@@ -234,6 +234,8 @@ struct ChromeCtx {
     focused_part: Option<String>,
     /// Hover target `{action}:{owner-key|-}` (G5).
     hover_target: Option<String>,
+    /// Snapshots menu visibility — the header trigger's `aria-expanded`.
+    snapshots_menu_open: bool,
 }
 
 /// One values scoped to one instantiated message row.
@@ -398,6 +400,7 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
             .collect(),
     focused_part: view.focused_part.clone(),
     hover_target: view.hover_target.clone(),
+    snapshots_menu_open: view.snapshots_menu_open,
     };
 
     let state = ChatSurfaceStateV1 {
@@ -471,23 +474,34 @@ fn render_header_child(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
     match node.id.as_str() {
         "chat-identity" => render_identity(node, ctx),
         "header-search" => render_search_button(),
-        "snapshots-trigger" => render_snapshots_trigger(),
+        "snapshots-trigger" => render_snapshots_trigger(ctx),
         _ => render_plain_container(node, ctx, None),
     }
 }
 
 /// Native snapshots-menu trigger (`snapshots-trigger` in lib.rs): same
 /// markup; the `custom.*` action rides the shared hit table verbatim.
-fn render_snapshots_trigger() -> Element {
+/// Hover and `aria-expanded` mirror the legacy trigger exactly — the
+/// skeleton parity gate compares attributes on both chomes (G5/G3).
+fn render_snapshots_trigger(ctx: &ChromeCtx) -> Element {
+    let hovered = ctx.hover_target.as_deref() == Some("custom.chat.snapshots-menu:-");
+    let style = if hovered {
+        "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:rgba(33,27,23,0.07);color:#f3eee8;"
+    } else {
+        "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;"
+    };
     rsx! {
         button {
             class: "ChatWorkspace_headerSearch",
             r#type: "button",
             "data-action": "custom.chat.snapshots-menu",
             "data-part": "snapshots-trigger",
-            "aria-label": "Chat snapshots",
-            title: "Chat snapshots",
-            style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+            "data-state": if hovered { "hover" } else { "idle" },
+            "aria-label": "Snapshots",
+            "aria-haspopup": "menu",
+            "aria-expanded": if ctx.snapshots_menu_open { "true" } else { "false" },
+            title: "Snapshots",
+            style: style,
             {crate::product_shell::icon("GitBranch", 17)}
         }
     }

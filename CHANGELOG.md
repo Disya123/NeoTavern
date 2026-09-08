@@ -4,6 +4,19 @@
 
 ### Fixed
 
+- Native desktop UI (wave D): the six interactive overlays (snapshots menu,
+  variant picker, inline editor, revision history, message details, header
+  search) now match their React components externally — resolved dark-sheet
+  tokens (dialogs: surface #292522, border #39342f, radius 20, 560px centered,
+  24px padding; popovers: radius 10, 2px gaps, right-anchored 260–320px;
+  secondary surfaces #24211e, accent-soft #492a20 active rows, danger #b23b35,
+  44px hit targets). Behavior followed: snapshots rows open the child chat
+  and picker rows activate the stored variant (both were dead taps), and both
+  popovers close on an outside press like React's `document pointerdown` —
+  Escape remains an honest gap (the host keyboard layer does not drive
+  overlays yet). The open snapshots panel is pinned by a skeleton golden
+  (React panel parts, 320px width, `open-snapshot` rows); Restore/Load-more
+  in the revision history stay documented gaps.
 - Native desktop UI: visible focus and hover feedback at last — this Blitz
   build has no CSS pseudo-classes, so the host now publishes the focused
   field identity (tap) and the hover target (pointer move, from the same

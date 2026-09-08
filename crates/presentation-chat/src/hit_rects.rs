@@ -206,6 +206,12 @@ pub enum MessageActionKind {
     DetailsModeEdit,
     /// Save button inside message details editor mode (`data-action="details-save-edit"`).
     DetailsSaveEdit,
+    /// A row of the snapshots menu (`data-action="open-snapshot"`); the key
+    /// carries the child chat id, like the React row navigating to its route.
+    SnapshotOpen,
+    /// A row of the variant picker popover (`data-action="swipe-pick"`); the
+    /// key carries the stored variant id (React `onPick` → activate by id).
+    SwipePick,
 }
 
 impl MessageActionKind {
@@ -236,6 +242,8 @@ impl MessageActionKind {
             "details-mode-details" | "details-back" => Self::DetailsModeDetails,
             "details-mode-edit" => Self::DetailsModeEdit,
             "details-save-edit" => Self::DetailsSaveEdit,
+            "open-snapshot" => Self::SnapshotOpen,
+            "swipe-pick" => Self::SwipePick,
             _ => return None,
         })
     }

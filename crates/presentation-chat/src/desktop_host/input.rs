@@ -36,6 +36,25 @@ impl App {
         // cloned the whole view-model per pointer event AND diverged from the
         // painted frame whenever state mutated between produce and Down.
         let view = current_product_shell();
+        // React `ChatSnapshotsMenu` closes its panel on a press anywhere
+        // outside the host (document pointerdown). The painted frame marks
+        // the panel, the trigger and every row with `snapshot*` parts, so
+        // one needle separates inside from outside. Live route state, not
+        // the installed view: the menu may have opened since the last
+        // produce in tests and during the one-frame reproduce window.
+        if self.session.route_state().snapshots_menu_open && !rects.covers(css_x, css_y, "snapshot")
+        {
+            self.session.close_snapshots_menu();
+        }
+        // React `MessageVariantPicker` closes the same way: a press outside
+        // the popover (`data-part="swipe-picker-popover"`) or its rows
+        // (`data-action="swipe-pick"`) dismisses it at press time.
+        if self.session.route_state().variant_picker_for.is_some()
+            && !rects.covers(css_x, css_y, "swipe-picker")
+            && !rects.covers(css_x, css_y, "swipe-pick")
+        {
+            self.session.close_variant_picker();
+        }
         if self.near_panel_resize(css_x) {
             self.panel_drag = Some(PanelDrag {
                 start_x: css_x,
@@ -502,6 +521,23 @@ impl App {
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
+                    crate::MessageActionKind::SwipePick => {
+                        eprintln!(
+                            "[neocompositor-desktop] swipe-pick tapped: {}",
+                            pending.row_id
+                        );
+                        // The open picker names the owner message; the row
+                        // key carries the variant id — the React row click
+                        // (`ShellAction::PickVariant` → `variants.activate`).
+                        if let Some(owner) = self.session.route_state().variant_picker_for.clone() {
+                            self.session.apply_shell_action(ShellAction::PickVariant(
+                                owner,
+                                pending.row_id.clone(),
+                            ));
+                        }
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
                     crate::MessageActionKind::Edit => {
                         eprintln!("[neocompositor-desktop] edit tapped: {}", pending.row_id);
                         if self.session.view().details_message_id.as_deref()
@@ -553,6 +589,18 @@ impl App {
                     crate::MessageActionKind::Branch => {
                         eprintln!("[neocompositor-desktop] branch tapped: {}", pending.row_id);
                         self.session.create_message_snapshot(&pending.row_id, false);
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    crate::MessageActionKind::SnapshotOpen => {
+                        eprintln!(
+                            "[neocompositor-desktop] snapshot row tapped: {}",
+                            pending.row_id
+                        );
+                        // Session closes the menu and opens the child chat
+                        // (`ShellAction::OpenSnapshot`), like the React row.
+                        self.session
+                            .apply_shell_action(ShellAction::OpenSnapshot(pending.row_id.clone()));
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
@@ -882,6 +930,60 @@ mod tests {
         app.pointer_up(30.0, 110.0);
         assert!(app.session.scene_epoch() > epoch);
         assert!(app.dirty);
+    }
+
+    #[test]
+    fn snapshot_row_tap_opens_the_child_chat_route_after_release() {
+        let mut app = custom_button("custom.chat.snapshots-menu");
+        app.pointer_down(30.0, 110.0);
+        app.pointer_up(30.0, 110.0);
+        assert!(app.session.view().snapshots_menu_open);
+        // The row as the open panel paints it: identity carries the child
+        // chat id, the action routes through the shared decision table.
+        app.hit_rects.rects.push(HitRect {
+            identity: "part:snapshot-row-chat-child-2".into(),
+            action: Some("open-snapshot".into()),
+            key: Some("chat-child-2".into()),
+            x: 280.0,
+            y: 90.0,
+            w: 320.0,
+            h: 44.0,
+        });
+        // Inside the row: the outside-close must NOT fire at Down...
+        app.pointer_down(300.0, 100.0);
+        assert!(app.session.view().snapshots_menu_open);
+        // ...and the row dispatch closes it at Up (session `open_snapshot`).
+        app.pointer_up(300.0, 100.0);
+        assert!(!app.session.view().snapshots_menu_open);
+    }
+
+    #[test]
+    fn tap_outside_the_snapshots_panel_closes_it_at_press() {
+        let mut app = custom_button("custom.chat.snapshots-menu");
+        app.pointer_down(30.0, 110.0);
+        app.pointer_up(30.0, 110.0);
+        assert!(app.session.view().snapshots_menu_open);
+        // The panel root as the open panel paints it: non-interactive, but
+        // its identity participates in the outside-press needle.
+        app.hit_rects.rects.push(HitRect {
+            identity: "part:snapshots-panel".into(),
+            action: None,
+            key: None,
+            x: 280.0,
+            y: 70.0,
+            w: 320.0,
+            h: 200.0,
+        });
+        // A press inside the panel host keeps the menu open, like React
+        // (only presses OUTSIDE the host close it).
+        app.pointer_down(400.0, 150.0);
+        assert!(app.session.view().snapshots_menu_open);
+        app.pointer_up(400.0, 150.0);
+        assert!(app.session.view().snapshots_menu_open);
+        // Dead space: the press itself closes (document pointerdown).
+        app.pointer_down(700.0, 500.0);
+        assert!(!app.session.view().snapshots_menu_open);
+        app.pointer_up(700.0, 500.0);
     }
 
     #[test]

@@ -396,16 +396,20 @@ fn header_search_overlay(view: &ProductChatView) -> Element {
     };
     let show_count = !view.header_search_query.trim().is_empty();
     let count_label = search_match_label(view.header_search_match_count);
+    // React `.chatSearch` (ChatWorkspace): muted icons/count, a borderless
+    // transparent input at `--st-control-height-xs` 36px, match count muted
+    // 13px. The close button shares the header ghost hover (G5).
+    let close_hover = view.hover_target.as_deref() == Some("header-search:-");
     rsx! {
         div {
             class: "ChatWorkspace_chatSearch",
             "data-part": "header-search-overlay",
-            style: "display:flex;align-items:center;gap:8px;min-width:0;flex:1;",
+            style: "display:flex;align-items:center;gap:8px;min-width:0;flex:1;color:#998f87;",
             {crate::product_shell::icon("MagnifyingGlass", 17)}
             div {
                 "data-part": "header-search-input",
                 "aria-label": "Search messages",
-                style: "flex:1;min-width:0;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.16);border-radius:10px;background:#1e1b18;color:#f3eee8;font-size:13px;display:flex;align-items:center;overflow:hidden;white-space:nowrap;",
+                style: "flex:1;min-width:0;height:36px;padding:0;border:0;background:transparent;color:#f3eee8;font-size:16px;display:flex;align-items:center;overflow:hidden;white-space:nowrap;",
                 if query.is_empty() {
                     span { style: "color:#998f87;", "Search messages…" }
                 } else {
@@ -417,7 +421,7 @@ fn header_search_overlay(view: &ProductChatView) -> Element {
                     class: "ChatWorkspace_searchMatchCount",
                     role: "status",
                     "aria-live": "polite",
-                    style: "flex:none;color:#c5bbb2;font-size:12px;white-space:nowrap;",
+                    style: "flex:none;color:#998f87;font-size:13px;white-space:nowrap;",
                     "{count_label}"
                 }
             }
@@ -426,9 +430,14 @@ fn header_search_overlay(view: &ProductChatView) -> Element {
                 r#type: "button",
                 "data-action": "header-search",
                 "data-part": "header-search-close",
+                "data-state": if close_hover { "hover" } else { "idle" },
                 "aria-label": "Close search",
                 title: "Close search",
-                style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+                style: if close_hover {
+                    "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:rgba(33,27,23,0.07);color:#f3eee8;"
+                } else {
+                    "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;"
+                },
                 {crate::product_shell::icon("X", 18)}
             }
         }
@@ -443,12 +452,20 @@ fn header_search_overlay(view: &ProductChatView) -> Element {
 /// resolves their owning row.
 fn message_edit_editor(view: &ProductChatView, row_id: &str) -> Element {
     let draft = view.editing_draft.clone();
+    // React `.editor` (MessageBubble): the card itself is the surface
+    // (surface-secondary 72% + inverse-10% border + radius-card + inset
+    // highlight), the textarea is transparent inside, `--st-textarea-
+    // min-height` 96px. Save disables at an empty draft (opacity .45).
+    let save_disabled = draft.trim().is_empty();
+    let hover = view.hover_target.as_deref();
+    let ghost_idle = "display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;gap:4px;padding:0 8px;border:1px solid rgba(33,27,23,0.1);border-radius:999px;color:#c5bbb2;background:rgba(36,33,30,0.62);cursor:pointer;";
+    let ghost_hover = "display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;gap:4px;padding:0 8px;border:1px solid rgba(33,27,23,0.1);border-radius:999px;color:#f3eee8;background:#302c28;cursor:pointer;";
     rsx! {
         div {
-            style: "display:flex;flex-direction:column;gap:8px;width:100%;",
+            style: "display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;padding:12px;border:1px solid rgba(33,27,23,0.1);border-radius:16px;background:rgba(36,33,30,0.72);box-shadow:inset 0 1px 0 rgba(33,27,23,0.08);",
             div {
                 "data-part": "message-edit-input",
-                style: "box-sizing:border-box;width:100%;min-height:72px;padding:8px 10px;border:1px solid rgba(243,238,232,0.16);border-radius:10px;background:#1e1b18;color:#f3eee8;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;",
+                style: "box-sizing:border-box;width:100%;min-height:96px;padding:0;border:0;background:transparent;color:#f3eee8;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;",
                 if draft.is_empty() {
                     span { style: "color:#998f87;", "\u{00a0}" }
                 } else {
@@ -462,8 +479,10 @@ fn message_edit_editor(view: &ProductChatView, row_id: &str) -> Element {
                     r#type: "button",
                     "data-action": "message-edit-cancel",
                     "data-message-id": "{row_id}",
+                    "data-state": if hover == Some(&format!("message-edit-cancel:{row_id}")) { "hover" } else { "idle" },
                     "aria-label": "Cancel edit",
-                    style: "width:auto;padding:0 12px;height:32px;border-radius:16px;font-size:12px;color:#c5bbb2;",
+                    style: if hover == Some(&format!("message-edit-cancel:{row_id}")) { ghost_hover } else { ghost_idle },
+                    {crate::product_shell::icon("X", 15)}
                     span { "Cancel" }
                 }
                 button {
@@ -471,8 +490,12 @@ fn message_edit_editor(view: &ProductChatView, row_id: &str) -> Element {
                     r#type: "button",
                     "data-action": "message-edit-save",
                     "data-message-id": "{row_id}",
+                    "data-state": if save_disabled { "disabled" } else if hover == Some(&format!("message-edit-save:{row_id}")) { "hover" } else { "idle" },
                     "aria-label": "Save edit",
-                    style: "width:auto;padding:0 12px;height:32px;border-radius:16px;font-size:12px;color:#f3eee8;background:#5a3b2e;",
+                    style: if save_disabled {
+                        "display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;gap:4px;padding:0 8px;border:1px solid rgba(33,27,23,0.1);border-radius:999px;color:#c5bbb2;background:rgba(36,33,30,0.62);opacity:0.45;cursor:not-allowed;"
+                    } else if hover == Some(&format!("message-edit-save:{row_id}")) { ghost_hover } else { ghost_idle },
+                    {crate::product_shell::icon("Check", 15)}
                     span { "Save" }
                 }
             }
@@ -491,36 +514,39 @@ fn revision_history_card(view: &ProductChatView) -> Option<Element> {
             class: "MessageRevisionHistoryCard_card",
             "data-component": "revision-history-card",
             "data-part": "revision-history-card",
-            style: "position:absolute;left:16px;right:16px;top:12px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;max-height:60%;padding:12px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.94);color:#f3eee8;overflow:hidden;",
+            style: "position:absolute;left:50%;transform:translateX(-50%);top:12px;z-index:30;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:8px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
             div {
-                style: "display:flex;align-items:center;gap:8px;",
-                strong { style: "font-size:13px;", "Edit history" }
+                style: "display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:12px;",
+                strong { style: "font-size:20px;font-weight:600;color:#f3eee8;", "Revision history" }
                 button {
                     class: "MessageBubble_actionButton",
                     r#type: "button",
                     "data-action": "message-history-close",
                     "data-message-id": "{owner}",
                     "aria-label": "Close history",
-                    style: "margin-left:auto;width:28px;height:28px;border-radius:14px;",
+                    style: "display:inline-grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid #39342f;border-radius:10px;background:#24211e;color:#c5bbb2;cursor:pointer;",
                     {crate::product_shell::icon("X", 14)}
                 }
             }
             if items.is_empty() {
-                p { style: "margin:0;color:#998f87;font-size:12px;", "No previous versions." }
+                p { style: "margin:0;padding:12px;color:#998f87;font-size:13px;text-align:center;", "No previous versions." }
             } else {
                 div {
-                    style: "display:flex;flex-direction:column;gap:6px;overflow:hidden;",
+                    style: "display:flex;flex-direction:column;gap:8px;overflow:hidden;",
                     for item in items.iter() {
                         div {
                             "data-part": "revision-row",
-                            style: "padding:8px 10px;border:1px solid rgba(243,238,232,0.10);border-radius:10px;background:rgba(36,33,30,0.62);",
+                            style: "padding:12px;border:1px solid #39342f;border-radius:16px;background:#24211e;",
                             div {
-                                style: "font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:64px;overflow:hidden;",
-                                "{item.content}"
+                                style: "display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;",
+                                time {
+                                    style: "color:#998f87;font-size:12px;text-align:end;",
+                                    {crate::product_path::format_timestamp(&item.created_at)}
+                                }
                             }
                             div {
-                                style: "margin-top:4px;color:#998f87;font-size:11px;",
-                                {crate::product_path::format_timestamp(&item.created_at)}
+                                style: "color:#c5bbb2;font-size:13px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;max-height:87px;overflow:hidden;",
+                                "{item.content}"
                             }
                         }
                     }
@@ -530,47 +556,42 @@ fn revision_history_card(view: &ProductChatView) -> Option<Element> {
     })
 }
 
-/// Snapshots menu panel overlay (React `ChatSnapshotsMenu` panel): child
-/// chats of the active chat, newest first. Rows carry
-/// `data-part="snapshot-row-{id}"` — the desktop bin resolves them by
-/// identity (`covers`) because custom intents carry no key payload.
+/// Snapshots menu panel overlay (React `ChatSnapshotsMenu` panel, G3
+/// parity). Visual contract resolved from the dark-sheet tokens the React
+/// panel consumes: `--st-color-surface-elevated` #292522, `--st-color-border`
+/// #39342f, `--st-radius-control` 10px, `--st-space-2xs` 2px gap/padding,
+/// muted copy #998f87, overlay shadow. React anchors the panel right under
+/// the header trigger; the native overlay lives in the viewport wrapper, so
+/// it anchors to the viewport's right edge (the trigger's right edge).
+/// React closes on outside press / Escape / trigger toggle; the host
+/// implements the outside press and the trigger toggle — Escape stays a
+/// documented native gap (no keyboard overlay wiring yet).
 fn snapshots_menu_panel(view: &ProductChatView) -> Element {
+    let hover = view.hover_target.as_deref();
     let items = view.snapshot_items.clone();
     rsx! {
         div {
             class: "ChatSnapshotsMenu_panel",
             "data-component": "chat-snapshots-menu",
             "data-part": "snapshots-panel",
-            style: "position:absolute;left:16px;right:16px;top:12px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;max-height:60%;padding:12px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.94);color:#f3eee8;overflow:hidden;",
+            style: "position:absolute;top:12px;right:16px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;width:320px;max-width:calc(100% - 16px);max-height:min(360px,60%);padding:2px;overflow-y:auto;border:1px solid #39342f;border-radius:10px;background:#292522;color:#f3eee8;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
             div {
-                style: "display:flex;align-items:center;gap:8px;",
-                strong { style: "font-size:13px;", "Chat snapshots" }
-                button {
-                    class: "MessageBubble_actionButton",
-                    r#type: "button",
-                    "data-part": "snapshots-close",
-                    "aria-label": "Close snapshots",
-                    style: "margin-left:auto;width:28px;height:28px;border-radius:14px;",
-                    {crate::product_shell::icon("X", 14)}
-                }
+                "data-part": "snapshots-title",
+                style: "padding:0 2px;color:#998f87;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;",
+                "Snapshots of this chat"
             }
             if items.is_empty() {
-                p { style: "margin:0;color:#998f87;font-size:12px;", "No checkpoints or branches yet." }
+                p {
+                    "data-part": "snapshots-state",
+                    style: "margin:0;padding:10px;color:#998f87;font-size:13px;",
+                    {"No snapshots yet. Use \"Roll back\" or \"Checkpoint\" on a message to create one."}
+                }
             } else {
                 div {
-                    style: "display:flex;flex-direction:column;gap:6px;overflow:hidden;",
+                    "data-part": "snapshots-list",
+                    style: "display:flex;flex-direction:column;gap:2px;",
                     for item in items.iter() {
-                        button {
-                            class: "MessageBubble_actionButton",
-                            r#type: "button",
-                            "data-part": "snapshot-row-{item.id}",
-                            style: "display:flex;align-items:center;gap:8px;width:100%;height:48px;border-radius:12px;padding:0 10px;text-align:left;",
-                            span {
-                                style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;",
-                                strong { style: "font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{item.title}" }
-                                span { style: "color:#998f87;font-size:11px;", "{item.origin_label} · {item.message_count} messages" }
-                            }
-                        }
+                        {snapshot_row(item, hover)}
                     }
                 }
             }
@@ -578,14 +599,64 @@ fn snapshots_menu_panel(view: &ProductChatView) -> Element {
     }
 }
 
-/// Variant picker popover overlay (React `MessageVariantPicker` listbox):
-/// the lazily fetched stored variants plus the active content row. Rows carry
-/// `data-part="swipe-row-{id}"`; the desktop bin resolves taps by identity
-/// (`covers`), and the trigger row carries the owning message id through the
-/// hit-rects ancestor chain. Loading state (query disabled) renders nothing,
-/// like the React popover before the query resolves.
+/// One snapshots-menu row (React `.item` / `.itemTitle` / `.itemMeta`): a
+/// two-line column — ellipsized title, then origin badge left and message
+/// count right. The row navigates to the child chat (`data-action=
+/// "open-snapshot"` + `data-message-id` = chat id) exactly like the React
+/// row's `navigate(/chats/{id})`; hover follows the shared G5 contract.
+fn snapshot_row(item: &SnapshotItemView, hover: Option<&str>) -> Element {
+    let hovered = hover == Some(&format!("open-snapshot:{}", item.id));
+    let count_word = if item.message_count == 1 {
+        "message"
+    } else {
+        "messages"
+    };
+    let style = if hovered {
+        "display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%;padding:4px 8px;border:1px solid transparent;border-radius:4px;background:rgba(33,27,23,0.07);color:#f3eee8;text-align:left;cursor:pointer;"
+    } else {
+        "display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%;padding:4px 8px;border:1px solid transparent;border-radius:4px;background:transparent;color:#f3eee8;text-align:left;cursor:pointer;"
+    };
+    rsx! {
+        button {
+            class: "ChatSnapshotsMenu_item",
+            r#type: "button",
+            "data-action": "open-snapshot",
+            "data-state": if hovered { "hover" } else { "idle" },
+            "data-message-id": "{item.id}",
+            "data-part": "snapshot-row-{item.id}",
+            "aria-label": "Open {item.title}",
+            title: "{item.title}",
+            style: style,
+            span {
+                "data-part": "snapshot-item-title",
+                style: "overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap;",
+                "{item.title}"
+            }
+            span {
+                "data-part": "snapshot-item-meta",
+                style: "display:flex;align-items:center;justify-content:space-between;gap:8px;color:#998f87;font-size:12px;",
+                span { "data-part": "snapshot-origin", "{item.origin_label}" }
+                span { "data-part": "snapshot-count", "{item.message_count} {count_word}" }
+            }
+        }
+    }
+}
+
+/// Variant picker popover overlay (React `MessageVariantPicker` listbox, G3
+/// parity): the lazily fetched stored variants plus the active content row.
+/// Visual contract resolved from the dark-sheet tokens the popover consumes:
+/// `--st-color-surface-overlay` #292522, border `color-mix(border 60%)` =
+/// rgba(57,52,47,0.6), `--st-radius-control` 10px, `--st-space-xs` 4px
+/// padding / `--st-space-2xs` 2px gap, min-width 260px, overlay shadow.
+/// React closes on outside press / Escape / trigger toggle — the host
+/// implements the outside press and the trigger toggle (input.rs). Rows
+/// carry `data-action="swipe-pick"` with the variant id as `data-ui-key`;
+/// the popover root keys the owner message (`data-message-id`). Loading
+/// state (query disabled) renders nothing, like the React popover before
+/// the query resolves.
 fn variant_picker_popover(view: &ProductChatView) -> Option<Element> {
     let owner = view.variant_picker_for.as_deref()?;
+    let hover = view.hover_target.as_deref();
     let rows = view.variant_picker_rows.clone();
     Some(rsx! {
         div {
@@ -594,49 +665,61 @@ fn variant_picker_popover(view: &ProductChatView) -> Option<Element> {
             "data-part": "swipe-picker-popover",
             role: "listbox",
             "aria-label": "Variants",
-            style: "position:absolute;left:16px;right:16px;top:12px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;max-height:60%;padding:12px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.94);color:#f3eee8;overflow:hidden;",
-            div {
-                style: "display:flex;align-items:center;gap:8px;",
-                strong { style: "font-size:13px;", "Variants" }
-                button {
-                    class: "MessageBubble_actionButton",
-                    r#type: "button",
-                    "data-action": "swipe-picker-close",
-                    "data-message-id": "{owner}",
-                    "aria-label": "Close variants",
-                    style: "margin-left:auto;width:28px;height:28px;border-radius:14px;",
-                    {crate::product_shell::icon("X", 14)}
-                }
-            }
+            "data-message-id": "{owner}",
+            style: "position:absolute;top:12px;right:16px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;min-width:260px;max-width:calc(100% - 16px);max-height:min(280px,60%);padding:4px;overflow-y:auto;border:1px solid rgba(57,52,47,0.6);border-radius:10px;background:#292522;color:#f3eee8;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
             if rows.is_empty() && view.variant_picker_empty {
-                p { style: "margin:0;color:#998f87;font-size:12px;", "No other variants" }
-            } else {
                 div {
-                    role: "listbox",
-                    style: "display:flex;flex-direction:column;gap:6px;overflow:hidden;",
-                    for item in rows.iter() {
-                        button {
-                            class: "MessageBubble_actionButton",
-                            r#type: "button",
-                            role: "option",
-                            "data-part": "swipe-row-{item.id}",
-                            "data-state": if item.active { "active" } else { "idle" },
-                            "aria-selected": "{item.active}",
-                            style: "display:flex;align-items:flex-start;gap:8px;width:100%;min-height:40px;border-radius:12px;padding:8px 10px;text-align:left;",
-                            span {
-                                style: "flex:none;color:#998f87;font-size:11px;font-variant-numeric:tabular-nums;",
-                                "{item.index_label}"
-                            }
-                            span {
-                                style: "flex:1;min-width:0;font-size:12px;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;max-height:36px;",
-                                "{item.preview}"
-                            }
-                        }
-                    }
+                    "data-part": "swipe-picker-empty",
+                    style: "padding:8px;color:#998f87;font-size:13px;",
+                    "No other variants"
+                }
+            } else {
+                for item in rows.iter() {
+                    {variant_row(item, hover)}
                 }
             }
         }
     })
+}
+
+/// One variant-picker row (React `.popover button` grid): muted tabular
+/// index label, then a single-line ellipsized content preview. React paints
+/// the active row with `--st-color-accent-soft` #492a20; the G5 hover target
+/// paints `--st-color-surface-tertiary` #302c28 — never over the active row
+/// (the React attribute selector outranks `:hover`).
+fn variant_row(item: &VariantRowView, hover: Option<&str>) -> Element {
+    let active = item.active;
+    let hovered = !active && hover == Some(&format!("swipe-pick:{}", item.id));
+    let style = if active {
+        "display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px;width:100%;padding:8px;border:0;border-radius:10px;color:#f3eee8;background:#492a20;font-size:13px;text-align:left;cursor:pointer;"
+    } else if hovered {
+        "display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px;width:100%;padding:8px;border:0;border-radius:10px;color:#f3eee8;background:#302c28;font-size:13px;text-align:left;cursor:pointer;"
+    } else {
+        "display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px;width:100%;padding:8px;border:0;border-radius:10px;color:#c5bbb2;background:transparent;font-size:13px;text-align:left;cursor:pointer;"
+    };
+    rsx! {
+        button {
+            class: "MessageVariantPicker_option",
+            r#type: "button",
+            role: "option",
+            "data-action": "swipe-pick",
+            "data-state": if active { "active" } else if hovered { "hover" } else { "idle" },
+            "data-ui-key": "{item.id}",
+            "data-part": "swipe-row-{item.id}",
+            "aria-selected": "{item.active}",
+            style: style,
+            span {
+                "data-part": "swipe-index",
+                style: "color:#998f87;font-variant-numeric:tabular-nums;white-space:nowrap;",
+                "{item.index_label}"
+            }
+            span {
+                "data-part": "swipe-preview",
+                style: "overflow:hidden;min-width:0;text-overflow:ellipsis;white-space:nowrap;",
+                "{item.preview}"
+            }
+        }
+    }
 }
 
 /// Flagged Product Wire chat workspace: header glass, visible Markdown/image
@@ -682,7 +765,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                 "data-state": "edit",
                 role: "dialog",
                 "aria-label": "Edit message",
-                style: "position:absolute;left:16px;right:16px;top:12px;z-index:35;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;max-height:85%;padding:14px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.96);color:#f3eee8;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5);",
+                style: "position:absolute;left:50%;transform:translateX(-50%);top:12px;z-index:35;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:10px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
                 div {
                     class: "MessageDetailsCardV2_editor",
                     "data-part": "details-editor",
@@ -709,7 +792,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                             "data-action": "details-mode-details",
                             "data-message-id": "{owner}",
                             "aria-label": "Cancel edit",
-                            style: "width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+                            style: "width:44px;height:44px;border-radius:999px;display:flex;align-items:center;justify-content:center;border:1px solid #39342f;background:#24211e;color:#c5bbb2;cursor:pointer;",
                             {crate::product_shell::icon("X", 14)}
                         }
                     }
@@ -717,7 +800,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                     div {
                         class: "MessageDetailsCardV2_textareaWrap",
                         "data-part": "details-editor-input",
-                        style: "min-height:100px;max-height:220px;overflow-y:auto;padding:10px 12px;border-radius:10px;background:rgba(36,33,30,0.62);border:1px solid rgba(243,238,232,0.14);font-size:13px;line-height:1.45;color:#f3eee8;white-space:pre-wrap;overflow-wrap:anywhere;",
+                        style: "min-height:96px;max-height:220px;overflow-y:auto;padding:8px 12px;border-radius:10px;background:#24211e;border:1px solid #39342f;font-size:16px;line-height:1.45;color:#f3eee8;white-space:pre-wrap;overflow-wrap:anywhere;",
                         "{draft}"
                     }
                     // Editor action buttons (Cancel / Save)
@@ -733,7 +816,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                             "data-action": "details-mode-details",
                             "data-message-id": "{owner}",
                             "aria-label": "Cancel",
-                            style: "display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:transparent;color:#c5bbb2;font-size:12px;cursor:pointer;",
+                            style: "display:flex;align-items:center;gap:6px;min-height:44px;padding:0 16px;border-radius:10px;border:1px solid #39342f;background:#24211e;color:#f3eee8;font-size:16px;cursor:pointer;",
                             span { "data-part": "label", "Cancel" }
                         }
                         button {
@@ -744,7 +827,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                             "data-action": "details-save-edit",
                             "data-message-id": "{owner}",
                             "aria-label": "Save message",
-                            style: "display:flex;align-items:center;gap:6px;padding:6px 16px;border-radius:8px;border:none;background:#e38a62;color:#2a130b;font-size:12px;font-weight:600;cursor:pointer;",
+                            style: "display:flex;align-items:center;gap:6px;min-height:44px;padding:0 16px;border-radius:10px;border:0;background:#e38a62;color:#2a130b;font-size:16px;font-weight:600;cursor:pointer;",
                             {crate::product_shell::icon("Check", 14)}
                             span { "data-part": "label", "Save" }
                         }
@@ -762,7 +845,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                 "data-part": "details-card",
                 role: "dialog",
                 "aria-label": "Message actions",
-                style: "position:absolute;left:16px;right:16px;top:12px;z-index:35;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;max-height:85%;padding:14px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.96);color:#f3eee8;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5);",
+                style: "position:absolute;left:50%;transform:translateX(-50%);top:12px;z-index:35;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:10px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
                 div {
                     class: "MessageDetailsCardV2_actionMode",
                     "data-part": "details-action-menu",
@@ -783,7 +866,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                 }
                             }
                             strong {
-                                style: "font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                                style: "font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
                                 "{author}"
                             }
                         }
@@ -793,7 +876,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                             "data-action": "details-mode-details",
                             "data-message-id": "{owner}",
                             "aria-label": "Close message actions",
-                            style: "width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+                            style: "width:44px;height:44px;border-radius:999px;display:flex;align-items:center;justify-content:center;border:1px solid #39342f;background:#24211e;color:#c5bbb2;cursor:pointer;",
                             {crate::product_shell::icon("X", 14)}
                         }
                     }
@@ -801,7 +884,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                     div {
                         class: "MessageDetailsCardV2_preview",
                         "data-part": "details-action-preview",
-                        style: "max-height:80px;overflow-y:auto;padding:8px 10px;border-radius:10px;background:rgba(36,33,30,0.3);font-size:12px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;color:#c5bbb2;",
+                        style: "margin:4px 0 8px;max-height:66px;overflow:hidden;padding:12px;border-radius:16px;background:#24211e;font-size:13px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;color:#c5bbb2;",
                         "{content}"
                     }
                     // Action scroll container
@@ -813,9 +896,9 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                         section {
                             class: "MessageDetailsCardV2_actionGroup",
                             "data-part": "details-danger-zone",
-                            style: "display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:10px;background:rgba(224,108,117,0.08);border:1px solid rgba(224,108,117,0.2);",
+                            style: "display:flex;flex-direction:column;gap:0;",
                             h3 {
-                                style: "margin:0 0 4px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#e06c75;",
+                                style: "margin:0 0 4px 0;font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:0.05em;color:#b23b35;",
                                 "Danger zone"
                             }
                             button {
@@ -824,7 +907,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                 "data-action": "delete",
                                 "data-message-id": "{owner}",
                                 "aria-label": "Delete message and all versions",
-                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(224,108,117,0.3);background:rgba(224,108,117,0.15);color:#f3eee8;font-size:12px;cursor:pointer;",
+                                style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#b23b35;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                 {crate::product_shell::icon("Trash", 14)}
                                 span { "Delete message and all versions" }
                             }
@@ -833,9 +916,9 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                         section {
                             class: "MessageDetailsCardV2_actionGroup",
                             "data-part": "details-core-actions",
-                            style: "display:flex;flex-direction:column;gap:4px;",
+                            style: "display:flex;flex-direction:column;gap:0;",
                             h3 {
-                                style: "margin:0 0 4px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#998f87;",
+                                style: "margin:0 0 4px 0;font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:0.05em;color:#998f87;",
                                 "Message actions"
                             }
                             button {
@@ -844,7 +927,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                 "data-action": "copy",
                                 "data-message-id": "{owner}",
                                 "aria-label": "Copy message",
-                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#f3eee8;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                 {crate::product_shell::icon("Copy", 14)}
                                 span { "Copy message" }
                             }
@@ -854,7 +937,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                 "data-action": "context",
                                 "data-message-id": "{owner}",
                                 "aria-label": if excluded { "Include in prompt context" } else { "Exclude from prompt context" },
-                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#f3eee8;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                 if excluded {
                                     {crate::product_shell::icon("Eye", 14)}
                                     span { "Include in prompt context" }
@@ -869,7 +952,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                 "data-action": "edit",
                                 "data-message-id": "{owner}",
                                 "aria-label": "Edit message",
-                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#f3eee8;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                 {crate::product_shell::icon("PencilSimple", 14)}
                                 span { "Edit message" }
                             }
@@ -879,7 +962,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                 "data-action": "history",
                                 "data-message-id": "{owner}",
                                 "aria-label": "Revision history",
-                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#f3eee8;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                 {crate::product_shell::icon("ClockCounterClockwise", 14)}
                                 span { "Revision history" }
                             }
@@ -889,7 +972,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                 "data-action": "regenerate",
                                 "data-message-id": "{owner}",
                                 "aria-label": "Regenerate",
-                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#f3eee8;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                 {crate::product_shell::icon("ArrowClockwise", 14)}
                                 span { "Regenerate" }
                             }
@@ -899,7 +982,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                 "data-action": "rollback",
                                 "data-message-id": "{owner}",
                                 "aria-label": "Rollback to here",
-                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#f3eee8;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                 {crate::product_shell::icon("ArrowUUpLeft", 14)}
                                 span { "Rollback to here" }
                             }
@@ -909,7 +992,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                 "data-action": "checkpoint",
                                 "data-message-id": "{owner}",
                                 "aria-label": "Set checkpoint",
-                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#f3eee8;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                 {crate::product_shell::icon("Flag", 14)}
                                 span { "Set checkpoint" }
                             }
@@ -919,7 +1002,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                 "data-action": "branch",
                                 "data-message-id": "{owner}",
                                 "aria-label": "Branch from here",
-                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#f3eee8;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                 {crate::product_shell::icon("GitBranch", 14)}
                                 span { "Branch from here" }
                             }
@@ -930,7 +1013,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                     "data-action": "prompt",
                                     "data-message-id": "{owner}",
                                     "aria-label": "View prompt plan",
-                                    style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                    style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#f3eee8;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                     {crate::product_shell::icon("BookOpenText", 14)}
                                     span { "View prompt plan" }
                                 }
@@ -940,7 +1023,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                                     "data-action": "steps",
                                     "data-message-id": "{owner}",
                                     "aria-label": "View run steps",
-                                    style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                    style: "display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;border-bottom:1px solid #39342f;border-radius:0;background:transparent;color:#f3eee8;font-size:16px;font-weight:650;text-align:start;cursor:pointer;",
                                     {crate::product_shell::icon("List", 14)}
                                     span { "View run steps" }
                                 }
@@ -959,7 +1042,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
             "data-part": "details-card",
             role: "dialog",
             "aria-label": "Message details",
-            style: "position:absolute;left:16px;right:16px;top:12px;z-index:35;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;max-height:75%;padding:14px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.96);color:#f3eee8;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5);",
+            style: "position:absolute;left:50%;transform:translateX(-50%);top:12px;z-index:35;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:10px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
             // Header: Identity & Badges
             div {
                 class: "MessageDetailsCardV2_header",
@@ -976,7 +1059,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                         }
                     }
                     strong {
-                        style: "font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                        style: "font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
                         "{author}"
                     }
                 }
@@ -986,7 +1069,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                     style: "display:flex;align-items:center;gap:6px;",
                     if let Some(tok) = token_label {
                         span {
-                            style: "display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:10px;background:rgba(243,238,232,0.08);color:#d08770;font-size:11px;",
+                            style: "display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:10px;background:#492a20;color:#f0d9cb;font-size:11px;",
                             {crate::product_shell::icon("Lightning", 12)}
                             "{tok}"
                         }
@@ -997,7 +1080,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                         "data-action": "details-close",
                         "data-message-id": "{owner}",
                         "aria-label": "Close details",
-                        style: "width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+                        style: "width:44px;height:44px;border-radius:999px;display:flex;align-items:center;justify-content:center;border:1px solid #39342f;background:#24211e;color:#c5bbb2;cursor:pointer;",
                         {crate::product_shell::icon("X", 14)}
                     }
                 }
@@ -1006,29 +1089,26 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
             div {
                 class: "MessageDetailsCardV2_meta",
                 "data-part": "details-meta",
-                style: "display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:10px;background:rgba(36,33,30,0.5);font-size:11px;color:#c5bbb2;",
+                style: "display:flex;flex-direction:column;",
                 if let Some(time) = timestamp {
                     div {
-                        style: "display:flex;align-items:center;gap:6px;",
-                        {crate::product_shell::icon("CalendarBlank", 13)}
-                        span { style: "color:#998f87;", "Sent: " }
-                        span { "{time}" }
+                        style: "display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;border-bottom:1px solid #39342f;font-size:13px;",
+                        span { style: "color:#998f87;gap:8px;", {crate::product_shell::icon("CalendarBlank", 13)}, "Sent" }
+                        span { style: "color:#f3eee8;font-weight:650;text-align:end;overflow-wrap:anywhere;", "{time}" }
                     }
                 }
                 if let Some(mdl) = model {
                     div {
-                        style: "display:flex;align-items:center;gap:6px;",
-                        {crate::product_shell::icon("Robot", 13)}
-                        span { style: "color:#998f87;", "Model: " }
-                        span { "{mdl}" }
+                        style: "display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;border-bottom:1px solid #39342f;font-size:13px;",
+                        span { style: "color:#998f87;gap:8px;", {crate::product_shell::icon("Robot", 13)}, "Model" }
+                        span { style: "color:#f3eee8;font-weight:650;text-align:end;overflow-wrap:anywhere;", "{mdl}" }
                     }
                 }
                 if let Some(dur) = duration {
                     div {
-                        style: "display:flex;align-items:center;gap:6px;",
-                        {crate::product_shell::icon("Timer", 13)}
-                        span { style: "color:#998f87;", "Time: " }
-                        span { "{dur}" }
+                        style: "display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;border-bottom:1px solid #39342f;font-size:13px;",
+                        span { style: "color:#998f87;gap:8px;", {crate::product_shell::icon("Timer", 13)}, "Time" }
+                        span { style: "color:#f3eee8;font-weight:650;text-align:end;overflow-wrap:anywhere;", "{dur}" }
                     }
                 }
             }
@@ -1036,21 +1116,21 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
             div {
                 class: "MessageDetailsCardV2_content",
                 "data-part": "details-content",
-                style: "flex:1;min-height:48px;max-height:160px;overflow-y:auto;padding:8px 10px;border-radius:10px;background:rgba(36,33,30,0.3);font-size:12px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;",
+                style: "flex:1;min-height:48px;max-height:160px;overflow-y:auto;margin-bottom:12px;padding:12px 12px 16px;border:1px solid #39342f;border-radius:16px;background:#24211e;font-size:13px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;color:#c5bbb2;",
                 "{content}"
             }
             // Actions / footer
             div {
                 class: "MessageDetailsCardV2_footer",
                 "data-part": "details-footer",
-                style: "display:flex;align-items:center;gap:8px;padding-top:4px;border-top:1px solid rgba(243,238,232,0.08);",
+                style: "display:flex;align-items:center;justify-content:space-around;gap:2px;padding-top:8px;border-top:1px solid #39342f;",
                 button {
                     class: "MessageBubble_actionButton",
                     r#type: "button",
                     "data-action": "copy",
                     "data-message-id": "{owner}",
                     "aria-label": "Copy message",
-                    style: "display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:11px;cursor:pointer;",
+                    style: "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:44px;min-height:44px;padding:0 2px;border:0;border-radius:10px;background:transparent;color:#c5bbb2;cursor:pointer;",
                     {crate::product_shell::icon("Copy", 13)}
                     span { "Copy" }
                 }
@@ -1060,7 +1140,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                     "data-action": "context",
                     "data-message-id": "{owner}",
                     "aria-label": "Toggle context",
-                    style: "display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:11px;cursor:pointer;",
+                    style: "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:44px;min-height:44px;padding:0 2px;border:0;border-radius:10px;background:transparent;color:#c5bbb2;cursor:pointer;",
                     if excluded {
                         {crate::product_shell::icon("Eye", 13)}
                         span { "Include" }
@@ -1086,7 +1166,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                         "data-action": "prompt",
                         "data-message-id": "{owner}",
                         "aria-label": "Prompt plan",
-                        style: "display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:11px;cursor:pointer;",
+                        style: "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:44px;min-height:44px;padding:0 2px;border:0;border-radius:10px;background:transparent;color:#c5bbb2;cursor:pointer;",
                         {crate::product_shell::icon("BookOpenText", 13)}
                         span { "Prompt" }
                     }
@@ -1096,7 +1176,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                         "data-action": "steps",
                         "data-message-id": "{owner}",
                         "aria-label": "Run steps",
-                        style: "display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:11px;cursor:pointer;",
+                        style: "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:44px;min-height:44px;padding:0 2px;border:0;border-radius:10px;background:transparent;color:#c5bbb2;cursor:pointer;",
                         {crate::product_shell::icon("List", 13)}
                         span { "Steps" }
                     }
@@ -1294,6 +1374,9 @@ pub fn product_chat_app() -> Element {
                                 style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
                                 {crate::product_shell::icon("MagnifyingGlass", 17)}
                             }
+                            // React `ChatSnapshotsMenu` trigger: aria-label
+                            // "Snapshots", round 40px ghost button, hover
+                            // text-primary over inverse-7% background (G5).
                             button {
                                 class: "ChatWorkspace_headerSearch",
                                 r#type: "button",
@@ -1302,9 +1385,12 @@ pub fn product_chat_app() -> Element {
                                 // one to `toggle_snapshots_menu`.
                                 "data-action": "custom.chat.snapshots-menu",
                                 "data-part": "snapshots-trigger",
-                                "aria-label": "Chat snapshots",
-                                title: "Chat snapshots",
-                                style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+                                "data-state": if hover == Some("custom.chat.snapshots-menu:-") { "hover" } else { "idle" },
+                                "aria-label": "Snapshots",
+                                "aria-haspopup": "menu",
+                                "aria-expanded": if view.snapshots_menu_open { "true" } else { "false" },
+                                title: "Snapshots",
+                                style: if hover == Some("custom.chat.snapshots-menu:-") { "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:rgba(33,27,23,0.07);color:#f3eee8;" } else { "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;" },
                                 {crate::product_shell::icon("GitBranch", 17)}
                             }
                             if let Some(ref parent_id) = view.parent_chat_id {

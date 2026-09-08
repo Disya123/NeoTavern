@@ -249,6 +249,15 @@ Safe-mode выход на рукописный RSX: `--legacy-chrome` или
   инлайнится из React-правила `.PluginsPage_card[data-state='active']`
   (в Blitz атрибутные селекторы ненадёжны). Card-клика в React нет — карточку
   и не делаем «выделяемой» (это была бы выдумка).
+- **Оверлеи чата (снапшоты, variant picker)** — через ту же decision-таблицу
+  hit-rects: строка снапшота несёт `data-action="open-snapshot"` с
+  `data-message-id` = id дочернего чата (`ShellAction::OpenSnapshot`), строка
+  пикера — `data-action="swipe-pick"` с `data-ui-key` = id варианта
+  (`ShellAction::PickVariant`; синтетический ряд `active-…` только закрывает,
+  как `if (!row.active)` в React). Оба поповера закрываются нажатием ВНЕ
+  панели (React `document pointerdown`): rect'ы панели/триггера/строк
+  опознаются по игле `snapshot*` / `swipe-picker|swipe-pick`. Escape оверлеи
+  не закрывает (клавиатурный контур хоста не ведёт оверлеи).
 - **Колёсико мыши** над чатом — `session.scroll_chat_by(css_px)` поднимает
   виртуализированное окно вверх от низа (новое состояние
   `ChatRouteState.scroll_offset_css`, позиция clamp к протяжённости сообщений).

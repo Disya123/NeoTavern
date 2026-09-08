@@ -1351,6 +1351,77 @@ fn delete_checkpoint_clears_the_snapshot_link() {
         .any(|op| op == "chats.messages.update"));
 }
 
+/// G3 golden: the open snapshots panel publishes the React
+/// `ChatSnapshotsMenu` contract — a right-anchored 320px panel, an uppercase
+/// title part, and child-chat rows routing `open-snapshot` with the chat id
+/// as the owner key (data-state idle until the G5 hover target moves in).
+#[test]
+fn snapshots_panel_skeleton_matches_the_react_contract() {
+    use neotavern_presentation_dioxus_shell::install_product_chat;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    let row_id = session
+        .view()
+        .visible
+        .iter()
+        .find(|row| row.id != "streaming")
+        .map(|row| row.id.clone())
+        .expect("a durable row");
+    // A checkpoint seeds one child chat, so the panel renders rows (not the
+    // empty state) exactly like the React popover after the query resolves.
+    session.create_message_snapshot(&row_id, true);
+    session.toggle_snapshots_menu();
+    assert!(session.view().snapshots_menu_open);
+    let view = session.view();
+    install_product_chat(view.clone());
+    let skel = inspect_slot_skeleton(
+        product_chat_app,
+        view.viewport_width,
+        view.viewport_height,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("skeleton");
+    let panel = skel
+        .nodes
+        .iter()
+        .find(|node| node.part.as_deref() == Some("snapshots-panel"))
+        .expect("panel in skeleton");
+    assert_eq!(panel.css_width, 320.0, "React panel width min(320px)");
+    assert!(
+        skel.nodes
+            .iter()
+            .any(|node| node.part.as_deref() == Some("snapshots-title")),
+        "uppercase title part present"
+    );
+    assert!(
+        !skel
+            .nodes
+            .iter()
+            .any(|node| node.part.as_deref() == Some("snapshots-state")),
+        "rows exist, so the empty/error state is absent"
+    );
+    let row = skel
+        .nodes
+        .iter()
+        .find(|node| node.identity.contains("snapshot-row-"))
+        .expect("child chat row in skeleton");
+    assert_eq!(row.action.as_deref(), Some("open-snapshot"));
+    assert!(
+        row.key.as_deref().is_some_and(|key| !key.is_empty()),
+        "row owner key carries the child chat id"
+    );
+    assert_eq!(row.state.as_deref(), Some("idle"));
+}
+
 #[test]
 fn run_transcript_lists_generation_steps_without_tool_payloads() {
     use neotavern_presentation_chat::ShellAction;
