@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- Native desktop UI: visible focus and hover feedback at last — this Blitz
+  build has no CSS pseudo-classes, so the host now publishes the focused
+  field identity (tap) and the hover target (pointer move, from the same
+  hit-rect snapshot taps use) into the session; both render with the exact
+  React values from the packed stylesheet (focus ring 0 0 0 3px
+  rgba(227,138,98,.2) on the composer, hover backgrounds #39342f / #f09a73 /
+  #302c28 per variant). Changes bump the scene only on target change and
+  hover is frozen during active captures; legacy RSX and blueprint chrome
+  stay skeleton-identical (attribute parity gate).
 - Native desktop UI: Cyrillic text now renders at all — the font context only
   bundled Latin subsets (Outfit has no Cyrillic glyphs upstream), so every
   Cyrillic cluster had no font. Onest (metric neighbor with native Cyrillic)

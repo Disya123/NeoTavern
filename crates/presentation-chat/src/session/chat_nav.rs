@@ -333,6 +333,28 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
+    /// G5 focus feedback: set the focused field's Theme SDK identity
+    /// (`slot:chat.composer`, `part:chat-search`, …). Only a CHANGE bumps
+    /// the scene — focus re-resolution on every tap must not produce.
+    pub fn set_focused_part(&mut self, part: Option<&str>) {
+        let next = part.map(str::to_string);
+        if self.state.focused_part != next {
+            self.state.focused_part = next;
+            self.bump_scene();
+        }
+    }
+
+    /// G5 hover feedback: set the hover target (`{action}:{owner-key|-}`)
+    /// from the same hit-rect snapshot the tap capture uses. Only a CHANGE
+    /// bumps the scene — the pointer crossing dead space stays free.
+    pub fn set_hover_target(&mut self, target: Option<&str>) {
+        let next = target.map(str::to_string);
+        if self.state.hover_target != next {
+            self.state.hover_target = next;
+            self.bump_scene();
+        }
+    }
+
     pub fn set_character_sort(&mut self, sort: &str) {
         self.state.character_sort = sort.to_string();
         self.bump_scene();

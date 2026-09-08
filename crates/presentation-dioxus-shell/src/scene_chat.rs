@@ -230,6 +230,10 @@ struct ChromeCtx {
     /// session view): the blueprint `swipe-label` node renders the same
     /// "N/M" string the legacy pager does.
     swipe_labels: HashMap<String, String>,
+    /// Theme SDK identity of the keyboard-focused field (G5).
+    focused_part: Option<String>,
+    /// Hover target `{action}:{owner-key|-}` (G5).
+    hover_target: Option<String>,
 }
 
 /// One values scoped to one instantiated message row.
@@ -242,6 +246,9 @@ struct RowView<'a> {
     /// Pre-formatted swipe counter (React `MessageSwipePager` "N/M"); empty
     /// hides the label, exactly like the legacy path.
     swipe_label: &'a str,
+    /// Hover target `{action}:{owner-key|-}` (G5) — the action buttons draw
+    /// the React `:hover` styles when they own it.
+    hover_target: Option<&'a str>,
 }
 
 /// Pre-rendered chat chrome fragments for one frame. `Element` clones are
@@ -389,6 +396,8 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
             .filter(|row| !row.swipe_label.is_empty())
             .map(|row| (row.id.clone(), row.swipe_label.clone()))
             .collect(),
+    focused_part: view.focused_part.clone(),
+    hover_target: view.hover_target.clone(),
     };
 
     let state = ChatSurfaceStateV1 {
@@ -650,6 +659,7 @@ fn render_row(node: &UiNodeV1, ctx: &ChromeCtx, message: &MessageDto) -> Element
         },
         streaming_state: ctx.streaming && uuid == "streaming",
         swipe_label,
+        hover_target: ctx.hover_target.as_deref(),
     };
     let role_name = if user { "user" } else { "assistant" };
     let style = crate::message_bubble_style(user, ctx.compact, ctx.font_px);
@@ -899,15 +909,24 @@ fn message_action_button(kind: &str, row: &RowView) -> Element {
         _ => ("", ""),
     };
     let uuid = row.uuid;
+    // React `.MessageBubble_actionButton:hover` (G5, no pseudo-classes in
+    // this Blitz build): color #f3eee8 over background #302c28.
+    let hovered = row.hover_target == Some(&format!("{kind}:{uuid}"));
+    let style = if hovered {
+        "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.10);border-radius:16px;background:#302c28;color:#f3eee8;cursor:pointer;"
+    } else {
+        "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.10);border-radius:16px;background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;"
+    };
     rsx! {
         button {
             class: "MessageBubble_actionButton",
             r#type: "button",
             "data-action": "{kind}",
+            "data-state": if hovered { "hover" } else { "idle" },
             "data-message-id": "{uuid}",
             "aria-label": "{label}",
             title: "{label}",
-            style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.10);border-radius:16px;background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+            style: style,
             {crate::product_shell::icon(icon, 16)}
         }
     }
@@ -1000,6 +1019,8 @@ fn render_composer(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
         context_panel_open: ctx.context_panel_open,
         context_summary: ctx.context_summary.clone(),
         streaming: ctx.streaming,
+        focused_part: ctx.focused_part.clone(),
+        hover_target: ctx.hover_target.clone(),
     };
     render_node(node, &composer_ctx)
 }
@@ -1012,6 +1033,13 @@ struct ComposerCtx {
     context_panel_open: bool,
     context_summary: Option<ContextUsageSummaryV1>,
     streaming: bool,
+    /// Theme SDK identity of the keyboard-focused field (G5) — the React
+    /// focus ring (box-shadow 0 0 0 3px rgba(227,138,98,.2)) renders on the
+    /// composer textarea when focused.
+    focused_part: Option<String>,
+    /// Hover target `{action}:{owner-key|-}` (G5) for the React `:hover`
+    /// styles (pseudo-classes do not exist in this Blitz build).
+    hover_target: Option<String>,
 }
 
 fn render_node(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
@@ -1097,10 +1125,20 @@ fn render_container(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
     if node.id == "composer-textarea" {
         let color = ctx.color.clone();
         let label = ctx.label.clone();
+        // G5 focus ring (React `[data-component='textarea']:focus`:
+        // box-shadow 0 0 0 3px rgba(227,138,98,.2)) — pseudo-classes do not
+        // exist in this Blitz build; the host publishes the focused part.
+        let focused = ctx.focused_part.as_deref() == Some("slot:chat.composer");
+        let style = if focused {
+            format!("flex:1;min-height:48px;font-size:16px;line-height:1.4;box-shadow:0 0 0 3px rgba(227,138,98,0.2);border-radius:8px;color:{color};")
+        } else {
+            format!("flex:1;min-height:48px;color:{color};font-size:16px;line-height:1.4;")
+        };
         return rsx! {
             div {
                 "data-component": "textarea",
-                style: "flex:1;min-height:48px;color:{color};font-size:16px;line-height:1.4;",
+                "data-state": if focused { "focused" } else { "idle" },
+                style: "{style}",
                 "{label}"
             }
         };
@@ -1498,6 +1536,26 @@ fn render_button(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
             .and_then(|action| data_action_attr(action).or_else(|| non_empty(look.action)))
     };
     let mut style = button_style(&node.id, look.primary, look.danger);
+    // G5 hover (React `[data-component='button']:hover` background #39342f,
+    // primary #f09a73; pseudo-classes do not exist in this Blitz build — the
+    // host resolves the hover target from the hit-rect snapshot).
+    let hover_key = action_attr
+        .as_deref()
+        .map(|action| format!("{action}:-"))
+        .or_else(|| non_empty(look.action).map(|action| format!("{action}:-")));
+    let hovered = hover_key
+        .as_deref()
+        .is_some_and(|key| ctx.hover_target.as_deref() == Some(key));
+    if hovered && !is_streaming_send {
+        if look.primary {
+            style = style.replace("background:#e38a62;", "background:#f09a73;");
+        } else if !style.contains("background:transparent;") {
+            style = style.replace("background:rgba(243,238,232,0.05);", "background:#39342f;");
+        } else {
+            style = style.replace("background:transparent;", "background:rgba(33,27,23,0.10);");
+            style = style.replace("color:#998f87;", "color:#f3eee8;");
+        }
+    }
     style.push_str(&overrides_style(node));
     let icon_element = match look.icon_fill_color {
         Some(fill) if !look.danger => {
@@ -1532,6 +1590,7 @@ fn render_button(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
             "data-variant": variant,
             "data-size": if look.primary { Some("md".to_owned()) } else { None },
             "data-action": action_attr,
+            "data-state": if hovered { "hover" } else { "idle" },
             "aria-label": "{aria}",
             title,
             style: "{style}",

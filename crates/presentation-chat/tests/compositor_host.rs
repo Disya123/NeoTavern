@@ -241,6 +241,8 @@ fn markdown_minimal_probe() {
         header_search_match_count: 0,
         variant_picker_for: None,
         variant_picker_rows: Vec::new(),
+        focused_part: None,
+        hover_target: None,
         variant_picker_empty: false,
         details_message_id: None,
         details_mode: "details".to_string(),

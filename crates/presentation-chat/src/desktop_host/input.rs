@@ -179,6 +179,53 @@ impl App {
             focus = TextFocus::PresetSampler;
         }
         self.focus = focus;
+        // G5 focus feedback: publish the focused field's Theme SDK identity
+        // so the renderers can draw the React focus ring on the same part.
+        // `set_focused_part` only bumps on a CHANGE — re-tapping the already
+        // focused field stays free.
+        let focused_part = match focus {
+            TextFocus::None => None,
+            TextFocus::Composer => Some("slot:chat.composer"),
+            TextFocus::CharacterSearch => Some("component:text-field+part:search"),
+            TextFocus::ChatSearch => Some("part:chat-search"),
+            TextFocus::CreateName => Some("part:create-name"),
+            TextFocus::ProfileCreateName => Some("part:profile-create-name"),
+            TextFocus::ProfileRename => Some("part:profile-rename-input"),
+            TextFocus::ChatRename => Some("part:chat-rename-input"),
+            TextFocus::MemoryContent => Some("part:memory-content-input"),
+            TextFocus::MemoryKeys => Some("part:memory-keys-input"),
+            TextFocus::PresetName => Some("part:preset-name-input"),
+            TextFocus::ProviderName => Some("part:provider-name-input"),
+            TextFocus::MessageEdit => Some("part:message-edit-input"),
+            TextFocus::LorebookName => Some("part:lorebook-name-input"),
+            TextFocus::LorebookDescription => Some("part:lorebook-description-input"),
+            TextFocus::PersonaName => Some("part:persona-name-input"),
+            TextFocus::PersonaDescription => Some("part:persona-description-input"),
+            TextFocus::CardPath => Some("part:card-path-input"),
+            TextFocus::PromptTemplatePath => Some("part:prompt-template-path-input"),
+            TextFocus::PresetImportPath => Some("part:generation-preset-path-input"),
+            TextFocus::ProfileImportPath => Some("part:profile-import-path"),
+            TextFocus::HeaderSearch => Some("part:header-search-input"),
+            TextFocus::InstructSystem => Some("part:instruct-system-input"),
+            TextFocus::InstructUser => Some("part:instruct-user-input"),
+            TextFocus::InstructAssistant => Some("part:instruct-assistant-input"),
+            TextFocus::InstructTool => Some("part:instruct-tool-input"),
+            TextFocus::InstructSuffix => Some("part:instruct-suffix-input"),
+            TextFocus::InstructStops => Some("part:instruct-stops-input"),
+            TextFocus::PromptBlockName => Some("part:prompt-block-name-input"),
+            TextFocus::PromptBlockContent => Some("part:prompt-block-content-input"),
+            TextFocus::PromptBlockDepth => Some("part:prompt-block-depth-input"),
+            TextFocus::PromptBlockOrder => Some("part:prompt-block-order-input"),
+            TextFocus::PromptBlockModel => Some("part:prompt-block-model-input"),
+            TextFocus::CharacterName => Some("part:character-name-input"),
+            TextFocus::CharacterDescription => Some("part:character-description-input"),
+            TextFocus::CharacterTag => Some("part:character-tag-input"),
+            TextFocus::CharacterFirstMessage => Some("part:character-first-message-input"),
+            TextFocus::CharacterCreatorNotes => Some("part:character-creator-notes-input"),
+            TextFocus::CharacterGreeting(_) => Some("part:character-greeting-input"),
+            TextFocus::PresetSampler => Some("part:preset-value-input"),
+        };
+        self.session.set_focused_part(focused_part);
     }
     pub(super) fn near_panel_resize(&self, css_x: f32) -> bool {
         // Hot path (per pointer event): direct state reads, no view-model
@@ -298,6 +345,30 @@ impl App {
             if self.cursor_icon != Some(icon) {
                 window.set_cursor(icon);
                 self.cursor_icon = Some(icon);
+            }
+        }
+        // G5 hover feedback: the topmost interactive control under the
+        // pointer, from the same hit-rect snapshot the tap capture uses.
+        // `set_hover_target` bumps the scene only when the target CHANGES —
+        // crossing dead space or moving within one button stays free. Skipped
+        // while a capture is active (press/drag/panel-resize/touch): React
+        // does not hover-highlight a control mid-gesture either, and a drag
+        // that crosses buttons must not repaint per slop pixel.
+        let capture_active = self.panel_drag.is_some()
+            || self.pending_ui.is_some()
+            || self.pending_message_action.is_some()
+            || self.pending_quick.is_some()
+            || self.pending_custom.is_some();
+        if !capture_active {
+            let hover = self
+                .hit_rects
+                .top_action(css_x, css_y)
+                .map(|(action, key)| format!("{action}:{}", key.unwrap_or("-")));
+            let hover = hover.as_deref();
+            if self.session.route_state().hover_target.as_deref() != hover {
+                self.session.set_hover_target(hover);
+                self.dirty = true;
+                self.window.as_ref().map(|w| w.request_redraw());
             }
         }
         let _ = css_y;
@@ -782,11 +853,20 @@ mod tests {
         let mut app = custom_button("custom.chat.snapshots-menu");
         app.pointer_down(30.0, 110.0);
         app.pointer_move(30.0, 110.0 + TOUCH_SLOP_CSS + 1.0);
+        // The slop-cancel dropped the capture, so moving BACK over the
+        // button is a plain hover (G5): the button highlights, one frame.
         app.pointer_move(30.0, 110.0);
+        assert!(!app.session.view().snapshots_menu_open);
+        assert!(app.dirty);
+        assert_eq!(
+            app.session.view().hover_target.as_deref(),
+            Some("custom.chat.snapshots-menu:-")
+        );
+        assert!(app.pending_custom.is_none());
+        app.dirty = false;
         app.pointer_up(30.0, 110.0);
         assert!(!app.session.view().snapshots_menu_open);
         assert!(!app.dirty);
-        assert!(app.pending_custom.is_none());
         app.pointer_down(30.0, 110.0);
         app.pointer_up(30.0, 110.0 + TOUCH_SLOP_CSS + 1.0);
         assert!(!app.session.view().snapshots_menu_open);
@@ -802,6 +882,52 @@ mod tests {
         app.pointer_up(30.0, 110.0);
         assert!(app.session.scene_epoch() > epoch);
         assert!(app.dirty);
+    }
+
+    #[test]
+    fn hover_target_updates_only_on_change_and_reaches_the_view() {
+        let mut app = custom_button("custom.chat.snapshots-menu");
+        // Inside the authored button rect (10..50 x 90..130).
+        app.dirty = false;
+        app.pointer_move(30.0, 110.0);
+        assert_eq!(
+            app.session.view().hover_target.as_deref(),
+            Some("custom.chat.snapshots-menu:-")
+        );
+        assert!(app.dirty, "a hover CHANGE must request a frame");
+        // Moving within the same control: no extra bump, no extra produce.
+        app.dirty = false;
+        app.pointer_move(32.0, 112.0);
+        assert!(!app.dirty, "same-target moves must stay free");
+        // Leaving to dead space clears the target and requests one frame.
+        app.pointer_move(400.0, 400.0);
+        assert_eq!(app.session.view().hover_target, None);
+        assert!(app.dirty);
+    }
+
+    #[test]
+    fn focus_tap_publishes_the_focused_part_identity() {
+        let mut app = custom_button("custom.chat.snapshots-menu");
+        // Synthesize the composer field rect at (100..600, 600..660).
+        app.hit_rects.rects.push(HitRect {
+            identity: "slot:chat.composer".into(),
+            action: None,
+            key: None,
+            x: 100.0,
+            y: 600.0,
+            w: 500.0,
+            h: 60.0,
+        });
+        app.pointer_down(300.0, 630.0);
+        assert_eq!(app.focus, TextFocus::Composer);
+        assert_eq!(
+            app.session.view().focused_part.as_deref(),
+            Some("slot:chat.composer")
+        );
+        // Re-tapping the same field stays free (no bump).
+        let epoch = app.session.scene_epoch();
+        app.pointer_down(300.0, 630.0);
+        assert_eq!(app.session.scene_epoch(), epoch);
     }
 
     #[test]

@@ -233,6 +233,8 @@ impl<W: ProductWire> ChatSession<W> {
             header_search_match_count: self.state.header_search_match_count,
             variant_picker_for: self.state.variant_picker_for.clone(),
             variant_picker_rows,
+            focused_part: self.state.focused_part.clone(),
+            hover_target: self.state.hover_target.clone(),
             // `None` variants = the lazy list query still loading (React
             // `variants.isLoading`); a fetched-but-empty list shows the
             // honest empty copy.

@@ -214,6 +214,20 @@ Safe-mode выход на рукописный RSX: `--legacy-chrome` или
 
 Окно кликабельно и скроллится:
 
+- **Фокус-ринг и hover (G5).** В этом Blitz-билде нет псевдоклассов
+  (`:hover`/`:focus`), события мыши не доходят до DOM — поэтому видимый
+  фидбэк идёт через хост: `pointer_down` публикует Theme SDK identity
+  сфокусированного поля (`state.focused_part`), `pointer_move` — hover-цель
+  `{action}:{owner-key|-}` из ТОГО ЖЕ hit-rect снапшота, что и тапы
+  (`state.hover_target`). Оба сеттера бампают сцену только при ИЗМЕНЕНИИ
+  (движение внутри кнопки бесплатно; hover заморожен во время активного
+  захвата — press/drag/panel-resize, как в React). Рендер — точные React
+  значения из `product.css`: фокус-ринг `box-shadow:0 0 0 3px
+  rgba(227,138,98,.2)` на композер-поле; hover: default-кнопки `#39342f`,
+  primary Send `#f09a73`, иконки сообщений/тулбара `#302c28`/`rgba(33,27,23,.1)`
+  + `#f3eee8`; кнопки несут `data-state="hover|idle"`, поле — `focused`.
+  Покрытие: легаси-RSX и blueprint-хром симметричны (скелет-гейт
+  `blueprint_chrome_skeleton_matches_legacy_rsx` проверяет и атрибуты).
 - **Клик (левая кнопка).** winit-перо → CSS-координаты (`physical / density`) →
   `shell_hit::hit_test(shell_view, x, y)` — тот же hit-test, что на Android.
   Tap захватывается на `Down` (`PendingUi`), отменяется при сдвиге за

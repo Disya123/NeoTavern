@@ -132,6 +132,14 @@ pub struct ProductChatView {
     /// `chats.messages.variants.list` rows.
     pub variant_picker_for: Option<String>,
     pub variant_picker_rows: Vec<VariantRowView>,
+    /// Theme SDK identity of the keyboard-focused field (G5): the React
+    /// `box-shadow: 0 0 0 3px rgba(227,138,98,.2)` focus ring renders on the
+    /// matching part.
+    pub focused_part: Option<String>,
+    /// Hover target `{action}:{owner-key|-}` (G5) for the React `:hover`
+    /// backgrounds (default `#39342f`, primary `#f09a73`, icon buttons
+    /// `#302c28` + `#f3eee8`).
+    pub hover_target: Option<String>,
     /// React picker empty state (`chat:swipePickerEmpty`): `true` after a
     /// successful list with no rows; `false` = loading.
     pub variant_picker_empty: bool,
@@ -213,6 +221,8 @@ impl Default for ProductChatView {
             header_search_match_count: 0,
             variant_picker_for: None,
             variant_picker_rows: Vec::new(),
+            focused_part: None,
+            hover_target: None,
             variant_picker_empty: false,
             details_message_id: None,
             details_row: None,
@@ -491,6 +501,8 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         header_search_match_count: 0,
         variant_picker_for: None,
         variant_picker_rows: Vec::new(),
+        focused_part: None,
+        hover_target: None,
         variant_picker_empty: false,
         details_message_id: None,
         details_row: None,

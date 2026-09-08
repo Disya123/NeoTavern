@@ -320,18 +320,30 @@ fn message_action_button(
     label: &'static str,
     icon_name: &'static str,
     message_id: &str,
+    hover_target: Option<&str>,
 ) -> Element {
+    // React `.MessageBubble_actionButton:hover` — color #f3eee8 over
+    // background #302c28 (G5; pseudo-classes do not exist in this Blitz
+    // build, so the host resolves the hover target from the same hit-rect
+    // snapshot the tap capture uses).
+    let hovered = hover_target == Some(&format!("{action}:{message_id}"));
+    let style = if hovered {
+        "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.10);border-radius:16px;background:#302c28;color:#f3eee8;cursor:pointer;"
+    } else {
+        "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.10);border-radius:16px;background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;"
+    };
     rsx! {
         button {
             class: "MessageBubble_actionButton",
             r#type: "button",
             "data-action": "{action}",
+            "data-state": if hovered { "hover" } else { "idle" },
             // Lets the native hit-rect snapshot resolve the owning row
             // (`SlotNode.key` = data-ui-key || data-message-id).
             "data-message-id": "{message_id}",
             "aria-label": "{label}",
             title: "{label}",
-            style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.10);border-radius:16px;background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+            style: style,
             {crate::product_shell::icon(icon_name, 16)}
         }
     }
@@ -1110,6 +1122,10 @@ pub fn product_chat_app() -> Element {
     let header_radius = header_px / 2.0;
     let msg_px = tokens.control_height_xs_px();
     let msg_radius = msg_px / 2.0;
+    // G5 hover feedback for the message action bar (React
+    // `.MessageBubble_actionButton:hover`): the host resolves the hover
+    // target from the same hit-rect snapshot the taps use.
+    let hover = view.hover_target.as_deref();
     // Blueprint-driven chrome (M2 phase 2): when a document source is
     // installed, header/viewport/composer structure comes from the authored
     // JSON; the legacy RSX below stays the fallback and the parity oracle.
@@ -1174,6 +1190,16 @@ pub fn product_chat_app() -> Element {
         "#998f87"
     } else {
         "#f3eee8"
+    };
+    // G5 focus ring on the composer field (React
+    // `[data-component='textarea']:focus`): box-shadow 0 0 0 3px
+    // rgba(227,138,98,.2) — pseudo-classes do not exist in this Blitz build,
+    // the focused part arrives from the host's focus resolution.
+    let composer_focused = view.focused_part.as_deref() == Some("slot:chat.composer");
+    let composer_field_style = if composer_focused {
+        "flex:1;min-height:48px;font-size:16px;line-height:1.4;box-shadow:0 0 0 3px rgba(227,138,98,0.2);border-radius:8px;"
+    } else {
+        "flex:1;min-height:48px;font-size:16px;line-height:1.4;"
     };
     let composer_style = if compact {
         format!(
@@ -1423,25 +1449,25 @@ pub fn product_chat_app() -> Element {
                                             "data-state": "idle",
                                             // Packed class governs (flex row, wrap, gap 4px,
                                             // margin-left:auto) — see the message-header note.
-                                            {message_action_button("details", "Message details", "TextAlignLeft", &row.id)}
+                                            {message_action_button("details", "Message details", "TextAlignLeft", &row.id, hover)}
                                             {if row.manual_excluded {
-                                                message_action_button("context", "Include in prompt context", "Eye", &row.id)
+                                                message_action_button("context", "Include in prompt context", "Eye", &row.id, hover)
                                             } else {
-                                                message_action_button("context", "Exclude from prompt context", "EyeSlash", &row.id)
+                                                message_action_button("context", "Exclude from prompt context", "EyeSlash", &row.id, hover)
                                             }}
-                                            {message_action_button("edit", "Edit message", "PencilSimple", &row.id)}
-                                            {message_action_button("copy", "Copy", "Copy", &row.id)}
-                                            {message_action_button("checkpoint", "Checkpoint", "Flag", &row.id)}
-                                            {message_action_button("branch", "Branch", "GitBranch", &row.id)}
+                                            {message_action_button("edit", "Edit message", "PencilSimple", &row.id, hover)}
+                                            {message_action_button("copy", "Copy", "Copy", &row.id, hover)}
+                                            {message_action_button("checkpoint", "Checkpoint", "Flag", &row.id, hover)}
+                                            {message_action_button("branch", "Branch", "GitBranch", &row.id, hover)}
                                             if row.checkpoint_chat_id.is_some() {
-                                                {message_action_button("delete-checkpoint", "Remove checkpoint", "Flag", &row.id)}
+                                                {message_action_button("delete-checkpoint", "Remove checkpoint", "Flag", &row.id, hover)}
                                             }
-                                            {message_action_button("delete", "Delete message", "Trash", &row.id)}
-                                            {message_action_button("rollback", "Rollback to here", "ArrowUUpLeft", &row.id)}
-                                            {message_action_button("history", "Edit history", "ClockCounterClockwise", &row.id)}
+                                            {message_action_button("delete", "Delete message", "Trash", &row.id, hover)}
+                                            {message_action_button("rollback", "Rollback to here", "ArrowUUpLeft", &row.id, hover)}
+                                            {message_action_button("history", "Edit history", "ClockCounterClockwise", &row.id, hover)}
                                             if row.run_id.is_some() {
-                                                {message_action_button("prompt", "View prompt plan", "BookOpenText", &row.id)}
-                                                {message_action_button("steps", "View run steps", "List", &row.id)}
+                                                {message_action_button("prompt", "View prompt plan", "BookOpenText", &row.id, hover)}
+                                                {message_action_button("steps", "View run steps", "List", &row.id, hover)}
                                             }
                                         }
                                     }
@@ -1632,6 +1658,7 @@ pub fn product_chat_app() -> Element {
                                             "data-variant": "danger",
                                             "data-size": "md",
                                             "data-action": "stop",
+                                            "data-state": "idle",
                                             style: "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#fee2e2;background:#b91c1c;font-size:13px;font-weight:500;",
                                             span { "data-part": "label", "Stop" }
                                             span {
@@ -1649,7 +1676,13 @@ pub fn product_chat_app() -> Element {
                                             "data-variant": "primary",
                                             "data-size": "md",
                                             "data-action": "send",
-                                            style: "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
+                                            // G5 hover: React primary-button :hover (#f09a73).
+                                            "data-state": if hover == Some("send:-") { "hover" } else { "idle" },
+                                            style: if hover == Some("send:-") {
+                                                "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#f09a73;font-size:13px;font-weight:500;"
+                                            } else {
+                                                "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;"
+                                            },
                                             span { "data-part": "label", "Send" }
                                             span {
                                                 "data-part": "icon",
@@ -1671,9 +1704,16 @@ pub fn product_chat_app() -> Element {
                                                 class: "ChatWorkspace_menuButton",
                                                 r#type: "button",
                                                 "data-action": "composer-settings",
+                                                // React `.ChatWorkspace_menuButton:hover`
+                                                // (G5; no pseudo-classes in this Blitz build).
+                                                "data-state": if hover == Some("composer-settings:-") { "hover" } else { "idle" },
                                                 "aria-label": "Settings",
                                                 title: "Settings",
-                                                style: "display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.10);border-radius:16px;color:#c5bbb2;background:rgba(243,238,232,0.05);",
+                                                style: if hover == Some("composer-settings:-") {
+                                                    "display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.10);border-radius:16px;color:#f3eee8;background:rgba(33,27,23,0.10);"
+                                                } else {
+                                                    "display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.10);border-radius:16px;color:#c5bbb2;background:rgba(243,238,232,0.05);"
+                                                },
                                                 {crate::product_shell::icon("GearSix", 15)}
                                                 span { style: "font-size:13px;", "Settings" }
                                             }
@@ -1681,9 +1721,14 @@ pub fn product_chat_app() -> Element {
                                                 class: "ChatWorkspace_iconButton",
                                                 r#type: "button",
                                                 "data-action": "composer-reset",
+                                                "data-state": if hover == Some("composer-reset:-") { "hover" } else { "idle" },
                                                 "aria-label": "Reset",
                                                 title: "Reset",
-                                                style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;border-radius:16px;background:transparent;color:#998f87;",
+                                                style: if hover == Some("composer-reset:-") {
+                                                    "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;border-radius:16px;background:rgba(33,27,23,0.10);color:#f3eee8;"
+                                                } else {
+                                                    "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;border-radius:16px;background:transparent;color:#998f87;"
+                                                },
                                                 {crate::product_shell::icon("X", 17)}
                                             }
                                         }
@@ -1691,11 +1736,18 @@ pub fn product_chat_app() -> Element {
                                             class: "ChatWorkspace_contextTrigger",
                                             r#type: "button",
                                             "data-action": "composer-context",
+                                            // React `.ChatWorkspace_contextTrigger:hover`
+                                            // (G5; no pseudo-classes in this Blitz build).
+                                            "data-state": if hover == Some("composer-context:-") { "hover" } else { "idle" },
                                             "aria-label": "Context",
                                             // Honest estimate from the session
                                             // summary (see `context_meter_label`).
                                             title: "{context_meter_title}",
-                                            style: "display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.10);border-radius:16px;color:#c5bbb2;background:rgba(243,238,232,0.05);",
+                                            style: if hover == Some("composer-context:-") {
+                                                "display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.10);border-radius:16px;color:#f3eee8;background:rgba(33,27,23,0.10);"
+                                            } else {
+                                                "display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.10);border-radius:16px;color:#c5bbb2;background:rgba(243,238,232,0.05);"
+                                            },
                                             {crate::product_shell::icon("Database", 15)}
                                             span { style: "font-size:13px;", "{context_meter_label}" }
                                         }
@@ -1710,7 +1762,8 @@ pub fn product_chat_app() -> Element {
                                         style: "display:flex;flex-direction:column;flex:1;min-height:0;padding:12px 16px 8px;box-sizing:border-box;background:rgba(36,33,30,0.55);",
                                         div {
                                             "data-component": "textarea",
-                                            style: "flex:1;min-height:48px;color:{composer_color};font-size:16px;line-height:1.4;",
+                                            "data-state": if composer_focused { "focused" } else { "idle" },
+                                            style: "color:{composer_color};{composer_field_style}",
                                             "{composer_label}"
                                         }
                                         div {
@@ -1751,22 +1804,39 @@ pub fn product_chat_app() -> Element {
                                                 button {
                                                     r#type: "button",
                                                     "data-action": "composer-settings",
+                                                    // React `.ChatWorkspace_composerUtilities button:hover`
+                                                    // (G5, no pseudo-classes in this Blitz build).
+                                                    "data-state": if hover == Some("composer-settings:-") { "hover" } else { "idle" },
                                                     "aria-label": "Settings",
-                                                    style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#998f87;",
+                                                    style: if hover == Some("composer-settings:-") {
+                                                        "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:rgba(33,27,23,0.10);color:#f3eee8;"
+                                                    } else {
+                                                        "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#998f87;"
+                                                    },
                                                     {crate::product_shell::icon("List", 19)}
                                                 }
                                                 button {
                                                     r#type: "button",
                                                     "data-action": "scroll-latest",
+                                                    "data-state": if hover == Some("scroll-latest:-") { "hover" } else { "idle" },
                                                     "aria-label": "Scroll to latest",
-                                                    style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#998f87;",
+                                                    style: if hover == Some("scroll-latest:-") {
+                                                        "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:rgba(33,27,23,0.10);color:#f3eee8;"
+                                                    } else {
+                                                        "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#998f87;"
+                                                    },
                                                     {crate::product_shell::icon("ArrowDown", 19)}
                                                 }
                                                 button {
                                                     r#type: "button",
                                                     "data-action": "composer-reset",
+                                                    "data-state": if hover == Some("composer-reset:-") { "hover" } else { "idle" },
                                                     "aria-label": "Reset",
-                                                    style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#998f87;",
+                                                    style: if hover == Some("composer-reset:-") {
+                                                        "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:rgba(33,27,23,0.10);color:#f3eee8;"
+                                                    } else {
+                                                        "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#998f87;"
+                                                    },
                                                     {crate::product_shell::icon("MagicWand", 19)}
                                                 }
                                             }
@@ -1778,6 +1848,7 @@ pub fn product_chat_app() -> Element {
                                                     "data-variant": "danger",
                                                     "data-size": "md",
                                                     "data-action": "stop",
+                                                    "data-state": "idle",
                                                     "aria-label": "Stop",
                                                     title: "Stop",
                                                     style: "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#fee2e2;background:#b91c1c;font-size:13px;font-weight:500;",
@@ -1799,7 +1870,12 @@ pub fn product_chat_app() -> Element {
                                                     "data-action": "send",
                                                     "aria-label": "Send",
                                                     title: "Send",
-                                                    style: "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
+                                                    "data-state": if hover == Some("send:-") { "hover" } else { "idle" },
+                                                    style: if hover == Some("send:-") {
+                                                        "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#f09a73;font-size:13px;font-weight:500;"
+                                                    } else {
+                                                        "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;"
+                                                    },
                                                     span { "data-part": "label", "Send" }
                                                     span {
                                                         "data-part": "icon",

@@ -248,6 +248,16 @@ pub struct ChatRouteState {
     /// `HEIGHT_CORRECTION_CAP` — AGENTS §20.
     pub height_corrections: HashMap<String, (f64, f64)>,
     pub(crate) height_correction_order: VecDeque<String>,
+    /// Theme SDK identity (`slot:chat.composer`, `part:chat-search`, …) of
+    /// the text field that currently owns keyboard focus (G5). Display-only
+    /// state driven by the hosts' focus resolution; renderers compare it
+    /// against their own part to draw the React focus ring.
+    pub focused_part: Option<String>,
+    /// Hover target as `{action}:{owner-key|-}` (G5) — e.g. `"send:-"` or
+    /// `"copy:<message-uuid>"`, from the same hit-rect snapshot the tap
+    /// capture uses. Display-only; changes only when the pointer crosses an
+    /// interactive control, never per pixel.
+    pub hover_target: Option<String>,
     /// Matches React `useUiStore.pinnedCharacterId` (select also pins).
     pub pinned_character_id: Option<String>,
     pub create_dialog_open: bool,
