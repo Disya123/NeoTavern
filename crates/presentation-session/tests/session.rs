@@ -7,7 +7,7 @@ use neotavern_neocompositor::{
 };
 use neotavern_presentation_m0_d2::publish_selectable_text;
 use neotavern_presentation_session::{
-    PresentationSession, ScrollRebase, SessionOutcome, map_viewport_geometry,
+    map_viewport_geometry, PresentationSession, ScrollRebase, SessionOutcome,
 };
 
 fn lid(n: u64) -> LogicalItemId {
@@ -189,12 +189,10 @@ fn autoscroll_uses_existing_scroll_id_and_selection_damage_is_underlay_only() {
         .expect("extend");
     assert_eq!(extended.raster, RasterDecision::SelectionOnly);
     assert!(!extended.glass_roi_invalidations.is_empty());
-    assert!(
-        extended
-            .damage
-            .iter()
-            .all(|rect| { rect.width.saturating_mul(rect.height) < 240 * 240 || rect.is_empty() })
-    );
+    assert!(extended
+        .damage
+        .iter()
+        .all(|rect| { rect.width.saturating_mul(rect.height) < 240 * 240 || rect.is_empty() }));
     let update = session
         .drag_selection(
             origin_x + 80.0,

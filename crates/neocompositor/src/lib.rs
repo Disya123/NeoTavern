@@ -38,9 +38,8 @@ pub use display_list::{
     AffineCoeffs, BackdropRootId, BarrierId, CaretPaintOp, ClipChainId, ClipNode,
     CompositionMarkKind, CompositionPaintOp, EffectKind, EffectNode, EffectNodeId, EffectScopeId,
     GlassBoundary, HandleKind, HandlePaintOp, ImageLayer, ImagePaintOp, NeoDisplayList, NeoPaintOp,
-    PaintChunk,
-    PaintChunkId, PaintOrderKey, Rect, SelectionPaintOp, SpatialNode, SpatialNodeId, StubPayload,
-    TextPaintFragment,
+    PaintChunk, PaintChunkId, PaintOrderKey, Rect, SelectionPaintOp, SpatialNode, SpatialNodeId,
+    StubPayload, TextPaintFragment,
 };
 pub use epoch::{DeviceEpoch, EpochClock, FrameId, PresentationTime, SceneEpoch, ScrollEpoch};
 pub use fast_path::{CompositorFastPath, PresentOutcome, RasterDecision};

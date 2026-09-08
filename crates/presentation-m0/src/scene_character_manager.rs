@@ -39,7 +39,14 @@ pub fn build_cm_vello_scene(scene: &UiSceneV1, width: f64, height: f64) -> Scene
     vello_scene
 }
 
-fn draw_node(scene: &mut Scene, node: &UiNodeV1, x: f64, y: f64, available_w: f64, available_h: f64) {
+fn draw_node(
+    scene: &mut Scene,
+    node: &UiNodeV1,
+    x: f64,
+    y: f64,
+    available_w: f64,
+    available_h: f64,
+) {
     let component = &node.hook.component;
     let part = node.hook.part.as_deref().unwrap_or("");
     let states = &node.hook.states;
@@ -68,7 +75,11 @@ fn draw_node(scene: &mut Scene, node: &UiNodeV1, x: f64, y: f64, available_w: f6
                     _ => {
                         // Collection and load-more share remaining space
                         let remaining = available_h - (cy - y);
-                        if remaining > 0.0 { remaining } else { 100.0 }
+                        if remaining > 0.0 {
+                            remaining
+                        } else {
+                            100.0
+                        }
                     }
                 };
                 draw_node(scene, child, x, cy, available_w, child_h);
@@ -81,7 +92,13 @@ fn draw_node(scene: &mut Scene, node: &UiNodeV1, x: f64, y: f64, available_w: f6
         }
         "text-field" if part == "search" => {
             // Search input
-            let rect = RoundedRect::new(x + 8.0, y + 2.0, x + available_w - 8.0, y + available_h - 2.0, 10.0);
+            let rect = RoundedRect::new(
+                x + 8.0,
+                y + 2.0,
+                x + available_w - 8.0,
+                y + available_h - 2.0,
+                10.0,
+            );
             scene.fill(Fill::NonZero, Affine::IDENTITY, INPUT_BG, None, &rect);
             // Search icon placeholder
             scene.fill(
@@ -104,7 +121,11 @@ fn draw_node(scene: &mut Scene, node: &UiNodeV1, x: f64, y: f64, available_w: f6
         "character-card" => {
             // Individual card
             let selected = states.contains(&"selected".to_string());
-            let border_color = if selected { CARD_SELECTED_BORDER } else { TEXT_MUTED };
+            let border_color = if selected {
+                CARD_SELECTED_BORDER
+            } else {
+                TEXT_MUTED
+            };
             let rect = RoundedRect::new(x, y, x + available_w, y + available_h, 12.0);
             scene.fill(Fill::NonZero, Affine::IDENTITY, CARD_BG, None, &rect);
             if selected {
@@ -124,7 +145,13 @@ fn draw_node(scene: &mut Scene, node: &UiNodeV1, x: f64, y: f64, available_w: f6
                 let _initial = character.name.chars().next().unwrap_or('?');
                 // Draw initial as a colored circle
                 let circle = vello::kurbo::Circle::new((x + 30.0, y + 30.0), 14.0);
-                scene.fill(Fill::NonZero, Affine::IDENTITY, BTN_SECONDARY, None, &circle);
+                scene.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    BTN_SECONDARY,
+                    None,
+                    &circle,
+                );
             }
             // Pin indicator
             if states.contains(&"pinned".to_string()) {
@@ -135,8 +162,18 @@ fn draw_node(scene: &mut Scene, node: &UiNodeV1, x: f64, y: f64, available_w: f6
         "button" => {
             // Button
             let is_primary = part == "create";
-            let color = if is_primary { BTN_PRIMARY } else { BTN_SECONDARY };
-            let rect = RoundedRect::new(x + 4.0, y + 2.0, x + available_w - 4.0, y + available_h - 2.0, 16.0);
+            let color = if is_primary {
+                BTN_PRIMARY
+            } else {
+                BTN_SECONDARY
+            };
+            let rect = RoundedRect::new(
+                x + 4.0,
+                y + 2.0,
+                x + available_w - 4.0,
+                y + available_h - 2.0,
+                16.0,
+            );
             scene.fill(Fill::NonZero, Affine::IDENTITY, color, None, &rect);
         }
         "character-view-toggle" => {
@@ -148,13 +185,22 @@ fn draw_node(scene: &mut Scene, node: &UiNodeV1, x: f64, y: f64, available_w: f6
             // Generic node: draw a subtle background
             if available_w > 0.0 && available_h > 0.0 {
                 let rect = RoundedRect::new(x, y, x + available_w, y + available_h.min(200.0), 4.0);
-                scene.fill(Fill::NonZero, Affine::IDENTITY, Color::from_rgb8(20, 14, 10), None, &rect);
+                scene.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    Color::from_rgb8(20, 14, 10),
+                    None,
+                    &rect,
+                );
             }
         }
     }
 
     // For non-container nodes, draw children within the same bounds
-    if !matches!(component.as_str(), "character-management" | "tabs" | "action-bar" | "text-field" | "character-card") {
+    if !matches!(
+        component.as_str(),
+        "character-management" | "tabs" | "action-bar" | "text-field" | "character-card"
+    ) {
         // Don't draw children for leaf nodes
     }
 }
@@ -166,7 +212,11 @@ fn draw_sidebar(scene: &mut Scene, x: f64, y: f64, w: f64, h: f64) {
     for i in 0..7 {
         let icon_y = y + 18.0 + i as f64 * 46.0;
         let circle = vello::kurbo::Circle::new((x + 28.0, icon_y), 14.0);
-        let color = if i == 2 { ICON_ACTIVE } else { Color::from_rgb8(107, 74, 42) };
+        let color = if i == 2 {
+            ICON_ACTIVE
+        } else {
+            Color::from_rgb8(107, 74, 42)
+        };
         scene.fill(Fill::NonZero, Affine::IDENTITY, color, None, &circle);
     }
 }

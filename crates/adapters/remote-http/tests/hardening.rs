@@ -553,11 +553,9 @@ fn cors_admits_opaque_null_origin_only_when_auth_is_on() {
         "opaque origin admitted when pairing is on"
     );
     assert!(
-        allowed
-            .headers
-            .iter()
-            .any(|(key, value)| key.eq_ignore_ascii_case("Access-Control-Allow-Origin")
-                && value == "null"),
+        allowed.headers.iter().any(|(key, value)| key
+            .eq_ignore_ascii_case("Access-Control-Allow-Origin")
+            && value == "null"),
         "CORS allow-origin echoes the opaque origin"
     );
     gated.shutdown();

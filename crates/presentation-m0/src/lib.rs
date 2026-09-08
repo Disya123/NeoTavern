@@ -20,10 +20,10 @@ pub mod gpu;
 pub mod pass_graph;
 #[cfg(feature = "gpu")]
 mod reference_visual_surface;
-#[cfg(feature = "gpu")]
-pub mod scene_character_manager;
 #[cfg(all(feature = "renderdoc-capture", target_os = "android"))]
 mod renderdoc_capture;
+#[cfg(feature = "gpu")]
+pub mod scene_character_manager;
 // Optional `ash` is Android-only in this crate. Keep the dep used on host so
 // `cargo test --features renderdoc-capture` does not warn.
 #[cfg(all(feature = "renderdoc-capture", not(target_os = "android")))]
@@ -35,8 +35,9 @@ pub mod verdict;
 
 pub use display_list::{
     AffineCoeffs, BackdropRootId, BarrierId, ClipChainId, ClipNode, EffectKind, EffectNode,
-    EffectNodeId, EffectScopeId, GlassBoundary, ImageLayer, ImagePaintOp, NeoDisplayList, NeoPaintOp, PaintChunk,
-    PaintChunkId, PaintOrderKey, Rect, SpatialNode, SpatialNodeId, StubPayload,
+    EffectNodeId, EffectScopeId, GlassBoundary, ImageLayer, ImagePaintOp, NeoDisplayList,
+    NeoPaintOp, PaintChunk, PaintChunkId, PaintOrderKey, Rect, SpatialNode, SpatialNodeId,
+    StubPayload,
 };
 pub use pass_graph::{compile_passes, CompiledPass, GraphError};
 pub use scene_d1a::static_d1a_scene;

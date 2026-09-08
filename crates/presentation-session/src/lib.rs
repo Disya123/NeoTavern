@@ -12,17 +12,18 @@ use neotavern_chat_viewport::{
     SceneGeneration, ScrollAck as ViewportScrollAck, TileFidelity, ViewportSession,
 };
 use neotavern_neocompositor::{
-    AffineCoeffs, BackdropRootId, BidiAffinity, ClipChainId, ClipId, ClipNode, CompositorFastPath,
-    DamageRect, DeviceEpoch, EffectKind, EffectNode, EffectNodeId, EpochClock, FrameMailbox,
-    FrameTransaction, FrameTransactionParts, GeometryTile, GeometryTileSnapshot, GestureId,
-    GlassBoundary, HitTestSnapshot, IngressReject, InteractionReady, LogicalRect, NeoDisplayList,
-    NeoPaintOp, NeoScene, PaintChunk, PaintChunkId, PaintOrderKey, Point, PointerEvent, PointerId,
-    PointerKind, PostAccept, PostReject, PresentationTime, PropertySnapshot, PropertyTreeBuilder,
+    apply_autoscroll, autoscroll_delta, compose_selectable, AffineCoeffs, BackdropRootId,
+    BidiAffinity, ClipChainId, ClipId, ClipNode, CompositorFastPath, DamageRect, DeviceEpoch,
+    EffectKind, EffectNode, EffectNodeId, EpochClock, FrameMailbox, FrameTransaction,
+    FrameTransactionParts, GeometryTile, GeometryTileSnapshot, GestureId, GlassBoundary,
+    HitTestSnapshot, IngressReject, InteractionReady, LogicalRect, NeoDisplayList, NeoPaintOp,
+    NeoScene, PaintChunk, PaintChunkId, PaintOrderKey, Point, PointerEvent, PointerId, PointerKind,
+    PostAccept, PostReject, PresentationTime, PropertySnapshot, PropertyTreeBuilder,
     RasterDecision, Rect, SceneEpoch, ScrollAck as CompositorScrollAck, ScrollEpoch, ScrollId,
     ScrollSequence, SelectablePaintPlan, SpatialKind, SpatialNode, SpatialNodeId, StableSemanticId,
     StubPayload, SurfaceFrameIngress, SurfaceId, TextFragmentId, TextInteractionSnapshot,
     TextOffset, TextRange, TextSnapshotSet, TileCoverage, TileId, TileKind, Vec2,
-    VisualSurfaceDeclare, apply_autoscroll, autoscroll_delta, compose_selectable,
+    VisualSurfaceDeclare,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

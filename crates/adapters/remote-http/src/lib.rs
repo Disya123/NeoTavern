@@ -606,12 +606,10 @@ fn respond_cors_preflight(request: Request, origin: &str) {
         .with_header(header("Access-Control-Allow-Origin", origin))
         .with_header(header("Vary", "Origin"))
         .with_header(header("Access-Control-Allow-Methods", "GET, POST, OPTIONS"))
-        .with_header(
-            header(
-                "Access-Control-Allow-Headers",
-                "Authorization, Content-Type, Last-Event-ID",
-            ),
-        )
+        .with_header(header(
+            "Access-Control-Allow-Headers",
+            "Authorization, Content-Type, Last-Event-ID",
+        ))
         .with_header(header("Access-Control-Max-Age", "600"))
         .with_header(header("Access-Control-Allow-Private-Network", "true"));
     let _ = request.respond(response);
