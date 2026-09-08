@@ -238,6 +238,11 @@ fn general_range_row(
                     "aria-label": "{label}",
                     style: "flex:1;height:8px;border-radius:4px;background:rgba(57,52,47,0.7);overflow:hidden;cursor:pointer;display:flex;",
                     div {
+                        // Key flips with the value: Blitz does not repaint
+                        // state-dependent inline styles on reused nodes (the
+                        // fill width would freeze at the first painted
+                        // percent).
+                        key: "range-fill-{pct}",
                         "data-part": "range-fill",
                         style: "height:100%;width:{pct}%;border-radius:4px;background:#e38a62;pointer-events:none;",
                     }

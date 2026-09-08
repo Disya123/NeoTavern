@@ -338,12 +338,17 @@ fn preset_number_row(row: &PresetValueRow, full_width: bool) -> Element {
     };
     rsx! {
         div {
+            key: "preset-row-{id}-{full_width}",
             style: "{width}",
             span {
                 style: "flex:1;min-width:0;color:#998f87;font-size:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
                 "{label}"
             }
             span {
+                // Key flips with focus: Blitz keeps a reused node's
+                // first-painted inline style, so the focus border would
+                // freeze on one row.
+                key: "preset-value-{id}-{row.focused}",
                 "data-part": "preset-value-input",
                 "data-ui-key": "{id}",
                 "aria-label": "{label}",
@@ -362,6 +367,9 @@ fn preset_flag_row(row: &PresetValueRow) -> Element {
     let state = if on { "on" } else { "off" };
     rsx! {
         button {
+            // Key flips with the switch state: track/thumb are inline styles
+            // and would freeze at the first-painted position.
+            key: "preset-flag-{id}-{state}",
             r#type: "button",
             "data-part": "preset-flag",
             "data-ui-key": "{id}",
@@ -835,6 +843,11 @@ fn advanced_tab(view: &ProductShellView) -> Element {
                                             "data-state": "{up_state}",
                                             "aria-label": "{up_aria}",
                                             "aria-disabled": !can_move_up,
+                                            // Key flips with the enabled state:
+                                            // the inline color would otherwise
+                                            // freeze on the first painted
+                                            // state on this reused node.
+                                            key: "block-up-{up_state}",
                                             style: "width:32px;height:36px;flex:none;color:{up_color};",
                                             span { "Up" }
                                         }
@@ -845,6 +858,7 @@ fn advanced_tab(view: &ProductShellView) -> Element {
                                             "data-state": "{down_state}",
                                             "aria-label": "{down_aria}",
                                             "aria-disabled": !can_move_down,
+                                            key: "block-down-{down_state}",
                                             style: "width:32px;height:36px;flex:none;color:{down_color};",
                                             span { "Down" }
                                         }

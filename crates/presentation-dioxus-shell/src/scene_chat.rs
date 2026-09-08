@@ -70,6 +70,11 @@ thread_local! {
     /// shell. Off by default: the packed `.AppShell_shell` canvas keeps the
     /// scene opaque.
     static WALLPAPER_MODE: RefCell<bool> = const { RefCell::new(false) };
+
+    /// `node_id:property` pairs whose document-shadows-table notice already
+    /// fired (see `warn_shadowed_table`).
+    static SHADOW_NOTICES: RefCell<std::collections::HashSet<String>> =
+        RefCell::new(std::collections::HashSet::new());
 }
 
 struct DocumentCacheEntry {
@@ -1396,6 +1401,15 @@ const BUTTON_GEOMETRY: ButtonLook = ButtonLook {
     danger: false,
 };
 
+/// One-time stderr notice when an authored document declaration REPLACES a
+/// built-in `scene_chat` table value for the same node: editing the table is
+/// invisible for that node, the document is the winning source (recipe,
+/// "что где живёт"). Returns `true` the first time a given pair fires —
+/// testable without capturing stderr.
+fn warn_shadowed_table(node_id: &str, property: &str, shadows: bool) -> bool {
+    shadows && SHADOW_NOTICES.with(|cell| cell.borrow_mut().insert(format!("{node_id}:{property}")))
+}
+
 fn render_button(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
     let streaming = ctx.streaming;
     let look = button_look(&node.id, streaming);
@@ -1414,6 +1428,19 @@ fn render_button(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
     // never adds a visible span to an icon-only button.
     let is_streaming_send = streaming && node.id == "composer-send";
     let authored_label = node.overrides.label.as_ref();
+    // G2 shadow notice: an authored label REPLACES the table's text surfaces
+    // (aria/title/trailing) for this node — a `button_look` edit would be
+    // invisible. Fire once per node.
+    if warn_shadowed_table(
+        &node.id,
+        "label",
+        authored_label.is_some() && !is_streaming_send && !look.aria.is_empty(),
+    ) {
+        eprintln!(
+            "[neocompositor] document label shadows the built-in table for node '{}' — edit the document (or the fixture), not scene_chat tables",
+            node.id
+        );
+    }
     let aria: String = if is_streaming_send {
         "Stop".to_owned()
     } else {
@@ -1447,6 +1474,17 @@ fn render_button(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
     let icon_name: String = if is_streaming_send {
         "StopCircle".to_owned()
     } else {
+        // G2 shadow notice: an authored icon REPLACES the table icon.
+        if warn_shadowed_table(
+            &node.id,
+            "icon",
+            node.overrides.icon.is_some() && !look.icon.is_empty(),
+        ) {
+            eprintln!(
+                "[neocompositor] document icon shadows the built-in table for node '{}' — edit the document (or the fixture), not scene_chat tables",
+                node.id
+            );
+        }
         node.overrides
             .icon
             .clone()
@@ -1593,6 +1631,24 @@ mod context_meter_tests {
         let (title, label) = context_meter_label(None);
         assert_eq!(title, "Context 0%");
         assert_eq!(label, "0%");
+    }
+}
+
+#[cfg(test)]
+mod shadow_notice_tests {
+    use super::*;
+
+    #[test]
+    fn shadow_notice_fires_once_per_node_and_property() {
+        // Thread-local per test thread: fresh state, no cross-test pollution.
+        assert!(warn_shadowed_table("composer-send", "label", true));
+        assert!(!warn_shadowed_table("composer-send", "label", true));
+        assert!(warn_shadowed_table("composer-send", "icon", true));
+        // Not shadowing: no notice, no state change.
+        assert!(!warn_shadowed_table("composer-send", "label", false));
+        // Already warned for this pair.
+        assert!(!warn_shadowed_table("composer-send", "label", true));
+        assert!(warn_shadowed_table("composer-reset", "label", true));
     }
 }
 

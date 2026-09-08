@@ -81,6 +81,15 @@ pub fn chats_panel(view: &ProductShellView) -> Element {
                     "data-part": "chat-search",
                     placeholder: "Search chats and messages…",
                     value: "{view.chat_search}",
+                    // Key flips with emptiness: Blitz does not repaint
+                    // state-dependent inline styles on reused nodes — without
+                    // it the first typed character stays invisible
+                    // (color:transparent).
+                    key: if view.chat_search.trim().is_empty() {
+                        "chat-search-empty"
+                    } else {
+                        "chat-search-filled"
+                    },
                     style: if view.chat_search.trim().is_empty() {
                         "flex:1;min-width:0;background:transparent;border:none;outline:none;color:transparent;font-size:14px;"
                     } else {
@@ -147,6 +156,11 @@ fn chat_item(index: usize, item: &ChatCardView, selected_id: Option<&str>) -> El
     rsx! {
         li {
             "data-chat-index": "{index}",
+            // Key flips with the pinned height: a rename that switches the
+            // label script changes `row_height`, and Blitz would keep the
+            // reused node's first-painted height (diverging from the hit
+            // pass, which always derives the fresh `chats_layout` value).
+            key: "chat-item-{index}-{row_h}",
             // Pinned row box: the hit pass derives the same height from
             // `chats_layout`, so they stay in sync regardless of text flow.
             style: "height:{row_h}px;box-sizing:border-box;",

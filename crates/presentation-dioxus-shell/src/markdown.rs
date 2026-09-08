@@ -580,6 +580,10 @@ fn render_block(block: &Block, is_first: bool, is_last: bool) -> Element {
             items,
         } => rsx! {
             ul {
+                // Key flips with the first/last margins: streaming appends
+                // blocks and the reused list node would keep its
+                // first-painted margin.
+                key: "ul-{is_first}-{is_last}",
                 style: "display:block;margin:{block_margin(is_first, is_last)}padding-left:24px;list-style:disc;",
                 for item in items.iter() {
                     li { style: "display:list-item;", {render_inlines(item)} }
@@ -591,6 +595,7 @@ fn render_block(block: &Block, is_first: bool, is_last: bool) -> Element {
             items,
         } => rsx! {
             ol {
+                key: "ol-{is_first}-{is_last}",
                 style: "display:block;margin:{block_margin(is_first, is_last)}padding-left:24px;list-style:decimal;",
                 for item in items.iter() {
                     li { style: "display:list-item;", {render_inlines(item)} }

@@ -83,6 +83,11 @@ pub fn plugins_panel(view: &ProductShellView) -> Element {
                             rsx! {
                                 div {
                                     class: "st-card PluginsPage_card",
+                                    // Key flips with the enabled state: the
+                                    // green border inline style (and the
+                                    // switch track/thumb) would freeze at the
+                                    // first-painted state on this reused node.
+                                    key: "plugin-{item.id}-{item.enabled}",
                                     "data-component": "plugin-card",
                                     "data-plugin-id": "{item.id}",
                                     "data-enabled": "{item.enabled}",

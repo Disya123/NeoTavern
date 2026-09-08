@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- Native desktop UI determinism (wave B): a document declaration that shadows
+  a built-in presentation table now prints a one-time stderr notice ("edit
+  the document, not scene_chat tables") — six composer buttons were silently
+  immune to table edits; the recipe gains a precedence map ("what wins
+  where"). Eight state-dependent inline styles froze on their first painted
+  value (the Blitz reused-node stale-style defect) and now carry state keys:
+  the chats search input (the first typed character was invisible), slider
+  fill percent, chat row heights after a script-changing rename, sampler
+  focus borders and switches, prompt-block move buttons, markdown list
+  margins during streaming, and plugin card enable state. The key-flip
+  pattern is documented in the recipe's honest-boundaries section.
 - Native desktop UI determinism (wave A): every visible session mutation now
   reaches the screen — the host observes the session's `scene_epoch`
   (`about_to_wait`/`frame`) instead of relying on per-call-site `dirty`
