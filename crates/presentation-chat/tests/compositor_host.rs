@@ -3,7 +3,7 @@
 use contracts_generated::generated::MessageRole;
 use neotavern_neocompositor::PresentationTime;
 use neotavern_presentation_chat::{
-    scroll_dynamics::SmoothScroll, start_flagged_session, ChatCompositor, FakeWire,
+    scroll_dynamics::SmoothScroll, start_flagged_session, ChatCompositor, FakeWire, ShellAction,
     AVATAR_DISPLAY_MAX_PX, DEMO_AVATAR_ASSET_ID,
 };
 use neotavern_presentation_dioxus_shell::{product_chat_app, product_shell_app};
@@ -69,8 +69,14 @@ fn surface_size_converts_physical_pixels_to_css() {
 
 #[test]
 fn demo_session_loads_characters_list_for_character_manager() {
-    let (session, _) =
+    let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    // React `ui.ts` startup: the app opens IN THE CHAT — sidebar closed,
+    // resting panel `home`. The character manager loads on demand.
+    let closed = session.shell_view();
+    assert_eq!(closed.panel, "home");
+    assert!(!closed.sidebar_open);
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     let shell = session.shell_view();
     assert_eq!(shell.panel, "characters");
     assert!(shell.sidebar_open);
@@ -327,6 +333,7 @@ fn hit_rects_resolve_actions_from_layout_not_bands() {
     )
     .expect("route");
     session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
     let skeleton = inspect_slot_skeleton(
         product_shell_app,
@@ -475,8 +482,9 @@ fn product_shell_character_manager_paints_react_tokens() {
 
 #[test]
 fn demo_session_hydrates_a_display_sized_avatar() {
-    let (session, _) =
+    let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     let shell = session.shell_view();
     assert_eq!(
         shell.characters[0].avatar_asset_id.as_deref(),
@@ -547,6 +555,7 @@ fn hazel_card_stays_compact_on_the_phone_viewport() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1220, 2712, 3.0);
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
     let layout = inspect_product_layout(
         product_shell_app,
@@ -605,6 +614,7 @@ fn header_title_ellipsizes_on_the_phone_viewport() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1220, 2712, 3.0);
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     let title = character_manager_title(session.view().viewport_width);
     assert!(
         title.ends_with('…') || title == CHARACTER_MANAGER_TITLE,
@@ -4622,6 +4632,7 @@ fn shell_hit_new_button_opens_create_dialog() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1220, 2712, 3.0);
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     let mut view = session.shell_view();
     view.chat.viewport_width = 407;
     view.chat.viewport_height = 904;
@@ -4635,8 +4646,9 @@ fn shell_hit_new_button_opens_create_dialog() {
 #[test]
 fn shell_hit_segment_tabs_sit_above_the_home_indicator() {
     use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
-    let (session, _) =
+    let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     let mut view = session.shell_view();
     view.chat.viewport_width = 407;
     view.chat.viewport_height = 904;
@@ -4676,11 +4688,12 @@ fn toggle_rail_collapses_desktop_sidebar_and_keeps_the_rail() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1100, 760, 1.0);
-    assert!(session.sidebar_open());
-    assert!((chat_origin_x(&session.shell_view()) - 440.0).abs() < 0.5);
-    session.apply_shell_action(ShellAction::ToggleRail);
+    // React startup: the chat is the screen (rail + chat, no panel).
     assert!(!session.sidebar_open());
     assert!((chat_origin_x(&session.shell_view()) - 60.0).abs() < 0.5);
+    session.apply_shell_action(ShellAction::ToggleRail);
+    assert!(session.sidebar_open());
+    assert!((chat_origin_x(&session.shell_view()) - 440.0).abs() < 0.5);
 }
 
 #[test]
@@ -4689,6 +4702,7 @@ fn panel_width_clamps_to_react_shell_tokens() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     session.set_panel_width(100.0);
     assert_eq!(session.panel_width(), 260.0);
     session.set_panel_width(900.0);

@@ -1349,13 +1349,23 @@ pub fn product_chat_app() -> Element {
                                         class: "ChatWorkspace_headerAvatar",
                                         "data-part": "character-avatar",
                                         "aria-hidden": "true",
-                                        style: "flex:none;width:{header_px}px;height:{header_px}px;border-radius:{header_radius}px;overflow:hidden;background:#302c28;",
+                                        style: "flex:none;width:{header_px}px;height:{header_px}px;border-radius:{header_radius}px;overflow:hidden;background:#302c28;position:relative;",
                                         span {
                                             "data-part": "avatar-fallback",
                                             "data-avatar-asset": "{view.character_avatar_asset}",
                                             "data-avatar-radius": "{header_radius}",
                                             class: "headerAvatar",
                                             style: "display:block;width:{header_px}px;height:{header_px}px;border-radius:{header_radius}px;background:#302c28;",
+                                        }
+                                        // In-scene raster, same as the blueprint
+                                        // (`scene_chat.rs`): stage B retired the GPU
+                                        // overlay, so the legacy chrome must carry
+                                        // the `<img>` itself or the header avatar
+                                        // degrades to the fallback letter.
+                                        img {
+                                            src: "{crate::ASSET_URL_PREFIX}{view.character_avatar_asset}",
+                                            alt: "",
+                                            style: "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:{header_radius}px;",
                                         }
                                     }
                                 }
@@ -1498,7 +1508,7 @@ pub fn product_chat_app() -> Element {
                                             "data-part": "message-avatar",
                                             "data-state": if !view.character_avatar_asset.is_empty() && row.role == "assistant" { "image" } else { "fallback" },
                                             "aria-hidden": "true",
-                                            style: "flex:none;width:{msg_px}px;height:{msg_px}px;border-radius:{msg_radius}px;overflow:hidden;background:#492a20;",
+                                            style: "flex:none;width:{msg_px}px;height:{msg_px}px;border-radius:{msg_radius}px;overflow:hidden;background:#492a20;position:relative;",
                                             if !view.character_avatar_asset.is_empty() && row.role == "assistant" {
                                                 span {
                                                     "data-part": "avatar-fallback",
@@ -1506,6 +1516,13 @@ pub fn product_chat_app() -> Element {
                                                     "data-avatar-radius": "{msg_radius}",
                                                     class: "messageAvatar",
                                                     style: "display:block;width:{msg_px}px;height:{msg_px}px;border-radius:{msg_radius}px;background:#302c28;",
+                                                }
+                                                // Same stage-B in-scene raster as the
+                                                // blueprint `message-avatar` branch.
+                                                img {
+                                                    src: "{crate::ASSET_URL_PREFIX}{view.character_avatar_asset}",
+                                                    alt: "",
+                                                    style: "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:{msg_radius}px;",
                                                 }
                                             }
                                         }

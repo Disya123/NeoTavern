@@ -182,6 +182,11 @@ impl App {
                     self.dom_dump_path = dump;
                 }
             }
+            // The replay's settled state is always worth one paint, even
+            // when every op clamped to a no-op (e.g. wheel past the chat
+            // bottom): dumps requested with the probe must deterministically
+            // capture the post-replay UI.
+            self.dirty = true;
         }
         // Wheel ease-out / touch fling advance the VISUAL offset (frozen
         // raster + blit shift, no re-produce). The scripted probe clock lives

@@ -11,8 +11,36 @@
   rebuild keeps the previous binary running; closing the window ends the
   loop. Parsing/root-selection covered by `scripts/ui-dev.test.mjs` (18
   tests).
+- `scripts/probe-host.mjs`: one-shot wrapper for scripted desktop-host probe
+  runs (`node scripts/probe-host.mjs -- <bin args>`) — waits for the
+  `--snapshot` PNG to stabilize, then kills the process tree (the host keeps
+  its event loop alive by design). The scripted replay produces between ops
+  and always kicks one final frame, so `--dom-dump` captures are
+  deterministic even when every op clamped to a no-op.
 
 ### Fixed
+
+- Native desktop UI interaction (wave F): the app now starts in the chat like
+  React (`ui.ts` `sidebarOpen: false`, resting panel `home`) — previously the
+  characters panel covered the chat from the first second, shifting every hit
+  surface and stealing wheel scrolls for the hidden chat behind it.
+- Wheel over the character panel now scrolls the panel for every tab and
+  mode (cards list, read-only viewer, editor form, advanced/gallery) through
+  one routing needle (`part:floating-tab-content`); the read-only viewer —
+  the default content of the edit tab — previously consumed every notch
+  without scrolling at all.
+- Removed the per-scroll-pixel key flips on the panel scroll shim
+  (`cards-list-{offset}` / `editor-root-{offset}`): the shifting
+  `margin-top` applies on the reused node directly (verified numerically),
+  and the keyed replacement of a large subtree per wheel step was both edit
+  churn and the trigger behind the `blitz-dom` mutator `invalid key` panic
+  (exit 101) users hit while scrolling the panel.
+- The legacy RSX chat chrome now carries the in-scene `<img>` avatar rasters
+  (header + assistant message avatars) that the blueprint document has had
+  since stage B — the legacy track had silently degraded to fallback letters
+  when the GPU overlay was retired, which the legacy-vs-blueprint golden
+  gate caught as a 0.3–0.9% drift in the avatar blocks. The gate is back to
+  0.0000% on all four canonical sizes.
 
 - Native desktop UI (wave D): the six interactive overlays (snapshots menu,
   variant picker, inline editor, revision history, message details, header

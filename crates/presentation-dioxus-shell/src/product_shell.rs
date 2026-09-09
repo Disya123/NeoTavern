@@ -1153,6 +1153,8 @@ fn cards_tab(view: &ProductShellView) -> Element {
     let loaded = view.characters.len();
     let list_active = view.view != "grid";
     let empty = view.characters.is_empty();
+    // Native panel scroll shim offset (see the list container below).
+    let scroll_offset = view.panel_scroll_css.max(0.0).round() as i32;
     rsx! {
         div {
             class: "CharacterManagementPanel_cardsTab",
@@ -1306,11 +1308,20 @@ fn cards_tab(view: &ProductShellView) -> Element {
             } else {
                 div {
                     class: "CharacterManagementPanel_characterList",
+                    // Native panel scroll shim (same contract as the edit
+                    // tab): the host routes wheel-over-panel into
+                    // `session.scroll_panel_by` and this negative margin
+                    // shifts the rows.
+                    "data-part": "character-cards-list",
                     "data-view": "{view.view}",
                     style: if view.view == "grid" {
-                        "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;box-sizing:border-box;flex:1;min-height:0;overflow:auto;"
+                        format!(
+                            "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;box-sizing:border-box;flex:1;min-height:0;overflow:auto;margin-top:-{scroll_offset}px;"
+                        )
                     } else {
-                        "display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;flex:1;min-height:0;overflow:auto;"
+                        format!(
+                            "display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;flex:1;min-height:0;overflow:auto;margin-top:-{scroll_offset}px;"
+                        )
                     },
                     for item in view.characters.iter().take(view.character_browser_limit.max(1)) {
                         {
@@ -1392,13 +1403,17 @@ fn character_card_viewer(view: &ProductShellView, draft: &CharacterDraftView) ->
     } else {
         draft.name.as_str()
     };
+    // Native panel scroll shim (same contract as the cards list and the
+    // editor): the host routes wheel-over-panel into
+    // `session.scroll_panel_by` and this negative margin shifts the body.
+    let scroll_offset = view.panel_scroll_css.max(0.0).round() as i32;
     rsx! {
         div {
             class: "CharacterManagementPanel_viewer",
             "data-component": "character-card-viewer",
             "data-part": "character-viewer",
             "data-state": "read-only",
-            style: "padding:16px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;flex:1;min-height:0;box-sizing:border-box;",
+            style: "padding:16px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;flex:1;min-height:0;box-sizing:border-box;margin-top:-{scroll_offset}px;",
             section {
                 class: "CharacterManagementPanel_viewerIdentity",
                 "data-part": "character-viewer-identity",
@@ -1524,11 +1539,6 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
         div {
             class: "CharacterManagementPanel_editor",
             "data-part": "character-editor",
-            // Same Blitz stale-inline-style workaround as the tab triggers:
-            // a reused node keeps its first-paint inline style, so the
-            // shifting scroll margin would be ignored. Recreate the editor
-            // subtree whenever the offset changes.
-            key: "editor-root-{scroll_offset}",
             style: "{root_margin}",
             div {
                 class: "CharacterManagementPanel_characterActionBar",

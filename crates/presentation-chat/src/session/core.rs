@@ -35,8 +35,13 @@ impl<W: ProductWire> ChatSession<W> {
         if let Err(err) = session.load_workspace() {
             session.record_error(err);
         }
-        session.state.sidebar_panel = "characters".into();
-        session.state.sidebar_open = true;
+        // React `ui.ts` initial shell state: the app starts IN THE CHAT
+        // (`sidebarOpen: false`), and the sidebar's resting panel is `home`
+        // (`activeSidebarPanel: 'home'`). The panel-over-chat startup this
+        // replaces shifted every hit surface from the first second and made
+        // wheel-over-panel scroll the hidden chat behind it.
+        session.state.sidebar_panel = "home".into();
+        session.state.sidebar_open = false;
         session.state.rail_expanded = true;
         session.state.panel_width = 380.0;
         session.state.character_sort = "name".into();
