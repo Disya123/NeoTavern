@@ -593,6 +593,15 @@ impl ProductVelloSession {
         self.warm
     }
 
+    /// Live + detached nodes in the Blitz arena. The vendored blitz-dom has
+    /// the arena GC disabled (id-recycling panics — see
+    /// `vendor/blitz-dom/NEOTAVERN_PATCH.md`), so detached subtrees
+    /// accumulate; hosts cap that growth by cold re-opening once this count
+    /// crosses a threshold.
+    pub fn arena_node_count(&self) -> usize {
+        self.doc.inner.borrow().node_count()
+    }
+
     pub fn slot_skeleton(&self) -> SlotSkeleton {
         let skeleton =
             collect_slot_skeleton(&self.doc.inner.borrow(), "native", self.width, self.height);

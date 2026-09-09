@@ -20,6 +20,16 @@
 
 ### Fixed
 
+- Native desktop UI crash (`thread 'main' panicked at blitz-dom …mutator.rs:
+  invalid key`, exit 101) while scrolling the chat, switching panels and
+  resizing the window: dioxus-native-dom 0.8.0-alpha.1's ElementId-recycling
+  GC drops nodes from the Blitz arena while their descendants' `parent`
+  pointers and the id mappings stay alive, so later edits index arena-dead
+  ids. Fixed with a bounded vendored blitz-dom patch (arena GC no-op + a
+  read-only node counter); the resulting detached-subtree accumulation is
+  capped by a cold re-open of the document at 8192 arena nodes
+  (`NEOTA_ARENA_COLD_REOPEN` overrides). Verified with scripted probes and
+  live-window resizes on all previously crashing scenarios.
 - Native desktop UI interaction (wave F): the app now starts in the chat like
   React (`ui.ts` `sidebarOpen: false`, resting panel `home`) — previously the
   characters panel covered the chat from the first second, shifting every hit

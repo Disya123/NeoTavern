@@ -11,6 +11,16 @@ use neotavern_presentation_m0_d2::{
 };
 use vello::peniko::color::palette;
 
+/// Cap on live+detached Blitz arena nodes before the next produce cold-opens
+/// a fresh document (leak containment for the vendored blitz-dom GC no-op).
+/// `NEOTA_ARENA_COLD_REOPEN` overrides (diagnostics/soak tests).
+fn arena_cold_reopen_nodes() -> usize {
+    std::env::var("NEOTA_ARENA_COLD_REOPEN")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(8192)
+}
+
 impl App {
     /// Produce + rasterize once on dirty (mirrors the Android host: layout and
     /// vello raster happen per `bind`, then each present frame only re-blits
@@ -252,8 +262,24 @@ impl App {
         // Layout-derived hit rects: the single geometry source for taps and
         // text-field focus (same skeleton the `--dom-dump` writes).
         self.hit_rects = HitRects::from_skeleton(&skeleton);
-        // Park the warm session for the next incremental produce.
-        self.vello_session = Some(sess);
+        // Arena leak containment: the vendored blitz-dom has the arena GC
+        // disabled (dioxus-native-dom id recycling panicked on arena-dead
+        // nodes — see vendor/blitz-dom/NEOTAVERN_PATCH.md), so detached
+        // subtrees accumulate instead. Past the threshold the warm session
+        // is dropped and the NEXT produce cold-opens a fresh document,
+        // bounding the leak at a one-frame hiccup (~90 ms release) per
+        // crossing. The live DOM at desktop sizes is ~120-180 nodes; the
+        // cap leaves ~45x headroom.
+        let arena_nodes = sess.arena_node_count();
+        if arena_nodes > arena_cold_reopen_nodes() {
+            let cap = arena_cold_reopen_nodes();
+            eprintln!(
+                "[neocompositor-desktop] arena nodes {arena_nodes} > {cap}: next produce cold-opens"
+            );
+        } else {
+            // Park the warm session for the next incremental produce.
+            self.vello_session = Some(sess);
+        }
         let total = t0.elapsed();
         let layout_ms = t_layout.duration_since(t0).as_millis();
         let open_ms = t_paint.duration_since(t_open).as_millis();

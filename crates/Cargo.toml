@@ -9,6 +9,11 @@ members = ["contracts-generated", "runtime-kernel", "storage", "secret-store", "
 # layout or text. See crates/presentation-m0-d2/upstream/.
 [patch.crates-io]
 anyrender = { path = "vendor/anyrender" }
+# Bounded producer-seam patch (see vendor/blitz-dom/NEOTAVERN_PATCH.md):
+# tolerate a dead old-parent id in `add_children_to_parent` instead of
+# panicking — dioxus-native-dom 0.8.0-alpha.1 ElementId recycling can orphan
+# subtree nodes whose `parent` points at an arena-dropped node.
+blitz-dom = { path = "vendor/blitz-dom" }
 blitz-paint = { path = "vendor/blitz-paint" }
 # Diagnostic hook: `set_debug_shader_bounds_checks` for A/B vs upstream `unchecked`.
 # Not a WGSL index patch. Default remains upstream unchecked.

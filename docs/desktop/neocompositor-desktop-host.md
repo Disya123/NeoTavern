@@ -626,6 +626,36 @@ Kernel `characters.update` принимает только `name`, `description`
   `character_manager_alternate_greetings_add_toggle_and_remove`,
   `character_card_viewer_mode_toggle_and_rendering`.
 
+### Мутатор dioxus-native-dom: паника «invalid key» и вендор-патч blitz-dom
+
+Симптом: процесс умирает по exit 101 — `blitz-dom ... mutator.rs: invalid
+key` — при скролле чата, смене панели с последующим ресайзом окна по высоте
+и любом сдвиге окна виртуализации сообщений. Корень: dioxus-native-dom
+0.8.0-alpha.1 рециклит `ElementId` и GC-ит отцепленные узлы
+(`remove_node_if_unparented` → `remove_and_drop_node`), выбрасывая из арены
+корень, пока (а) потомки держат `parent` на мёртвый id и (б) маппинги
+`ElementId → NodeId` выброшенного поддерева остаются живыми. Любая
+последующая правка, идущая по такому id, индексирует мёртвый слот (SlotMap
+паникует).
+
+Лечение — bounded-патч вендоренного `crates/vendor/blitz-dom/` (патч-секция
+в `crates/Cargo.toml`, как у vello/anyrender): ареный GC отключён
+(`remove_node_if_unparented` — no-op), добавлен read-only
+`BaseDocument::node_count`. Детали и учёт утечки — в
+[`vendor/blitz-dom/NEOTAVERN_PATCH.md`](../../crates/vendor/blitz-dom/NEOTAVERN_PATCH.md).
+Без GC ничего не выбрасывается из арены, мёртвых id в стриме правок не
+существует. Отцепленные поддеревья копятся вместо этого (~33 узла на
+скролл-нотч) — десктопный хост ограничивает рост порогом 8192 узлов: по
+достижении тёплая сессия не паркуется, следующий produce холодно
+переоткрывает документ (~90 мс release, один кадр). Порог переопределяется
+переменной `NEOTA_ARENA_COLD_REOPEN` (диагностика/soak-тесты). Убрать
+вендор, когда апстрим blitz-dom/dioxus-native-dom починит GC рецикла id.
+
+Честная граница: контейнмент пока только в десктопном хосте
+(`produce_and_render`); Android-хост шарит ту же арену, но его produce
+кадры часто холодные (пересоздание surface) — при переносе на Android
+добавить тот же порог в `android_surface`.
+
 ### Скролл панели и React-паритет режима карточки
 
 React-панели скроллятся нативно; у Blitz-краски overflow-скролла нет. Хост
