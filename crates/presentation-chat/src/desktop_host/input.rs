@@ -445,11 +445,14 @@ impl App {
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
                     QuickAction::ScrollLatest => {
-                        // Saturate the virtualized window at the newest rows.
-                        // The jump happens outside the animation, so the
-                        // visual follows the baked offset (no stale shift).
+                        // Saturate the virtualized window at the newest rows
+                        // (offset 0 = pinned to the bottom). The jump happens
+                        // outside the animation, so the visual follows the
+                        // baked offset (no stale shift). Positive offsets run
+                        // toward OLDER messages — the pre-clamp code sent
+                        // +1e6, which landed on the oldest rows.
                         self.pending_ui = None;
-                        self.session.scroll_chat_by(1.0e6);
+                        self.session.scroll_chat_by(-1.0e6);
                         self.visual_scroll_css = self.session.scroll_offset_css();
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
@@ -802,7 +805,8 @@ impl App {
                     contact.last_t_ns = now;
                     // Visual-only: the frozen raster presents the drag as a
                     // blit shift; the session lands on release.
-                    self.visual_scroll_css = (self.visual_scroll_css + dy).max(0.0);
+                    self.visual_scroll_css =
+                        (self.visual_scroll_css + dy).clamp(0.0, self.scroll_max_css);
                     self.window.as_ref().map(|w| w.request_redraw());
                 }
             }

@@ -221,6 +221,7 @@ fn markdown_minimal_probe() {
             generation_time: None,
             token_count: None,
         }],
+        chat_window_offset_css: 0.0,
         chrome: ProductChrome::HeaderComposer,
         character_avatar_asset: "asset:avatar-hazel".into(),
         character_name: "Hazel".into(),
@@ -4984,13 +4985,13 @@ fn rollback_removes_the_suffix_and_keeps_the_target() {
     .expect("route");
     assert_eq!(session.kernel_message_count(), 6);
 
-    // `visible` is the viewport window (the newest few rows), so the oldest
-    // visible row is a mid-chat target whose suffix actually exists.
-    let target = session.view().visible[0].id.clone();
+    // The window pins the NEWEST rows, so pick the mid-chat target from the
+    // full message list (deterministic: index 2 of the 6-row seed).
+    let target = session.state().messages[2].id.clone();
     session.rollback_to_message(&target);
     assert_eq!(
         session.kernel_message_count(),
-        4,
+        3,
         "error={:?} status={:?}",
         session.view().error_code,
         session.shell_view().status_message
@@ -5130,9 +5131,10 @@ fn chat_snapshots_checkpoint_branch_over_product_wire() {
     .expect("route");
     session.set_surface_size(1100, 760, 1.0);
     assert_eq!(session.kernel_message_count(), 6);
-    let visible = session.view().visible;
-    let branch_target = visible[0].id.clone();
-    let checkpoint_target = visible[2].id.clone();
+    // The window pins the newest rows, so pick the two targets from the full
+    // message list (deterministic: rows 0 and 2 of the 6-row seed).
+    let branch_target = session.state().messages[0].id.clone();
+    let checkpoint_target = session.state().messages[2].id.clone();
     let chats_before = session.shell_view().chat_list.len();
 
     // Checkpoint on visible[2]: prefix of 3 messages copied into a child.
@@ -5637,8 +5639,10 @@ fn swipes_cycle_variants_and_stop_at_edges() {
     // Variants swap content in place: the message count never moves.
     assert_eq!(session.kernel_message_count(), 6);
 
-    // A message without variants reports honestly and stays untouched.
-    let head = session.view().visible[0].id.clone();
+    // A message without variants reports honestly and stays untouched. The
+    // window pins the newest rows (a plain head row may not be in it), so
+    // take the oldest seeded message.
+    let head = session.state().messages[0].id.clone();
     session.swipe_variant(&head, 1);
     assert_eq!(
         session.shell_view().status_message.as_deref(),
@@ -6512,9 +6516,10 @@ fn chat_header_back_to_parent_button_navigates_to_parent_chat() {
         "initial chat without parent must not render back-to-parent button"
     );
 
-    // Create a checkpoint snapshot of the chat.
-    let visible = session.view().visible;
-    let checkpoint_target = visible[2].id.clone();
+    // Create a checkpoint snapshot of the chat. The window pins the newest
+    // rows, so pick the target from the full message list (deterministic:
+    // row 2 of the 6-row seed).
+    let checkpoint_target = session.state().messages[2].id.clone();
     session.create_message_snapshot(&checkpoint_target, true);
 
     // Open the snapshots menu to discover the created child chat.

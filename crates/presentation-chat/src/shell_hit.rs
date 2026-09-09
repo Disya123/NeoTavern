@@ -2266,8 +2266,8 @@ fn presets_config_hit(
 /// on a row = select via `settings.update` `activeProviderConfigId`), then
 /// read-only adapter rows from `providers.list`. Geometry mirrors
 /// `ai_settings_tab.rs::providers_tab`: padding 12 + heading 20 + gap 8 +
-/// button 36 + gap 8; profile rows 64 + 4; adapters label 20 + note 16 +
-/// rows 60 + 4.
+/// button 44 (`.st-button` sheet min-height) + gap 8; profile rows 64 + 4;
+/// adapters label 20 + note 16 + rows 60 + 4.
 fn providers_hit(
     view: &ProductShellView,
     x: f32,
@@ -2300,14 +2300,14 @@ fn providers_hit(
     }
     let inner_r = x1 - pad;
     let mut cursor = tabs_bottom + 12.0 + 20.0 + 8.0;
-    // "New profile" button.
-    if y >= cursor && y < cursor + 36.0 {
+    // "New profile" button (`.st-button` sheet rule: min-height 44).
+    if y >= cursor && y < cursor + 44.0 {
         if x >= panel_x + pad && x < panel_x + pad + 140.0 {
             return Some(ShellHit::Action(ShellAction::ProviderCreateOpen));
         }
         return Some(ShellHit::Absorb);
     }
-    cursor += 36.0 + 8.0;
+    cursor += 44.0 + 8.0;
     // Empty note line when no profiles.
     if view.provider_configs.is_empty() {
         if y >= cursor && y < cursor + 16.0 {
@@ -2529,33 +2529,42 @@ fn plugins_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         return Some(ShellHit::Absorb);
     }
     let safe_mode = view.chat.error_code.as_deref() == Some("SAFE_MODE");
-    let pad = SPACE_LG;
-    // Subtitle 20 (padding 8) + note 56 (margin 8) + install bar 36
-    // (padding 8) + meta 20 = 8 + 20 + 8 + 56 + 8 + 36 + 8 + 20.
-    let list_top = header_end + 164.0;
+    // Measured panel stack (1920x1009 dump, see `plugins_tab.rs`): subtitle
+    // 28 + note 8+60 + install bar 8+44 + meta 20 + list padding 8 → cards
+    // start 215px below the header. The cards are content-sized (header
+    // min-40 + permissions (wrapped, demo ~50) + actions 44 + padding 16 =
+    // ~200); permission lists of real installs wrap differently — the
+    // constants mirror the demo geometry, the layout-hit migration is the
+    // tracked follow-up.
+    let list_top = header_end + 215.0;
     if y < list_top {
         return Some(ShellHit::Absorb);
     }
     if safe_mode || view.plugins.is_empty() {
         return Some(ShellHit::Absorb);
     }
-    let card_h = 112.0;
+    let card_h = 200.0;
     let card_gap = SPACE_LG;
     for (index, plugin) in view.plugins.iter().enumerate() {
         let y0 = list_top + index as f32 * (card_h + card_gap);
         if y < y0 || y >= y0 + card_h {
             continue;
         }
-        let actions_top = y0 + card_h - 36.0;
+        let actions_top = y0 + card_h - 44.0;
         if y < actions_top {
             return Some(ShellHit::Absorb);
         }
         let id = plugin.id.clone();
-        if x >= x1 - pad - 44.0 && x < x1 - pad {
-            return Some(ShellHit::Action(ShellAction::TogglePlugin(id)));
-        }
-        if x >= x1 - pad - 88.0 && x < x1 - pad - 44.0 {
+        // Card content right edge: panel pad 16 + card padding 12 + border 1
+        // (see `plugins_tab.rs`). Painted order (justify-content:flex-end):
+        // uninstall is the LAST child, so it owns the rightmost 44px; the
+        // toggle sits left of it (gap 4).
+        let content_right = x1 - 29.0;
+        if x >= content_right - 44.0 && x < content_right {
             return Some(ShellHit::Action(ShellAction::OpenPluginUninstall(id)));
+        }
+        if x >= content_right - 92.0 && x < content_right - 48.0 {
+            return Some(ShellHit::Action(ShellAction::TogglePlugin(id)));
         }
         return Some(ShellHit::Absorb);
     }

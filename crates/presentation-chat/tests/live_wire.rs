@@ -396,7 +396,7 @@ fn ten_thousand_wire_messages_virtualize_the_visible_window() {
         ChatSession::open(FakeWire::with_message_count(10_000), Some(DEMO_CHAT_ID)).expect("open");
     assert_eq!(session.state().messages.len(), PAGE_LIMIT as usize);
     assert_eq!(session.view().message_count, 10_000);
-    let (visible, outcome) = session.present_visible();
+    let (visible, outcome, _) = session.present_visible();
     assert!(visible.len() <= PRODUCT_PATH_VISIBLE);
     assert!(!outcome.waited_on_producer);
     assert!(session.mount_vdom() > 0);
@@ -406,7 +406,7 @@ fn ten_thousand_wire_messages_virtualize_the_visible_window() {
 #[test]
 fn present_does_not_catch_up_frames_on_the_producer() {
     let session = ChatSession::open(FakeWire::demo(), Some(DEMO_CHAT_ID)).expect("open");
-    let (_, outcome) = session.present_visible();
+    let (_, outcome, _) = session.present_visible();
     assert!(!outcome.waited_on_producer);
 }
 
@@ -436,7 +436,7 @@ fn isolated_10k_seed_goes_through_wire_ops_and_pages() {
     assert_eq!(session.view().title, ISOLATED_10K_TITLE);
     assert_eq!(session.view().message_count, ISOLATED_10K_COUNT as usize);
     assert_eq!(session.state().messages.len(), PAGE_LIMIT as usize);
-    let (visible, outcome) = session.present_visible();
+    let (visible, outcome, _) = session.present_visible();
     assert!(visible.len() <= PRODUCT_PATH_VISIBLE);
     assert!(!outcome.waited_on_producer);
     assert!(!visible.iter().any(|row| row.content.contains("**msg 0**")));
@@ -455,4 +455,58 @@ fn isolated_10k_profile_opens_the_seeded_workspace() {
     assert_eq!(session.view().title, ISOLATED_10K_TITLE);
     assert_eq!(session.view().message_count, ISOLATED_10K_COUNT as usize);
     assert_eq!(session.state().messages.len(), PAGE_LIMIT as usize);
+}
+
+#[test]
+fn chat_scroll_window_is_continuous_and_pins_both_edges() {
+    let mut session =
+        ChatSession::open(FakeWire::with_message_count(200), Some(DEMO_CHAT_ID)).expect("open");
+    session.set_surface_size(1100, 760, 1.0);
+    // Startup: offset 0 pins the NEWEST rows at the viewport bottom — the
+    // window must end on the last message, not sit on mid-list rows.
+    let (visible0, _, hidden0) = session.present_visible();
+    let last_id = session
+        .state()
+        .messages
+        .last()
+        .map(|row| row.id.clone())
+        .expect("seeded");
+    assert!(
+        visible0.iter().any(|row| row.id == last_id),
+        "newest row visible at startup"
+    );
+    // A short scroll keeps the window on the same rows: the sub-row offset
+    // shrinks by exactly the scrolled px (±1 for estimate rounding) as the
+    // window start moves up — the paint shifts continuously instead of
+    // snapping to a row boundary.
+    session.scroll_chat_by(37.0);
+    let (visible37, _, hidden37) = session.present_visible();
+    let ids37: Vec<&str> = visible37.iter().map(|row| row.id.as_str()).collect();
+    if visible0.iter().any(|row| ids37.contains(&row.id.as_str())) {
+        assert!(
+            (hidden0 - hidden37 - 37.0).abs() <= 1.0,
+            "sub-row offset tracks the scrolled px: {hidden37} vs {hidden0}-37"
+        );
+    }
+    // Overscroll past the newest clamps at 0 (never negative).
+    session.scroll_chat_by(-1.0e6);
+    assert_eq!(session.scroll_offset_css(), 0.0);
+    // Overscroll past the oldest clamps at the extent: the window starts at
+    // the FIRST message with nothing hidden above it.
+    session.scroll_chat_by(1.0e6);
+    let (visible_max, _, hidden_max) = session.present_visible();
+    let first_id = session
+        .state()
+        .messages
+        .first()
+        .map(|row| row.id.clone())
+        .expect("seeded");
+    assert!(
+        visible_max.iter().any(|row| row.id == first_id),
+        "oldest row visible at max"
+    );
+    assert!(
+        hidden_max.abs() <= 1.0,
+        "max pins the content start, got {hidden_max}"
+    );
 }

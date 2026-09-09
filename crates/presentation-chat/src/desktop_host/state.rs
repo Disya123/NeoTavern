@@ -50,6 +50,7 @@ impl App {
             smooth_scroll: None,
             glide_velocity: 0.0,
             visual_scroll_css: 0.0,
+            scroll_max_css: 0.0,
             chat_band: None,
             ack: ScrollAckLoop::new(0.0),
             clock_base: std::time::Instant::now(),

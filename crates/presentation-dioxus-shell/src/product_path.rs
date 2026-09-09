@@ -71,6 +71,11 @@ pub struct ProductChatView {
     pub title: String,
     pub message_count: usize,
     pub visible: Vec<VisibleRow>,
+    /// px of the first visible row hidden above the viewport top (the
+    /// virtualized window's sub-row offset). The message canvas pulls itself
+    /// up by this amount so painted rows land at their true scrolled
+    /// positions; without it the paint snaps to whole rows on every produce.
+    pub chat_window_offset_css: f32,
     pub chrome: ProductChrome,
     pub composer_text: String,
     /// Composer placeholder (React `home:composerPlaceholder` with the
@@ -196,6 +201,7 @@ impl Default for ProductChatView {
             title: "Product path".into(),
             message_count: 0,
             visible: Vec::new(),
+            chat_window_offset_css: 0.0,
             chrome: ProductChrome::HeaderComposer,
             composer_text: String::new(),
             composer_placeholder: String::new(),
@@ -476,6 +482,7 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
             .to_string(),
         message_count: fixture.messages.len(),
         visible: visible_rows(fixture, start),
+        chat_window_offset_css: 0.0,
         chrome: ProductChrome::HeaderComposer,
         composer_text: String::new(),
         composer_placeholder: "Message Hazel…".into(),

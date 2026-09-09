@@ -719,6 +719,16 @@ pub(crate) fn instruct_stop_text(format: &Option<Value>) -> String {
         .unwrap_or_default()
 }
 
+/// Painted pitch between message rows: the canvas flex `gap: 24px` plus the
+/// article's own `margin-top:8px;margin-bottom:8px`
+/// (`message_bubble_style`). The presentation height index adds it to every
+/// row so the index's cumulative px equals the painted canvas positions —
+/// without it the window selection and the sub-row offset drift from the
+/// paint by the pitch per row (rows select at wrong offsets and the viewport
+/// grows a void at the bottom). Verified against painted dom-dumps: row
+/// top-to-top = box height + exactly this constant.
+pub(crate) const ROW_GAP_CSS: f64 = 40.0;
+
 pub(crate) fn virtualized_window(
     messages: &[MessageDto],
     viewport_height: f64,
@@ -726,11 +736,15 @@ pub(crate) fn virtualized_window(
     assistant_author: &str,
     macros: &crate::macros::MacroContext,
     height_corrections: &HashMap<String, (f64, f64)>,
-) -> (Vec<VisibleRow>, PresentOutcome) {
+) -> (Vec<VisibleRow>, PresentOutcome, f64) {
     let mut index = HeightIndex::new();
     for message in messages {
         let (height, kind) = corrected_height_kind(message, height_corrections);
-        let _ = index.push(LogicalItemId(message.sequence as u64), height, kind);
+        let _ = index.push(
+            LogicalItemId(message.sequence as u64),
+            height + ROW_GAP_CSS,
+            kind,
+        );
     }
     let viewport_height = viewport_height.max(1.0);
     let extent = index.extent();
@@ -743,6 +757,7 @@ pub(crate) fn virtualized_window(
                 waited_on_producer: false,
                 snapshot: GeometrySnapshot::empty(),
             },
+            0.0,
         );
     }
     let mut viewport = ViewportSession::new(
@@ -761,6 +776,18 @@ pub(crate) fn virtualized_window(
     let span = viewport
         .index()
         .span_covering(start, start + viewport_height);
+    // px of the first window row hidden above the viewport top. The painter
+    // pulls the message canvas up by exactly this amount so rows land at
+    // their true scrolled positions: the window selection alone only swaps
+    // whole rows (the paint has no scroll offset of its own), which snapped
+    // every land to a row boundary — the "flipping a book" scroll.
+    let hidden_above = {
+        let index = viewport.index();
+        let cum_before: f64 = (0..span.start)
+            .filter_map(|i| index.height_at(i).map(|(_, h, _)| h))
+            .sum();
+        (start - cum_before).max(0.0)
+    };
     let mut visible = Vec::new();
     for i in span.start..span.end {
         if let Some((id, _, _)) = viewport.index().height_at(i) {
@@ -771,8 +798,9 @@ pub(crate) fn virtualized_window(
     }
     if visible.is_empty() {
         visible = visible_rows(messages, assistant_author, macros);
+        return (visible, outcome, 0.0);
     }
-    (visible, outcome)
+    (visible, outcome, hidden_above)
 }
 
 /// Single shared height baseline (A3 unification): `estimate_height` (the
@@ -805,7 +833,20 @@ pub(crate) fn corrected_height_kind(
         Some((measured, captured)) if *captured == estimate_height(message) => {
             (*measured, HeightKind::Exact)
         }
-        _ => (estimate_height(message), HeightKind::Estimated),
+        _ => {
+            // Photo rows paint ~436px of raster (the same over-cover the
+            // compositor index applies). Without it the presentation window
+            // under-estimates image rows ~5x, so the budget, the window
+            // selection and the scroll max all drift from the paint until
+            // learning catches up row by row.
+            let base = estimate_height(message);
+            let has_photo =
+                !neotavern_presentation_dioxus_shell::asset_image_refs(&message.content).is_empty();
+            (
+                base + if has_photo { 436.0 } else { 0.0 },
+                HeightKind::Estimated,
+            )
+        }
     }
 }
 

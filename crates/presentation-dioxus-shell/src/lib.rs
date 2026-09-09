@@ -1266,6 +1266,17 @@ pub fn product_chat_app() -> Element {
     let scroll_style = format!(
         "display:flex;flex-direction:column;gap:24px;box-sizing:border-box;min-height:100%;padding:{pad}px;"
     );
+    // Sub-row scroll offset (view `chat_window_offset_css`): the message
+    // canvas pulls itself up so the virtualized window's rows land at their
+    // true scrolled px positions instead of snapping to whole rows.
+    let chat_window_shift = {
+        let offset_px = view.chat_window_offset_css.round().max(0.0) as i64;
+        if offset_px > 0 {
+            format!("margin-top:-{offset_px}px;")
+        } else {
+            String::new()
+        }
+    };
     let composer_color = if view.composer_text.is_empty() {
         "#998f87"
     } else {
@@ -1475,10 +1486,15 @@ pub fn product_chat_app() -> Element {
                             // inside a `data-component="chat-message-list"`
                             // canvas; the native surface publishes the same
                             // hook so themes can target both identically.
+                            // The canvas pulls itself up by the virtualized
+                            // window's sub-row offset (`chat_window_offset_css`)
+                            // so rows land at their true scrolled positions —
+                            // inline style WITHOUT a key (high-frequency value;
+                            // a key flip re-mounts the row subtree every land).
                             div {
                                 class: "ChatPage_messageCanvas",
                                 "data-component": "chat-message-list",
-                                style: "display:flex;flex-direction:column;gap:24px;min-height:0;",
+                                style: "display:flex;flex-direction:column;gap:24px;min-height:0;{chat_window_shift}",
                             for row in view.visible.iter() {
                                 { rsx! {
                                 if row.id == "streaming" {

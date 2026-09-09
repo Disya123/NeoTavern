@@ -967,6 +967,14 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
    via the `theme` layer or by overriding tokens. */
 
   /* Button ---------------------------------------------------------------- */
+  /* `.st-button` is the marker class `Button` always pairs with the
+     data-component hook, so both selectors match the same React DOM: the
+     full rule (incl. the 44px control minimums) applies through the data
+     attribute. The native (Rust) shell renders ONLY the marker class — it
+     gets the same flex layout and skin, but its authored inline sizes own
+     the geometry (the native geometric hit tables mirror those sizes;
+     growing every button to the 44px control minimum would drift every
+     panel's hit bands). */
   [data-component='button'] {
     display: inline-flex;
     max-width: 100%;
@@ -1044,6 +1052,38 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   [data-component='button'] > [data-part='label'] {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+  /* Marker-class-only buttons (the native Rust shell): the same flex layout
+     and skin as the data-component rule above, without the 44px control
+     minimums — the native panels author their own sizes and the native
+     geometric hit tables mirror them. In the React DOM this rule is inert:
+     every `.st-button` there also carries `data-component='button'`. */
+  .st-button {
+    display: inline-flex;
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 4px 16px;
+    border-radius: 10px;
+    font-family: 'Outfit Variable', 'Segoe UI Variable', sans-serif;
+    font-size: 1rem;
+    font-weight: 500;
+    background: #302c28;
+    color: #f3eee8;
+    line-height: 1.45;
+    text-align: center;
+  }
+  .st-button[data-variant='primary'] {
+    background: #e38a62;
+    color: #2a130b;
+  }
+  .st-button[data-variant='danger'] {
+    background: #f0837d;
+    color: #211b17;
+  }
+  .st-button[data-variant='ghost'] {
+    background: transparent;
   }
 
   /* Action bar ------------------------------------------------------------ */

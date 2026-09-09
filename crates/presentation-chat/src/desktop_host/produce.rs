@@ -256,9 +256,6 @@ impl App {
         // in-flow inside the chat viewport, so their layout rects are the
         // window CSS-px positions the pointer pipeline uses.
         self.message_rects = sess.paint_layout().messages.clone();
-        // L3 height feedback: measured painted heights replace the estimates
-        // on the next produce (never bumps the scene — no produce loop).
-        self.session.learn_measured_heights(&self.message_rects);
         // Layout-derived hit rects: the single geometry source for taps and
         // text-field focus (same skeleton the `--dom-dump` writes).
         self.hit_rects = HitRects::from_skeleton(&skeleton);
@@ -303,19 +300,32 @@ impl App {
             post_ms,
             total.as_millis(),
         );
-        if let Some(path) = self.snapshot_path.take() {
-            match present.snapshot(&path) {
-                Ok(()) => eprintln!("[neocompositor-desktop] snapshot WROTE {path}"),
-                Err(err) => eprintln!("[neocompositor-desktop] snapshot failed: {err}"),
-            }
-        }
-        if let Some(path) = self.dom_dump_path.take() {
-            let count = skeleton.nodes.len();
-            match write_slot_skeleton(&path, &skeleton) {
-                Ok(()) => {
-                    eprintln!("[neocompositor-desktop] dom-dump WROTE {path} ({count} nodes)")
+        // L3 height feedback (before the dump writes, it decides them):
+        // measured painted heights replace the estimates. A CHANGED
+        // correction re-arms one settle produce — the row window is selected
+        // by the corrected heights, so without it the first frame after open
+        // (estimates only) paints the wrong rows (the startup chat sat on
+        // mid-list rows instead of the newest ones). A stable layout
+        // re-learns nothing and clears the flag: no produce loop. The redraw
+        // re-arm is load-bearing: the event loop waits idle, so the settle
+        // produce never runs unless asked for. Probe dumps skip this
+        // estimate-selected frame and capture the settle produce instead.
+        let learned = self.session.learn_measured_heights(&self.message_rects);
+        if !learned {
+            if let Some(path) = self.snapshot_path.take() {
+                match present.snapshot(&path) {
+                    Ok(()) => eprintln!("[neocompositor-desktop] snapshot WROTE {path}"),
+                    Err(err) => eprintln!("[neocompositor-desktop] snapshot failed: {err}"),
                 }
-                Err(err) => eprintln!("[neocompositor-desktop] dom-dump failed: {err}"),
+            }
+            if let Some(path) = self.dom_dump_path.take() {
+                let count = skeleton.nodes.len();
+                match write_slot_skeleton(&path, &skeleton) {
+                    Ok(()) => {
+                        eprintln!("[neocompositor-desktop] dom-dump WROTE {path} ({count} nodes)")
+                    }
+                    Err(err) => eprintln!("[neocompositor-desktop] dom-dump failed: {err}"),
+                }
             }
         }
         // After a produce the raster is baked at the session offset: the
@@ -327,9 +337,26 @@ impl App {
         if !self.scroll_animation_active() {
             self.visual_scroll_css = self.session.scroll_offset_css();
         }
+        // Extent cache — refreshed here because learning (above) is the only
+        // thing that changes it. A fling-to-top pinned the offset against the
+        // extent the host knew at impulse time; when learning grows the
+        // extent, re-pin so one fling reaches the top instead of sticking
+        // short. The re-pin rides the NEXT produce: this raster stays at the
+        // window it painted (the ack landed on it above), so no visible snap.
+        let prev_max = self.scroll_max_css;
+        self.scroll_max_css = self.session.scroll_max_css();
+        let repinned = prev_max > 0.0
+            && self.scroll_max_css > prev_max + 0.5
+            && self.session.scroll_offset_css() >= prev_max - 0.5;
+        if repinned {
+            self.session.set_scroll_offset_css(self.scroll_max_css);
+        }
         // A3 scroll-settle hydration moved out of the produce (host `frame`
         // runs it after the present): image fetches must not extend the
         // land-critical path, and a hydrated asset re-arms one redraw itself.
-        self.dirty = false;
+        self.dirty = learned || repinned;
+        if self.dirty {
+            self.window.as_ref().map(|w| w.request_redraw());
+        }
     }
 }

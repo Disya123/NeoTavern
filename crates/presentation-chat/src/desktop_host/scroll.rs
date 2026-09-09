@@ -25,13 +25,13 @@ impl App {
         if let Some(anim) = self.smooth_scroll.take() {
             match anim.sample(now) {
                 Some(offset) => {
-                    self.visual_scroll_css = offset.max(0.0);
+                    self.visual_scroll_css = offset.clamp(0.0, self.scroll_max_css);
                     self.smooth_scroll = Some(anim);
                 }
                 None => {
                     // The eased sample never returns the endpoint itself;
                     // the visual ends exactly on the target.
-                    self.visual_scroll_css = anim.target().max(0.0);
+                    self.visual_scroll_css = anim.target().clamp(0.0, self.scroll_max_css);
                 }
             }
         }
@@ -52,7 +52,7 @@ impl App {
                 .clamp(1, 250_000_000);
             self.last_glide_tick_ns = Some(now);
             self.visual_scroll_css += (self.glide_velocity * (dt as f64 / 1e9)) as f32;
-            self.visual_scroll_css = self.visual_scroll_css.max(0.0);
+            self.visual_scroll_css = self.visual_scroll_css.clamp(0.0, self.scroll_max_css);
             self.glide_velocity = crate::scroll_dynamics::glide_decay(self.glide_velocity, dt);
         } else {
             self.last_glide_tick_ns = None;
@@ -97,11 +97,19 @@ impl App {
         }
         self.glide_velocity = 0.0;
         let now = self.monotonic_ns();
+        // Clamp the notch target to the content extent: the animation must
+        // never aim past the newest row (the land would snap the overshoot
+        // back — a visible jump at the bottom edge).
+        let target = (self.visual_scroll_css + css_dy).clamp(0.0, self.scroll_max_css);
+        let delta = target - self.visual_scroll_css;
+        if delta.abs() <= f32::EPSILON {
+            return;
+        }
         match self.smooth_scroll.as_mut() {
-            Some(anim) if anim.sample(now).is_some() => anim.retarget(css_dy, now),
+            Some(anim) if anim.sample(now).is_some() => anim.retarget(delta, now),
             _ => {
                 self.smooth_scroll =
-                    Some(SmoothScroll::impulse(self.visual_scroll_css, css_dy, now));
+                    Some(SmoothScroll::impulse(self.visual_scroll_css, delta, now));
             }
         }
         self.window.as_ref().map(|w| w.request_redraw());

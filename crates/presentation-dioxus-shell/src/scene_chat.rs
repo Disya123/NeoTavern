@@ -236,6 +236,10 @@ struct ChromeCtx {
     hover_target: Option<String>,
     /// Snapshots menu visibility — the header trigger's `aria-expanded`.
     snapshots_menu_open: bool,
+    /// Sub-row scroll offset (view `chat_window_offset_css`): the message
+    /// canvas pulls itself up by it so painted rows land at the virtualized
+    /// window's px positions instead of snapping to whole rows.
+    chat_window_offset_css: f32,
 }
 
 /// One values scoped to one instantiated message row.
@@ -401,6 +405,7 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
     focused_part: view.focused_part.clone(),
     hover_target: view.hover_target.clone(),
     snapshots_menu_open: view.snapshots_menu_open,
+    chat_window_offset_css: view.chat_window_offset_css,
     };
 
     let state = ChatSurfaceStateV1 {
@@ -613,28 +618,40 @@ fn render_viewport_root(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
                 for child in node.children.iter() { {render_viewport_root(child, ctx)} }
             }
         },
-        "chat-message-list" => rsx! {
-            div {
-                class: "ChatPage_messageCanvas",
-                "data-component": "chat-message-list",
-                style: "display:flex;flex-direction:column;gap:24px;min-height:0;",
-                for child in node.children.iter() {
-                    { rsx! {
-                        if is_streaming_message_node(child) {
-                            if let Some(name) = ctx.tool_activity_name.as_deref() {
-                                {crate::tool_activity_badge(name)}
+        "chat-message-list" => {
+            // Sub-row scroll offset: pull the canvas up so the window's rows
+            // land at their true scrolled positions. High-frequency value —
+            // inline style WITHOUT a key (key flips re-mount the whole row
+            // subtree; see the chat-ui recipe's dynamic-style rule).
+            let offset_px = ctx.chat_window_offset_css.round().max(0.0) as i64;
+            let shift = if offset_px > 0 {
+                format!("margin-top:-{offset_px}px;")
+            } else {
+                String::new()
+            };
+            rsx! {
+                div {
+                    class: "ChatPage_messageCanvas",
+                    "data-component": "chat-message-list",
+                    style: "display:flex;flex-direction:column;gap:24px;min-height:0;{shift}",
+                    for child in node.children.iter() {
+                        { rsx! {
+                            if is_streaming_message_node(child) {
+                                if let Some(name) = ctx.tool_activity_name.as_deref() {
+                                    {crate::tool_activity_badge(name)}
+                                }
                             }
-                        }
-                        {render_viewport_root(child, ctx)}
-                    } }
-                }
-                if ctx.tool_activity_name.is_some()
-                    && !node.children.iter().any(is_streaming_message_node)
-                {
-                    {crate::tool_activity_badge(ctx.tool_activity_name.as_deref().unwrap_or("tool"))}
+                            {render_viewport_root(child, ctx)}
+                        } }
+                    }
+                    if ctx.tool_activity_name.is_some()
+                        && !node.children.iter().any(is_streaming_message_node)
+                    {
+                        {crate::tool_activity_badge(ctx.tool_activity_name.as_deref().unwrap_or("tool"))}
+                    }
                 }
             }
-        },
+        }
         _ => match row_of(node) {
             Some(message) => render_row(node, ctx, &message),
             None => render_plain_container(node, ctx, None),

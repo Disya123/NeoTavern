@@ -20,6 +20,48 @@
 
 ### Fixed
 
+- Native desktop chat scroll — the "flipping a book, not scrolling a chat"
+  defect is fixed at the root. Four coupled causes, one slice: (a) the
+  virtualized row window was selected by cumulative offsets but the canvas
+  stayed top-aligned, so sub-row pixels were dropped between produces and
+  every settle repainted a different row set — the window offset now
+  reaches the view (`ProductChatView.chat_window_offset_css` →
+  `margin-top:-{offset}px` on the reused message canvas, in both the
+  blueprint and legacy renderers, keyless like the panel-scroll shim);
+  (b) the height index ignored the painted row step (`ROW_GAP_CSS` 40 =
+  canvas gap 24 + article margins 8+8); (c) photo rows underestimated
+  their height by ~436px (the image over-cover was missing from
+  `estimate_height`) — which also made the first frame start mid-list
+  instead of pinned to the newest messages; a settle produce now runs
+  after the height-learning pass when heights changed; (d) the scroll
+  offset clamped against stale extents and stranded flings short of the
+  top — the max offset is cached on the host, wheel/drag/fling clamp to
+  it, and a bottom-pinned offset re-pins when the extent grows. Wheel
+  notch is 100 css px (was 40 — page turns), and ScrollLatest no longer
+  scrolls the wrong way. Verified with scripted probes: startup shows the
+  newest rows (last row bottom 819 ≈ viewport 827), `--wheel 37` →
+  `--wheel 137` shifts the same rows by exactly +100px, a fling to the top
+  lands at hidden 0, both edges clamp. Contract test added
+  (`chat_scroll_window_is_continuous_and_pins_both_edges`); goldens
+  re-captured (0.0000%).
+- Native desktop layout — the "broken everywhere" complaint traced to two
+  systemic causes, both fixed at the engine level. (a) ~67 shell buttons
+  painted as inline spans with no `display` rule — inline spans ignore
+  width/height, so toggle knobs collapsed to 0×0 ("floating" circles over
+  content) and labels overlapped; the packed CSS now ships a separate
+  `.st-button` rulet (`display:inline-flex` + skin, NO min sizes) so
+  author sizes and the pixel hit constants stay valid, while the full
+  React rulet remains on `[data-component='button']` and stays inert in
+  React-DOM. (b) a fixed `height:` on a block with element children
+  collapses to 0×0 in this Blitz/Taffy build — the Plugins panel note fell
+  56→0 and the install button escaped the panel; fixed-height strips now
+  use `min-height` + flex. The Plugins panel (the worst case from the
+  report) was rebuilt from its measured stack (note, install bar 44, meta,
+  content-sized cards ~200px) and its hit geometry re-mirrored —
+  including a swap fix where the rightmost 44px hit-tested as the toggle
+  while the uninstall button painted there. Hit constants for the
+  content-sized plugin cards mirror the demo geometry; migrating them to
+  layout measurements is the tracked follow-up.
 - Native desktop UI crash (`thread 'main' panicked at blitz-dom …mutator.rs:
   invalid key`, exit 101) while scrolling the chat, switching panels and
   resizing the window: dioxus-native-dom 0.8.0-alpha.1's ElementId-recycling

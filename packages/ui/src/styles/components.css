@@ -3,6 +3,14 @@
    via the `theme` layer or by overriding tokens. */
 @layer components {
   /* Button ---------------------------------------------------------------- */
+  /* `.st-button` is the marker class `Button` always pairs with the
+     data-component hook, so both selectors match the same React DOM: the
+     full rule (incl. the 44px control minimums) applies through the data
+     attribute. The native (Rust) shell renders ONLY the marker class — it
+     gets the same flex layout and skin, but its authored inline sizes own
+     the geometry (the native geometric hit tables mirror those sizes;
+     growing every button to the 44px control minimum would drift every
+     panel's hit bands). */
   [data-component='button'] {
     display: inline-flex;
     max-inline-size: 100%;
@@ -80,6 +88,38 @@
   [data-component='button'] > [data-part='label'] {
     min-inline-size: 0;
     overflow-wrap: anywhere;
+  }
+  /* Marker-class-only buttons (the native Rust shell): the same flex layout
+     and skin as the data-component rule above, without the 44px control
+     minimums — the native panels author their own sizes and the native
+     geometric hit tables mirror them. In the React DOM this rule is inert:
+     every `.st-button` there also carries `data-component='button'`. */
+  .st-button {
+    display: inline-flex;
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: center;
+    gap: var(--st-space-sm);
+    padding: var(--st-space-xs) var(--st-space-lg);
+    border-radius: var(--st-radius-control);
+    font-family: var(--st-font-ui);
+    font-size: var(--st-font-size-md);
+    font-weight: var(--st-font-weight-medium);
+    background: var(--st-color-surface-tertiary);
+    color: var(--st-color-text-primary);
+    line-height: var(--st-line-height-body);
+    text-align: center;
+  }
+  .st-button[data-variant='primary'] {
+    background: var(--st-color-accent);
+    color: var(--st-color-accent-text);
+  }
+  .st-button[data-variant='danger'] {
+    background: var(--st-color-danger);
+    color: var(--st-color-text-inverse);
+  }
+  .st-button[data-variant='ghost'] {
+    background: transparent;
   }
 
   /* Action bar ------------------------------------------------------------ */

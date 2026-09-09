@@ -190,11 +190,43 @@ impl<W: ProductWire> ChatSession<W> {
         self.state.scroll_offset_css
     }
 
+    /// Maximum chat scroll offset (content extent minus the viewport, CSS
+    /// px). Same gap-aware heights the presentation window selects rows with
+    /// (`virtualized_window`), so the clamp lands exactly at the newest row's
+    /// bottom.
+    pub fn scroll_max_css(&self) -> f32 {
+        let (_, _, viewport_h, _) = chrome_metrics(self.viewport_width, self.viewport_height);
+        let extent: f64 = self
+            .state
+            .messages
+            .iter()
+            .map(|row| corrected_height(row, &self.state.height_corrections) + ROW_GAP_CSS)
+            .sum();
+        (extent - f64::from(viewport_h)).max(0.0) as f32
+    }
+
     pub fn scroll_chat_by(&mut self, dy_css: f32) {
         if dy_css == 0.0 {
             return;
         }
-        self.state.scroll_offset_css = (self.state.scroll_offset_css + dy_css).max(0.0);
+        let next = (self.state.scroll_offset_css + dy_css).clamp(0.0, self.scroll_max_css());
+        if (next - self.state.scroll_offset_css).abs() <= f32::EPSILON {
+            return;
+        }
+        self.state.scroll_offset_css = next;
+        self.bump_scene();
+    }
+
+    /// Direct offset setter (host re-pin): a fling-to-top clamps against the
+    /// extent the host knew at impulse time; once learning grows the extent,
+    /// the host re-pins the pinned offset to the new maximum. Clamped and
+    /// bump-guarded like `scroll_chat_by`.
+    pub fn set_scroll_offset_css(&mut self, offset_css: f32) {
+        let next = offset_css.clamp(0.0, self.scroll_max_css());
+        if (next - self.state.scroll_offset_css).abs() <= f32::EPSILON {
+            return;
+        }
+        self.state.scroll_offset_css = next;
         self.bump_scene();
     }
 
@@ -222,11 +254,17 @@ impl<W: ProductWire> ChatSession<W> {
 
     /// L3 height feedback: learn the measured painted row heights from the
     /// last produce. `rects` are the painted message boxes
-    /// (`paint_layout().messages`, keyed by `data-message-id`). Learning
-    /// never bumps the scene — corrections ride the NEXT produce, so the
-    /// learn step cannot loop into a repaint. An edited row invalidates its
-    /// own correction via the captured estimate (see `corrected_height_kind`).
-    pub fn learn_measured_heights(&mut self, rects: &[neotavern_presentation_m0_d2::MessageRect]) {
+    /// (`paint_layout().messages`, keyed by `data-message-id`). Returns
+    /// `true` when at least one correction CHANGED — the host then runs one
+    /// settle produce so the row window (selected by the corrected heights)
+    /// matches the paint; a stable layout re-learns nothing and never loops.
+    /// An edited row invalidates its own correction via the captured estimate
+    /// (see `corrected_height_kind`).
+    pub fn learn_measured_heights(
+        &mut self,
+        rects: &[neotavern_presentation_m0_d2::MessageRect],
+    ) -> bool {
+        let mut changed = false;
         for rect in rects {
             let Some(row) = self.state.messages.iter().find(|row| row.id == rect.id) else {
                 continue;
@@ -236,8 +274,10 @@ impl<W: ProductWire> ChatSession<W> {
                 let estimate = estimate_height(row);
                 self.state
                     .learn_height_correction(&rect.id, measured, estimate);
+                changed = true;
             }
         }
+        changed
     }
 
     /// The single shared row height (L3): the measured painted height when a

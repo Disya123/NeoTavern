@@ -87,7 +87,11 @@ impl<W: ProductWire> ChatSession<W> {
             .as_ref()
             .map(|chat| chat.title.clone())
             .unwrap_or_else(|| "Chat".into());
-        let (mut visible, _) = self.visible_window();
+        let (mut visible, _, hidden_above) = self.visible_window();
+        // The sub-row scroll offset travels with the view: the shell pulls
+        // the message canvas up by it so painted rows match the virtualized
+        // window's px positions (see `virtualized_window`).
+        let chat_window_offset_css = hidden_above as f32;
         // The details card outlives the visible window: resolve its owner
         // from the FULL message list so scrolling the row away while the
         // card is open keeps the card alive (React keeps the message
@@ -182,6 +186,7 @@ impl<W: ProductWire> ChatSession<W> {
             title,
             message_count: self.kernel_message_count(),
             visible,
+            chat_window_offset_css,
             chrome,
             composer_text: self.state.composer_text.clone(),
             composer_placeholder,
@@ -795,7 +800,7 @@ impl<W: ProductWire> ChatSession<W> {
             .collect()
     }
 
-    pub fn present_visible(&self) -> (Vec<VisibleRow>, PresentOutcome) {
+    pub fn present_visible(&self) -> (Vec<VisibleRow>, PresentOutcome, f64) {
         self.visible_window()
     }
 
@@ -803,7 +808,7 @@ impl<W: ProductWire> ChatSession<W> {
         self.state.messages.last().map(|row| row.content.clone())
     }
 
-    pub(crate) fn visible_window(&self) -> (Vec<VisibleRow>, PresentOutcome) {
+    pub(crate) fn visible_window(&self) -> (Vec<VisibleRow>, PresentOutcome, f64) {
         let (_, _, viewport_h, _) = chrome_metrics(self.viewport_width, self.viewport_height);
         virtualized_window(
             &self.state.messages,

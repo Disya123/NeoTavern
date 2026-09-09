@@ -57,8 +57,11 @@ fn wallpaper_rect_css(
 }
 
 const TITLE: &str = "NeoCompositor — NeoTavern (Windows)";
-/// Approx CSS-px per wheel notch — a comfortable desktop scroll step.
-const WHEEL_LINE_CSS: f32 = 40.0;
+/// CSS-px per wheel notch — Chromium's desktop wheel step (~100 px per
+/// detent). winit reports one line per notch on Windows and does not apply
+/// the OS "lines per notch" setting, so the multiplier carries the whole
+/// browser-parity step; 40 px read as "nothing moves" next to any browser.
+const WHEEL_LINE_CSS: f32 = 100.0;
 
 /// Auto-dismiss delay for the Phase C status toast.
 const TOAST_MS: std::time::Duration = std::time::Duration::from_millis(3500);
@@ -249,6 +252,11 @@ struct App {
     /// without a re-produce. Landing (gesture end, grab, drift cap) syncs the
     /// session to this value with one `scroll_chat_by`.
     visual_scroll_css: f32,
+    /// Cached chat scroll extent (`ChatSession::scroll_max_css`), refreshed
+    /// per produce. The wheel impulse and the animation advance clamp their
+    /// targets against it so the visual never overshoots the content window
+    /// (an overshoot snapped back on landing — a visible jump at the edge).
+    scroll_max_css: f32,
     /// Chat-column blend window cached per produce: `(header, composer_top,
     /// band_left, band_right)` in physical px.
     chat_band: Option<(f32, f32, f32, f32)>,

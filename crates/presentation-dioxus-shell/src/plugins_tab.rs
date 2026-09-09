@@ -23,27 +23,32 @@ pub fn plugins_panel(view: &ProductShellView) -> Element {
             "data-contained": "websurface",
             p {
                 class: "PluginsPage_subtitle",
-                style: "box-sizing:border-box;height:28px;padding:4px 16px;line-height:20px;margin:0;color:#c5bbb2;font-size:0.75rem;",
+                "data-part": "plugin-subtitle",
+                style: "box-sizing:border-box;min-height:28px;padding:4px 16px;line-height:20px;margin:0;color:#c5bbb2;font-size:0.75rem;",
                 "Install versioned plugin packages, review every requested capability, and control their lifecycle without a terminal."
             }
             div {
                 class: "PluginsPage_containedNote",
-                style: "box-sizing:border-box;height:56px;margin:8px 16px;padding:10px 12px;line-height:18px;border:1px solid #39342f;border-radius:10px;background:#302c28;overflow:hidden;",
+                "data-part": "plugin-contained-note",
+                style: "box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:56px;margin:8px 16px;padding:10px 12px;line-height:18px;border:1px solid #39342f;border-radius:10px;background:#302c28;overflow:hidden;",
                 strong { style: "font-size:0.75rem;", "Frontend slots are contained" }
                 p { style: "margin:0;color:#c5bbb2;font-size:0.6875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "Plugin DOM islands and legacy window.SillyTavern run only in a sandboxed WebSurface." }
             }
             div {
                 class: "st-action-bar",
-                style: "box-sizing:border-box;height:36px;margin:8px 16px 0;padding:0 16px;",
+                "data-part": "plugin-install-bar",
+                style: "box-sizing:border-box;display:flex;align-items:center;min-height:44px;margin:8px 16px 0;padding:0 16px;",
                 button {
                     class: "st-button",
+                    "data-part": "plugin-install-button",
                     r#type: "button",
                     disabled: true,
+                    style: "min-height:44px;",
                     span { "data-part": "icon", "aria-hidden": "true", {icon_fill("UploadSimple", 18, "#998f87")} }
                     span { "data-part": "label", "Install plugin package" }
                 }
             }
-            div { class: "PluginsPage_listMeta", style: "box-sizing:border-box;height:20px;line-height:20px;padding:0 16px;", span { "{loaded} loaded" } }
+            div { class: "PluginsPage_listMeta", "data-part": "plugin-list-meta", style: "box-sizing:border-box;min-height:20px;line-height:20px;padding:0 16px;", span { "{loaded} loaded" } }
             if empty {
                 div {
                     class: "PluginsPage_emptyState",
@@ -65,7 +70,7 @@ pub fn plugins_panel(view: &ProductShellView) -> Element {
                             // selectors. `st-card` is the shared card primitive
                             // React applies via cx('st-card', styles.card).
                             // Card geometry mirrors `shell_hit.rs::plugins_hit`
-                            // (112 px card, bottom 36 px = the actions row).
+                            // (content-sized card, bottom 44 px = the actions row).
                             let status = if item.enabled { "active" } else { "error" };
                             let status_label = if item.enabled { "Active" } else { "Disabled" };
                             let status_color = if item.enabled { "#63c98d" } else { "#998f87" };
@@ -92,10 +97,15 @@ pub fn plugins_panel(view: &ProductShellView) -> Element {
                                     "data-plugin-id": "{item.id}",
                                     "data-enabled": "{item.enabled}",
                                     "data-state": "{status}",
-                                    style: "height:112px;box-sizing:border-box;display:flex;flex-direction:column;gap:4px;padding:8px 12px;{card_style}",
+                                    // Content-sized card (React `st-card` has no
+                                    // fixed height): header 40 + 4 + permissions
+                                    // 24 + 4 + actions 44 + padding 16 = 132.
+                                    // The fixed 112px cropped the 44px action
+                                    // buttons out of the card's bottom edge.
+                                    style: "min-height:132px;box-sizing:border-box;display:flex;flex-direction:column;gap:4px;padding:8px 12px;{card_style}",
                                     div {
                                         class: "PluginsPage_cardHeader",
-                                        style: "height:40px;display:flex;align-items:center;gap:8px;min-width:0;",
+                                        style: "min-height:40px;display:flex;align-items:center;gap:8px;min-width:0;",
                                         span {
                                             class: "PluginsPage_pluginIcon",
                                             style: "flex:none;",
@@ -113,12 +123,12 @@ pub fn plugins_panel(view: &ProductShellView) -> Element {
                                     div {
                                         class: "PluginsPage_permissions",
                                         "data-part": "plugin-permissions",
-                                        style: "height:24px;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#998f87;font-size:0.6875rem;",
+                                        style: "min-height:24px;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#998f87;font-size:0.6875rem;",
                                         if permissions.is_empty() { "No permissions requested" } else { "Permissions: {permissions}" }
                                     }
                                     div {
                                         class: "PluginsPage_cardActions",
-                                        style: "height:32px;display:flex;align-items:center;justify-content:flex-end;gap:4px;",
+                                        style: "height:44px;display:flex;align-items:center;justify-content:flex-end;gap:4px;",
                                         button {
                                             r#type: "button",
                                             "data-part": "plugin-toggle",
@@ -126,7 +136,11 @@ pub fn plugins_panel(view: &ProductShellView) -> Element {
                                             "aria-label": "Toggle plugin",
                                             title: if item.enabled { "Disable plugin" } else { "Enable plugin" },
                                             disabled: safe_mode,
-                                            style: "padding:0;border:0;background:transparent;cursor:pointer;",
+                                            // `.st-button` (packed components layer)
+                                            // supplies the flex layout; this
+                                            // override keeps the switch a bare
+                                            // 44x44 slot for the track span.
+                                            style: "display:flex;align-items:center;justify-content:center;padding:0;border:0;background:transparent;cursor:pointer;",
                                             span { style: "{track_style}", span { style: "{thumb_style}" } }
                                         }
                                         button {
