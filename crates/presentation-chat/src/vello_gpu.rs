@@ -478,6 +478,21 @@ pub fn format_is_srgb(format: wgpu::TextureFormat) -> bool {
 /// ghost composer into the band — the src window must always be the canvas
 /// extents, and rows past them fall to the wallpaper/filler branch like the
 /// old 96 px cap behavior. `(0, 0)` keeps the legacy full-raster window.
+/// Normalizes the blit source window into uv. `src_top`/`src_bottom` are
+/// absolute raster px (canvas extents + the overscan strips, per the
+/// [`BlitWindow`] contract); `(0, 0)` — the legacy marker — keeps the full
+/// raster sampleable.
+fn blit_src_window_uv(src_top: f32, src_bottom: f32, raster_h: f32) -> (f32, f32) {
+    if src_bottom > src_top {
+        (
+            src_top.max(0.0) / raster_h,
+            src_bottom.min(raster_h) / raster_h,
+        )
+    } else {
+        (0.0f32, 1.0f32)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct BlitWindow {
     pub scroll_y: f32,
@@ -1219,15 +1234,12 @@ impl PresentSurface {
         // below the band the doc scene painted the COMPOSER, and an
         // unclamped sample would smear a ghost composer into the band while
         // the drift is live (the desktop "second composer" artifact).
-        let (src_top_uv, src_bottom_uv) = if window.src_bottom > window.src_top {
-            let overscan = self.overscan_phys as f32;
-            (
-                (overscan + window.src_top.max(0.0)) / raster_h,
-                (overscan + window.src_bottom.min(raster_h as f32 - overscan)) / raster_h,
-            )
-        } else {
-            (0.0f32, 1.0f32)
-        };
+        // `src_top`/`src_bottom` are ALREADY absolute raster px (the host
+        // added the overscan strips when it translated the canvas extents);
+        // adding overscan here too pushed the window a full strip down and
+        // filled the band's top with the wallpaper filler at rest.
+        let (src_top_uv, src_bottom_uv) =
+            blit_src_window_uv(window.src_top, window.src_bottom, raster_h);
         uniform[56..60].copy_from_slice(&(self.overscan_phys as f32 / raster_h).to_le_bytes());
         uniform[60..64].copy_from_slice(&(height / raster_h).to_le_bytes());
         uniform[64..68].copy_from_slice(&src_top_uv.to_le_bytes());
@@ -1546,6 +1558,30 @@ mod tests {
         assert!(!software_raster_debug_enabled());
         assert_eq!(renderer_name(false), "vello-gpu");
         assert!(!vello_renderer_options(false).use_cpu);
+    }
+
+    /// Regression: the src window arrived as ABSOLUTE raster px (overscan
+    /// already included), but the blit added the overscan strip a second
+    /// time — the window started a full strip (256 css) below the band top
+    /// and every at-rest frame filled the band's top with the wallpaper
+    /// filler. The normalized window must keep css 0 sampleable.
+    #[test]
+    fn blit_src_window_takes_absolute_raster_px() {
+        let raster_h = 1521.0; // 1009 panel + 2×256 overscan
+                               // The startup canvas extents: css −256..803 at overscan 256 → raster
+                               // px 0..1059. The pre-fix double-add produced 256..1315 instead.
+        let (top, bottom) = blit_src_window_uv(0.0, 1059.0, raster_h);
+        assert_eq!((top, bottom), (0.0, 1059.0 / raster_h));
+        assert!(top < 256.0 / raster_h, "css 0 must stay inside the window");
+        // A plain window normalizes without shifts; raster-edge clamps and
+        // the (0, 0) legacy full-raster marker.
+        let (top, bottom) = blit_src_window_uv(328.0, 1059.0, raster_h);
+        assert!((top - 328.0 / raster_h).abs() < 1e-6);
+        assert!((bottom - 1059.0 / raster_h).abs() < 1e-6);
+        let (top, bottom) = blit_src_window_uv(-40.0, 1600.0, raster_h);
+        assert_eq!((top, bottom), (0.0, 1.0));
+        let (top, bottom) = blit_src_window_uv(0.0, 0.0, raster_h);
+        assert_eq!((top, bottom), (0.0, 1.0));
     }
 
     #[test]

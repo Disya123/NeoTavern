@@ -28,6 +28,25 @@
 
 ### Fixed
 
+- The at-rest void at the top of the chat band (user report: "worse, with
+  and without scrolling" — a flat ~256 css strip between the header and the
+  first content, present even when idle): a REGRESSION in the ghost-composer
+  fix below. The host translated the canvas extents into ABSOLUTE raster px
+  (`overscan + top*d`) as the `BlitWindow` contract requires, but the blit
+  added the overscan strip a SECOND time when normalizing to uv — the source
+  window started a full strip (256 css) below the band top, so every
+  in-band row above it failed the shifted-window test and fell to the
+  wallpaper filler branch EVEN AT REST (drift 0), and during up-scrolls the
+  baked runway above the viewport was never sampleable. The blit now
+  normalizes absolute raster px directly (`blit_src_window_uv`), and the
+  host clamps the window to the RASTER edges instead of css 0/viewport
+  height, keeping the overscan strips sampleable. Pixel-proven: the rest
+  frame showed the flat filler color (21,19,17) from the band top down to
+  ~300 css while the raw produce raster had content there; after the fix
+  rows render from the band top, the ghost-composer scan stays 0/122
+  mid-gesture frames, and filler never exceeds the legit 16 px strip below
+  the canvas bottom. Regression test
+  `blit_src_window_takes_absolute_raster_px`.
 - THE scroll artifact and judder root (user screenshots: a second composer
   floating in the chat content, a dark gap band, "still the same" after the
   pacing fixes): the overscan blit sampled the FULL raster while shifted —

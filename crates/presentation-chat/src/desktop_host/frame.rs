@@ -346,10 +346,19 @@ impl App {
                 // the ghost jumping on every land read as scroll judder.
                 let (src_top, src_bottom) = match self.chat_canvas_css {
                     Some((top, bottom)) => {
-                        let css_h = self.size.1 as f32 / d;
+                        // ABSOLUTE raster px (the BlitWindow contract): css
+                        // panel px translated into the raster, which puts
+                        // the top strip (css < 0) INSIDE the window — the
+                        // clamps hold at the raster edges, not at css 0,
+                        // or the overscan runway stops being sampleable.
+                        let raster_h = self
+                            .present
+                            .as_ref()
+                            .map(|p| p.raster_height())
+                            .unwrap_or(0) as f32;
                         (
-                            overscan + top.max(0.0) * d,
-                            overscan + bottom.min(css_h) * d,
+                            (top * d + overscan).max(0.0),
+                            (bottom * d + overscan).min(raster_h),
                         )
                     }
                     None => (0.0, 0.0),
