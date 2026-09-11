@@ -6,8 +6,11 @@
 /// Fullscreen-triangle blit: samples `resolve` into the swapchain, with the
 /// NeoCompositor scroll blend window, a fixed wallpaper underlay, and optional
 /// sRGB re-encode. The window is a 2D rect — `scroll[0] =
-/// (offset_y, band_top, band_bottom, srgb)` — where `offset_y` is the drift
-/// normalized to RASTER height and the band to swapchain height,
+/// (offset_y, band_top, band_bottom, srgb)` — where `offset_y` is the CONTENT
+/// displacement (the shader samples `doc_y + offset_y`, so a positive value
+/// moves the content UP on screen; the host passes the negated drift because
+/// the visual offset grows toward OLDER content, which must move the content
+/// DOWN) normalized to RASTER height and the band to swapchain height,
 /// `scroll[1].xy = (band_left, band_right)` normalized to width — so split
 /// layouts shift only the chat column. Uniform rows 2/3 are the wallpaper
 /// underlay: `scroll[2] = (x0, y0, x1, y1)` dest rect in uv, `scroll[3] =

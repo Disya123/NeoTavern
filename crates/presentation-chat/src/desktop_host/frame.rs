@@ -146,6 +146,23 @@ impl App {
                         let (css_px, css_py) = self.pointer_css;
                         self.wheel_at(css_px, css_py, dy);
                     }
+                    ProbeOp::ScrollTo(offset) => {
+                        // Deterministic jump: the produce later in THIS frame
+                        // bakes the raster at the new offset and rebases the
+                        // ack loop; the visual follows the bake (no
+                        // animation is left mid-flight here).
+                        let before = self.session.scroll_offset_css();
+                        self.smooth_scroll = None;
+                        self.glide_velocity = 0.0;
+                        self.session.set_scroll_offset_css(offset);
+                        self.visual_scroll_css = offset;
+                        self.dirty = true;
+                        eprintln!(
+                            "[scroll-to] before={before} after={} max={}",
+                            self.session.scroll_offset_css(),
+                            self.session.scroll_max_css()
+                        );
+                    }
                     ProbeOp::Tick(ms) => {
                         // One animation step at a deterministic sample
                         // time: the same step the real frame loop runs
@@ -364,7 +381,16 @@ impl App {
                     None => (0.0, 0.0),
                 };
                 BlitWindow {
-                    scroll_y: self.ack.drift(self.visual_scroll_css) * d,
+                    // The blit shift is the CONTENT displacement: the shader
+                    // samples `doc_y + scroll_y`, so a positive `scroll_y`
+                    // moves the content UP on screen. The visual offset grows
+                    // toward OLDER content (from-bottom semantics), which
+                    // must move the content DOWN — hence the negation.
+                    // Un-negated, every gesture animated the content the
+                    // wrong way and each land snapped it back (the frame
+                    // tracking measured +4 px/frame backward drift with
+                    // −24..−120 px land snaps netting the correct +196 px).
+                    scroll_y: -self.ack.drift(self.visual_scroll_css) * d,
                     header,
                     composer_top,
                     band_left,

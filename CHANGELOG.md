@@ -28,6 +28,23 @@
 
 ### Fixed
 
+- THE scroll judder root, found by tracking the content position across 122
+  dump frames of a scripted wheel gesture: the blit drift SIGN was inverted
+  since the overscan blit was born. The shader samples `doc_y + offset_y`
+  (a positive value moves the content UP), while the visual scroll offset
+  grows toward OLDER content — which must move the content DOWN. Every
+  gesture therefore animated the content the WRONG way (~4 px/frame) and
+  every land snapped it back 24–120 px in the correct direction (the land's
+  re-produced raster continues where the animation should have gone) — the
+  measured net was correct (+196 px for a 200 px gesture) but the motion was
+  backwards-with-snaps: the "рывки" the user reported since the first
+  overscan build. The host now passes the negated drift
+  (`present_window`), the directional runway caps pair back to
+  positive-drift→above-band / negative-drift→below-band (the pairing
+  flipped for the ghost-composer fix was compensating the inverted sign),
+  and the ack comments/tests state the real sign contract. Post-fix track
+  of the same gesture: 0 backward frames, 0 snaps, monotonic content motion;
+  the ghost-composer scan stays 0/122.
 - The at-rest void at the top of the chat band (user report: "worse, with
   and without scrolling" — a flat ~256 css strip between the header and the
   first content, present even when idle): a REGRESSION in the ghost-composer

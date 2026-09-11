@@ -14,6 +14,11 @@ pub(super) enum ProbeOp {
     Type(String),
     /// One wheel notch in CSS px through the live smooth-scroll path.
     Wheel(f32),
+    /// Jump the chat to an absolute scroll offset (CSS px) before the
+    /// frame's produce: deterministic access to any window state (top pin,
+    /// mid-list) without unreliable notch chains. The next produce bakes
+    /// the raster there and rebases the ack loop.
+    ScrollTo(f32),
     /// Advance the deterministic probe clock by N ms and run one animation
     /// step (same sampler the real frame loop uses).
     Tick(u64),
@@ -62,6 +67,13 @@ pub(super) fn parse_probe_ops(args: &[String]) -> VecDeque<ProbeOp> {
                 if let Some(spec) = args_iter.next() {
                     if let Ok(dy) = spec.trim().parse::<f32>() {
                         ops.push_back(ProbeOp::Wheel(dy));
+                    }
+                }
+            }
+            "--scroll-to" => {
+                if let Some(spec) = args_iter.next() {
+                    if let Ok(offset) = spec.trim().parse::<f32>() {
+                        ops.push_back(ProbeOp::ScrollTo(offset));
                     }
                 }
             }

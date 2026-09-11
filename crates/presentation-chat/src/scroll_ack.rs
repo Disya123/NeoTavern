@@ -22,15 +22,16 @@
 #[derive(Clone, Copy, Debug)]
 pub struct ScrollAckLoop {
     presented_css: f32,
-    /// Drift cap toward OLDER messages (negative drift): the painted runway
-    /// ABOVE the band. Scrolling up shows doc rows above the presented
-    /// window at the band's top edge, so the up-direction is bounded by the
-    /// above-band canvas rows.
+    /// Drift cap toward OLDER messages (POSITIVE drift): the painted runway
+    /// ABOVE the band. The visual offset grows toward older content, the
+    /// blit moves the content DOWN, and the band's top edge exposes doc
+    /// rows above the presented window — so the positive direction is
+    /// bounded by the above-band canvas rows.
     cap_older_css: f32,
-    /// Drift cap toward NEWER messages (positive drift): the painted runway
-    /// BELOW the band. Scrolling down samples doc rows below the presented
-    /// window at the band's bottom edge — where the raster holds the
-    /// composer, not rows, so the down-direction is bounded by the
+    /// Drift cap toward NEWER messages (NEGATIVE drift): the painted runway
+    /// BELOW the band. The content moves UP and the band's bottom edge
+    /// samples doc rows below the presented window — where the raster holds
+    /// the composer, not rows — so the negative direction is bounded by the
     /// below-band canvas rows.
     cap_newer_css: f32,
     /// Window advance in flight: the product state was already advanced to
@@ -98,13 +99,12 @@ impl ScrollAckLoop {
         self.cap_newer_css = cap;
     }
 
-    /// Directional caps from the overscan runway: POSITIVE drift (scrolled
-    /// toward newer; the band's bottom edge exposes doc rows below the
-    /// presented window) is bounded by the painted rows below the band,
-    /// negative drift by the rows above it. The blit presents real rows only
-    /// inside those extents; past them the leading edge would show the
-    /// filler (or, unclamped, the composer rows) — the host lands the
-    /// re-produce while the drift still has runway.
+    /// Directional caps from the overscan runway: the cap is bound to the
+    /// screen edge the shifted content exposes. POSITIVE drift (the visual
+    /// ahead toward older; the content moves DOWN) exposes the band's TOP
+    /// edge and is bounded by the painted rows above the band
+    /// (`older_css`); negative drift exposes the band's bottom edge and is
+    /// bounded by the below-band rows (`newer_css`).
     pub fn set_runway_caps(&mut self, older_css: f32, newer_css: f32) {
         self.cap_older_css = older_css.max(MIN_ACK_CAP_CSS);
         self.cap_newer_css = newer_css.max(MIN_ACK_CAP_CSS);
@@ -122,16 +122,16 @@ impl ScrollAckLoop {
 
     /// Window-advance decision for the current frame.
     ///
-    /// While the gesture is active the directional runway cap applies: the
-    /// blit samples the band at `doc + drift`, so POSITIVE drift (scrolled
-    /// toward newer) exposes doc rows at the band's BOTTOM edge and is
-    /// bounded by the below-band canvas rows (`cap_newer_css`); negative
-    /// drift exposes the band's TOP edge and is bounded by `cap_older_css`.
-    /// (The two were crossed once: a down-scroll was checked against the
-    /// above-band runway while the below-band edge kept sampling the
-    /// composer rows — the ghost-composer judder.) Once the gesture is not
-    /// active, any residual drift is a final landing. `None` while an
-    /// advance is already in flight, and for a zero drift.
+    /// Directional caps from the overscan runway: the cap is bound to the
+    /// screen edge the shifted content EXPOSES. POSITIVE drift (the visual
+    /// ahead toward older; the blit moves the content DOWN) exposes the
+    /// band's TOP edge and is bounded by the painted rows above the band
+    /// (`cap_older_css`); negative drift moves the content UP and exposes
+    /// the band's bottom edge (`cap_newer_css`). The blit samples the band
+    /// at `doc − drift` (see `present_window`), so the exposed edge and the
+    /// sample direction stay in sync. Once the gesture is not active, any
+    /// residual drift is a final landing. `None` while an advance is
+    /// already in flight, and for a zero drift.
     pub fn due(&self, visual_css: f32, gesture_active: bool) -> Option<f32> {
         if self.in_flight.is_some() {
             return None;
@@ -142,9 +142,9 @@ impl ScrollAckLoop {
         }
         if gesture_active {
             let over = if drift > 0.0 {
-                drift >= self.cap_newer_css
+                drift >= self.cap_older_css
             } else {
-                drift <= -self.cap_older_css
+                drift <= -self.cap_newer_css
             };
             over.then_some(drift)
         } else {
@@ -232,28 +232,29 @@ mod tests {
 
     #[test]
     fn directional_caps_match_the_exposed_edge() {
-        // Scrolling DOWN (positive drift) exposes the band's BOTTOM edge:
-        // the below-band runway (cap_newer) gates it, the above-band one
-        // does not. Scrolling UP mirrors. The crossed wiring let a
-        // down-scroll sample the composer rows below the band unchecked.
+        // POSITIVE drift (the visual ahead toward older; the blit moves the
+        // content DOWN) exposes the band's TOP edge: the above-band runway
+        // (cap_older) gates it, the below-band one does not. Negative drift
+        // mirrors (content UP, bottom edge, below-band runway). The blit
+        // samples `doc − drift`, so the exposed edge and the gate must stay
+        // in sync — a crossed wiring let a drift sample the edge whose
+        // runway it never checked.
         let mut loop_ = ScrollAckLoop::new(0.0);
         loop_.set_runway_caps(300.0, 60.0);
-        assert_eq!(loop_.due(59.0, true), None, "inside the below-band runway");
+        assert_eq!(loop_.due(299.0, true), None, "inside the above-band runway");
         assert_eq!(
-            loop_.due(60.0, true),
-            Some(60.0),
-            "below-band runway exhausted"
-        );
-        loop_.land(60.0);
-        assert_eq!(
-            loop_.due(-239.0, true),
-            None,
-            "inside the above-band runway"
-        );
-        assert_eq!(
-            loop_.due(-240.0, true),
-            Some(-300.0),
+            loop_.due(300.0, true),
+            Some(300.0),
             "above-band runway exhausted"
+        );
+        loop_.land(300.0);
+        // The drift reads against the presented window: visual 240 sits 60 px
+        // NEWER-ward of it (drift −60), visual 241 sits 59.
+        assert_eq!(loop_.due(241.0, true), None, "inside the below-band runway");
+        assert_eq!(
+            loop_.due(240.0, true),
+            Some(-60.0),
+            "below-band runway exhausted"
         );
     }
 
