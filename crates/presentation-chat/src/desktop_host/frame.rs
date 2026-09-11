@@ -517,14 +517,22 @@ impl ApplicationHandler for App {
             // correct offset instead of skipping steps. A scripted animation
             // still on the probe clock advances it at the same cadence, so it
             // completes in real time after the replay.
+            //
+            // The re-arm timer must be SHORTER than a vsync interval: the
+            // FIFO swapchain makes `get_current_texture` the pacer (it
+            // blocks until the compositor releases a buffer), so a 1 ms
+            // re-arm aligns every frame to the refresh (144 Hz included).
+            // The old 8 ms timer landed BETWEEN vsyncs on high-refresh
+            // monitors — frame intervals alternated 7/14 ms and scrolling
+            // juddered.
             if let Some(clock) = self.probe_clock_ns.as_mut() {
-                *clock = clock.saturating_add(8_000_000);
+                *clock = clock.saturating_add(1_000_000);
             }
             if let Some(window) = self.window.as_ref() {
                 window.request_redraw();
             }
             let next = std::time::Instant::now()
-                .checked_add(std::time::Duration::from_millis(8))
+                .checked_add(std::time::Duration::from_millis(1))
                 .expect("instant");
             event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next.into()));
         } else if self.status_shown_at.is_some() {

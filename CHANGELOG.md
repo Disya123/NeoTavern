@@ -17,7 +17,11 @@
   `ScrollAckLoop::set_runway_caps` — at the bottom pin the below-band runway
   is zero, but the offset cannot move past the pin): a 600 px wheel gesture
   lands 2 produces (was 9), a 2000 px fling 6. Touch drags move the visual
-  directly (1:1 blit, no pending accumulator). The blit uniform grew to five
+  directly (1:1 blit, no pending accumulator). The scroll frame re-arm
+  timer dropped from 8 ms to 1 ms: on a 144 Hz monitor the 8 ms timer fired
+  BETWEEN vsyncs, so present intervals alternated 7/14 ms and the motion
+  juddered — the FIFO swapchain is the pacer now (frames align to the
+  refresh at any rate). The blit uniform grew to five
   vec4 rows on both hosts (screen→raster window mapping in `scroll[3].zw`,
   the filler source window in `scroll[4].xy`); Android writes the flat
   mapping and the old band bounds, so its present path is unchanged.

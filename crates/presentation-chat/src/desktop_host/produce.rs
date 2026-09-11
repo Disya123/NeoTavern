@@ -82,10 +82,7 @@ impl App {
             // clipped, so the runway must clamp to the box too, or a fling
             // would sample the cleared raster outside the painted strips.
             let overscan_css = neotavern_presentation_dioxus_shell::CHAT_OVERSCAN_CSS as f32;
-            let canvas_top = shell
-                .chat
-                .chat_canvas_top_css
-                .max(-overscan_css);
+            let canvas_top = shell.chat.chat_canvas_top_css.max(-overscan_css);
             let canvas_bottom = shell
                 .chat
                 .chat_canvas_bottom_css
