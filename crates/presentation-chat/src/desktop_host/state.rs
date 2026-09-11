@@ -73,6 +73,9 @@ impl App {
             last_stream_produce: None,
             produce_deferred: false,
             pointer_css: (0.0, 0.0),
+            last_present_instant: None,
+            last_produce_ms: None,
+            frame_timing: std::env::var("NEOTA_FRAME_TIMING").is_ok(),
         })
     }
 

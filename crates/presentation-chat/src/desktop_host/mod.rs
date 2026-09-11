@@ -11,7 +11,8 @@
 //! - `scroll` - visual-offset animations (wheel ease-out, touch fling, land);
 //! - `text` - keyboard into the focused field;
 //! - `frame` - per-redraw present, blend windows, resize, `ApplicationHandler`;
-//! - `probe` - deterministic `--pointer`/`--type`/`--wheel`/`--tick` scripting.
+//! - `probe` - deterministic `--pointer`/`--type`/`--wheel`/`--tick` scripting
+//!   (plus the diagnostics-only real-time `--wait <ms>` pause).
 //!
 //! Privacy contract: `App` is declared here, so every child `impl App` block
 //! sees the private fields as a descendant of this module - the split changed
@@ -316,6 +317,11 @@ struct App {
     /// Last tracked CSS cursor position — wheel events carry no position in
     /// this winit version, and the panel scroll router needs one.
     pointer_css: (f32, f32),
+    /// Frame-pacing diagnostics (`NEOTA_FRAME_TIMING=1`): when the last blit
+    /// presented and how long the last produce took, logged per present.
+    last_present_instant: Option<std::time::Instant>,
+    last_produce_ms: Option<u128>,
+    frame_timing: bool,
 }
 
 pub struct RunConfig {

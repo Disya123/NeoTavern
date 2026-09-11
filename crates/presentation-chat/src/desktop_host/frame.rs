@@ -161,6 +161,13 @@ impl App {
                         // every other replayed op.
                         eprintln!("{}", self.hit_probe_report(x, y));
                     }
+                    ProbeOp::Wait(ms) => {
+                        // Real-time pause (diagnostics): the event loop is
+                        // inside this frame, the window just shows the last
+                        // present; resize/input events queue and replay
+                        // after the pause.
+                        std::thread::sleep(std::time::Duration::from_millis(ms));
+                    }
                 }
                 // A live window produces between input events; the scripted
                 // replay must too, or the next op reads stale geometry
@@ -193,7 +200,9 @@ impl App {
         if !self.scroll_animation_active() {
             self.probe_clock_ns = None;
         }
-        self.advance_and_land_scroll();
+        // Produce BEFORE the acquire: a produce may re-allocate the rasters
+        // and re-configure the swapchain, which must not happen while a
+        // swapchain texture is checked out.
         if self.dirty {
             let streaming = self.session.state().stream_handle.is_some();
             let due = !streaming
@@ -220,19 +229,35 @@ impl App {
         if self.dirty && !self.produce_deferred {
             return;
         }
-        // Present from the accumulated resolve once per redraw. Redraws are
-        // event-driven (resize, data change, later: pointer/stream) вЂ” the idle
-        // window stays at ~0% CPU instead of spinning the event loop. The
-        // probe dump (if requested) is re-written by the shifted present
-        // below, so `--blit-shift --swapchain x.png` captures the shifted
-        // frame.
+        // Present, phase 1 — acquire. The FIFO swapchain blocks here until
+        // the compositor releases a buffer (a v-sync boundary); the wake
+        // timer only has to fire once per refresh, the acquire does the
+        // phase-locking.
+        if let Err(err) = self.present.as_mut().expect("present present").acquire() {
+            self.note_present_error(&err);
+            return;
+        }
+        // Present, phase 2 — sample the scroll animation against the v-sync
+        // boundary the acquire just returned from, so every displayed frame
+        // leads scanout by exactly one refresh. Sampling at the wake-timer
+        // instant (the old order) left a 0..refresh random offset between the
+        // sample and the scanout: consecutive displayed frames advanced the
+        // motion by 5/6/7 ms worth of samples in turn — the judder that
+        // high-refresh monitors turned into visible stutter even though the
+        // present cadence itself was perfectly even.
+        self.advance_and_land_scroll();
+        // Present, phase 3 — blit the blended window and queue the frame for
+        // the next refresh. Redraws are event-driven (resize, data change,
+        // scroll frames) — the idle window stays at ~0% CPU. The probe dump
+        // (if requested) is re-written by the shifted present below, so
+        // `--blit-shift --swapchain x.png` captures the shifted frame.
         let probe_swap = self.swap_path.clone();
         let window = self.present_window();
         let result = {
             let present = self.present.as_mut().expect("present present");
             match &self.swap_path {
-                Some(path) => present.present_and_dump(window, path),
-                None => present.present(window),
+                Some(path) => present.blit_and_dump(window, path),
+                None => present.blit(window),
             }
         };
         match result {
@@ -242,24 +267,26 @@ impl App {
                 }
                 self.retry_present = false;
                 self.last_present_error = None;
-            }
-            Err(err) => {
-                let now = std::time::Instant::now();
-                let throttle = self
-                    .last_present_error
-                    .map(|last| now.duration_since(last).as_millis() > 250)
-                    .unwrap_or(true);
-                self.last_present_error = Some(now);
-                if throttle {
-                    eprintln!("[neocompositor-desktop] present: {err}");
+                if self.frame_timing {
+                    let now = std::time::Instant::now();
+                    let dt = self
+                        .last_present_instant
+                        .map(|at| now.duration_since(at).as_millis())
+                        .unwrap_or(0);
+                    self.last_present_instant = Some(now);
+                    let acquire = self
+                        .present
+                        .as_ref()
+                        .map(|p| p.last_acquire_wait().as_millis())
+                        .unwrap_or(0);
+                    eprintln!(
+                        "[frame-timing] dt={dt}ms acquire={acquire}ms produce={:?}ms drift={:.1}",
+                        self.last_produce_ms,
+                        self.ack.drift(self.visual_scroll_css)
+                    );
                 }
-                // Any acquire failure (incl. Timeout/Occluded) leaves the
-                // window on stale/brown вЂ” schedule a bounded retry instead of
-                // freezing on the first failure. `about_to_wait` re-arms a
-                // redraw every ~50ms while this stays set; otherwise the loop
-                // idles at 0% CPU.
-                self.retry_present = true;
             }
+            Err(err) => self.note_present_error(&err),
         }
         // `--blit-shift` diagnostic: one extra present with the chat column
         // shifted by the given CSS px inside the 2D blend window — sidebar,
@@ -267,9 +294,12 @@ impl App {
         if let Some(dy) = self.blit_shift_probe.take() {
             let window = self.chat_blit_window(dy);
             if let Some(present) = self.present.as_mut() {
-                let result = match &probe_swap {
-                    Some(path) => present.present_and_dump(window, path),
-                    None => present.present(window),
+                let result = match present.acquire() {
+                    Err(err) => Err(err),
+                    Ok(()) => match &probe_swap {
+                        Some(path) => present.blit_and_dump(window, path),
+                        None => present.blit(window),
+                    },
                 };
                 match result {
                     Ok(()) => eprintln!(
@@ -327,6 +357,25 @@ impl App {
         }
     }
 
+    /// Shared present-failure bookkeeping: throttled stderr plus a bounded
+    /// retry (re-armed in `about_to_wait`).
+    fn note_present_error(&mut self, err: &str) {
+        let now = std::time::Instant::now();
+        let throttle = self
+            .last_present_error
+            .map(|last| now.duration_since(last).as_millis() > 250)
+            .unwrap_or(true);
+        self.last_present_error = Some(now);
+        if throttle {
+            eprintln!("[neocompositor-desktop] present: {err}");
+        }
+        // Any acquire failure (incl. Timeout/Occluded) leaves the window on
+        // stale content — schedule a bounded retry instead of freezing on
+        // the first failure. `about_to_wait` re-arms a redraw every ~50ms
+        // while this stays set; otherwise the loop idles at 0% CPU.
+        self.retry_present = true;
+    }
+
     pub(super) fn resize(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 {
             return;
@@ -338,15 +387,16 @@ impl App {
             );
         }
         self.size = (width, height);
-        // Per event: re-configure the swapchain only (the blit keeps sampling
-        // the previous raster between produces) and mark dirty — winit
-        // coalesces redraws, so the document re-lays-out at the new size at
-        // the display cadence instead of once per drag pixel. The expensive
-        // target re-allocation happens once per produce (`produce_and_render`
-        // calls `PresentSurface::resize`), not once per event.
-        if let Some(present) = self.present.as_mut() {
-            present.set_swapchain_size(width, height);
-        }
+        // Per event: layout state only. The swapchain is deliberately NOT
+        // re-configured here — re-configuring per event left a window where
+        // the blit mapped the screen through the NEW config while the
+        // resolve was still the OLD raster (a maximize painted a compressed
+        // middle band with black margins and chrome from two layouts).
+        // Keeping the old configuration lets DWM stretch the last consistent
+        // frame for the one coalesced frame until `produce_and_render` →
+        // `PresentSurface::resize` re-configures and re-allocates atomically;
+        // a swapchain that does go stale surfaces as `Outdated` in `acquire`
+        // and is healed with the raster-matching config there.
         self.dirty = true;
         self.window.as_ref().map(|w| w.request_redraw());
     }
@@ -528,6 +578,20 @@ impl ApplicationHandler for App {
             if let Some(clock) = self.probe_clock_ns.as_mut() {
                 *clock = clock.saturating_add(1_000_000);
             }
+            if let Some(window) = self.window.as_ref() {
+                window.request_redraw();
+            }
+            let next = std::time::Instant::now()
+                .checked_add(std::time::Duration::from_millis(1))
+                .expect("instant");
+            event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next.into()));
+        } else if self.dirty && self.session.state().stream_handle.is_none() {
+            // The post-acquire residual land (gesture end) marks the frame
+            // dirty AFTER the scroll branch above went idle — without this
+            // re-arm the loop parks on Wait and the window freezes on the
+            // shifted raster until the next input event. (Live streams are
+            // driven by the stream branch below instead; produce failures
+            // retry through this branch too.)
             if let Some(window) = self.window.as_ref() {
                 window.request_redraw();
             }

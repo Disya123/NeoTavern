@@ -28,6 +28,31 @@
 
 ### Fixed
 
+- Scroll judder that survived the 1 ms re-arm (user: "nothing changed"): the
+  animation was sampled at the wake-timer instant, which is not phase-locked
+  to the monitor — the offset between the sample and the actual scanout
+  wandered 0..refresh every frame, so consecutive displayed frames advanced
+  the motion by 5/6/7 ms worth of samples in turn. The frame is now split
+  into `acquire` (blocks on the FIFO swapchain until a v-sync boundary) and
+  `blit`, the produce runs before the acquire, and the scroll animation is
+  sampled AFTER the acquire — with the live animation clock reading the
+  predicted scanout instant (last acquire return plus the measured refresh
+  EMA, `PresentSurface::predicted_display_ns`), so wake-timer jitter never
+  reaches the displayed motion. The same split fixed a frame-loop deadlock
+  the refactor exposed: the post-acquire residual land marked the frame
+  dirty after the scroll re-arm branch went idle, and the loop parked on
+  `Wait` with the window frozen on the shifted raster until the next input
+  (live gesture + `NEOTA_FRAME_TIMING` trace: 122 animation presents,
+  residual land, settle produce, idle park). `NEOTA_FRAME_TIMING=1` now logs
+  per-present `dt/acquire/produce/drift`.
+- A maximize/resize frame showing black margins with the chat squeezed into
+  a middle band and chrome from two different layouts: `Resized` used to
+  re-configure the swapchain immediately, so presents between the event and
+  the produce-time re-allocation sampled the OLD resolve through the NEW
+  doc-window mapping. The event now only updates layout state; DWM stretches
+  the last consistent frame until `PresentSurface::resize` re-configures and
+  re-allocates atomically in the produce, and a genuinely stale swapchain
+  (`Outdated`) is healed in `acquire` with the raster-matching config.
 - Product chrome (chat header + composer pill) no longer carries the
   `neoui-glass` marker: that attribute is a wallpaper CUTOUT — the paint
   pipeline erases every row painted beneath the node so the wallpaper shows

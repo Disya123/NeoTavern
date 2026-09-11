@@ -317,6 +317,9 @@ impl App {
             self.vello_session = Some(sess);
         }
         let total = t0.elapsed();
+        // Frame-pacing diagnostics (`NEOTA_FRAME_TIMING`): the produce cost
+        // rides the per-present log line so a land stall is attributable.
+        self.last_produce_ms = Some(total.as_millis());
         let layout_ms = t_layout.duration_since(t0).as_millis();
         let open_ms = t_paint.duration_since(t_open).as_millis();
         let paint_ms = t_render.duration_since(t_paint).as_millis();

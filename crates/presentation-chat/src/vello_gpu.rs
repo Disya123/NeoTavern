@@ -636,6 +636,23 @@ pub struct PresentSurface {
     convert_pipeline: Option<wgpu::ComputePipeline>,
     convert_bgl: Option<wgpu::BindGroupLayout>,
     avatars: crate::avatar_gpu::AvatarGpu,
+    /// Swapchain texture checked out by [`Self::acquire`] and presented by
+    /// [`Self::blit`]. Splitting the present lets the host sample
+    /// time-dependent state (the scroll animation) BETWEEN the two: with the
+    /// FIFO swapchain `acquire` returns on a v-sync boundary, so a sample
+    /// taken right after it leads scanout by exactly one refresh — a wake
+    /// timer's arbitrary offset into the refresh interval cannot reach the
+    /// displayed motion.
+    frame: Option<wgpu::SurfaceTexture>,
+    /// How long the last [`Self::acquire`] blocked on the FIFO swapchain
+    /// (`NEOTA_FRAME_TIMING` diagnostics).
+    acquire_wait: std::time::Duration,
+    /// When the last [`Self::acquire`] returned, plus the EMA of consecutive
+    /// return gaps. On a visible window the FIFO acquire returns on a
+    /// v-sync boundary, so `last + interval` predicts the scanout instant of
+    /// the frame being composed — the animation sample clock.
+    acquire_return: Option<std::time::Instant>,
+    acquire_interval: Option<std::time::Duration>,
 }
 
 impl PresentSurface {
@@ -844,6 +861,10 @@ impl PresentSurface {
             convert_pipeline,
             convert_bgl,
             avatars,
+            frame: None,
+            acquire_wait: std::time::Duration::ZERO,
+            acquire_return: None,
+            acquire_interval: None,
         })
     }
 
@@ -1045,21 +1066,100 @@ impl PresentSurface {
         Ok(())
     }
 
-    /// Draw `resolve` into the swapchain and present (mirror of the Android
-    /// host's `blit`). The window is the NeoCompositor scroll blend window;
-    /// `BlitWindow::default()` is a plain full-frame blit.
-    pub fn present(&mut self, window: BlitWindow) -> Result<(), String> {
-        self.present_opt(window, None)
+    /// Phase 1 of a frame: acquire the swapchain texture. With the FIFO
+    /// swapchain this blocks until the compositor releases a buffer — a
+    /// v-sync boundary — which makes it the frame pacer. Hosts run their
+    /// time-dependent sampling between `acquire` and [`Self::blit`].
+    pub fn acquire(&mut self) -> Result<(), String> {
+        let started = std::time::Instant::now();
+        let mut outcome = self.surface.get_current_texture();
+        if matches!(outcome, wgpu::CurrentSurfaceTexture::Outdated) {
+            // Heal a stale swapchain with the CURRENT config — the one the
+            // rasters still match. Adopting a newer window size here would
+            // desynchronize the blit's doc-window mapping from the resolve
+            // until the next produce re-allocates; until then DWM stretches
+            // the last consistent frame instead.
+            self.surface.configure(&self.device, &self.config);
+            outcome = self.surface.get_current_texture();
+        }
+        self.acquire_wait = started.elapsed();
+        let returned = std::time::Instant::now();
+        if let Some(last) = self.acquire_return {
+            let gap = returned.duration_since(last);
+            // Idle gaps (no animation running) and occluded-window free runs
+            // must not define the refresh interval; the clamp bounds a
+            // pathological driver anyway.
+            if gap <= std::time::Duration::from_millis(100) {
+                self.acquire_interval = Some(
+                    match self.acquire_interval {
+                        Some(cur) => cur.mul_f64(0.75) + gap.mul_f64(0.25),
+                        None => gap,
+                    }
+                    .clamp(
+                        std::time::Duration::from_micros(500),
+                        std::time::Duration::from_millis(50),
+                    ),
+                );
+            }
+        }
+        self.acquire_return = Some(returned);
+        self.frame = Some(match outcome {
+            wgpu::CurrentSurfaceTexture::Success(frame)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+            wgpu::CurrentSurfaceTexture::Timeout => return Err("acquire_timeout".into()),
+            wgpu::CurrentSurfaceTexture::Occluded => return Err("acquire_occluded".into()),
+            wgpu::CurrentSurfaceTexture::Outdated => return Err("acquire_outdated".into()),
+            wgpu::CurrentSurfaceTexture::Lost => return Err("acquire_lost".into()),
+            wgpu::CurrentSurfaceTexture::Validation => return Err("acquire_validation".into()),
+        });
+        Ok(())
     }
 
-    /// `present` plus a one-shot swapchain read-back diagnostic (what the user
+    /// Phase 2 of a frame: draw `resolve` into the texture acquired by
+    /// [`Self::acquire`] and present it (mirror of the Android host's
+    /// `blit`). The window is the NeoCompositor scroll blend window;
+    /// `BlitWindow::default()` is a plain full-frame blit.
+    pub fn blit(&mut self, window: BlitWindow) -> Result<(), String> {
+        self.blit_opt(window, None)
+    }
+
+    /// `blit` plus a one-shot swapchain read-back diagnostic (what the user
     /// actually sees). `swap_save` copies the backbuffer right after the blit,
     /// before `frame.present()`.
-    pub fn present_and_dump(&mut self, window: BlitWindow, swap_save: &str) -> Result<(), String> {
-        self.present_opt(window, Some(swap_save))
+    pub fn blit_and_dump(&mut self, window: BlitWindow, swap_save: &str) -> Result<(), String> {
+        self.blit_opt(window, Some(swap_save))
     }
 
-    fn present_opt(&mut self, window: BlitWindow, swap_save: Option<&str>) -> Result<(), String> {
+    /// How long the last [`Self::acquire`] blocked on the FIFO swapchain
+    /// (frame pacing diagnostics).
+    pub fn last_acquire_wait(&self) -> std::time::Duration {
+        self.acquire_wait
+    }
+
+    /// Predicted scanout instant of the frame being composed, as ns since
+    /// `base`. On a visible window the FIFO acquire returns right after a
+    /// v-sync boundary (a buffer just came back from scanout), and the frame
+    /// acquired now presents at the NEXT boundary — `last return + interval`.
+    /// Sampling the scroll animation at this instant makes consecutive
+    /// displayed positions exactly one refresh apart, regardless of when the
+    /// wake timer happened to fire. `None` (no phase yet, or a stale one —
+    /// the window idled or is occluded and the FIFO free-runs) lets the
+    /// caller fall back to wall time.
+    pub fn predicted_display_ns(&self, base: std::time::Instant) -> Option<u64> {
+        let last = self.acquire_return?;
+        let interval = self.acquire_interval?;
+        let predicted = last + interval;
+        if predicted <= std::time::Instant::now() {
+            return None;
+        }
+        Some(predicted.duration_since(base).as_nanos() as u64)
+    }
+
+    fn blit_opt(&mut self, window: BlitWindow, swap_save: Option<&str>) -> Result<(), String> {
+        let frame = self
+            .frame
+            .take()
+            .ok_or_else(|| "blit without acquire".to_string())?;
         let height = self.config.height.max(1) as f32;
         let width = self.config.width.max(1) as f32;
         // Raster-window mapping: the rasters are taller than the swapchain
@@ -1102,15 +1202,6 @@ impl PresentSurface {
         uniform[64..68].copy_from_slice(&0.0f32.to_le_bytes());
         uniform[68..72].copy_from_slice(&1.0f32.to_le_bytes());
         self.queue.write_buffer(&self.uniform, 0, &uniform);
-        let frame = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            wgpu::CurrentSurfaceTexture::Timeout => return Err("acquire_timeout".into()),
-            wgpu::CurrentSurfaceTexture::Occluded => return Err("acquire_occluded".into()),
-            wgpu::CurrentSurfaceTexture::Outdated => return Err("acquire_outdated".into()),
-            wgpu::CurrentSurfaceTexture::Lost => return Err("acquire_lost".into()),
-            wgpu::CurrentSurfaceTexture::Validation => return Err("acquire_validation".into()),
-        };
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());

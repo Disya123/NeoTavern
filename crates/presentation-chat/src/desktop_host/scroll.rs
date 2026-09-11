@@ -8,10 +8,20 @@ use neotavern_presentation_dioxus_shell::current_product_shell;
 impl App {
     /// Monotonic nanoseconds for the scroll animation timelines. The
     /// deterministic probe clock takes precedence while scripted ops run so
-    /// `--tick` sequences land on exact sample times.
+    /// `--tick` sequences land on exact sample times. Live frames sample at
+    /// the PREDICTED scanout instant (the FIFO acquire's v-sync phase plus
+    /// one refresh — see `PresentSurface::predicted_display_ns`): the wake
+    /// timer's jitter then never reaches the displayed motion, because the
+    /// sample time no longer depends on when the timer happened to fire.
     pub(super) fn monotonic_ns(&self) -> u64 {
-        self.probe_clock_ns
-            .unwrap_or_else(|| self.clock_base.elapsed().as_nanos() as u64)
+        if let Some(clock) = self.probe_clock_ns {
+            return clock;
+        }
+        let base = self.clock_base;
+        self.present
+            .as_ref()
+            .and_then(|p| p.predicted_display_ns(base))
+            .unwrap_or_else(|| base.elapsed().as_nanos() as u64)
     }
 
     /// Advances the scroll animations in the VISUAL offset only: the frozen

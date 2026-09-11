@@ -21,6 +21,11 @@ pub(super) enum ProbeOp {
     /// (geometric `shell_hit` + layout-derived `HitRects::resolve_tap`).
     /// The direct tool for "I clicked X, Y happened" questions.
     Hit(f32, f32),
+    /// Real-time pause inside the replay (diagnostics only): lets a test
+    /// harness bring the window to the foreground BEFORE the scripted
+    /// gesture, so the animation runs on a visible window with true
+    /// v-sync pacing. Deterministic snapshot flows never use it.
+    Wait(u64),
 }
 
 /// Parse the probe ops in argv order so "focus -> type -> send" scenarios are
@@ -73,6 +78,13 @@ pub(super) fn parse_probe_ops(args: &[String]) -> VecDeque<ProbeOp> {
                         if let (Ok(x), Ok(y)) = (x.trim().parse::<f32>(), y.trim().parse::<f32>()) {
                             ops.push_back(ProbeOp::Hit(x, y));
                         }
+                    }
+                }
+            }
+            "--wait" => {
+                if let Some(spec) = args_iter.next() {
+                    if let Ok(ms) = spec.trim().parse::<u64>() {
+                        ops.push_back(ProbeOp::Wait(ms));
                     }
                 }
             }
