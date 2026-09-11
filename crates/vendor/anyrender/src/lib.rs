@@ -162,12 +162,28 @@ impl From<RegisterResourceErrorKind> for RegisterResourceError {
     }
 }
 
+/// Which sink a NeoCompositor chrome-split router should feed. The desktop
+/// overscan blit needs the fixed chrome (header/composer) OUT of the content
+/// raster: the painter marks `data-action="chrome-block"` subtree roots and
+/// the recording sink routes their commands into separate chrome scenes that
+/// the host composites at reserved raster strips. Sinks that do not opt in
+/// keep the default no-op and paint the chrome inline (single-scene hosts,
+/// Android included).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChromeRoute {
+    /// The regular content scene.
+    Main,
+    /// The fixed chrome above the chat band (the header).
+    Header,
+    /// The fixed chrome below the chat band (the composer).
+    Composer,
+}
+
 pub trait RenderContext {
     fn try_register_custom_resource(
         &mut self,
         resource: Box<dyn Any>,
-    ) -> Result<ResourceId, RegisterResourceError> {
-        let _ = resource;
+    ) -> Result<ResourceId, RegisterResourceError> {        let _ = resource;
         Err(RegisterResourceErrorKind::Unimplemented.into())
     }
     fn unregister_resource(&mut self, resource_id: ResourceId) {
@@ -329,6 +345,11 @@ pub trait PaintScene: RenderContext {
     ///
     /// Default: no-op. Recording sinks and compositor probes override this.
     fn host_node_marker(&mut self, _marker: HostNodeMarker) {}
+
+    /// Switch the chrome-split route for all subsequent commands (see
+    /// [`ChromeRoute`]). The painter calls this when entering/leaving a
+    /// `chrome-block` subtree root. Default: no-op.
+    fn set_chrome_route(&mut self, _route: ChromeRoute) {}
 
     /// Publish a producer-authored text interaction snapshot.
     ///

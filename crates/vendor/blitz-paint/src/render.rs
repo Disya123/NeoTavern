@@ -5,6 +5,7 @@ mod clip_path;
 mod form_controls;
 mod mask;
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -16,7 +17,7 @@ use crate::kurbo_css::NonUniformRoundedRectRadii;
 use crate::layers::LayerManager;
 use crate::sizing::compute_object_fit;
 use crate::{CustomWidgetSceneMap, SELECTION_COLOR};
-use anyrender::{HostNodeKind, HostNodeMarker, PaintScene, Scene};
+use anyrender::{ChromeRoute, HostNodeKind, HostNodeMarker, PaintScene, Scene};
 use blitz_dom::node::{
     ListItemLayout, ListItemLayoutPosition, Marker, NodeData, RasterImageData, TextInputData,
     TextNodeData,
@@ -65,6 +66,12 @@ pub struct BlitzDomPainter<'dom, 'a> {
 
     // Pre-computed `Scene`s for each CustomWidget
     pub(crate) custom_widget_scenes: &'a CustomWidgetSceneMap,
+
+    /// Nesting depth of `chrome-block` subtree roots (NeoCompositor chrome
+    /// split): the painter routes fixed chrome (header/composer) into
+    /// separate scenes via [`PaintScene::set_chrome_route`] so the desktop
+    /// overscan raster keeps its scroll-band sample space chrome-free.
+    pub(crate) chrome_depth: Cell<u32>,
 }
 
 impl<'dom, 'a> BlitzDomPainter<'dom, 'a> {
@@ -102,6 +109,7 @@ impl<'dom, 'a> BlitzDomPainter<'dom, 'a> {
             layer_manager,
             selection_ranges,
             custom_widget_scenes,
+            chrome_depth: Cell::new(0),
         }
     }
 
@@ -201,7 +209,48 @@ impl<'dom, 'a> BlitzDomPainter<'dom, 'a> {
     ///
     /// Approaching rendering this way guarantees we have all the styles we need when rendering text with not having
     /// to traverse back to the parent for its styles, or needing to pass down styles
+    /// Routes `chrome-block` subtree roots (NeoCompositor chrome split) into
+    /// the sink's chrome scenes, then delegates to the regular element
+    /// renderer. Sinks without the split ignore the route (a default no-op)
+    /// and paint exactly as before.
     fn render_element(
+        &self,
+        scene: &mut impl PaintScene,
+        node_id: usize,
+        parent_style_transform: Affine,
+        clip_rect: Rect,
+    ) {
+        let node = &self.dom.as_ref().tree()[node_id];
+        let mut chrome_root = None;
+        if let Some(data) = node.element_data() {
+            let is_chrome_root = data.attrs.iter().any(|attr| {
+                &*attr.name.local == "data-action" && &*attr.value == "chrome-block"
+            });
+            if is_chrome_root {
+                let half = self.height as f32 / 2.0;
+                let y = node.final_layout.location.y * self.scale as f32;
+                chrome_root = Some(if y < half {
+                    ChromeRoute::Header
+                } else {
+                    ChromeRoute::Composer
+                });
+            }
+        }
+        if let Some(route) = chrome_root {
+            self.chrome_depth.set(self.chrome_depth.get() + 1);
+            scene.set_chrome_route(route);
+        }
+        self.render_element_inner(scene, node_id, parent_style_transform, clip_rect);
+        if chrome_root.is_some() {
+            let depth = self.chrome_depth.get().saturating_sub(1);
+            self.chrome_depth.set(depth);
+            if depth == 0 {
+                scene.set_chrome_route(ChromeRoute::Main);
+            }
+        }
+    }
+
+    fn render_element_inner(
         &self,
         scene: &mut impl PaintScene,
         node_id: usize,
