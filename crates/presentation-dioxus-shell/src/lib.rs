@@ -41,11 +41,11 @@ pub use neotavern_presentation_design_system::{
     resolve_theme_tokens, ThemeTokens,
 };
 pub use product_path::{
-    chrome_metrics, current_product_chat, format_timestamp, install_product_chat, message_id,
-    mixed_height, mixed_height_catalog, product_chat_from_fixture, product_chat_with_chrome,
-    streaming_schedule, visible_rows, ProductChatView, ProductChrome, RevisionRow, RowKind,
-    SnapshotItemView, VariantRowView, VisibleRow, PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS,
-    PRODUCT_PATH_VISIBLE,
+    chrome_metrics, composer_float_css, current_product_chat, format_timestamp,
+    install_product_chat, message_id, mixed_height, mixed_height_catalog,
+    product_chat_from_fixture, product_chat_with_chrome, streaming_schedule, visible_rows,
+    ProductChatView, ProductChrome, RevisionRow, RowKind, SnapshotItemView, VariantRowView,
+    VisibleRow, CHAT_OVERSCAN_CSS, PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE,
 };
 pub use product_shell::{
     character_card_description, character_manager_title, current_product_shell, ellipsize_css,
@@ -509,12 +509,16 @@ fn message_edit_editor(view: &ProductChatView, row_id: &str) -> Element {
 fn revision_history_card(view: &ProductChatView) -> Option<Element> {
     let owner = view.history_open_for.as_deref()?;
     let items = view.revision_history.clone();
+    // Overlay anchor: the viewport is full-height now (the header is an
+    // absolute overlay), so popovers clear the header band explicitly.
+    let overlay_top = crate::chrome_metrics(view.viewport_width, view.viewport_height).1 + 12;
+
     Some(rsx! {
         div {
             class: "MessageRevisionHistoryCard_card",
             "data-component": "revision-history-card",
             "data-part": "revision-history-card",
-            style: "position:absolute;left:50%;transform:translateX(-50%);top:12px;z-index:30;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:8px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
+            style: format!("position:absolute;left:50%;transform:translateX(-50%);top:{overlay_top}px;z-index:30;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:8px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);"),
             div {
                 style: "display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:12px;",
                 strong { style: "font-size:20px;font-weight:600;color:#f3eee8;", "Revision history" }
@@ -569,12 +573,16 @@ fn revision_history_card(view: &ProductChatView) -> Option<Element> {
 fn snapshots_menu_panel(view: &ProductChatView) -> Element {
     let hover = view.hover_target.as_deref();
     let items = view.snapshot_items.clone();
+    // Overlay anchor: the viewport is full-height now (the header is an
+    // absolute overlay), so popovers clear the header band explicitly.
+    let overlay_top = crate::chrome_metrics(view.viewport_width, view.viewport_height).1 + 12;
+
     rsx! {
         div {
             class: "ChatSnapshotsMenu_panel",
             "data-component": "chat-snapshots-menu",
             "data-part": "snapshots-panel",
-            style: "position:absolute;top:12px;right:16px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;width:320px;max-width:calc(100% - 16px);max-height:min(360px,60%);padding:2px;overflow-y:auto;border:1px solid #39342f;border-radius:10px;background:#292522;color:#f3eee8;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
+            style: format!("position:absolute;top:{overlay_top}px;right:16px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;width:320px;max-width:calc(100% - 16px);max-height:min(360px,60%);padding:2px;overflow-y:auto;border:1px solid #39342f;border-radius:10px;background:#292522;color:#f3eee8;box-shadow:0 24px 64px rgba(0,0,0,0.58);"),
             div {
                 "data-part": "snapshots-title",
                 style: "padding:0 2px;color:#998f87;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;",
@@ -658,6 +666,10 @@ fn variant_picker_popover(view: &ProductChatView) -> Option<Element> {
     let owner = view.variant_picker_for.as_deref()?;
     let hover = view.hover_target.as_deref();
     let rows = view.variant_picker_rows.clone();
+    // Overlay anchor: the viewport is full-height now (the header is an
+    // absolute overlay), so popovers clear the header band explicitly.
+    let overlay_top = crate::chrome_metrics(view.viewport_width, view.viewport_height).1 + 12;
+
     Some(rsx! {
         div {
             class: "MessageVariantPicker_popover",
@@ -666,7 +678,7 @@ fn variant_picker_popover(view: &ProductChatView) -> Option<Element> {
             role: "listbox",
             "aria-label": "Variants",
             "data-message-id": "{owner}",
-            style: "position:absolute;top:12px;right:16px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;min-width:260px;max-width:calc(100% - 16px);max-height:min(280px,60%);padding:4px;overflow-y:auto;border:1px solid rgba(57,52,47,0.6);border-radius:10px;background:#292522;color:#f3eee8;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
+            style: format!("position:absolute;top:{overlay_top}px;right:16px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;min-width:260px;max-width:calc(100% - 16px);max-height:min(280px,60%);padding:4px;overflow-y:auto;border:1px solid rgba(57,52,47,0.6);border-radius:10px;background:#292522;color:#f3eee8;box-shadow:0 24px 64px rgba(0,0,0,0.58);"),
             if rows.is_empty() && view.variant_picker_empty {
                 div {
                     "data-part": "swipe-picker-empty",
@@ -722,8 +734,9 @@ fn variant_row(item: &VariantRowView, hover: Option<&str>) -> Element {
     }
 }
 
-/// Flagged Product Wire chat workspace: header glass, visible Markdown/image
-/// rows, composer glass. Blitz consumes this tree; callers must not inject a
+/// Flagged Product Wire chat workspace: translucent header/composer chrome
+/// (no `neoui-glass` cutouts), visible Markdown/image rows. Blitz consumes
+/// this tree; callers must not inject a
 /// hand-built `NeoDisplayList`.
 /// Message details card modal overlay (React `MessageDetailsCardV2`):
 /// displays message metadata (sent time, model name, generation duration,
@@ -747,6 +760,9 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
     let content = row.content.clone();
     let run_id = row.run_id.clone();
     let excluded = row.manual_excluded;
+    // Overlay anchor: the viewport is full-height now (the header is an
+    // absolute overlay), so popovers clear the header band explicitly.
+    let overlay_top = crate::chrome_metrics(view.viewport_width, view.viewport_height).1 + 12;
 
     let is_actions_mode = view.details_mode == "actions";
     let is_edit_mode = view.details_mode == "edit";
@@ -765,7 +781,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                 "data-state": "edit",
                 role: "dialog",
                 "aria-label": "Edit message",
-                style: "position:absolute;left:50%;transform:translateX(-50%);top:12px;z-index:35;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:10px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
+                style: format!("position:absolute;left:50%;transform:translateX(-50%);top:{overlay_top}px;z-index:35;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:10px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);"),
                 div {
                     class: "MessageDetailsCardV2_editor",
                     "data-part": "details-editor",
@@ -845,7 +861,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                 "data-part": "details-card",
                 role: "dialog",
                 "aria-label": "Message actions",
-                style: "position:absolute;left:50%;transform:translateX(-50%);top:12px;z-index:35;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:10px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
+                style: format!("position:absolute;left:50%;transform:translateX(-50%);top:{overlay_top}px;z-index:35;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:10px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);"),
                 div {
                     class: "MessageDetailsCardV2_actionMode",
                     "data-part": "details-action-menu",
@@ -1042,7 +1058,7 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
             "data-part": "details-card",
             role: "dialog",
             "aria-label": "Message details",
-            style: "position:absolute;left:50%;transform:translateX(-50%);top:12px;z-index:35;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:10px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);",
+            style: format!("position:absolute;left:50%;transform:translateX(-50%);top:{overlay_top}px;z-index:35;box-sizing:border-box;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:10px;max-height:85%;padding:24px;border:1px solid #39342f;border-radius:20px;background:#292522;color:#f3eee8;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.58);"),
             // Header: Identity & Badges
             div {
                 class: "MessageDetailsCardV2_header",
@@ -1218,6 +1234,10 @@ pub fn product_chat_app() -> Element {
     let compact = view.viewport_height <= 240;
     let font_px = if compact { 12 } else { 18 };
     let pad = if compact { 8 } else { 16 };
+    // React `.composerWrapper` `padding-block-end` (chat-composer-edge-inset):
+    // the composer pill floats above the panel bottom. Shared with
+    // `chrome_metrics` so the scroll band and the painted pill agree.
+    let composer_float = crate::composer_float_css(view.viewport_height) as usize;
     let header_title = if view.character_name.is_empty() {
         view.title.clone()
     } else {
@@ -1251,20 +1271,37 @@ pub fn product_chat_app() -> Element {
         "position:relative;box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;min-width:0;min-height:0;padding:0 {pad}px;background:rgba(36,33,30,0.70);"
     );
     let header_style = format!(
-        // No `z-index`: any non-auto z-index on a positioned node makes Blitz
-        // hoist the subtree to its stacking-context ancestor on the FIRST
-        // layout and never re-anchor it on relayout (the header kept the
-        // 1424-wide coordinates after resizing to 1920 — traced via
-        // NEOTA_TEXT_TRACE: paint parent_tx=440 for the header subtree vs
-        // 640 for the viewport). The bands don't overlap, so stacking is
-        // unnecessary in the native flow.
-        "flex:none;position:relative;width:100%;height:{header_h}px;box-sizing:border-box;padding:0 {pad}px;background:rgba(36,33,30,0.82);color:#f3eee8;border-bottom:1px solid rgba(57,52,47,0.48);display:flex;align-items:center;justify-content:space-between;gap:8px;"
+        // React parity: the header is an ABSOLUTE overlay on the full-height
+        // viewport (Telegram-style; React `.chatHeader` is absolute with a
+        // z-index, which this Blitz build forbids) - messages slide under
+        // its translucent background (NO `neoui-glass`: that attribute is a
+        // wallpaper cutout that erases the rows painted beneath - see the
+        // desktop-host doc). No `z-index` here: any non-auto z-index on a
+        // positioned node
+        // makes Blitz hoist the subtree to its stacking-context ancestor on
+        // the FIRST layout and never re-anchor it on relayout (the header
+        // kept the 1424-wide coordinates after resizing to 1920). Layering
+        // is DOM order instead: viewport paints first, header/composer
+        // after; the session overlays keep their positive z-index and stay
+        // above everything.
+        "position:absolute;top:0;left:{pad}px;right:{pad}px;height:{header_h}px;box-sizing:border-box;padding:0 {pad}px;background:rgba(36,33,30,0.82);color:#f3eee8;border-bottom:1px solid rgba(57,52,47,0.48);display:flex;align-items:center;justify-content:space-between;gap:8px;"
     );
+    // 144fps scroll: the viewport box extends CHAT_OVERSCAN_CSS above and
+    // below the panel so the virtualized window's overscan rows paint there
+    // (clipped by this box) - the blit shift then presents real rows on the
+    // leading edge instead of the wallpaper filler strip. Absolute because
+    // the flex panel no longer constrains the box (the chrome stays anchored
+    // to the panel by its own absolute styles).
     let viewport_style = format!(
-        "flex:1 1 auto;position:relative;width:100%;min-height:0;box-sizing:border-box;overflow:hidden;background:transparent;"
+        "position:absolute;left:0;right:0;top:-{CHAT_OVERSCAN_CSS}px;bottom:-{CHAT_OVERSCAN_CSS}px;box-sizing:border-box;overflow:hidden;background:transparent;"
     );
+    // React parity: the viewport is full-height now (header/composer are
+    // absolute overlays), so the scroll body clears the header band with its
+    // own top padding (React `.scrollBody` `padding-block`); rows land at the
+    // same px they occupied in the old band layout: band_top + pad.
+    let scroll_pad_top = header_h + pad;
     let scroll_style = format!(
-        "display:flex;flex-direction:column;gap:24px;box-sizing:border-box;min-height:100%;padding:{pad}px;"
+        "position:absolute;left:0;right:0;top:{CHAT_OVERSCAN_CSS}px;bottom:{CHAT_OVERSCAN_CSS}px;display:flex;flex-direction:column;gap:24px;box-sizing:border-box;padding:{scroll_pad_top}px {pad}px 12px;"
     );
     // Sub-row scroll offset (view `chat_window_offset_css`): the message
     // canvas pulls itself up so the virtualized window's rows land at their
@@ -1339,105 +1376,6 @@ pub fn product_chat_app() -> Element {
                     class: "ChatWorkspace_chatPanel",
                     style: "{panel_style}",
                     "data-component": "chat-panel",
-                    if let Some(parts) = &chrome_parts {
-                        {parts.header.clone()}
-                    } else {
-                    div {
-                        class: "ChatWorkspace_chatHeader neoui-glass",
-                        "data-neoui": "glass",
-                        "data-slot": "chat.header",
-                        role: "banner",
-                        style: "{header_style}",
-                        if view.header_search_open {
-                            {header_search_overlay(&view)}
-                        } else {
-                            div {
-                                class: "ChatWorkspace_chatIdentity",
-                                "data-part": "character-identity",
-                                style: "display:flex;align-items:center;gap:8px;min-width:0;flex:1;",
-                                if !view.character_avatar_asset.is_empty() {
-                                    span {
-                                        class: "ChatWorkspace_headerAvatar",
-                                        "data-part": "character-avatar",
-                                        "aria-hidden": "true",
-                                        style: "flex:none;width:{header_px}px;height:{header_px}px;border-radius:{header_radius}px;overflow:hidden;background:#302c28;position:relative;",
-                                        span {
-                                            "data-part": "avatar-fallback",
-                                            "data-avatar-asset": "{view.character_avatar_asset}",
-                                            "data-avatar-radius": "{header_radius}",
-                                            class: "headerAvatar",
-                                            style: "display:block;width:{header_px}px;height:{header_px}px;border-radius:{header_radius}px;background:#302c28;",
-                                        }
-                                        // In-scene raster, same as the blueprint
-                                        // (`scene_chat.rs`): stage B retired the GPU
-                                        // overlay, so the legacy chrome must carry
-                                        // the `<img>` itself or the header avatar
-                                        // degrades to the fallback letter.
-                                        img {
-                                            src: "{crate::ASSET_URL_PREFIX}{view.character_avatar_asset}",
-                                            alt: "",
-                                            style: "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:{header_radius}px;",
-                                        }
-                                    }
-                                }
-                                h1 {
-                                    style: "margin:0;overflow:hidden;min-width:0;font-size:13px;font-weight:600;text-overflow:ellipsis;white-space:nowrap;color:#f3eee8;",
-                                    "{header_title}"
-                                }
-                            }
-                            button {
-                                class: "ChatWorkspace_headerSearch",
-                                r#type: "button",
-                                "data-action": "header-search",
-                                "data-part": "header-search",
-                                "aria-label": "Search messages",
-                                title: "Search messages",
-                                style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
-                                {crate::product_shell::icon("MagnifyingGlass", 17)}
-                            }
-                            // React `ChatSnapshotsMenu` trigger: aria-label
-                            // "Snapshots", round 40px ghost button, hover
-                            // text-primary over inverse-7% background (G5).
-                            button {
-                                class: "ChatWorkspace_headerSearch",
-                                r#type: "button",
-                                // Custom intents render verbatim through the
-                                // shared hit table; the desktop bin routes this
-                                // one to `toggle_snapshots_menu`.
-                                "data-action": "custom.chat.snapshots-menu",
-                                "data-part": "snapshots-trigger",
-                                "data-state": if hover == Some("custom.chat.snapshots-menu:-") { "hover" } else { "idle" },
-                                "aria-label": "Snapshots",
-                                "aria-haspopup": "menu",
-                                "aria-expanded": if view.snapshots_menu_open { "true" } else { "false" },
-                                title: "Snapshots",
-                                style: if hover == Some("custom.chat.snapshots-menu:-") { "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:rgba(33,27,23,0.07);color:#f3eee8;" } else { "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;" },
-                                {crate::product_shell::icon("GitBranch", 17)}
-                            }
-                            if let Some(ref parent_id) = view.parent_chat_id {
-                                button {
-                                    class: "ChatWorkspace_headerSearch",
-                                    r#type: "button",
-                                    "data-component": "back-to-parent",
-                                    "data-action": "back-to-parent",
-                                    "data-parent-chat-id": "{parent_id}",
-                                    "aria-label": "Back to parent chat",
-                                    title: "Back to parent chat",
-                                    style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
-                                    {crate::product_shell::icon("ArrowLeft", 17)}
-                                }
-                            }
-                            if nested {
-                                div {
-                                    class: "neoui-glass",
-                                    "data-neoui": "glass",
-                                    "data-part": "dialog",
-                                    style: "position:absolute;left:48px;top:4px;width:160px;height:28px;background:#302c28;"
-                                }
-                            }
-                        }
-                    }
-                    }
                     if let Some(parts) = &chrome_parts {
                         {parts.viewport.clone()}
                         // Interactive overlays are session-state driven and
@@ -1734,16 +1672,121 @@ pub fn product_chat_app() -> Element {
                         }
                     }
                     }
-                    // Composer sits AFTER the viewport as a flex sibling (the
-                    // packed Blitz sheet models the same bands): the native
-                    // surface materializes row windows from the canvas top, so
-                    // a composer inside the scrolling subtree always ended up
-                    // painted over the newest message. React keeps it inside
-                    // via position:sticky, which Blitz cannot express.
+                    if let Some(parts) = &chrome_parts {
+                        {parts.header.clone()}
+                    } else {
+                    div {
+                        class: "ChatWorkspace_chatHeader",
+                        "data-slot": "chat.header",
+                        // Overlay semantics: the header covers the overscan
+                        // rows; taps on its non-interactive areas resolve to
+                        // `chrome-block` (TapIntent::None) instead of falling
+                        // through to the row actions painted behind it.
+                        "data-action": "chrome-block",
+                        role: "banner",
+                        style: "{header_style}",
+                        if view.header_search_open {
+                            {header_search_overlay(&view)}
+                        } else {
+                            div {
+                                class: "ChatWorkspace_chatIdentity",
+                                "data-part": "character-identity",
+                                style: "display:flex;align-items:center;gap:8px;min-width:0;flex:1;",
+                                if !view.character_avatar_asset.is_empty() {
+                                    span {
+                                        class: "ChatWorkspace_headerAvatar",
+                                        "data-part": "character-avatar",
+                                        "aria-hidden": "true",
+                                        style: "flex:none;width:{header_px}px;height:{header_px}px;border-radius:{header_radius}px;overflow:hidden;background:#302c28;position:relative;",
+                                        span {
+                                            "data-part": "avatar-fallback",
+                                            "data-avatar-asset": "{view.character_avatar_asset}",
+                                            "data-avatar-radius": "{header_radius}",
+                                            class: "headerAvatar",
+                                            style: "display:block;width:{header_px}px;height:{header_px}px;border-radius:{header_radius}px;background:#302c28;",
+                                        }
+                                        // In-scene raster, same as the blueprint
+                                        // (`scene_chat.rs`): stage B retired the GPU
+                                        // overlay, so the legacy chrome must carry
+                                        // the `<img>` itself or the header avatar
+                                        // degrades to the fallback letter.
+                                        img {
+                                            src: "{crate::ASSET_URL_PREFIX}{view.character_avatar_asset}",
+                                            alt: "",
+                                            style: "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:{header_radius}px;",
+                                        }
+                                    }
+                                }
+                                h1 {
+                                    style: "margin:0;overflow:hidden;min-width:0;font-size:13px;font-weight:600;text-overflow:ellipsis;white-space:nowrap;color:#f3eee8;",
+                                    "{header_title}"
+                                }
+                            }
+                            button {
+                                class: "ChatWorkspace_headerSearch",
+                                r#type: "button",
+                                "data-action": "header-search",
+                                "data-part": "header-search",
+                                "aria-label": "Search messages",
+                                title: "Search messages",
+                                style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+                                {crate::product_shell::icon("MagnifyingGlass", 17)}
+                            }
+                            // React `ChatSnapshotsMenu` trigger: aria-label
+                            // "Snapshots", round 40px ghost button, hover
+                            // text-primary over inverse-7% background (G5).
+                            button {
+                                class: "ChatWorkspace_headerSearch",
+                                r#type: "button",
+                                // Custom intents render verbatim through the
+                                // shared hit table; the desktop bin routes this
+                                // one to `toggle_snapshots_menu`.
+                                "data-action": "custom.chat.snapshots-menu",
+                                "data-part": "snapshots-trigger",
+                                "data-state": if hover == Some("custom.chat.snapshots-menu:-") { "hover" } else { "idle" },
+                                "aria-label": "Snapshots",
+                                "aria-haspopup": "menu",
+                                "aria-expanded": if view.snapshots_menu_open { "true" } else { "false" },
+                                title: "Snapshots",
+                                style: if hover == Some("custom.chat.snapshots-menu:-") { "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:rgba(33,27,23,0.07);color:#f3eee8;" } else { "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;" },
+                                {crate::product_shell::icon("GitBranch", 17)}
+                            }
+                            if let Some(ref parent_id) = view.parent_chat_id {
+                                button {
+                                    class: "ChatWorkspace_headerSearch",
+                                    r#type: "button",
+                                    "data-component": "back-to-parent",
+                                    "data-action": "back-to-parent",
+                                    "data-parent-chat-id": "{parent_id}",
+                                    "aria-label": "Back to parent chat",
+                                    title: "Back to parent chat",
+                                    style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+                                    {crate::product_shell::icon("ArrowLeft", 17)}
+                                }
+                            }
+                            if nested {
+                                div {
+                                    class: "neoui-glass",
+                                    "data-neoui": "glass",
+                                    "data-part": "dialog",
+                                    style: "position:absolute;left:48px;top:4px;width:160px;height:28px;background:#302c28;"
+                                }
+                            }
+                        }
+                    }
+                    }
+                    // Composer overlay (React parity): the pill floats above
+                    // the panel bottom inside an absolute bottom-docked
+                    // wrapper - React `.composerWrapper` is position:sticky,
+                    // which Blitz cannot express. Out of flow it no longer
+                    // shortens the viewport: message rows slide under the
+                    // pill and its glass cuts them at the pill edge
+                    // (Telegram-style). DOM order keeps the chrome above the
+                    // rows: [viewport, header, composer].
                     div {
                         class: "ChatWorkspace_composerWrapper",
                         "data-part": "composer-sticky",
-                            style: "flex:none;box-sizing:border-box;width:100%;padding:0 {pad}px {pad}px;",
+                            style: "position:absolute;left:0;right:0;bottom:0;box-sizing:border-box;padding:0 {pad}px {composer_float}px;",
                             if let Some(code) = view.error_code.as_deref() {
                                 div {
                                     "data-part": "error",
@@ -1760,9 +1803,9 @@ pub fn product_chat_app() -> Element {
                                 {parts.composer.clone()}
                             } else {
                             div {
-                                class: "ChatWorkspace_composer neoui-glass",
-                                "data-neoui": "glass",
+                                class: "ChatWorkspace_composer",
                                 role: "region",
+                                "data-action": "chrome-block",
                                 "aria-label": "Message composer",
                                 "data-state": if view.streaming { "streaming" } else { "idle" },
                                 "data-slot": "chat.composer",

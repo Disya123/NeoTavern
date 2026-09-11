@@ -7,7 +7,7 @@
 //! RSX uses.
 
 use neotavern_presentation_dioxus_shell::{
-    chats_layout, chrome_metrics, PresetValueRow, ProductShellView,
+    chats_layout, chrome_metrics, composer_float_css, PresetValueRow, ProductShellView,
 };
 
 pub const RAIL_WIDTH: f32 = 60.0;
@@ -1396,7 +1396,11 @@ fn snapshots_menu_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHi
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
     let (_, header_h, _, composer_h) = chrome_metrics(width as u32, height as u32);
-    let composer_bottom = height - composer_h as f32 - chrome_bottom(view);
+    // The composer pill floats above the panel bottom (React
+    // chat-composer-edge-inset), so its top edge - and everything the
+    // hit geometry anchors to it - moves up by the float inset.
+    let composer_bottom =
+        height - composer_h as f32 - composer_float_css(height as u32) as f32 - chrome_bottom(view);
     let viewport_top = chrome_top(view) + header_h as f32;
     let items = &view.chat.snapshot_items;
     let list_h = if items.is_empty() {
@@ -1437,7 +1441,11 @@ fn variant_picker_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHi
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
     let (_, header_h, _, composer_h) = chrome_metrics(width as u32, height as u32);
-    let composer_bottom = height - composer_h as f32 - chrome_bottom(view);
+    // The composer pill floats above the panel bottom (React
+    // chat-composer-edge-inset), so its top edge - and everything the
+    // hit geometry anchors to it - moves up by the float inset.
+    let composer_bottom =
+        height - composer_h as f32 - composer_float_css(height as u32) as f32 - chrome_bottom(view);
     let viewport_top = chrome_top(view) + header_h as f32;
     let items = &view.chat.variant_picker_rows;
     let list_h = if items.is_empty() {

@@ -22,7 +22,13 @@
 #[derive(Clone, Copy, Debug)]
 pub struct ScrollAckLoop {
     presented_css: f32,
-    cap_css: f32,
+    /// Drift cap toward OLDER messages (positive drift). Overscan hosts set
+    /// it from the painted runway above the band.
+    cap_older_css: f32,
+    /// Drift cap toward NEWER messages (negative drift): the painted runway
+    /// below the band. At the newest end it is small — but the offset cannot
+    /// move past the pin there, so the small cap never gates a real gesture.
+    cap_newer_css: f32,
     /// Window advance in flight: the product state was already advanced to
     /// this offset, the re-produced raster has not landed yet. While set, no
     /// further advance is decided (one produce per ack).
@@ -64,7 +70,8 @@ impl ScrollAckLoop {
     pub fn new(presented_css: f32) -> Self {
         Self {
             presented_css,
-            cap_css: f32::INFINITY,
+            cap_older_css: f32::INFINITY,
+            cap_newer_css: f32::INFINITY,
             in_flight: None,
         }
     }
@@ -82,11 +89,23 @@ impl ScrollAckLoop {
     }
 
     pub fn set_cap(&mut self, cap_css: f32) {
-        self.cap_css = cap_css.max(MIN_ACK_CAP_CSS);
+        let cap = cap_css.max(MIN_ACK_CAP_CSS);
+        self.cap_older_css = cap;
+        self.cap_newer_css = cap;
+    }
+
+    /// Directional caps from the overscan runway: positive drift (toward
+    /// older) is bounded by the painted rows above the band, negative by the
+    /// rows below it. The blit presents real rows only inside those extents;
+    /// past them the filler branch would show, so the host lands the
+    /// re-produce while the drift still has runway.
+    pub fn set_runway_caps(&mut self, older_css: f32, newer_css: f32) {
+        self.cap_older_css = older_css.max(MIN_ACK_CAP_CSS);
+        self.cap_newer_css = newer_css.max(MIN_ACK_CAP_CSS);
     }
 
     pub fn cap(&self) -> f32 {
-        self.cap_css
+        self.cap_older_css.min(self.cap_newer_css)
     }
 
     /// Visual offset minus the presented window: what the blit shift / fast
@@ -110,7 +129,12 @@ impl ScrollAckLoop {
             return None;
         }
         if gesture_active {
-            (drift.abs() >= self.cap_css).then_some(drift)
+            let over = if drift > 0.0 {
+                drift >= self.cap_older_css
+            } else {
+                drift <= -self.cap_newer_css
+            };
+            over.then_some(drift)
         } else {
             (drift.abs() > LANDED_EPSILON_CSS).then_some(drift)
         }

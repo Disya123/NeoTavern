@@ -87,11 +87,21 @@ impl<W: ProductWire> ChatSession<W> {
             .as_ref()
             .map(|chat| chat.title.clone())
             .unwrap_or_else(|| "Chat".into());
-        let (mut visible, _, hidden_above) = self.visible_window();
+        let (mut visible, _, hidden_above, canvas_height) = self.visible_window();
         // The sub-row scroll offset travels with the view: the shell pulls
         // the message canvas up by it so painted rows match the virtualized
-        // window's px positions (see `virtualized_window`).
+        // window's px positions (see `virtualized_window`). The overscan
+        // lead row's height is included, so in-band rows do not move.
         let chat_window_offset_css = hidden_above as f32;
+        // Painted canvas extents in panel CSS px (overscan rows included):
+        // the render anchors the canvas `scroll_pad_top - hidden_above`
+        // below the panel top (16px inline pad; a compact render's 8px is
+        // absorbed by the ack cap margin), and the stack is
+        // `canvas_height` tall. Hosts bound the blit-shift runway by these
+        // against the on-screen chat band.
+        let (_, header_h, _, _) = chrome_metrics(self.viewport_width, self.viewport_height);
+        let chat_canvas_top_css = (f64::from(header_h) + 16.0 - hidden_above) as f32;
+        let chat_canvas_bottom_css = chat_canvas_top_css + canvas_height as f32;
         // The details card outlives the visible window: resolve its owner
         // from the FULL message list so scrolling the row away while the
         // card is open keeps the card alive (React keeps the message
@@ -187,6 +197,8 @@ impl<W: ProductWire> ChatSession<W> {
             message_count: self.kernel_message_count(),
             visible,
             chat_window_offset_css,
+            chat_canvas_top_css,
+            chat_canvas_bottom_css,
             chrome,
             composer_text: self.state.composer_text.clone(),
             composer_placeholder,
@@ -800,7 +812,7 @@ impl<W: ProductWire> ChatSession<W> {
             .collect()
     }
 
-    pub fn present_visible(&self) -> (Vec<VisibleRow>, PresentOutcome, f64) {
+    pub fn present_visible(&self) -> (Vec<VisibleRow>, PresentOutcome, f64, f64) {
         self.visible_window()
     }
 
@@ -808,7 +820,7 @@ impl<W: ProductWire> ChatSession<W> {
         self.state.messages.last().map(|row| row.content.clone())
     }
 
-    pub(crate) fn visible_window(&self) -> (Vec<VisibleRow>, PresentOutcome, f64) {
+    pub(crate) fn visible_window(&self) -> (Vec<VisibleRow>, PresentOutcome, f64, f64) {
         let (_, _, viewport_h, _) = chrome_metrics(self.viewport_width, self.viewport_height);
         virtualized_window(
             &self.state.messages,

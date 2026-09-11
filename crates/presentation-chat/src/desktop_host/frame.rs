@@ -147,16 +147,13 @@ impl App {
                         self.wheel_at(css_px, css_py, dy);
                     }
                     ProbeOp::Tick(ms) => {
-                        // One animation step at a deterministic sample time:
-                        // the same sampler the real frame loop runs. A step
-                        // that finishes the animation lands immediately so
-                        // the produce below bakes the landed offset (the
-                        // frame-level landing already ran inside the replay).
+                        // One animation step at a deterministic sample
+                        // time: the same step the real frame loop runs
+                        // (`advance_and_land_scroll` — visual advance, land
+                        // when the ack drift crosses the baked runway cap).
                         let clock = self.probe_clock_ns.get_or_insert(0);
                         *clock = clock.saturating_add(ms.saturating_mul(1_000_000));
-                        if self.advance_scroll_animations() {
-                            self.land_now();
-                        }
+                        self.advance_and_land_scroll();
                     }
                     ProbeOp::Hit(x, y) => {
                         // Resolves against the geometry produced by the
@@ -196,19 +193,7 @@ impl App {
         if !self.scroll_animation_active() {
             self.probe_clock_ns = None;
         }
-        self.advance_scroll_animations();
-        // Landing (sync-back) through the shared ack-loop: a drift past half
-        // the chat band while the gesture runs — or any residual drift once
-        // it ended — bakes the visual into the session with one clamped
-        // `scroll_chat_by`; the produce below then re-renders the content
-        // window at the landed offset (the same contract the Android host
-        // drives through the kernel rebase).
-        if let Some(shift) = self
-            .ack
-            .due(self.visual_scroll_css, self.scroll_animation_active())
-        {
-            self.land_scroll(shift);
-        }
+        self.advance_and_land_scroll();
         if self.dirty {
             let streaming = self.session.state().stream_handle.is_some();
             let due = !streaming

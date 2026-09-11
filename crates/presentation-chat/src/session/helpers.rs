@@ -736,7 +736,7 @@ pub(crate) fn virtualized_window(
     assistant_author: &str,
     macros: &crate::macros::MacroContext,
     height_corrections: &HashMap<String, (f64, f64)>,
-) -> (Vec<VisibleRow>, PresentOutcome, f64) {
+) -> (Vec<VisibleRow>, PresentOutcome, f64, f64) {
     let mut index = HeightIndex::new();
     for message in messages {
         let (height, kind) = corrected_height_kind(message, height_corrections);
@@ -748,6 +748,9 @@ pub(crate) fn virtualized_window(
     }
     let viewport_height = viewport_height.max(1.0);
     let extent = index.extent();
+    let canvas_height: f64 = (0..index.len())
+        .filter_map(|i| index.height_at(i).map(|(_, h, _)| h))
+        .sum();
     if messages.is_empty() || extent <= viewport_height {
         return (
             visible_rows(messages, assistant_author, macros),
@@ -758,6 +761,7 @@ pub(crate) fn virtualized_window(
                 snapshot: GeometrySnapshot::empty(),
             },
             0.0,
+            canvas_height,
         );
     }
     let mut viewport = ViewportSession::new(
@@ -776,21 +780,38 @@ pub(crate) fn virtualized_window(
     let span = viewport
         .index()
         .span_covering(start, start + viewport_height);
+    // Overscan (144fps scroll): bake the two neighbouring rows on each side
+    // of the band into the paint window. The viewport box extends
+    // `CHAT_OVERSCAN_CSS` above and below the panel and clips them, so the
+    // extra rows paint as runway under the translucent chrome — the blit
+    // shift presents real rows on the leading edge instead of the wallpaper
+    // filler strip, and the scroll ack cap derives from the painted canvas
+    // extents (`chat_canvas_top_css` / `chat_canvas_bottom_css`). Two rows
+    // (not one): the cap is bounded by the box, and small rows must not
+    // drag the land cadence up. Row-index extension, not px:
+    // `span_covering` falls back to `first` for offsets past the extent, so
+    // the range itself must stay inside it.
+    let lead_start = span.start.saturating_sub(2);
+    let trail_end = (span.end + 2).min(viewport.index().len());
     // px of the first window row hidden above the viewport top. The painter
     // pulls the message canvas up by exactly this amount so rows land at
     // their true scrolled positions: the window selection alone only swaps
     // whole rows (the paint has no scroll offset of its own), which snapped
-    // every land to a row boundary — the "flipping a book" scroll.
+    // every land to a row boundary — the "flipping a book" scroll. With the
+    // lead row this includes its height: the canvas shifts up by the same
+    // px, so the in-band rows do not move.
     let hidden_above = {
         let index = viewport.index();
-        let cum_before: f64 = (0..span.start)
+        let cum_before: f64 = (0..lead_start)
             .filter_map(|i| index.height_at(i).map(|(_, h, _)| h))
             .sum();
         (start - cum_before).max(0.0)
     };
     let mut visible = Vec::new();
-    for i in span.start..span.end {
-        if let Some((id, _, _)) = viewport.index().height_at(i) {
+    let mut painted_height = 0.0;
+    for i in lead_start..trail_end {
+        if let Some((id, h, _)) = viewport.index().height_at(i) {
+            painted_height += h;
             if let Some(message) = messages.iter().find(|row| row.sequence as u64 == id.0) {
                 visible.push(message_visible_row(message, assistant_author, macros));
             }
@@ -798,9 +819,18 @@ pub(crate) fn virtualized_window(
     }
     if visible.is_empty() {
         visible = visible_rows(messages, assistant_author, macros);
-        return (visible, outcome, 0.0);
+        return (visible, outcome, 0.0, canvas_height);
     }
-    (visible, outcome, hidden_above)
+    // Painted canvas height: the stack ends at the last row's own bottom
+    // margin (8px) — the trailing flex gap (+24) between rows is not part
+    // of the last row's painted extent. Precise here because the host caps
+    // the blit drift by the distance between this bottom and the chat band.
+    (
+        visible,
+        outcome,
+        hidden_above,
+        painted_height - ROW_GAP_CSS + 8.0,
+    )
 }
 
 /// Single shared height baseline (A3 unification): `estimate_height` (the

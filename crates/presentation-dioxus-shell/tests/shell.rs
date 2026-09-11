@@ -1,9 +1,9 @@
 use dioxus_core::VirtualDom;
 use neotavern_presentation_dioxus_shell::{
-    assert_registered_command, chat_route_line, chrome_metrics, dioxus_shell_from_flag,
-    expected_projection, flagged_chat_route, load_canonical_fixture, mixed_height_catalog,
-    mount_product_chat, mount_virtual_dom, product_chat_from_fixture, project_canonical,
-    DioxusShellHost, ShellError, PRODUCT_PATH_ITEMS,
+    assert_registered_command, chat_route_line, chrome_metrics, composer_float_css,
+    dioxus_shell_from_flag, expected_projection, flagged_chat_route, load_canonical_fixture,
+    mixed_height_catalog, mount_product_chat, mount_virtual_dom, product_chat_from_fixture,
+    project_canonical, DioxusShellHost, ShellError, PRODUCT_PATH_ITEMS,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -202,7 +202,11 @@ fn chrome_metrics_phone_uses_readable_bands() {
     assert_eq!(width, 407);
     assert_eq!(header, 56);
     assert_eq!(composer, 174);
-    assert_eq!(viewport, 904 - 56 - 174);
+    // The composer pill floats above the panel bottom (React
+    // chat-composer-edge-inset), so the message band ends at the pill top.
+    assert_eq!(viewport, 904 - 56 - 174 - composer_float_css(904));
+    assert_eq!(composer_float_css(904), 16);
+    assert_eq!(composer_float_css(220), 8, "compact keeps the flush inset");
 }
 
 #[test]

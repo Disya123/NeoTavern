@@ -222,6 +222,8 @@ fn markdown_minimal_probe() {
             token_count: None,
         }],
         chat_window_offset_css: 0.0,
+        chat_canvas_top_css: 0.0,
+        chat_canvas_bottom_css: 0.0,
         chrome: ProductChrome::HeaderComposer,
         character_avatar_asset: "asset:avatar-hazel".into(),
         character_name: "Hazel".into(),

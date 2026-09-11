@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### Changed
+
+- Native desktop chat scroll now runs at the monitor's refresh rate with a
+  handful of produces per gesture (follow-up: "8% CPU at 30fps is terrible —
+  I have a 144 Hz screen, it must be 144 fps at <4%"). The 30 fps
+  produce-driven quantum is replaced by an overscan runway: the virtualized
+  paint window bakes the two neighbouring rows beyond the chat band, the
+  viewport box extends `CHAT_OVERSCAN_CSS` (256 css px) past the panel on
+  both sides, and the scene/resolve rasters are that much taller — so the
+  vsync blit shift presents REAL rows on the leading edge instead of the
+  wallpaper filler that bounded the old 96 px cap. Produces happen only when
+  the ack drift crosses the painted runway (directional caps:
+  `ScrollAckLoop::set_runway_caps` — at the bottom pin the below-band runway
+  is zero, but the offset cannot move past the pin): a 600 px wheel gesture
+  lands 2 produces (was 9), a 2000 px fling 6. Touch drags move the visual
+  directly (1:1 blit, no pending accumulator). The blit uniform grew to five
+  vec4 rows on both hosts (screen→raster window mapping in `scroll[3].zw`,
+  the filler source window in `scroll[4].xy`); Android writes the flat
+  mapping and the old band bounds, so its present path is unchanged.
+
+### Fixed
+
+- Product chrome (chat header + composer pill) no longer carries the
+  `neoui-glass` marker: that attribute is a wallpaper CUTOUT — the paint
+  pipeline erases every row painted beneath the node so the wallpaper shows
+  through, which both broke React parity (React shows messages through its
+  70% translucent header) and ate the overscan rows the blit runway bakes
+  under the chrome. Pixel-proven (strip std 0 → 10–15 after removal): rows
+  now show dimmed through the translucent chrome in both the legacy and
+  blueprint renders, and the header/composer roots carry
+  `data-action="chrome-block"` so taps on non-interactive chrome areas
+  resolve to `TapIntent::None` instead of leaking to the overscan row
+  actions painted behind them.
+- A mid-sequence desktop-host regression where the whole window showed
+  black bars with the chat squeezed into the middle: the present uniforms
+  double-booked bytes 56..64 (the doc-window mapping and the filler source
+  window shared one slot, last write won, and the screen sampled the full
+  cleared raster including the overscan strips). The five-row uniform
+  layout splits them; swapchain dumps verified header/band/pill placement
+  at 1100×760.
+
 ### Added
 
 - `pnpm ui:dev --watch` (wave E): `.rs` edits anywhere under
@@ -20,6 +61,40 @@
 
 ### Fixed
 
+- Native desktop chat scroll (follow-up: "still jerky, and scrolling eats
+  15% CPU"). The animation was showing a FROZEN raster: the host
+  blit-shifted the stale frame, filled the leading band edge with the
+  wallpaper (up to the 96 px drift cap) and snapped the missing rows in at
+  the landing produce — the filler strip plus the landing snap read as
+  page-jerks. (Superseded within this release by the overscan runway in
+  Changed above, which fixes the same root cause while keeping the
+  vsync-rate fast path; the intermediate produce-driven quantum — real
+  content every frame at ~30 fps — never shipped.) The ack-loop land lives
+  in the produce itself either way, so a stream-gated frame still blits
+  the true shift instead of freezing, and the wheel continuity (37 → 137
+  stays exactly +100px on the same rows) holds in every variant.
+- Native desktop chat workspace (the "input field is a separate block, not
+  like React" complaint): the native shell painted three stacked opaque
+  bands (header / chat box / composer), while React renders a full-height
+  viewport with the header as an absolute glass overlay and the composer
+  sticky inside the scroll — messages slide under the chrome. The native
+  structure now mirrors React in both renderers: the viewport fills the
+  panel, the header and the composer wrapper are absolute overlays
+  (no z-index — Blitz hoists non-auto z-index subtrees on relayout;
+  layering is DOM order: viewport, header, composer), the composer pill
+  floats above the panel bottom (React chat-composer-edge-inset, 16 px
+  desktop / 8 px compact), the scroll body clears the header band with
+  its own top padding (rows land at the same px as before), and viewport
+  popovers re-anchor below the header. `chrome_metrics` now subtracts the
+  float inset — the old viewport metric ignored the composer wrapper's
+  padding and ran the message band 16 px under the painted pill (the last
+  row painted under the pill's top edge); the `shell_hit` popover
+  anchors follow. (The glass cutouts at the chrome edges went away with
+  the `neoui-glass` removal — see Fixed above.) Verified: header y=0 h=56 absolute,
+  viewport full-height, pill 819..993 with a 16 px float, bottom pin
+  leaves 16 px above the pill, the top window row bleeds under the header
+  glass like React, blueprint-vs-legacy goldens re-captured (0.0000% on
+  all four sizes).
 - Native desktop chat scroll — the "flipping a book, not scrolling a chat"
   defect is fixed at the root. Four coupled causes, one slice: (a) the
   virtualized row window was selected by cumulative offsets but the canvas

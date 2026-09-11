@@ -614,6 +614,11 @@ pub struct PresentSurface {
     /// re-configure ([`Self::set_swapchain_size`]) does not make
     /// [`Self::resize`] skip the produce-time target re-allocation.
     targets_size: (u32, u32),
+    /// Overscan strip above (and below) the panel baked into the rasters,
+    /// physical px (144fps scroll runway; see `CHAT_OVERSCAN_CSS`). The
+    /// rasters are taller than the swapchain by `2x` this; the blit maps the
+    /// screen into the middle window.
+    overscan_phys: u32,
     pipeline: wgpu::RenderPipeline,
     bind_layout: wgpu::BindGroupLayout,
     bind: wgpu::BindGroup,
@@ -774,7 +779,7 @@ impl PresentSurface {
         });
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("neocompositor-scroll"),
-            size: 64,
+            size: 80,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -824,6 +829,7 @@ impl PresentSurface {
             plan,
             targets,
             targets_size: (width.max(1), height.max(1)),
+            overscan_phys: 0,
             pipeline,
             bind_layout,
             bind,
@@ -981,7 +987,15 @@ impl PresentSurface {
     /// behind an env gate in the host; never on a hot path.
     #[doc(hidden)]
     pub fn debug_peek_resolve(&self, x: u32, y: u32) -> [u8; 4] {
-        peek_texture_rgba(&self.device, &self.queue, &self.targets.resolve, x, y)
+        // `y` is a panel pixel; the resolve carries the overscan strips, so
+        // peek the shifted raster pixel.
+        peek_texture_rgba(
+            &self.device,
+            &self.queue,
+            &self.targets.resolve,
+            x,
+            y + self.overscan_phys,
+        )
     }
 
     /// Vello-rasterize `scene` into the storage target then move it into the
@@ -992,7 +1006,7 @@ impl PresentSurface {
         scene: &vello::Scene,
         base_color: vello::peniko::Color,
     ) -> Result<(), String> {
-        let (width, height) = self.size();
+        let (width, height) = (self.targets_size.0, self.targets_size.1);
         if let Err(err) = self.renderer.render_to_texture(
             &self.device,
             &self.queue,
@@ -1048,8 +1062,13 @@ impl PresentSurface {
     fn present_opt(&mut self, window: BlitWindow, swap_save: Option<&str>) -> Result<(), String> {
         let height = self.config.height.max(1) as f32;
         let width = self.config.width.max(1) as f32;
-        let mut uniform = [0u8; 64];
-        uniform[0..4].copy_from_slice(&(window.scroll_y / height).to_le_bytes());
+        // Raster-window mapping: the rasters are taller than the swapchain
+        // by the overscan strips, so the shader scales screen uv into the
+        // middle window (top offset + scale) and the blit shift normalizes
+        // against the raster height (the shift happens in raster space).
+        let raster_h = self.raster_height().max(1) as f32;
+        let mut uniform = [0u8; 80];
+        uniform[0..4].copy_from_slice(&(window.scroll_y / raster_h).to_le_bytes());
         uniform[4..8].copy_from_slice(&(window.header / height).to_le_bytes());
         uniform[8..12].copy_from_slice(&(window.composer_top / height).to_le_bytes());
         let srgb = if self.srgb_target { 1.0f32 } else { 0.0 };
@@ -1072,7 +1091,16 @@ impl PresentSurface {
         uniform[44..48].copy_from_slice(&rect_uv[3].to_le_bytes());
         uniform[48..52].copy_from_slice(&enabled.to_le_bytes());
         uniform[52..56].copy_from_slice(&self.wall_overlay_alpha.to_le_bytes());
-        // uniform[24..32] and [56..64] stay zero.
+        // uniform[56..64]: scroll[3].zw — the raster doc window the screen
+        // maps into (top offset + scale).
+        //
+        // uniform[64..72]: scroll[4].xy — the source window the drift may
+        // leave: the full raster (the per-produce ack cap keeps the samples
+        // inside the baked canvas extents, so no narrower window is needed).
+        uniform[56..60].copy_from_slice(&(self.overscan_phys as f32 / raster_h).to_le_bytes());
+        uniform[60..64].copy_from_slice(&(height / raster_h).to_le_bytes());
+        uniform[64..68].copy_from_slice(&0.0f32.to_le_bytes());
+        uniform[68..72].copy_from_slice(&1.0f32.to_le_bytes());
         self.queue.write_buffer(&self.uniform, 0, &uniform);
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
@@ -1175,16 +1203,25 @@ impl PresentSurface {
     /// Re-create targets and re-configure the swapchain at a new size. The
     /// host calls this from the produce path (once per settled size), never
     /// per `Resized` event.
-    pub fn resize(&mut self, width: u32, height: u32) {
+    ///
+    /// `overscan_phys` extends the scene/resolve rasters above and below the
+    /// panel by that strip (physical px, 144fps scroll runway): the doc
+    /// scene paints into the middle window, and the blit samples it while
+    /// the drift stays inside the baked extents.
+    pub fn resize(&mut self, width: u32, height: u32, overscan_phys: u32) {
         let width = width.max(1);
         let height = height.max(1);
-        let targets_changed = (width, height) != self.targets_size;
+        let overscan_phys = overscan_phys.min(height / 2);
+        let raster_height = height + 2 * overscan_phys;
+        let targets_changed =
+            (width, raster_height) != self.targets_size || self.overscan_phys != overscan_phys;
+        self.overscan_phys = overscan_phys;
         self.set_swapchain_size(width, height);
         if !targets_changed {
             return;
         }
-        self.targets_size = (width, height);
-        self.targets = PresentTargets::alloc(&self.device, &self.plan, width, height);
+        self.targets_size = (width, raster_height);
+        self.targets = PresentTargets::alloc(&self.device, &self.plan, width, raster_height);
         self.rebuild_bind();
         clear_view_color(
             &self.device,
@@ -1194,11 +1231,26 @@ impl PresentSurface {
         );
     }
 
+    /// Overscan strip baked into the rasters (physical px, above AND below
+    /// the panel).
+    pub fn overscan_phys(&self) -> u32 {
+        self.overscan_phys
+    }
+
+    /// Full raster height in physical px (swapchain + both overscan strips).
+    pub fn raster_height(&self) -> u32 {
+        self.config.height + 2 * self.overscan_phys
+    }
+
     /// Headless diagnostic: read back the accumulated `resolve` (before the
     /// swapchain blit) and save it as a PNG — exactly what the blit samples.
     pub fn snapshot(&self, path: &str) -> Result<(), String> {
         let width = self.config.width.max(1);
         let height = self.config.height.max(1);
+        // The resolve is taller than the swapchain (overscan strips): the
+        // snapshot must cover exactly what the blit maps the screen to, so
+        // read the middle panel window.
+        let origin_y = self.overscan_phys;
         let bytes_per_row = (width * 4).div_ceil(256) * 256;
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("neocompositor-snapshot"),
@@ -1215,7 +1267,11 @@ impl PresentSurface {
             wgpu::TexelCopyTextureInfo {
                 texture: &self.targets.resolve,
                 mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
+                origin: wgpu::Origin3d {
+                    x: 0,
+                    y: origin_y,
+                    z: 0,
+                },
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::TexelCopyBufferInfo {

@@ -803,8 +803,11 @@ impl App {
                     contact.velocity = f64::from(dy) / (dt_ns as f64 / 1e9);
                     contact.last_y = css_y;
                     contact.last_t_ns = now;
-                    // Visual-only: the frozen raster presents the drag as a
-                    // blit shift; the session lands on release.
+                    // The drag moves the visual directly: the frozen raster +
+                    // blit shift present it 1:1 at the vsync cadence (the
+                    // overscan runway shows real rows on the leading edge),
+                    // and the frame loop lands the session when the ack drift
+                    // crosses the baked runway cap.
                     self.visual_scroll_css =
                         (self.visual_scroll_css + dy).clamp(0.0, self.scroll_max_css);
                     self.window.as_ref().map(|w| w.request_redraw());
@@ -823,7 +826,10 @@ impl App {
                         self.pointer_up(css_x, css_y);
                     } else {
                         // Release starts the shared glide decay (Android
-                        // fling constants); slow drags land immediately.
+                        // fling constants); slow drags land immediately. The
+                        // visual already carries every drag pixel (the drag
+                        // moves it directly), so a fling integrates from the
+                        // true position and a plain landing loses nothing.
                         if crate::scroll_dynamics::glide_active(contact.velocity) {
                             self.glide_velocity = contact.velocity;
                         } else {

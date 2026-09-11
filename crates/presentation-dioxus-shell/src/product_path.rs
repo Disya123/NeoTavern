@@ -75,7 +75,19 @@ pub struct ProductChatView {
     /// virtualized window's sub-row offset). The message canvas pulls itself
     /// up by this amount so painted rows land at their true scrolled
     /// positions; without it the paint snaps to whole rows on every produce.
+    /// With the overscan window the offset includes the lead row's height
+    /// (the canvas shifts up by the same px, so in-band rows do not move).
     pub chat_window_offset_css: f32,
+    /// Top of the painted message canvas in panel CSS px - may be negative
+    /// (overscan rows above the panel top, under the header). Together with
+    /// `chat_canvas_bottom_css` this bounds the blit-shift runway: the
+    /// leading edge shows real rows while the drift stays inside the canvas.
+    pub chat_canvas_top_css: f32,
+    /// Bottom of the painted message canvas in panel CSS px (overscan rows
+    /// below the panel bottom, under the composer). Hosts derive the
+    /// per-produce ack cap from the distance between these extents and the
+    /// on-screen chat band.
+    pub chat_canvas_bottom_css: f32,
     pub chrome: ProductChrome,
     pub composer_text: String,
     /// Composer placeholder (React `home:composerPlaceholder` with the
@@ -202,6 +214,8 @@ impl Default for ProductChatView {
             message_count: 0,
             visible: Vec::new(),
             chat_window_offset_css: 0.0,
+            chat_canvas_top_css: 0.0,
+            chat_canvas_bottom_css: 0.0,
             chrome: ProductChrome::HeaderComposer,
             composer_text: String::new(),
             composer_placeholder: String::new(),
@@ -243,6 +257,29 @@ impl Default for ProductChatView {
 /// Desktop composer matches React `ChatComposer`: toolbar 42px + field
 /// min-height 132px (`ChatWorkspace.module.css`). Compact/probe heights keep
 /// the short single-row band so 200 CSS-px fixtures still fit.
+/// React `.composerWrapper` `padding-block-end` (the
+// chat-composer-edge-inset): the composer pill floats this many CSS px
+// above the chat panel bottom. Compact keeps the legacy flush inset
+// (8 = the compact panel pad - the desktop compact frame is a probe
+// scenario with no on-screen keyboard avoidance).
+pub fn composer_float_css(height: u32) -> u32 {
+    if height <= 240 {
+        8
+    } else {
+        16
+    }
+}
+
+/// Vertical overscan baked into the chat viewport raster, CSS px on each
+/// side (144fps scroll architecture). The viewport box extends this far
+/// above and below the panel, the virtualized paint window selects rows for
+/// the extended box, and the vello raster is taller by `2x` this amount so
+/// a vsync blit-shift presents REAL rows on the leading edge instead of the
+/// wallpaper filler strip. The scroll ack cap is derived per produce from
+/// the painted extents and lands a re-produce while the drift still has
+/// baked runway left.
+pub const CHAT_OVERSCAN_CSS: u32 = 256;
+
 pub fn chrome_metrics(width: u32, height: u32) -> (u32, u32, u32, u32) {
     let width = width.max(1);
     let height = height.max(1);
@@ -253,8 +290,12 @@ pub fn chrome_metrics(width: u32, height: u32) -> (u32, u32, u32, u32) {
     } else {
         (56, 188)
     };
+    // The composer wrapper is an absolute bottom-docked overlay (React
+    // parity); the message band ends at the PILL top, so the float
+    // inset leaves the scroll math. Previously the viewport metric
+    // ignored it and the band ran 16 px under the painted pill.
     let viewport = height
-        .saturating_sub(header.saturating_add(composer))
+        .saturating_sub(header + composer + composer_float_css(height))
         .max(1);
     (width, header, viewport, composer)
 }
@@ -483,6 +524,8 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         message_count: fixture.messages.len(),
         visible: visible_rows(fixture, start),
         chat_window_offset_css: 0.0,
+        chat_canvas_top_css: 0.0,
+        chat_canvas_bottom_css: 0.0,
         chrome: ProductChrome::HeaderComposer,
         composer_text: String::new(),
         composer_placeholder: "Message Hazel…".into(),

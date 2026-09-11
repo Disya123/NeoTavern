@@ -90,7 +90,7 @@ fn isolated_10k_kernel_projection_pages_the_same_route() {
     assert_eq!(session.view().title, ISOLATED_10K_TITLE);
     assert_eq!(session.view().message_count, ISOLATED_10K_COUNT as usize);
     assert_eq!(session.state().messages.len(), PAGE_LIMIT as usize);
-    let (visible, outcome, _) = session.present_visible();
+    let (visible, outcome, _, _) = session.present_visible();
     assert!(visible.len() <= PRODUCT_PATH_VISIBLE);
     assert!(!outcome.waited_on_producer);
     assert_eq!(outcome.blank_px, 0.0);

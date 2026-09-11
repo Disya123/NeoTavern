@@ -6,12 +6,18 @@
 /// Fullscreen-triangle blit: samples `resolve` into the swapchain, with the
 /// NeoCompositor scroll blend window, a fixed wallpaper underlay, and optional
 /// sRGB re-encode. The window is a 2D rect — `scroll[0] =
-/// (offset_y, band_top, band_bottom, srgb)` normalized to texture height,
+/// (offset_y, band_top, band_bottom, srgb)` — where `offset_y` is the drift
+/// normalized to RASTER height and the band to swapchain height,
 /// `scroll[1].xy = (band_left, band_right)` normalized to width — so split
 /// layouts shift only the chat column. Uniform rows 2/3 are the wallpaper
-/// underlay: `scroll[2] = (x0, y0, x1, y1)` dest rect in uv, `scroll[3].x =
-/// enabled`, `scroll[3].y = overlay dim alpha` (the React wallpaper gradient,
-/// fixed with the photo instead of scrolling with the scene). The wallpaper
+/// underlay: `scroll[2] = (x0, y0, x1, y1)` dest rect in uv, `scroll[3] =
+/// (enabled, overlay dim alpha, raster uv top, raster uv scale)`, and
+/// `scroll[4] = (src_top, src_bottom, 0, 0)` — the uv window the drift may
+/// occupy before the filler branch takes over. The scene rasters are taller
+/// than the swapchain by the overscan strips (144fps scroll runway), so
+/// every texture sample maps the screen uv into the middle raster window
+/// (`doc_y = uv.y * scale + top`) before the shift; hosts without overscan
+/// pass `(0.0, 1.0)` and reduce to the flat mapping. The wallpaper
 /// (bindings 3/4) is sampled at the UNSHIFTED fragment uv inside the rect, so
 /// the photo stays fixed while the scene scrolls over it, and the band's
 /// out-of-range region composites the photo over the flat filler instead of
@@ -21,7 +27,7 @@ pub const BLIT_WGSL: &str = r#"
 struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
 @group(0) @binding(0) var tex: texture_2d<f32>;
 @group(0) @binding(1) var samp: sampler;
-@group(0) @binding(2) var<uniform> scroll: array<vec4<f32>, 4>;
+@group(0) @binding(2) var<uniform> scroll: array<vec4<f32>, 5>;
 @group(0) @binding(3) var wall_tex: texture_2d<f32>;
 @group(0) @binding(4) var wall_samp: sampler;
 @vertex fn vs(@builtin(vertex_index) i: u32) -> VsOut {
@@ -36,9 +42,16 @@ struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
     var uv = in.uv;
     let in_band = uv.y >= scroll[0].y && uv.y < scroll[0].z
         && uv.x >= scroll[1].x && uv.x < scroll[1].y;
-    let src_y = uv.y + scroll[0].x;
-    let shifted = in_band && src_y >= scroll[0].y && src_y < scroll[0].z;
-    uv.y = select(uv.y, src_y, shifted);
+    // Screen -> raster doc uv: the raster is taller than the swapchain by
+    // the overscan strips, so the screen samples the middle window.
+    let doc_y = uv.y * scroll[3].w + scroll[3].z;
+    let src_y = doc_y + scroll[0].x;
+    // The shift is safe while the sample stays inside the source window
+    // (the baked overscan runway; the host's ack cap lands a re-produce
+    // before it runs out). Past it the raster has no baked content and the
+    // wallpaper filler branch below takes over.
+    let shifted = in_band && src_y >= scroll[4].x && src_y < scroll[4].y;
+    uv.y = select(doc_y, src_y, shifted);
     var wall = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     if (scroll[3].x > 0.5) {
         let wx = (in.uv.x - scroll[2].x) / max(scroll[2].z - scroll[2].x, 1e-6);

@@ -387,7 +387,7 @@ fn open_gpu(
     });
     let uniform = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("neocompositor-scroll"),
-        size: 64,
+        size: 80,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -946,7 +946,7 @@ fn blit(gpu: &GpuSurface, scroll_y: f32, header: f32, composer_top: f32) -> Resu
     let offset = scroll_y / height;
     let header_uv = header / height;
     let composer_uv = composer_top / height;
-    let mut uniform = [0u8; 64];
+    let mut uniform = [0u8; 80];
     uniform[0..4].copy_from_slice(&offset.to_le_bytes());
     uniform[4..8].copy_from_slice(&header_uv.to_le_bytes());
     uniform[8..12].copy_from_slice(&composer_uv.to_le_bytes());
@@ -957,6 +957,12 @@ fn blit(gpu: &GpuSurface, scroll_y: f32, header: f32, composer_top: f32) -> Resu
     // rows 2/3 (wallpaper underlay) stay zero — this host has no wallpaper.
     uniform[16..20].copy_from_slice(&0.0f32.to_le_bytes());
     uniform[20..24].copy_from_slice(&1.0f32.to_le_bytes());
+    // Raster-window mapping: this host's rasters match the swapchain
+    // exactly (scroll[3].zw = flat identity, zeros), and the source window
+    // (scroll[4].xy) stays the old screen-band bounds so the filler branch
+    // takes over past the band exactly as before.
+    uniform[64..68].copy_from_slice(&header_uv.to_le_bytes());
+    uniform[68..72].copy_from_slice(&composer_uv.to_le_bytes());
     gpu.queue.write_buffer(&gpu.uniform, 0, &uniform);
     let frame = match gpu.surface.get_current_texture() {
         wgpu::CurrentSurfaceTexture::Success(frame)

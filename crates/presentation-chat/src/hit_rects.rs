@@ -282,6 +282,12 @@ impl HitRects {
             return TapIntent::None;
         };
         match (action, key) {
+            // Chrome overlay roots (header / composer pill) claim every tap
+            // on their non-interactive areas so the overscan row actions
+            // painted behind them cannot leak through (React overlay
+            // semantics: the chrome is on top). Their interactive children
+            // still win — the DFS tail resolves them first.
+            ("chrome-block", _) => TapIntent::None,
             ("send", _) => TapIntent::Quick(QuickIntent::Send),
             ("stop", _) => TapIntent::Quick(QuickIntent::Stop),
             ("composer-settings", _) => TapIntent::Quick(QuickIntent::ComposerSettings),

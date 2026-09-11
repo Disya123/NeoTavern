@@ -68,13 +68,15 @@ impl App {
     }
 
     /// Sync-back: lands the visual offset into the session with ONE clamped
-    /// `scroll_chat_by`, so the next produce bakes exactly what the screen
-    /// shows and the blit shift returns to zero. The ack-loop lands on the
-    /// produced window (produce is synchronous here — no in-flight state).
+    /// `scroll_chat_by`. The ack itself lands on the PRODUCED raster in
+    /// `produce_and_render` — not here: while a produce is gated (live
+    /// generation stream, 30/s cadence) the present must still blit the true
+    /// `visual − presented` shift of the stale raster, so the offset must
+    /// only rebase when the fresh raster actually exists. Without this the
+    /// screen would freeze for up to one gate interval mid-stream.
     pub(super) fn land_scroll(&mut self, shift: f32) {
         if shift != 0.0 {
             self.session.scroll_chat_by(shift);
-            self.ack.land(self.session.scroll_offset_css());
             self.visual_scroll_css = self.session.scroll_offset_css();
             self.dirty = true;
         }
@@ -85,6 +87,26 @@ impl App {
     pub(super) fn land_now(&mut self) {
         let shift = self.ack.drift(self.visual_scroll_css);
         self.land_scroll(shift);
+    }
+
+    /// One scroll step for the frame loop and the probe replay: sample the
+    /// eased visual and land the session when the ack drift reaches the
+    /// baked-runway cap. The overscan raster (`CHAT_OVERSCAN_CSS` strips and
+    /// the neighbouring rows baked into the paint window) presents real rows
+    /// on the leading edge while the drift stays inside the runway, so the
+    /// 144fps blit fast path carries the gesture without the wallpaper
+    /// filler strip that used to bound the cap at 96px. Mid-gesture produces
+    /// happen only when the drift crosses the cap (a few per notch instead
+    /// of one per quantized frame); once the gesture ends, any residual
+    /// drift lands through the ack epsilon.
+    pub(super) fn advance_and_land_scroll(&mut self) {
+        self.advance_scroll_animations();
+        if let Some(shift) = self
+            .ack
+            .due(self.visual_scroll_css, self.scroll_animation_active())
+        {
+            self.land_scroll(shift);
+        }
     }
 
     /// Wheel over the chat viewport scrolls it; `dy` is in CSS px (negative =

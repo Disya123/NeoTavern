@@ -28,7 +28,7 @@ use neotavern_presentation_blueprint::{
     ViewportClassV1,
 };
 
-use crate::product_path::{ProductChatView, ProductChrome};
+use crate::product_path::{ProductChatView, ProductChrome, CHAT_OVERSCAN_CSS};
 use crate::ASSET_URL_PREFIX;
 
 /// Where the chat blueprint document is loaded from.
@@ -375,13 +375,28 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         )
     };
 
+    // Scroll-body top clearance equals the absolute header band + pad:
+    // rows land exactly where the old band viewport placed them.
+    let scroll_pad_top = header_h + pad;
     let ctx = ChromeCtx {
+        // React parity: absolute header overlay over the full-height
+        // viewport (Telegram-style). No z-index - Blitz hoists non-auto
+        // z-index subtrees on relayout (see lib.rs); DOM order layers
+        // [viewport, header, composer].
         header_style: format!(
-            "flex:none;position:relative;z-index:2;width:100%;height:{header_h}px;box-sizing:border-box;padding:0 {pad}px;background:rgba(36,33,30,0.82);color:#f3eee8;border-bottom:1px solid rgba(57,52,47,0.48);display:flex;align-items:center;justify-content:space-between;gap:8px;"
+            "position:absolute;top:0;left:{pad}px;right:{pad}px;height:{header_h}px;box-sizing:border-box;padding:0 {pad}px;background:rgba(36,33,30,0.82);color:#f3eee8;border-bottom:1px solid rgba(57,52,47,0.48);display:flex;align-items:center;justify-content:space-between;gap:8px;"
         ),
-        viewport_style: "flex:1 1 auto;position:relative;width:100%;min-height:0;box-sizing:border-box;overflow:hidden;background:transparent;".to_owned(),
+        // 144fps scroll overscan box (same as the legacy render, lib.rs):
+        // the box extends past the panel so the window's overscan rows paint
+        // under the translucent chrome for the blit runway.
+        viewport_style: format!(
+            "position:absolute;left:0;right:0;top:-{CHAT_OVERSCAN_CSS}px;bottom:-{CHAT_OVERSCAN_CSS}px;box-sizing:border-box;overflow:hidden;background:transparent;"
+        ),
+        // React parity: full-height viewport (header/composer are absolute
+        // overlays), so the scroll body clears the header band with its own
+        // top padding; rows land at the same px as the old band layout.
         scroll_style: format!(
-            "display:flex;flex-direction:column;gap:24px;box-sizing:border-box;min-height:100%;padding:{pad}px;"
+            "position:absolute;left:0;right:0;top:{CHAT_OVERSCAN_CSS}px;bottom:{CHAT_OVERSCAN_CSS}px;display:flex;flex-direction:column;gap:24px;box-sizing:border-box;padding:{scroll_pad_top}px {pad}px 12px;"
         ),
         composer_style,
         composer_color: color.to_owned(),
@@ -465,9 +480,10 @@ fn synthesized_messages(view: &ProductChatView) -> Vec<MessageDto> {
 fn render_header(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
     rsx! {
         div {
-            class: "ChatWorkspace_chatHeader neoui-glass",
-            "data-neoui": "glass",
+            class: "ChatWorkspace_chatHeader",
             "data-slot": "chat.header",
+            // Overlay semantics over the overscan rows (see lib.rs).
+            "data-action": "chrome-block",
             role: "banner",
             style: "{ctx.header_style}",
             for child in node.children.iter() { {render_header_child(child, ctx)} }
@@ -997,9 +1013,10 @@ fn render_composer(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
         let label = ctx.composer_label.clone();
         return rsx! {
             div {
-                class: "ChatWorkspace_composer neoui-glass",
-                "data-neoui": "glass",
+                class: "ChatWorkspace_composer",
                 role: "region",
+                // Overlay semantics over the bottom overscan (see lib.rs).
+                "data-action": "chrome-block",
                 "aria-label": "Message composer",
                 "data-state": if ctx.streaming { "streaming" } else { "idle" },
                 "data-slot": "chat.composer",
@@ -1187,9 +1204,10 @@ fn render_container(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
         let streaming = node.hook.states.iter().any(|state| state == "streaming");
         return rsx! {
             div {
-                class: "ChatWorkspace_composer neoui-glass",
-                "data-neoui": "glass",
+                class: "ChatWorkspace_composer",
                 role: "region",
+                // Overlay semantics over the bottom overscan (see lib.rs).
+                "data-action": "chrome-block",
                 "aria-label": "Message composer",
                 "data-state": if streaming { "streaming" } else { "idle" },
                 "data-slot": "chat.composer",

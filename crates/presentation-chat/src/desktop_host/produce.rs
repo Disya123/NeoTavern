@@ -35,7 +35,13 @@ impl App {
         // Produce-time target re-allocation: resize events only re-configure
         // the swapchain (stretch-present of the previous raster); here the
         // rasters catch up with the settled size exactly once per produce.
-        present.resize(width.max(1), height);
+        // The rasters carry the overscan strips (144fps scroll runway) on
+        // top of the panel height.
+        let overscan_phys = ((neotavern_presentation_dioxus_shell::CHAT_OVERSCAN_CSS as f32)
+            * density)
+            .round()
+            .max(1.0) as u32;
+        present.resize(width.max(1), height, overscan_phys);
         let (insets, toast_showing, chat_band, ack_cap_css, ui_opacity, character_count) = {
             let session = &mut self.session;
             session.set_surface_size(width.max(1), height, density);
@@ -61,7 +67,31 @@ impl App {
                 occupied * d,
                 width as f32,
             );
-            let cap = crate::scroll_ack::ack_cap_for_band(viewport as f32);
+            // Directional runway caps: the overscan raster only has baked
+            // rows while the drift stays inside the painted canvas extents;
+            // past them the leading edge would show the wallpaper filler
+            // again. Land the re-produce with runway to spare (24px margin
+            // absorbs frame jitter and the compact-pad estimate difference
+            // between the session extents and the rendered anchor). At the
+            // bottom pin the below-band runway is ~0 — but the offset cannot
+            // move past the pin, so the small newer-cap never gates a real
+            // gesture.
+            let (band_top_css, band_bottom_css) = (header as f32, (header + viewport) as f32);
+            // The canvas extents are painted subject to the viewport box
+            // (CHAT_OVERSCAN_CSS past the panel edges) — anything beyond is
+            // clipped, so the runway must clamp to the box too, or a fling
+            // would sample the cleared raster outside the painted strips.
+            let overscan_css = neotavern_presentation_dioxus_shell::CHAT_OVERSCAN_CSS as f32;
+            let canvas_top = shell
+                .chat
+                .chat_canvas_top_css
+                .max(-overscan_css);
+            let canvas_bottom = shell
+                .chat
+                .chat_canvas_bottom_css
+                .min(css_h as f32 + overscan_css);
+            let runway_older = band_top_css - canvas_top - 24.0;
+            let runway_newer = canvas_bottom - band_bottom_css - 24.0;
             // Captured before the move into `install_product_shell`; the
             // wallpaper dim and the produce log need them, and a second
             // `shell_view()` call would clone the whole view-model again
@@ -73,13 +103,14 @@ impl App {
                 session.insets(),
                 toast_showing,
                 band,
-                cap,
+                (runway_older, runway_newer),
                 ui_opacity,
                 character_count,
             )
         };
         self.chat_band = Some(chat_band);
-        self.ack.set_cap(ack_cap_css);
+        let (runway_older, runway_newer) = ack_cap_css;
+        self.ack.set_runway_caps(runway_older, runway_newer);
         if toast_showing {
             if self.status_shown_at.is_none() {
                 self.status_shown_at = Some(std::time::Instant::now());
@@ -162,7 +193,18 @@ impl App {
             }
         }
 
-        if let Err(err) = present.render(&scene, palette::css::TRANSPARENT) {
+        // The rasters are taller than the swapchain by the overscan strips;
+        // the doc scene paints into the middle window (+overscan from the
+        // raster top) so its panel row maps 1:1 onto the screen.
+        let mut raster_scene = vello::Scene::new();
+        raster_scene.append(
+            &scene,
+            Some(vello::kurbo::Affine::translate((
+                0.0,
+                f64::from(overscan_phys),
+            ))),
+        );
+        if let Err(err) = present.render(&raster_scene, palette::css::TRANSPARENT) {
             eprintln!("[neocompositor-desktop] render: {err}");
             self.dirty = true;
             return;
