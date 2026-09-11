@@ -253,6 +253,10 @@ struct App {
     /// without a re-produce. Landing (gesture end, grab, drift cap) syncs the
     /// session to this value with one `scroll_chat_by`.
     visual_scroll_css: f32,
+    /// Cached painted canvas extents in CSS px (`chat_canvas_top/bottom`)
+    /// from the last produce — the blit's sample window (real rows only;
+    /// below the band the raster holds the composer, not content).
+    chat_canvas_css: Option<(f32, f32)>,
     /// Cached chat scroll extent (`ChatSession::scroll_max_css`), refreshed
     /// per produce. The wheel impulse and the animation advance clamp their
     /// targets against it so the visual never overshoots the content window
@@ -322,6 +326,8 @@ struct App {
     last_present_instant: Option<std::time::Instant>,
     last_produce_ms: Option<u128>,
     frame_timing: bool,
+    /// Per-produce skeleton dump counter (`NEOTA_DOM_DUMP_ALL`).
+    dom_dump_count: u32,
 }
 
 pub struct RunConfig {

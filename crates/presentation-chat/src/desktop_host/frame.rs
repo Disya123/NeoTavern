@@ -332,19 +332,46 @@ impl App {
     /// produce.
     pub(super) fn present_window(&self) -> BlitWindow {
         match self.chat_band {
-            Some((header, composer_top, band_left, band_right)) => BlitWindow {
-                scroll_y: self.ack.drift(self.visual_scroll_css) * self.density.max(1.0),
-                header,
-                composer_top,
-                band_left,
-                band_right,
-            },
+            Some((header, composer_top, band_left, band_right)) => {
+                let d = self.density.max(1.0);
+                let overscan = self
+                    .present
+                    .as_ref()
+                    .map(|p| p.overscan_phys())
+                    .unwrap_or(0) as f32;
+                // The drift may only sample baked chat rows: the source
+                // window is the canvas extents. Below the band the raster
+                // holds the COMPOSER (part of the doc scene) — an unclamped
+                // shifted sample painted a ghost composer into the band, and
+                // the ghost jumping on every land read as scroll judder.
+                let (src_top, src_bottom) = match self.chat_canvas_css {
+                    Some((top, bottom)) => {
+                        let css_h = self.size.1 as f32 / d;
+                        (
+                            overscan + top.max(0.0) * d,
+                            overscan + bottom.min(css_h) * d,
+                        )
+                    }
+                    None => (0.0, 0.0),
+                };
+                BlitWindow {
+                    scroll_y: self.ack.drift(self.visual_scroll_css) * d,
+                    header,
+                    composer_top,
+                    band_left,
+                    band_right,
+                    src_top,
+                    src_bottom,
+                }
+            }
             None => BlitWindow::default(),
         }
     }
 
     /// `--blit-shift` diagnostic window: the cached chat column shifted by an
-    /// absolute CSS px amount (independent of the animation state).
+    /// absolute CSS px amount (independent of the animation state). The
+    /// source window stays the legacy full raster so the probe can also
+    /// demonstrate what an unclamped shift samples.
     pub(super) fn chat_blit_window(&self, dy_css: f32) -> BlitWindow {
         let (header, composer_top, band_left, band_right) =
             self.chat_band.unwrap_or((0.0, 0.0, 0.0, 0.0));
@@ -354,6 +381,8 @@ impl App {
             composer_top,
             band_left,
             band_right,
+            src_top: 0.0,
+            src_bottom: 0.0,
         }
     }
 
@@ -444,7 +473,7 @@ impl ApplicationHandler for App {
                 return;
             }
         };
-        let present = match PresentSurface::open(&instance, surface, self.size.0, self.size.1) {
+        let mut present = match PresentSurface::open(&instance, surface, self.size.0, self.size.1) {
             Ok(present) => present,
             Err(err) => {
                 eprintln!("[neocompositor-desktop] present: {err}");
@@ -461,6 +490,13 @@ impl ApplicationHandler for App {
             present.config.format,
             present.srgb_target,
         );
+        if let Some(every) = std::env::var("NEOTA_FRAME_DUMPS")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+        {
+            let dir = std::env::var("NEOTA_DUMP_DIR").unwrap_or_else(|_| ".".into());
+            present.set_frame_dumps(every.max(1), dir);
+        }
         self.window = Some(window);
         self.present = Some(present);
         self.window.as_ref().map(|w| w.request_redraw());

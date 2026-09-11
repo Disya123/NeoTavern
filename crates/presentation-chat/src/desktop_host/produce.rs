@@ -42,7 +42,15 @@ impl App {
             .round()
             .max(1.0) as u32;
         present.resize(width.max(1), height, overscan_phys);
-        let (insets, toast_showing, chat_band, ack_cap_css, ui_opacity, character_count) = {
+        let (
+            insets,
+            toast_showing,
+            chat_band,
+            ack_cap_css,
+            ui_opacity,
+            character_count,
+            canvas_extents,
+        ) = {
             let session = &mut self.session;
             session.set_surface_size(width.max(1), height, density);
             session.set_safe_area_physical(0.0, 0.0, 0.0, 0.0);
@@ -103,9 +111,24 @@ impl App {
                 (runway_older, runway_newer),
                 ui_opacity,
                 character_count,
+                (canvas_top, canvas_bottom),
             )
         };
         self.chat_band = Some(chat_band);
+        // The blit's sample window: only baked chat rows may be shifted into
+        // view (below the band the raster holds the composer — see
+        // `present_window`).
+        self.chat_canvas_css = Some(canvas_extents);
+        if self.frame_timing {
+            let (ct, cb) = canvas_extents;
+            let d = self.density.max(1.0);
+            eprintln!(
+                "[runway] band_top={:.0} band_bottom={:.0} canvas=({ct:.0},{cb:.0}) css_h={:.0}",
+                chat_band.0 as f32 / d,
+                chat_band.1 as f32 / d,
+                self.size.1 as f32 / d,
+            );
+        }
         let (runway_older, runway_newer) = ack_cap_css;
         self.ack.set_runway_caps(runway_older, runway_newer);
         if toast_showing {
@@ -217,6 +240,18 @@ impl App {
         // wallpaper dest rect, the hit rects and (when requested) the dom
         // dump — `slot_skeleton()` walks the whole document on every call.
         let skeleton = sess.slot_skeleton();
+        // NEOTA_DOM_DUMP_ALL: write the skeleton of EVERY produce (numbered
+        // into NEOTA_DUMP_DIR) — the per-produce view of subtree duplication
+        // (a ghost composer painted into the scrolling content after a
+        // maximize was hunted this way).
+        if std::env::var("NEOTA_DOM_DUMP_ALL").is_ok() {
+            self.dom_dump_count += 1;
+            let dir = std::env::var("NEOTA_DUMP_DIR").unwrap_or_else(|_| ".".into());
+            let _ = write_slot_skeleton(
+                &format!("{}/dom_{:03}.json", dir, self.dom_dump_count),
+                &skeleton,
+            );
+        }
         // Wallpaper photo: fixed underlay composited by the blit shader (image
         // audit, stage C). The scroll blit shifts the scene OVER the photo, so
         // the wallpaper no longer rides the band shift and the band's

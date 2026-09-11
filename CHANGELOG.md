@@ -28,7 +28,23 @@
 
 ### Fixed
 
-- Scroll judder that survived the 1 ms re-arm (user: "nothing changed"): the
+- THE scroll artifact and judder root (user screenshots: a second composer
+  floating in the chat content, a dark gap band, "still the same" after the
+  pacing fixes): the overscan blit sampled the FULL raster while shifted —
+  `scroll[4] = (0,1)` — but below the band the doc scene paints the COMPOSER,
+  not rows. Any positive drift (scrolling down) therefore smeared a GHOST
+  COMPOSER into the band's bottom edge, scrolling with the content and
+  jumping on every land (proven by swapchain dumps: 43 of 61 mid-gesture
+  frames carried two Send buttons while the DOM skeleton had exactly one
+  composer node). The blit now clamps its source window to the baked canvas
+  extents (`BlitWindow.src_top/src_bottom`, cached per produce as
+  `chat_canvas_css`); rows past the canvas fall to the wallpaper/filler
+  branch like the old 96 px cap behavior. The directional runway caps were
+  also crossed — positive drift was checked against the ABOVE-band runway
+  while the exposed edge is the BELOW-band one (`ScrollAckLoop::due` now
+  matches the drift sign to the edge it actually exposes; directional test
+  added). Repro-after-fix: 0 of 61 frames with a duplicate composer.
+- Scroll judder that survived the 1 ms re-arm: the
   animation was sampled at the wake-timer instant, which is not phase-locked
   to the monitor — the offset between the sample and the actual scanout
   wandered 0..refresh every frame, so consecutive displayed frames advanced
@@ -44,9 +60,10 @@
   `Wait` with the window frozen on the shifted raster until the next input
   (live gesture + `NEOTA_FRAME_TIMING` trace: 122 animation presents,
   residual land, settle produce, idle park). `NEOTA_FRAME_TIMING=1` now logs
-  per-present `dt/acquire/produce/drift`.
-- A maximize/resize frame showing black margins with the chat squeezed into
-  a middle band and chrome from two different layouts: `Resized` used to
+  per-present `dt/acquire/produce/drift`, and the corruption hunt gained
+  `NEOTA_FRAME_DUMPS=<n>` + `NEOTA_DUMP_DIR` (periodic resolve+swapchain
+  pairs) and `NEOTA_DOM_DUMP_ALL` (skeleton per produce).
+- A maximize/resize frame class: `Resized` used to
   re-configure the swapchain immediately, so presents between the event and
   the produce-time re-allocation sampled the OLD resolve through the NEW
   doc-window mapping. The event now only updates layout state; DWM stretches

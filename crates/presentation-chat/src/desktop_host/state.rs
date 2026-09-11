@@ -52,6 +52,7 @@ impl App {
             visual_scroll_css: 0.0,
             scroll_max_css: 0.0,
             chat_band: None,
+            chat_canvas_css: None,
             ack: ScrollAckLoop::new(0.0),
             clock_base: std::time::Instant::now(),
             probe_clock_ns: None,
@@ -76,6 +77,7 @@ impl App {
             last_present_instant: None,
             last_produce_ms: None,
             frame_timing: std::env::var("NEOTA_FRAME_TIMING").is_ok(),
+            dom_dump_count: 0,
         })
     }
 

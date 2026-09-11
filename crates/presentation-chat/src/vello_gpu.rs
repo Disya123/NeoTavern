@@ -470,6 +470,14 @@ pub fn format_is_srgb(format: wgpu::TextureFormat) -> bool {
 /// (excluding the rail + sidebar panel on split layouts). All values in
 /// physical px; `BlitWindow::default()` (all zeros) disables the shift and
 /// blits the full frame unchanged — the pre-scroll-window behavior.
+///
+/// `src_top`/`src_bottom` bound the rows the drift may sample, in ABSOLUTE
+/// raster px (the rasters carry overscan strips above/below the panel): the
+/// baked chat-row canvas. Below the band the raster contains the COMPOSER
+/// (part of the same doc scene), so an unclamped shifted sample paints a
+/// ghost composer into the band — the src window must always be the canvas
+/// extents, and rows past them fall to the wallpaper/filler branch like the
+/// old 96 px cap behavior. `(0, 0)` keeps the legacy full-raster window.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct BlitWindow {
     pub scroll_y: f32,
@@ -477,6 +485,8 @@ pub struct BlitWindow {
     pub composer_top: f32,
     pub band_left: f32,
     pub band_right: f32,
+    pub src_top: f32,
+    pub src_bottom: f32,
 }
 
 /// Prefer non-sRGB `Rgba8Unorm`/`Bgra8Unorm` so the swapchain target never
@@ -653,6 +663,13 @@ pub struct PresentSurface {
     /// the frame being composed — the animation sample clock.
     acquire_return: Option<std::time::Instant>,
     acquire_interval: Option<std::time::Duration>,
+    /// Frame-corruption diagnostics (`NEOTA_FRAME_DUMPS=<n>`): every n-th
+    /// blit writes BOTH what it sampled (resolve) and what reached the
+    /// swapchain into `dump_dir` — a broken resolve indicts the DOM/scene,
+    /// a clean resolve with a broken swapchain indicts the blit/present.
+    dump_every: u32,
+    dump_count: u32,
+    dump_dir: String,
 }
 
 impl PresentSurface {
@@ -865,6 +882,9 @@ impl PresentSurface {
             acquire_wait: std::time::Duration::ZERO,
             acquire_return: None,
             acquire_interval: None,
+            dump_every: 0,
+            dump_count: 0,
+            dump_dir: String::new(),
         })
     }
 
@@ -1195,12 +1215,23 @@ impl PresentSurface {
         // maps into (top offset + scale).
         //
         // uniform[64..72]: scroll[4].xy — the source window the drift may
-        // leave: the full raster (the per-produce ack cap keeps the samples
-        // inside the baked canvas extents, so no narrower window is needed).
+        // sample: the baked chat-row canvas. It is NOT the full raster —
+        // below the band the doc scene painted the COMPOSER, and an
+        // unclamped sample would smear a ghost composer into the band while
+        // the drift is live (the desktop "second composer" artifact).
+        let (src_top_uv, src_bottom_uv) = if window.src_bottom > window.src_top {
+            let overscan = self.overscan_phys as f32;
+            (
+                (overscan + window.src_top.max(0.0)) / raster_h,
+                (overscan + window.src_bottom.min(raster_h as f32 - overscan)) / raster_h,
+            )
+        } else {
+            (0.0f32, 1.0f32)
+        };
         uniform[56..60].copy_from_slice(&(self.overscan_phys as f32 / raster_h).to_le_bytes());
         uniform[60..64].copy_from_slice(&(height / raster_h).to_le_bytes());
-        uniform[64..68].copy_from_slice(&0.0f32.to_le_bytes());
-        uniform[68..72].copy_from_slice(&1.0f32.to_le_bytes());
+        uniform[64..68].copy_from_slice(&src_top_uv.to_le_bytes());
+        uniform[68..72].copy_from_slice(&src_bottom_uv.to_le_bytes());
         self.queue.write_buffer(&self.uniform, 0, &uniform);
         let view = frame
             .texture
@@ -1237,8 +1268,25 @@ impl PresentSurface {
         if let Some(path) = swap_save {
             self.swapchain_snapshot(path, &frame)?;
         }
+        if self.dump_every > 0 {
+            self.dump_count += 1;
+            if self.dump_count % self.dump_every == 0 {
+                let n = self.dump_count;
+                let _ = self.snapshot(&format!("{}/resolve_{n:05}.png", self.dump_dir));
+                let _ =
+                    self.swapchain_snapshot(&format!("{}/swap_{n:05}.png", self.dump_dir), &frame);
+            }
+        }
         frame.present();
         Ok(())
+    }
+
+    /// Frame-corruption diagnostics: every `every`-th blit writes the sampled
+    /// resolve and the presented swapchain frame into `dir` (see the
+    /// `dump_every` field docs).
+    pub fn set_frame_dumps(&mut self, every: u32, dir: String) {
+        self.dump_every = every;
+        self.dump_dir = dir;
     }
 
     /// Re-tie the blit bind group to the (possibly re-allocated) `resolve`.
