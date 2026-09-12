@@ -107,7 +107,11 @@ impl App {
         // pipeline (each tap hit-tests against the state mutated by the prior
         // taps) before this frame's produce, so `--snapshot` captures the
         // post-tap UI. Probe ops replay in argument order, so
-        // "focus -> type -> send" is expressible.
+        // "focus -> type -> send" is expressible. Animation ops (wheel/tick)
+        // replay ONE PER FRAME — a real wheel spreads its notches over many
+        // frames and the ease renders between them; draining them all into
+        // one frame collapses the gesture into a single jump and no
+        // mid-gesture frame (drift, blit runway, cap lands) ever exists.
         if !self.simulated {
             self.simulated = true;
             // Chat-area hit-testing (inline message actions) needs the painted
@@ -123,7 +127,10 @@ impl App {
                 self.swap_path = swap;
                 self.dom_dump_path = dump;
             }
+        }
+        if !self.pointer_taps.is_empty() {
             while let Some(op) = self.pointer_taps.pop_front() {
+                let animation_op = matches!(op, ProbeOp::Wheel(_) | ProbeOp::Tick(_));
                 match op {
                     ProbeOp::Tap(x, y) => {
                         self.pointer_down(x, y);
@@ -139,10 +146,15 @@ impl App {
                     }
                     ProbeOp::Wheel(dy) => {
                         // Route the notch through the live `wheel_at` path
-                        // (panel vs chat routing off the tracked pointer)
-                        // with the deterministic clock started at 0 (a
-                        // real-time base would race the later `--tick` steps).
-                        self.probe_clock_ns.get_or_insert(0);
+                        // (panel vs chat routing off the tracked pointer).
+                        // The deterministic clock starts at 0 only for
+                        // scripts that step it with `--tick` (a real-time
+                        // base would race those steps); a wheel-only script
+                        // must keep the live clock, or the frozen clock
+                        // would stop the animation and the lands forever.
+                        if self.probe_has_tick {
+                            self.probe_clock_ns.get_or_insert(0);
+                        }
                         let (css_px, css_py) = self.pointer_css;
                         self.wheel_at(css_px, css_py, dy);
                     }
@@ -201,6 +213,12 @@ impl App {
                     self.snapshot_path = snapshot;
                     self.swap_path = swap;
                     self.dom_dump_path = dump;
+                }
+                if animation_op {
+                    // The wheel notch / tick lands in its own frame; the
+                    // ease renders through the animation re-arm until the
+                    // next op replays.
+                    break;
                 }
             }
             // The replay's settled state is always worth one paint, even

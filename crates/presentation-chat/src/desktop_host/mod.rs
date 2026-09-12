@@ -241,6 +241,11 @@ struct App {
     last_cursor: Option<(f32, f32)>,
     pointer_taps: VecDeque<ProbeOp>,
     simulated: bool,
+    /// Whether the queued probe script contains a `--tick` op. `--wheel`
+    /// starts the deterministic probe clock only then: a wheel-only script
+    /// must run on the live clock, or the frozen clock-at-0 would stop the
+    /// scroll animation (and the lands) from ever advancing.
+    probe_has_tick: bool,
     /// Live wheel smooth-scroll; sampled per frame and applied through the
     /// same clamped `scroll_chat_by` path as instant input.
     smooth_scroll: Option<SmoothScroll>,
@@ -358,6 +363,10 @@ pub fn run(config: RunConfig) -> Result<(), Box<dyn std::error::Error>> {
     app.swap_path = config.swapchain;
     app.dom_dump_path = config.dom_dump;
     app.pointer_taps = probe::parse_probe_ops(&std::env::args().collect::<Vec<String>>());
+    app.probe_has_tick = app
+        .pointer_taps
+        .iter()
+        .any(|op| matches!(op, crate::desktop_host::probe::ProbeOp::Tick(_)));
     app.blit_shift_probe = config.blit_shift;
     app.initial_size = config.initial_size;
     if let Some(path) = config.wallpaper_path {

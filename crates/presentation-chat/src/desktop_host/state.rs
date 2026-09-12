@@ -47,6 +47,7 @@ impl App {
             last_cursor: None,
             pointer_taps: VecDeque::new(),
             simulated: false,
+            probe_has_tick: false,
             smooth_scroll: None,
             glide_velocity: 0.0,
             visual_scroll_css: 0.0,

@@ -39,10 +39,14 @@
   clip by that margin on every side — the runway strips carry real rows
   (resolve probes: 0% → 100% painted alpha), the blit samples them in both
   drift directions, and the single-scene `paint()` (Android) plus
-  sub-documents keep the upstream viewport-exact culling. Probe fix riding
+  sub-documents keep the upstream viewport-exact culling. Probe fixes riding
   along: `--snapshot` is overwritten by every produce, so the surviving
   capture is the last produced frame (a scripted gesture's settled end
-  state) instead of the first learning-stable one; `NEOTA_WIN_DEBUG=1`
+  state) instead of the first learning-stable one; `--wheel`/`--tick` probe
+  ops replay one per frame (draining them into a single frame collapsed a
+  scripted gesture into one jump, so no mid-gesture frame ever existed), and
+  a wheel-only script keeps the live clock (the old forced clock-at-0 froze
+  the scroll animation and its lands forever); `NEOTA_WIN_DEBUG=1`
   prints the window-selection state (`scroll/extent/start/span/lead/trail`
   plus per-row estimate-vs-learned heights) per produce.
 - Chrome-split stage 2 (desktop overscan blit): the fixed header and composer
