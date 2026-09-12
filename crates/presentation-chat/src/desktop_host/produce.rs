@@ -2,6 +2,7 @@
 //! (`produce_and_render`), including the wallpaper cover and avatar plumbing.
 
 use super::{wallpaper_rect_css, App};
+use crate::scroll_ack::ACK_CAP_MAX_CSS;
 use crate::{sidebar_occupied_css, ChatCompositor, HitRects};
 use neotavern_presentation_dioxus_shell::{
     chrome_metrics, install_product_shell, product_shell_app,
@@ -85,22 +86,21 @@ impl App {
             // move past the pin, so the small newer-cap never gates a real
             // gesture.
             let (band_top_css, band_bottom_css) = (header as f32, (header + viewport) as f32);
-            // The canvas extents are painted subject to the viewport box,
-            // which is asymmetric since the chrome split: the top extends
-            // CHAT_OVERSCAN_CSS minus the header strip (the header paints
-            // into the raster's top strip, so the rows must stop above it),
-            // and the bottom stops at the panel edge (the composer paints
-            // into the raster's bottom strip). Anything beyond is clipped —
-            // the runway must clamp to the box too, or a fling would sample
-            // the cleared raster / the chrome strips outside the rows.
+            // The canvas extents are painted across the FULL overscan box
+            // (three-texture chrome split: no strips reserve the raster
+            // edges anymore) — the content raster spans css
+            // [−CHAT_OVERSCAN_CSS, css_h + CHAT_OVERSCAN_CSS], so the runway
+            // is symmetric. The clamp only guards the raster edges: beyond
+            // it the blit's source window would claim rows the raster
+            // cannot hold.
             let overscan_css = neotavern_presentation_dioxus_shell::CHAT_OVERSCAN_CSS as f32;
-            let canvas_top = shell
+            let canvas_top = shell.chat.chat_canvas_top_css.max(-overscan_css);
+            let canvas_bottom = shell
                 .chat
-                .chat_canvas_top_css
-                .max(-(overscan_css - band_top_css));
-            let canvas_bottom = shell.chat.chat_canvas_bottom_css.min(css_h as f32);
-            let runway_older = band_top_css - canvas_top - 24.0;
-            let runway_newer = canvas_bottom - band_bottom_css - 24.0;
+                .chat_canvas_bottom_css
+                .min(css_h as f32 + overscan_css);
+            let runway_older = (band_top_css - canvas_top - 24.0).min(ACK_CAP_MAX_CSS);
+            let runway_newer = (canvas_bottom - band_bottom_css - 24.0).min(ACK_CAP_MAX_CSS);
             // Captured before the move into `install_product_shell`; the
             // wallpaper dim and the produce log need them, and a second
             // `shell_view()` call would clone the whole view-model again
@@ -223,30 +223,41 @@ impl App {
         // The rasters are taller than the swapchain by the overscan strips;
         // the doc scene paints into the middle window (+overscan from the
         // raster top) so its panel row maps 1:1 onto the screen.
-        let mut raster_scene = vello::Scene::new();
-        // Content into the middle window; the fixed chrome into the reserved
-        // strips: the header at the raster's top edge, the composer at the
-        // bottom edge (+2×overscan puts its panel-css bottom on the raster's
-        // last row). The blit composites them over the content at the screen
-        // chrome zones (see blit_wgsl), keeping the scroll-band sample space
-        // chrome-free — a drift sweep can no longer smear a ghost
-        // header/composer through the band.
-        raster_scene.append(
-            &scene,
-            Some(vello::kurbo::Affine::translate((
-                0.0,
-                f64::from(overscan_phys),
-            ))),
-        );
-        raster_scene.append(&header_scene, Some(vello::kurbo::Affine::IDENTITY));
-        raster_scene.append(
+        //
+        // Chrome-split (three-texture contract): the content scene renders
+        // into the content raster ALONE and the fixed chrome scenes render
+        // into their own zone textures sized like their screen zones; the
+        // blit composites them at the identity screen uv. The old single-
+        // raster strip packing (header at the top edge, composer appended at
+        // +2×overscan) needed coordinate un-mixing in the shader and clamps
+        // here to keep rows out of the strips — the offset math bred the
+        // ghost-composer and stationary-copy classes of bugs.
+        //
+        // Scene translation: the content canvas keeps the +overscan doc→raster
+        // mapping (the screen samples the middle window); the header zone
+        // starts at doc y 0 so it maps 1:1; the composer zone texture starts
+        // at the band's bottom edge, so its scene shifts up by that offset.
+        let header_h_phys = chat_band.0.round() as u32;
+        let band_bottom_phys = chat_band.1.round() as u32;
+        let composer_h_phys = (height as u32).saturating_sub(band_bottom_phys);
+        let mut composer_scene_zoned = vello::Scene::new();
+        composer_scene_zoned.append(
             &composer_scene,
             Some(vello::kurbo::Affine::translate((
                 0.0,
-                f64::from(2 * overscan_phys),
+                -f64::from(band_bottom_phys),
             ))),
         );
-        if let Err(err) = present.render(&raster_scene, palette::css::TRANSPARENT) {
+        if let Err(err) = present.enable_chrome_split(header_h_phys, composer_h_phys) {
+            eprintln!("[neocompositor-desktop] chrome targets: {err}");
+        }
+        if let Err(err) = present.render_split(
+            &scene,
+            &header_scene,
+            &composer_scene_zoned,
+            palette::css::TRANSPARENT,
+            overscan_phys,
+        ) {
             eprintln!("[neocompositor-desktop] render: {err}");
             self.dirty = true;
             return;

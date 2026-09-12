@@ -346,6 +346,31 @@ fn open_gpu(
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
+            // The shared BLIT_WGSL declares chrome-zone texture bindings
+            // (5/6). Android paints the chrome inline (flat mapping), the
+            // shader's chrome branch is guarded off, but the layout must
+            // still declare the bindings and the bind group must bind the
+            // transparent dummies.
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 6,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
         ],
     });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -428,6 +453,12 @@ fn open_gpu(
         },
     );
     let wall_view = wall_texture.create_view(&wgpu::TextureViewDescriptor::default());
+    // Chrome dummies (bindings 5/6): 1×1 transparent textures — the inline
+    // chrome never samples them, the bind group just needs valid views.
+    let chrome_dummy_a = crate::vello_gpu::dummy_chrome_texture(&device);
+    let chrome_dummy_a_view = chrome_dummy_a.create_view(&wgpu::TextureViewDescriptor::default());
+    let chrome_dummy_b = crate::vello_gpu::dummy_chrome_texture(&device);
+    let chrome_dummy_b_view = chrome_dummy_b.create_view(&wgpu::TextureViewDescriptor::default());
     let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("neocompositor-bg"),
         layout: &bind_layout,
@@ -451,6 +482,14 @@ fn open_gpu(
             wgpu::BindGroupEntry {
                 binding: 4,
                 resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::TextureView(&chrome_dummy_a_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: wgpu::BindingResource::TextureView(&chrome_dummy_b_view),
             },
         ],
     });

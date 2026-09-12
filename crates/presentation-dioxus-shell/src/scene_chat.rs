@@ -387,25 +387,25 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
             "position:absolute;top:0;left:{pad}px;right:{pad}px;height:{header_h}px;box-sizing:border-box;padding:0 {pad}px;background:rgba(36,33,30,0.82);color:#f3eee8;border-bottom:1px solid rgba(57,52,47,0.48);display:flex;align-items:center;justify-content:space-between;gap:8px;"
         ),
         // 144fps scroll overscan box (same as the legacy render, lib.rs):
-        // the box extends past the panel so the window's overscan rows paint
-        // under the translucent chrome for the blit runway. Asymmetric since
-        // the chrome split: the top reserves the header strip (header_h at
-        // the raster's top edge), the bottom stops at the panel edge (the
-        // composer paints into the raster's bottom strip) - the rows must
-        // never overlap the chrome strips. NO `overflow:hidden`: a clip here
+        // the box extends a FULL CHAT_OVERSCAN_CSS past the panel top so the
+        // window's overscan rows paint there for the blit runway. The
+        // three-texture chrome split needs no strip reservation (chrome
+        // lives in its own textures). NO `overflow:hidden`: a clip here
         // would cull exactly the runway rows the blit samples mid-gesture
         // (the window's lead span extends past the box top); the produce
         // clamp bounds the sample window to the baked extents instead.
         viewport_style: format!(
             "position:absolute;left:0;right:0;top:-{}px;bottom:0;box-sizing:border-box;background:transparent;",
-            CHAT_OVERSCAN_CSS - header_h
+            CHAT_OVERSCAN_CSS
         ),
         // React parity: full-height viewport (header/composer are absolute
         // overlays), so the scroll body clears the header band with its own
-        // top padding; rows land at the same px as the old band layout.
+        // top padding; rows land at the same px as the old band layout. The
+        // body's top sits at panel css 0: viewport top (−CHAT_OVERSCAN_CSS)
+        // + this offset.
         scroll_style: format!(
             "position:absolute;left:0;right:0;top:{}px;bottom:0;display:flex;flex-direction:column;gap:24px;box-sizing:border-box;padding:{scroll_pad_top}px {pad}px 12px;",
-            CHAT_OVERSCAN_CSS - header_h
+            CHAT_OVERSCAN_CSS
         ),
         composer_style,
         composer_color: color.to_owned(),

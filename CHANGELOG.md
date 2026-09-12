@@ -28,6 +28,24 @@
 
 ### Fixed
 
+- The desktop chrome split is REWRITTEN as a three-texture contract
+  (breaking the single-raster strip packing whose offset math bred a whole
+  class of presentation bugs). The content scene now renders into the
+  overscan content raster alone; the fixed header and composer scenes render
+  into their OWN textures sized exactly like their screen zones
+  (`PresentSurface::enable_chrome_split` + `render_split`); the blit
+  composites them at the identity screen uv with premultiplied source-over —
+  no strip offsets in the content raster, no `chrome_y = doc_y ± top`
+  coordinate un-mixing in the shader, no strip-reservation clamps in the
+  produce path. The viewport box is symmetric again (full CHAT_OVERSCAN_CSS
+  above the panel, no overflow clip), the canvas clamp covers the whole
+  raster, and the directional ack caps are clamped to ACK_CAP_MAX_CSS so the
+  leading-edge filler stays bounded. Android keeps the inline-chrome flat
+  mapping: the shared shader's chrome branch stays guarded off and the
+  Android bind group binds 1×1 transparent dummies for the new bindings.
+  Verified: at-rest frame parity with the previous build (72 weak AA pixels,
+  zero strong), the chrome zones track the band during gestures, and the
+  toward-newer leading-edge transients are bounded by the cap.
 - Stationary copy of messages under the translucent chrome (desktop overscan
   blit): the shader shifted the content sample only inside the scroll band,
   so the screen header/composer zones kept sampling the content raster at

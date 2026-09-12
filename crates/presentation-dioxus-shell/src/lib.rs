@@ -1286,23 +1286,23 @@ pub fn product_chat_app() -> Element {
         // above everything.
         "position:absolute;top:0;left:{pad}px;right:{pad}px;height:{header_h}px;box-sizing:border-box;padding:0 {pad}px;background:rgba(36,33,30,0.82);color:#f3eee8;border-bottom:1px solid rgba(57,52,47,0.48);display:flex;align-items:center;justify-content:space-between;gap:8px;"
     );
-    // 144fps scroll: the viewport box extends past the panel so the
-    // virtualized window's overscan rows paint there - the blit shift then
-    // presents real rows on the leading edge instead of the wallpaper filler
-    // strip. NO `overflow:hidden` on this box: a clip would cull exactly the
-    // runway rows the blit samples mid-gesture (the window's lead span
-    // extends past the box top); the produce-side canvas clamp bounds the
-    // sample window to the baked extents instead (produce.rs), and the
-    // vendored root clip (+CHAT_OVERSCAN_CSS) bounds the paint. Asymmetric
-    // since the chrome split: the top reserves the header strip (header_h at
-    // the raster's top edge), the bottom stops at the panel edge (the
-    // composer paints into the raster's bottom strip) - the rows must never
-    // overlap the chrome strips. Absolute because the flex panel no longer
-    // constrains the box (the chrome stays anchored to the panel by its own
-    // absolute styles).
+    // 144fps scroll: the viewport box extends a FULL CHAT_OVERSCAN_CSS past
+    // the panel on the top edge (the bottom stops at the panel edge — the
+    // session's window math owns the below-runway) so the virtualized
+    // window's overscan rows paint there - the blit shift then presents real
+    // rows on the leading edge instead of the wallpaper filler strip. NO
+    // `overflow:hidden` on this box: a clip would cull exactly the runway
+    // rows the blit samples mid-gesture (the window's lead span extends
+    // past the box top); the produce-side canvas clamp bounds the sample
+    // window to the baked extents instead (produce.rs), and the vendored
+    // root clip (+CHAT_OVERSCAN_CSS) bounds the paint. The three-texture
+    // chrome split needs no strip reservation: chrome lives in its own
+    // textures. Absolute because the flex panel no longer constrains the
+    // box (the chrome stays anchored to the panel by its own absolute
+    // styles).
     let viewport_style = format!(
         "position:absolute;left:0;right:0;top:-{}px;bottom:0;box-sizing:border-box;background:transparent;",
-        CHAT_OVERSCAN_CSS - header_h
+        CHAT_OVERSCAN_CSS
     );
     // React parity: the viewport is full-height now (header/composer are
     // absolute overlays), so the scroll body clears the header band with its
@@ -1311,7 +1311,7 @@ pub fn product_chat_app() -> Element {
     let scroll_pad_top = header_h + pad;
     let scroll_style = format!(
         "position:absolute;left:0;right:0;top:{}px;bottom:0;display:flex;flex-direction:column;gap:24px;box-sizing:border-box;padding:{scroll_pad_top}px {pad}px 12px;",
-        CHAT_OVERSCAN_CSS - header_h
+        CHAT_OVERSCAN_CSS
     );
     // Sub-row scroll offset (view `chat_window_offset_css`): the message
     // canvas pulls itself up so the virtualized window's rows land at their

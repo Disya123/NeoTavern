@@ -315,6 +315,54 @@ pub struct StorageConvert<'a> {
     pub layout: Option<&'a wgpu::BindGroupLayout>,
 }
 
+/// Rasterize `scene` into one vello storage target at `width`×`height`
+/// (the render half of [`gpu_storage_to_sampled`]'s copy half).
+fn vello_render_to(
+    renderer: &mut vello::Renderer,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    storage_view: &wgpu::TextureView,
+    scene: &vello::Scene,
+    width: u32,
+    height: u32,
+    base_color: vello::peniko::Color,
+) -> Result<(), String> {
+    renderer
+        .render_to_texture(
+            device,
+            queue,
+            scene,
+            storage_view,
+            &vello::RenderParams {
+                base_color,
+                width,
+                height,
+                antialiasing_method: vello::AaConfig::Area,
+            },
+        )
+        .map_err(|err| format!("render_to_texture: {err}"))
+}
+
+/// 1×1 fully transparent texture for hosts that bind the shared `BLIT_WGSL`
+/// without the chrome split (Android inline chrome): wgpu zero-initializes,
+/// and premultiplied alpha 0 composites as a no-op.
+pub fn dummy_chrome_texture(device: &wgpu::Device) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("neocompositor-chrome-dummy"),
+        size: wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    })
+}
+
 pub fn gpu_storage_to_sampled(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -582,6 +630,21 @@ pub struct PresentTargets {
     pub resolve_view: wgpu::TextureView,
 }
 
+/// The chrome-split render targets: each fixed chrome scene (header /
+/// composer) rasterizes into its OWN texture pair sized exactly like its
+/// screen zone, and the blit composites them at the identity screen uv —
+/// no strip offsets in the content raster, no coordinate un-mixing in the
+/// shader (the three-texture contract replaced the single-raster strip
+/// packing whose offset math bred the ghost-composer / stationary-copy
+/// class of bugs).
+struct ChromeTargets {
+    header: PresentTargets,
+    composer: PresentTargets,
+    header_h: u32,
+    composer_h: u32,
+    width: u32,
+}
+
 impl PresentTargets {
     pub fn alloc(device: &wgpu::Device, plan: &VelloTargetPlan, width: u32, height: u32) -> Self {
         let size = wgpu::Extent3d {
@@ -634,6 +697,11 @@ pub struct PresentSurface {
     pub convert: ConvertMode,
     plan: VelloTargetPlan,
     targets: PresentTargets,
+    /// Chrome-split targets (bindings 5/6). `None` on hosts without the
+    /// split (Android inline chrome, or before the first desktop produce):
+    /// the bind group then carries 1×1 transparent dummies and the blit's
+    /// chrome branch is guarded off by the flat mapping.
+    chrome: Option<ChromeTargets>,
     /// Allocated size of `targets` (scene/resolve rasters). Tracked
     /// separately from `config` so the cheap per-event swapchain
     /// re-configure ([`Self::set_swapchain_size`]) does not make
@@ -657,6 +725,13 @@ pub struct PresentSurface {
     wall_key: Option<u64>,
     wall_rect_px: Option<[f32; 4]>,
     wall_overlay_alpha: f32,
+    /// 1×1 transparent dummies for the chrome bindings (5/6): they keep the
+    /// bind group complete while the chrome split is disabled (Android,
+    /// pre-produce). Premultiplied alpha 0 = a no-op composite.
+    chrome_header_dummy: wgpu::Texture,
+    chrome_header_dummy_view: wgpu::TextureView,
+    chrome_composer_dummy: wgpu::Texture,
+    chrome_composer_dummy_view: wgpu::TextureView,
     renderer: vello::Renderer,
     convert_pipeline: Option<wgpu::ComputePipeline>,
     convert_bgl: Option<wgpu::BindGroupLayout>,
@@ -782,6 +857,26 @@ impl PresentSurface {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -834,6 +929,12 @@ impl PresentSurface {
         });
         let wall_texture = Self::alloc_dummy_wallpaper(&device, &queue);
         let wall_view = wall_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let chrome_header_dummy = Self::alloc_dummy_chrome(&device);
+        let chrome_header_dummy_view =
+            chrome_header_dummy.create_view(&wgpu::TextureViewDescriptor::default());
+        let chrome_composer_dummy = Self::alloc_dummy_chrome(&device);
+        let chrome_composer_dummy_view =
+            chrome_composer_dummy.create_view(&wgpu::TextureViewDescriptor::default());
         let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("neocompositor-bg"),
             layout: &bind_layout,
@@ -858,6 +959,14 @@ impl PresentSurface {
                     binding: 4,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(&chrome_header_dummy_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::TextureView(&chrome_composer_dummy_view),
+                },
             ],
         });
         let (convert_pipeline, convert_bgl) = if plan.convert == ConvertMode::Compute {
@@ -877,6 +986,7 @@ impl PresentSurface {
             convert: plan.convert,
             plan,
             targets,
+            chrome: None,
             targets_size: (width.max(1), height.max(1)),
             overscan_phys: 0,
             pipeline,
@@ -889,6 +999,10 @@ impl PresentSurface {
             wall_key: None,
             wall_rect_px: None,
             wall_overlay_alpha: 0.0,
+            chrome_header_dummy,
+            chrome_header_dummy_view,
+            chrome_composer_dummy,
+            chrome_composer_dummy_view,
             renderer,
             convert_pipeline,
             convert_bgl,
@@ -998,6 +1112,13 @@ impl PresentSurface {
         self.wall_overlay_alpha = alpha.clamp(0.0, 1.0);
     }
 
+    /// 1×1 fully transparent texture for the chrome bindings (5/6) while the
+    /// chrome split is disabled: wgpu zero-initializes, and premultiplied
+    /// alpha 0 composites as a no-op.
+    fn alloc_dummy_chrome(device: &wgpu::Device) -> wgpu::Texture {
+        dummy_chrome_texture(device)
+    }
+
     fn alloc_dummy_wallpaper(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("neocompositor-wallpaper-dummy"),
@@ -1098,6 +1219,168 @@ impl PresentSurface {
                 layout: self.convert_bgl.as_ref(),
             },
         );
+        Ok(())
+    }
+
+    /// Allocate (or re-allocate) the chrome-split zone targets. `header_h` /
+    /// `composer_h` are the PHYSICAL px heights of the screen chrome zones —
+    /// the header occupies screen rows `[0, header_h)`, the composer rows
+    /// `[swapchain_height − composer_h, swapchain_height)`. No-op while the
+    /// sizes match; called from the produce path so a window resize re-allocs
+    /// on the next produce. Hosts without overscan (Android inline chrome)
+    /// never call this and keep the transparent dummies.
+    pub fn enable_chrome_split(&mut self, header_h: u32, composer_h: u32) -> Result<(), String> {
+        if self.overscan_phys == 0 {
+            return Ok(());
+        }
+        let width = self.config.width.max(1);
+        let matches = self.chrome.as_ref().is_some_and(|c| {
+            c.width == width && c.header_h == header_h && c.composer_h == composer_h
+        });
+        if matches {
+            return Ok(());
+        }
+        let header = PresentTargets::alloc(&self.device, &self.plan, width, header_h.max(1));
+        clear_view_color(
+            &self.device,
+            &self.queue,
+            &header.resolve_view,
+            canvas_clear_color(),
+        );
+        let composer = PresentTargets::alloc(&self.device, &self.plan, width, composer_h.max(1));
+        clear_view_color(
+            &self.device,
+            &self.queue,
+            &composer.resolve_view,
+            canvas_clear_color(),
+        );
+        self.chrome = Some(ChromeTargets {
+            header,
+            composer,
+            header_h: header_h.max(1),
+            composer_h: composer_h.max(1),
+            width,
+        });
+        self.rebuild_bind();
+        Ok(())
+    }
+
+    /// Chrome-split produce: rasterize the CONTENT scene into the overscan
+    /// content raster and the fixed chrome scenes into their own zone
+    /// textures (see [`Self::enable_chrome_split`]). The blit then composites
+    /// the chrome at the identity screen uv — the content raster carries no
+    /// chrome strips at all. `content_overscan` translates the doc-scene
+    /// canvas so the screen samples the raster's middle window (the content
+    /// scene is authored in panel css); the chrome scenes must already be
+    /// authored in their zone's own coordinates.
+    pub fn render_split(
+        &mut self,
+        content: &vello::Scene,
+        header: &vello::Scene,
+        composer: &vello::Scene,
+        base_color: vello::peniko::Color,
+        content_overscan: u32,
+    ) -> Result<(), String> {
+        let (width, height) = (self.targets_size.0, self.targets_size.1);
+        // Copy the zone specs out of `self.chrome` up front: the renderer
+        // calls need `&mut self.renderer` while the views must stay alive.
+        let chrome_spec = match self.chrome.as_ref() {
+            Some(chrome) => (
+                chrome.header.storage_view.clone(),
+                chrome.composer.storage_view.clone(),
+                chrome.width,
+                chrome.header_h,
+                chrome.composer_h,
+            ),
+            None => return self.render(content, base_color),
+        };
+        let (header_view, composer_view, chrome_w, header_h, composer_h) = chrome_spec;
+        let mut content_zoned = vello::Scene::new();
+        content_zoned.append(
+            content,
+            Some(vello::kurbo::Affine::translate((
+                0.0,
+                f64::from(content_overscan),
+            ))),
+        );
+        vello_render_to(
+            &mut self.renderer,
+            &self.device,
+            &self.queue,
+            &self.targets.storage_view,
+            &content_zoned,
+            width,
+            height,
+            base_color,
+        )?;
+        vello_render_to(
+            &mut self.renderer,
+            &self.device,
+            &self.queue,
+            &header_view,
+            header,
+            chrome_w,
+            header_h,
+            base_color,
+        )?;
+        vello_render_to(
+            &mut self.renderer,
+            &self.device,
+            &self.queue,
+            &composer_view,
+            composer,
+            chrome_w,
+            composer_h,
+            base_color,
+        )?;
+        gpu_storage_to_sampled(
+            &self.device,
+            &self.queue,
+            VelloTargets {
+                storage: &self.targets.storage,
+                sampled: &self.targets.resolve,
+                storage_view: &self.targets.storage_view,
+                sampled_view: &self.targets.resolve_view,
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                dest_origin: wgpu::Origin3d::ZERO,
+            },
+            StorageConvert {
+                mode: self.convert,
+                pipeline: self.convert_pipeline.as_ref(),
+                layout: self.convert_bgl.as_ref(),
+            },
+        );
+        let chrome = self.chrome.as_ref().expect("chrome checked above");
+        for (pair, w, h) in [
+            (&chrome.header, chrome.width, chrome.header_h),
+            (&chrome.composer, chrome.width, chrome.composer_h),
+        ] {
+            gpu_storage_to_sampled(
+                &self.device,
+                &self.queue,
+                VelloTargets {
+                    storage: &pair.storage,
+                    sampled: &pair.resolve,
+                    storage_view: &pair.storage_view,
+                    sampled_view: &pair.resolve_view,
+                    size: wgpu::Extent3d {
+                        width: w,
+                        height: h,
+                        depth_or_array_layers: 1,
+                    },
+                    dest_origin: wgpu::Origin3d::ZERO,
+                },
+                StorageConvert {
+                    mode: self.convert,
+                    pipeline: self.convert_pipeline.as_ref(),
+                    layout: self.convert_bgl.as_ref(),
+                },
+            );
+        }
         Ok(())
     }
 
@@ -1306,6 +1589,15 @@ impl PresentSurface {
     /// cleared target — the swapchain shows the clear color while every other
     /// path (render/snapshot) still sees the fresh content.
     fn rebuild_bind(&mut self) {
+        // Chrome bindings 5/6: the real zone targets when the split is
+        // enabled, the 1×1 transparent dummies otherwise.
+        let (header_view, composer_view) = match &self.chrome {
+            Some(chrome) => (&chrome.header.resolve_view, &chrome.composer.resolve_view),
+            None => (
+                &self.chrome_header_dummy_view,
+                &self.chrome_composer_dummy_view,
+            ),
+        };
         self.bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("neocompositor-bg"),
             layout: &self.bind_layout,
@@ -1329,6 +1621,14 @@ impl PresentSurface {
                 wgpu::BindGroupEntry {
                     binding: 4,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(header_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::TextureView(composer_view),
                 },
             ],
         });
@@ -1373,6 +1673,10 @@ impl PresentSurface {
         }
         self.targets_size = (width, raster_height);
         self.targets = PresentTargets::alloc(&self.device, &self.plan, width, raster_height);
+        // Zone targets are sized against the swapchain width; drop them so
+        // the next produce re-allocs at the new size (the bind group falls
+        // back to the transparent dummies for the interim frames).
+        self.chrome = None;
         self.rebuild_bind();
         clear_view_color(
             &self.device,
