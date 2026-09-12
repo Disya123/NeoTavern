@@ -14,6 +14,8 @@
 mod android_jni;
 mod assemble;
 mod asset_net;
+#[cfg(feature = "gpu")]
+mod chrome_router;
 mod data_uri;
 #[cfg(feature = "gpu")]
 mod gpu_run;
@@ -713,6 +715,80 @@ impl ProductVelloSession {
         // produce, like Android's per-produce layout.
         self.paint_layout = collect_paint_layout(&self.doc.inner.borrow(), self.scale);
         Ok((out, vello_sink.scene, diag))
+    }
+
+    /// Chrome-split paint (desktop overscan blit): one traversal, three
+    /// scenes. The content scene carries the chat rows only — the fixed
+    /// chrome (`data-action="chrome-block"` subtrees: the header and the
+    /// composer) routes into two separate scenes via the painter's
+    /// `set_chrome_route` toggles, so the overscan raster's scroll-band
+    /// sample space stays chrome-free. The host composites the chrome
+    /// scenes over the content at reserved raster strips (see the desktop
+    /// host's produce + the blit shader).
+    pub fn paint_split(
+        &mut self,
+        filter: vello_sink::VelloFilter,
+    ) -> Result<
+        (
+            ProducerOutput,
+            vello::Scene,
+            vello::Scene,
+            vello::Scene,
+            vello_sink::LayerDiag,
+        ),
+        String,
+    > {
+        let mut sink = ProducerSink {
+            max_ops: filter.max_ops,
+            ..ProducerSink::default()
+        };
+        let mut vello_sink = vello_sink::VelloSink::with_filter(filter);
+        let mut header_sink = vello_sink::VelloSink::with_filter(filter);
+        let mut composer_sink = vello_sink::VelloSink::with_filter(filter);
+        {
+            let mut inner = self.doc.inner.borrow_mut();
+            let mut tee = tee::TeeSink {
+                a: &mut sink,
+                b: &mut vello_sink,
+            };
+            let mut router = chrome_router::ChromeRouterSink {
+                main: &mut tee,
+                header: &mut header_sink,
+                composer: &mut composer_sink,
+                route: std::cell::Cell::new(anyrender::ChromeRoute::Main),
+            };
+            paint_scene(
+                &mut router,
+                &mut inner,
+                f64::from(self.scale),
+                self.width,
+                self.height,
+                0,
+                0,
+            );
+        }
+        vello_sink.close_unbalanced_layers();
+        header_sink.close_unbalanced_layers();
+        composer_sink.close_unbalanced_layers();
+        let diag = vello_sink.diag;
+        let out = finish_producer(
+            sink,
+            self.diagnostic_dom_glass.clone(),
+            self.raster_images,
+            self.width,
+            self.height,
+        )?;
+        // Keep the paint layout (avatar slots etc.) in sync with the frame we
+        // just painted — the GPU avatar overlay consumes `paint_layout` every
+        // produce, like Android's per-produce layout.
+        self.paint_layout = collect_paint_layout(&self.doc.inner.borrow(), self.scale);
+        Ok((
+            out,
+            vello_sink.scene,
+            header_sink.scene,
+            composer_sink.scene,
+            diag,
+        ))
     }
 }
 

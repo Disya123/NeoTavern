@@ -28,6 +28,31 @@
 
 ### Fixed
 
+- Chrome-split stage 2 (desktop overscan blit): the fixed header and composer
+  now paint into their own scenes and are composited at the screen chrome
+  zones by the blit shader, so the scroll-band sample space contains no
+  chrome at all — a drift sweep can no longer smear a ghost header/composer
+  through the band (the ghost was the pre-split inline chrome baked into the
+  raster). One paint traversal (`ProductVelloSession::paint_split`) emits
+  three vello scenes; the routing lives in the vendored blitz-paint
+  (`PaintScene::set_chrome_route`, a no-op for hosts without the hook) and
+  resolves by ABSOLUTE y — taffy's `final_layout.location` is relative to the
+  parent, and the composer lives inside the `composer-sticky` wrapper, so a
+  relative test misrouted the whole block into the header scene (the ghost
+  mid-band) and left the real bottom strip empty. The chrome zones composite
+  as source-over (`chrome.rgb + rgb·(1−chrome.a)`), matching the pre-split
+  translucent look; plain addition ignored the strip's alpha and washed the
+  chrome out. Whatever the wallpaper does not cover now fills with the panel
+  color — under the baked rows (transparent inter-row gaps and the unbaked
+  runway) and in the out-of-range filler branch: the exposed band edge
+  during a sweep presents the flat panel, not the cleared raster's black bar
+  (the ~140 px bar seen mid-gesture). Verified on a scripted 5×40 px-wheel
+  run (1920×1009, 122 frames): 0 dark frames, content tracking 0 backward /
+  0 >24 px jumps across 119 frame pairs, raster peeks confirm the baked
+  strips (pill body and Send button), and the at-rest frame is structurally
+  identical to the pre-split render (single composer, borders and
+  placeholder in place). Docs: the "Chrome-split (стадия 2)" section in
+  docs/desktop/neocompositor-desktop-host.md.
 - THE scroll judder root, found by tracking the content position across 122
   dump frames of a scripted wheel gesture: the blit drift SIGN was inverted
   since the overscan blit was born. The shader samples `doc_y + offset_y`

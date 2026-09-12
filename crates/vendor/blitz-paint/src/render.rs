@@ -222,19 +222,33 @@ impl<'dom, 'a> BlitzDomPainter<'dom, 'a> {
     ) {
         let node = &self.dom.as_ref().tree()[node_id];
         let mut chrome_root = None;
-        if let Some(data) = node.element_data() {
-            let is_chrome_root = data.attrs.iter().any(|attr| {
-                &*attr.name.local == "data-action" && &*attr.value == "chrome-block"
-            });
-            if is_chrome_root {
-                let half = self.height as f32 / 2.0;
-                let y = node.final_layout.location.y * self.scale as f32;
-                chrome_root = Some(if y < half {
-                    ChromeRoute::Header
-                } else {
-                    ChromeRoute::Composer
-                });
+        let is_chrome_root = node.element_data().is_some_and(|data| {
+            data.attrs
+                .iter()
+                .any(|attr| &*attr.name.local == "data-action" && &*attr.value == "chrome-block")
+        });
+        if is_chrome_root {
+            let half = self.height as f32 / 2.0;
+            // `final_layout.location` is relative to the PARENT (taffy); the
+            // route needs the absolute y. The composer sits inside a
+            // bottom-docked wrapper (`part:composer-sticky`), so its own
+            // location is 0 and a relative test misroutes the whole block
+            // into the header scene (the ghost-composer bug). Sum the
+            // ancestor chain — two chrome roots per produce, negligible.
+            let tree = self.dom.as_ref().tree();
+            let mut abs_y = 0.0f32;
+            let mut cur = Some(node_id);
+            while let Some(id) = cur {
+                let n = &tree[id];
+                abs_y += n.final_layout.location.y;
+                cur = n.parent;
             }
+            let y = abs_y * self.scale as f32;
+            chrome_root = Some(if y < half {
+                ChromeRoute::Header
+            } else {
+                ChromeRoute::Composer
+            });
         }
         if let Some(route) = chrome_root {
             self.chrome_depth.set(self.chrome_depth.get() + 1);

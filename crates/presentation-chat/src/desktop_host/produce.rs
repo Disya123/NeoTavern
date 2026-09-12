@@ -85,16 +85,20 @@ impl App {
             // move past the pin, so the small newer-cap never gates a real
             // gesture.
             let (band_top_css, band_bottom_css) = (header as f32, (header + viewport) as f32);
-            // The canvas extents are painted subject to the viewport box
-            // (CHAT_OVERSCAN_CSS past the panel edges) — anything beyond is
-            // clipped, so the runway must clamp to the box too, or a fling
-            // would sample the cleared raster outside the painted strips.
+            // The canvas extents are painted subject to the viewport box,
+            // which is asymmetric since the chrome split: the top extends
+            // CHAT_OVERSCAN_CSS minus the header strip (the header paints
+            // into the raster's top strip, so the rows must stop above it),
+            // and the bottom stops at the panel edge (the composer paints
+            // into the raster's bottom strip). Anything beyond is clipped —
+            // the runway must clamp to the box too, or a fling would sample
+            // the cleared raster / the chrome strips outside the rows.
             let overscan_css = neotavern_presentation_dioxus_shell::CHAT_OVERSCAN_CSS as f32;
-            let canvas_top = shell.chat.chat_canvas_top_css.max(-overscan_css);
-            let canvas_bottom = shell
+            let canvas_top = shell
                 .chat
-                .chat_canvas_bottom_css
-                .min(css_h as f32 + overscan_css);
+                .chat_canvas_top_css
+                .max(-(overscan_css - band_top_css));
+            let canvas_bottom = shell.chat.chat_canvas_bottom_css.min(css_h as f32);
             let runway_older = band_top_css - canvas_top - 24.0;
             let runway_newer = canvas_bottom - band_bottom_css - 24.0;
             // Captured before the move into `install_product_shell`; the
@@ -162,14 +166,15 @@ impl App {
             }
         };
         let t_paint = std::time::Instant::now();
-        let (produced, scene, _diag) = match sess.paint(VelloFilter::full()) {
-            Ok(out) => out,
-            Err(err) => {
-                eprintln!("[neocompositor-desktop] paint: {err}");
-                self.dirty = true;
-                return;
-            }
-        };
+        let (produced, scene, header_scene, composer_scene, _diag) =
+            match sess.paint_split(VelloFilter::full()) {
+                Ok(out) => out,
+                Err(err) => {
+                    eprintln!("[neocompositor-desktop] paint: {err}");
+                    self.dirty = true;
+                    return;
+                }
+            };
         let t_render = std::time::Instant::now();
         let list_ops = produced.list.ops.len();
         let scene_paths = scene.encoding().n_paths;
@@ -217,11 +222,26 @@ impl App {
         // the doc scene paints into the middle window (+overscan from the
         // raster top) so its panel row maps 1:1 onto the screen.
         let mut raster_scene = vello::Scene::new();
+        // Content into the middle window; the fixed chrome into the reserved
+        // strips: the header at the raster's top edge, the composer at the
+        // bottom edge (+2×overscan puts its panel-css bottom on the raster's
+        // last row). The blit composites them over the content at the screen
+        // chrome zones (see blit_wgsl), keeping the scroll-band sample space
+        // chrome-free — a drift sweep can no longer smear a ghost
+        // header/composer through the band.
         raster_scene.append(
             &scene,
             Some(vello::kurbo::Affine::translate((
                 0.0,
                 f64::from(overscan_phys),
+            ))),
+        );
+        raster_scene.append(&header_scene, Some(vello::kurbo::Affine::IDENTITY));
+        raster_scene.append(
+            &composer_scene,
+            Some(vello::kurbo::Affine::translate((
+                0.0,
+                f64::from(2 * overscan_phys),
             ))),
         );
         if let Err(err) = present.render(&raster_scene, palette::css::TRANSPARENT) {
@@ -231,9 +251,32 @@ impl App {
         }
         let t_post = std::time::Instant::now();
         if std::env::var("NEOTA_DEBUG_PEEK").is_ok() {
-            for (px, py) in [(550, 410), (1092, 410), (550, 100), (30, 400)] {
-                let before = present.debug_peek_resolve(px, py);
-                eprintln!("[wall-debug] after render ({px},{py}): {before:?}");
+            // Scene split sanity: path counts per routed scene — the chrome
+            // blocks must land in their own scenes, not the content scene.
+            eprintln!(
+                "[scene-split] content={} header={} composer={} paths",
+                scene.encoding().n_paths,
+                header_scene.encoding().n_paths,
+                composer_scene.encoding().n_paths
+            );
+            // Raster peeks (resolve coords = css + overscan): the composer
+            // strip (pill body / send button) and the content window. Values
+            // past the panel css (>= css_h) land in the composer strip.
+            // Guarded by the raster height — early produces may run on the
+            // pre-maximize window.
+            let peek_raster_h = height as f32 * density.max(1.0) + 2.0 * overscan_phys as f32;
+            for (px, py) in [
+                (700u32, 20u32),
+                (700, 1150),
+                (1420, 1215),
+                (700, 410),
+                (30, 400),
+            ] {
+                let ry = py as f32 + overscan_phys as f32;
+                if ry < peek_raster_h {
+                    let before = present.debug_peek_resolve(px, py);
+                    eprintln!("[wall-debug] after render ({px},{py}): {before:?}");
+                }
             }
         }
         // One full skeleton build per produce: the same skeleton feeds the

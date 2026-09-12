@@ -22,10 +22,11 @@
 /// (`doc_y = uv.y * scale + top`) before the shift; hosts without overscan
 /// pass `(0.0, 1.0)` and reduce to the flat mapping. The wallpaper
 /// (bindings 3/4) is sampled at the UNSHIFTED fragment uv inside the rect, so
-/// the photo stays fixed while the scene scrolls over it, and the band's
-/// out-of-range region composites the photo over the flat filler instead of
-/// replacing it. With `enabled = 0` the underlay is fully transparent and the
-/// shader reduces to the pre-wallpaper blit.
+/// the photo stays fixed while the scene scrolls over it, and whatever the
+/// photo does not cover presents the panel color — both under the baked rows
+/// (transparent runway rows / inter-row gaps) and in the band's out-of-range
+/// filler region. With `enabled = 0` the underlay is fully transparent and the
+/// shader reduces to the pre-wallpaper blit over the panel backdrop.
 pub const BLIT_WGSL: &str = r#"
 struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
 @group(0) @binding(0) var tex: texture_2d<f32>;
@@ -69,9 +70,27 @@ struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
         }
     }
     let c = textureSampleLevel(tex, samp, uv, 0.0);
-    var rgb = c.rgb + wall.rgb * (1.0 - c.a);
+    // Backdrop under the scene: the wallpaper photo (fixed underlay), with
+    // the panel color filling whatever the photo does not cover. Rows bake
+    // opaque over that backdrop, but the unbaked runway rows and inter-row
+    // gaps stay transparent — they must present the panel color, not the
+    // cleared raster's black.
+    let under = wall.rgb + vec3<f32>(0.1294, 0.1176, 0.1059) * (1.0 - wall.a);
+    var rgb = c.rgb + under * (1.0 - c.a);
+    // Chrome strips (overscan hosts only): the fixed chrome paints into the
+    // reserved raster strips (header at the raster's top edge, composer at
+    // the bottom edge); the screen chrome zones composite them OVER the
+    // content sampled at the unshifted doc position (source-over, so the
+    // translucent chrome blends with the rows behind it exactly like the
+    // pre-split inline paint). Android's flat mapping (raster uv top = 0)
+    // never enters this branch and keeps painting the chrome inline.
+    if (scroll[3].z > 0.0 && (in.uv.y < scroll[0].y || in.uv.y >= scroll[0].z)) {
+        let chrome_y = select(doc_y + scroll[3].z, doc_y - scroll[3].z, in.uv.y < scroll[0].y);
+        let chrome = textureSampleLevel(tex, samp, vec2<f32>(uv.x, chrome_y), 0.0);
+        rgb = chrome.rgb + rgb * (1.0 - chrome.a);
+    }
     if (in_band && !shifted) {
-        rgb = wall.rgb + vec3<f32>(0.082, 0.075, 0.067) * (1.0 - wall.a);
+        rgb = under;
     }
     if (scroll[0].w > 0.5) {
         let lo = rgb / 12.92;

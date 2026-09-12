@@ -388,15 +388,21 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         ),
         // 144fps scroll overscan box (same as the legacy render, lib.rs):
         // the box extends past the panel so the window's overscan rows paint
-        // under the translucent chrome for the blit runway.
+        // under the translucent chrome for the blit runway. Asymmetric since
+        // the chrome split: the top reserves the header strip (header_h at
+        // the raster's top edge), the bottom stops at the panel edge (the
+        // composer paints into the raster's bottom strip) - the rows must
+        // never overlap the chrome strips.
         viewport_style: format!(
-            "position:absolute;left:0;right:0;top:-{CHAT_OVERSCAN_CSS}px;bottom:-{CHAT_OVERSCAN_CSS}px;box-sizing:border-box;overflow:hidden;background:transparent;"
+            "position:absolute;left:0;right:0;top:-{}px;bottom:0;box-sizing:border-box;overflow:hidden;background:transparent;",
+            CHAT_OVERSCAN_CSS - header_h
         ),
         // React parity: full-height viewport (header/composer are absolute
         // overlays), so the scroll body clears the header band with its own
         // top padding; rows land at the same px as the old band layout.
         scroll_style: format!(
-            "position:absolute;left:0;right:0;top:{CHAT_OVERSCAN_CSS}px;bottom:{CHAT_OVERSCAN_CSS}px;display:flex;flex-direction:column;gap:24px;box-sizing:border-box;padding:{scroll_pad_top}px {pad}px 12px;"
+            "position:absolute;left:0;right:0;top:{}px;bottom:0;display:flex;flex-direction:column;gap:24px;box-sizing:border-box;padding:{scroll_pad_top}px {pad}px 12px;",
+            CHAT_OVERSCAN_CSS - header_h
         ),
         composer_style,
         composer_color: color.to_owned(),
