@@ -44,18 +44,26 @@ struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
 }
 @fragment fn fs(in: VsOut) -> @location(0) vec4<f32> {
     var uv = in.uv;
-    let in_band = uv.y >= scroll[0].y && uv.y < scroll[0].z
-        && uv.x >= scroll[1].x && uv.x < scroll[1].y;
+    let in_column = uv.x >= scroll[1].x && uv.x < scroll[1].y;
+    let in_band = uv.y >= scroll[0].y && uv.y < scroll[0].z && in_column;
     // Screen -> raster doc uv: the raster is taller than the swapchain by
     // the overscan strips, so the screen samples the middle window.
     let doc_y = uv.y * scroll[3].w + scroll[3].z;
     let src_y = doc_y + scroll[0].x;
     // The shift is safe while the sample stays inside the source window
     // (the baked overscan runway; the host's ack cap lands a re-produce
-    // before it runs out). Past it the raster has no baked content and the
-    // wallpaper filler branch below takes over.
-    let shifted = in_band && src_y >= scroll[4].x && src_y < scroll[4].y;
-    uv.y = select(doc_y, src_y, shifted);
+    // before it runs out). The shift spans the whole chat COLUMN — the band
+    // AND the screen chrome zones — so the rows behind the translucent
+    // header/composer scroll with the content (React parity); sampling them
+    // unshifted froze a stationary copy of the messages under the chrome
+    // while the band moved. Outside the baked window the sample falls back
+    // to the unshifted doc position: the band's leading edge then presents
+    // the wallpaper filler (below), while the chrome zones keep the backdrop
+    // baked behind them — filling them flat would wipe the chrome composite
+    // (the zones' baked rows can legitimately end above/below the canvas
+    // extents, e.g. the pad zone at the top pin).
+    let in_window = src_y >= scroll[4].x && src_y < scroll[4].y;
+    uv.y = select(doc_y, src_y, in_column && in_window);
     var wall = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     if (scroll[3].x > 0.5) {
         let wx = (in.uv.x - scroll[2].x) / max(scroll[2].z - scroll[2].x, 1e-6);
@@ -80,16 +88,18 @@ struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
     // Chrome strips (overscan hosts only): the fixed chrome paints into the
     // reserved raster strips (header at the raster's top edge, composer at
     // the bottom edge); the screen chrome zones composite them OVER the
-    // content sampled at the unshifted doc position (source-over, so the
-    // translucent chrome blends with the rows behind it exactly like the
-    // pre-split inline paint). Android's flat mapping (raster uv top = 0)
-    // never enters this branch and keeps painting the chrome inline.
+    // content sampled at the SHIFTED doc position — the rows scroll under
+    // the translucent chrome exactly like they do inside the band
+    // (source-over, so the translucent chrome blends with the rows behind
+    // it exactly like the pre-split inline paint). Android's flat mapping
+    // (raster uv top = 0) never enters this branch and keeps painting the
+    // chrome inline.
     if (scroll[3].z > 0.0 && (in.uv.y < scroll[0].y || in.uv.y >= scroll[0].z)) {
         let chrome_y = select(doc_y + scroll[3].z, doc_y - scroll[3].z, in.uv.y < scroll[0].y);
         let chrome = textureSampleLevel(tex, samp, vec2<f32>(uv.x, chrome_y), 0.0);
         rgb = chrome.rgb + rgb * (1.0 - chrome.a);
     }
-    if (in_band && !shifted) {
+    if (in_band && !in_window) {
         rgb = under;
     }
     if (scroll[0].w > 0.5) {

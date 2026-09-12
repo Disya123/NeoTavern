@@ -28,6 +28,30 @@
 
 ### Fixed
 
+- Stationary copy of messages under the translucent chrome (desktop overscan
+  blit): the shader shifted the content sample only inside the scroll band,
+  so the screen header/composer zones kept sampling the content raster at
+  the UNSHIFTED doc position — the rows visible through the translucent
+  header and composer pill stayed frozen while the band scrolled (frame
+  zone-diff: header/composer exactly 0 px changed across gesture frames
+  while the band moved 3000–19000 px). The shift now spans the whole chat
+  column, chrome zones included; outside the baked source window the zone
+  sample falls back to the unshifted doc position (the backdrop baked
+  behind the chrome) — filling those zones flat would wipe the chrome
+  composite and darken the header to the panel color at rest. Verified:
+  the at-rest frame is byte-identical to the previous build (1 px of AA
+  noise), the chrome zones track the band during gestures, and the
+  toward-newer leading-edge transient returns to the pre-change size.
+- The chat viewport container no longer clips the overscan runway rows
+  (native chat, both renders): `overflow:hidden` on the chat-viewport box
+  narrowed the paint clip to the container's border box, culling exactly
+  the lead/trail rows the blit samples mid-gesture whenever the virtualized
+  window's span extended past the box. The clip is removed from the legacy
+  RSX and the blueprint render; rows are bounded by the virtualized window,
+  the paint by the widened vendor root clip, and the blit source window by
+  the produce-side canvas clamp (which keeps samples out of the chrome
+  strips; any leaked rows are overpainted by the chrome scenes). Android's
+  single-scene paint keeps its exact root culling.
 - Native chat height feedback no longer requests an endless redraw for zero,
   negative or non-finite row measurements rejected by the height cache.
   Changes of at most 0.5 CSS px are ignored to let subpixel layout jitter
