@@ -270,7 +270,18 @@ impl<W: ProductWire> ChatSession<W> {
                 continue;
             };
             let measured = f64::from(rect.css_height);
-            if self.state.height_correction(&rect.id) != Some(measured) {
+            // The cache rejects invalid/hidden row heights. Reporting a
+            // rejected value as changed would schedule redraws forever.
+            if !measured.is_finite() || measured <= 0.0 {
+                continue;
+            }
+            // Ignore subpixel layout jitter instead of feeding it back into
+            // the virtualized window on every produce.
+            let unchanged = self
+                .state
+                .height_correction(&rect.id)
+                .is_some_and(|previous| (previous - measured).abs() <= 0.5);
+            if !unchanged {
                 let estimate = estimate_height(row);
                 self.state
                     .learn_height_correction(&rect.id, measured, estimate);

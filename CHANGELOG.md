@@ -28,6 +28,11 @@
 
 ### Fixed
 
+- Native chat height feedback no longer requests an endless redraw for zero,
+  negative or non-finite row measurements rejected by the height cache.
+  Changes of at most 0.5 CSS px are ignored to let subpixel layout jitter
+  settle instead of continuously rebuilding the same frame.
+
 - Chat viewport voids (desktop overscan blit): rows laid out above css y 0 —
   the virtualized window's lead rows and sub-row offsets — were culled by the
   vendor paint traversal's root clip (the exact viewport), so they never

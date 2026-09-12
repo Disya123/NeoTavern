@@ -29,6 +29,36 @@ fn production_dependency_text(manifest: &str) -> String {
 }
 
 #[test]
+fn height_feedback_rejects_invalid_rows_and_settles_subpixel_jitter() {
+    use neotavern_presentation_m0_d2::MessageRect;
+    let mut session =
+        ChatSession::open(FakeWire::with_message_count(12), Some(DEMO_CHAT_ID)).unwrap();
+    let id = session.state().messages[0].id.clone();
+    let mut rect = MessageRect {
+        id,
+        css_x: 0.0,
+        css_y: 0.0,
+        css_width: 500.0,
+        css_height: 0.0,
+    };
+    for height in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+        rect.css_height = height;
+        for _ in 0..4 {
+            assert!(!session.learn_measured_heights(std::slice::from_ref(&rect)));
+        }
+    }
+    rect.css_height = 100.0;
+    assert!(session.learn_measured_heights(std::slice::from_ref(&rect)));
+    for height in [100.0, 100.00001, 99.99999, 100.25, 99.75] {
+        rect.css_height = height;
+        assert!(!session.learn_measured_heights(std::slice::from_ref(&rect)));
+    }
+    rect.css_height = 120.0;
+    assert!(session.learn_measured_heights(std::slice::from_ref(&rect)));
+    assert!(!session.learn_measured_heights(std::slice::from_ref(&rect)));
+}
+
+#[test]
 fn cargo_toml_does_not_depend_on_kernel_storage_or_network() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
     let text = fs::read_to_string(manifest).expect("Cargo.toml");

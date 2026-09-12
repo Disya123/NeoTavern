@@ -1,5 +1,12 @@
 # NeoCompositor host — Windows/macOS (общий с Android)
 
+Height feedback schedules another produce only for an accepted, positive,
+finite row height that differs from the stored measurement by more than
+0.5 CSS px. Hidden rows with zero height and subpixel layout jitter must
+not keep the redraw loop alive. The regression test
+`height_feedback_rejects_invalid_rows_and_settles_subpixel_jitter` covers
+rejected measurements, repeated observations and real height changes.
+
 Экспериментальный (non-production) десктоп-хост, который гоняет ровно тот же
 продуктовый маршрут, что и Android-`SurfaceView` хост
 (`crates/presentation-chat/src/android_surface.rs`):
