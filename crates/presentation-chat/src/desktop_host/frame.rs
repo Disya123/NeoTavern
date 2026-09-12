@@ -688,6 +688,26 @@ impl ApplicationHandler for App {
                 .checked_add(std::time::Duration::from_millis(1))
                 .expect("instant");
             event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next.into()));
+        } else if self.ack.drift(self.visual_scroll_css).abs()
+            > crate::scroll_ack::LANDED_EPSILON_CSS
+        {
+            // Idle with a residual drift: the visual offset is ahead of (or
+            // behind) the presented window while no animation is running.
+            // The per-present land only runs on presenting frames, so a
+            // gesture whose easing outlived the last present (produce frames
+            // return before the present phase) can leave the loop parked on
+            // a SHIFTED raster forever — the content sits displaced behind
+            // the header/composer until the next input event. A shifted
+            // screen at rest is never acceptable: land the residual here so
+            // the very next frame re-produces at the true offset.
+            self.land_now();
+            if let Some(window) = self.window.as_ref() {
+                window.request_redraw();
+            }
+            let next = std::time::Instant::now()
+                .checked_add(std::time::Duration::from_millis(1))
+                .expect("instant");
+            event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next.into()));
         } else if self.status_shown_at.is_some() {
             // Poll at ~10 Hz so the toast auto-dismisses.
             if let Some(window) = self.window.as_ref() {

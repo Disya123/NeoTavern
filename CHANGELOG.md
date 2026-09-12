@@ -49,6 +49,19 @@
   the scroll animation and its lands forever); `NEOTA_WIN_DEBUG=1`
   prints the window-selection state (`scroll/extent/start/span/lead/trail`
   plus per-row estimate-vs-learned heights) per produce.
+- Stuck shifted screen at rest (desktop overscan blit): the residual-drift
+  land only ran on presenting frames (`advance_and_land_scroll` in the
+  present phase), while produce frames return before it — a gesture whose
+  easing outlived the last present left the event loop parked with
+  `ControlFlow::Wait` on a SHIFTED raster (visual − presented up to a full
+  runway cap, 96 px+): rows' tails sat displaced behind the header/composer
+  until the next input event, which read as "voids that never heal" in idle
+  screenshots. A watchdog in `about_to_wait` now lands the residual the
+  moment the loop goes idle with `|drift| > LANDED_EPSILON` (0.5 px):
+  `land_now()` + redraw at a 1 ms cadence, so the next frame re-produces at
+  the true offset and no idle state can keep a shifted screen. Verified on
+  a scripted wheel run: drift decays to 0 within one idle iteration, the
+  at-rest frame contains only the designed inter-row gaps.
 - Chrome-split stage 2 (desktop overscan blit): the fixed header and composer
   now paint into their own scenes and are composited at the screen chrome
   zones by the blit shader, so the scroll-band sample space contains no
