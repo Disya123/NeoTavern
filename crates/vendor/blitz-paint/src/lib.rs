@@ -16,7 +16,7 @@ mod text;
 use std::collections::HashMap;
 
 use anyrender::{PaintScene, Scene};
-use blitz_dom::{BaseDocument, util::Color};
+use blitz_dom::{util::Color, BaseDocument};
 use render::BlitzDomPainter;
 
 const FONT_EMBOLDEN_ENABLED: bool = cfg!(any(
@@ -48,6 +48,28 @@ pub fn paint_scene(
     x_offset: u32,
     y_offset: u32,
 ) {
+    paint_scene_expanded(scene, doc, scale, width, height, x_offset, y_offset, 0.0)
+}
+
+/// [`paint_scene`] with the root culling clip expanded by `clip_expand_css`
+/// device-independent px on every side.
+///
+/// NeoCompositor desktop overscan runway: the scroll-band raster carries
+/// overscan strips above/below the viewport, and the blit samples them both
+/// mid-gesture and at rest — rows laid out at negative css y (the virtualized
+/// window's lead rows) must paint, so the root clip grows by the same amount
+/// the host's viewport box does (`CHAT_OVERSCAN_CSS`). Zero reduces to the
+/// upstream viewport-exact culling.
+pub fn paint_scene_expanded(
+    scene: &mut impl PaintScene,
+    doc: &mut BaseDocument,
+    scale: f64,
+    width: u32,
+    height: u32,
+    x_offset: u32,
+    y_offset: u32,
+    clip_expand_css: f32,
+) {
     // Run `.paint()` on every custom widget in the document (and all subdocuments) ahead of time.
     // This helps us avoid borrow-checker issues as we recurse down the tree (`.paint()` require `&mut self`).
     //
@@ -65,6 +87,7 @@ pub fn paint_scene(
         x_offset as f64,
         y_offset as f64,
         &custom_widget_scenes,
+        clip_expand_css,
     );
     generator.paint_scene(scene);
 

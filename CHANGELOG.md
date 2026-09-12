@@ -28,6 +28,23 @@
 
 ### Fixed
 
+- Chat viewport voids (desktop overscan blit): rows laid out above css y 0 —
+  the virtualized window's lead rows and sub-row offsets — were culled by the
+  vendor paint traversal's root clip (the exact viewport), so they never
+  reached the overscan raster's top strip. Whenever a row boundary sat below
+  the band top, everything above it presented as a flat panel void (up to a
+  full photo row, ~400 px) both mid-gesture (the drift samples css < 0 up to
+  the runway cap) and at rest. `paint_split` now passes `CHAT_OVERSCAN_CSS`
+  to a new vendored `paint_scene_expanded`, which widens the root culling
+  clip by that margin on every side — the runway strips carry real rows
+  (resolve probes: 0% → 100% painted alpha), the blit samples them in both
+  drift directions, and the single-scene `paint()` (Android) plus
+  sub-documents keep the upstream viewport-exact culling. Probe fix riding
+  along: `--snapshot` is overwritten by every produce, so the surviving
+  capture is the last produced frame (a scripted gesture's settled end
+  state) instead of the first learning-stable one; `NEOTA_WIN_DEBUG=1`
+  prints the window-selection state (`scroll/extent/start/span/lead/trail`
+  plus per-row estimate-vs-learned heights) per produce.
 - Chrome-split stage 2 (desktop overscan blit): the fixed header and composer
   now paint into their own scenes and are composited at the screen chrome
   zones by the blit shader, so the scroll-band sample space contains no

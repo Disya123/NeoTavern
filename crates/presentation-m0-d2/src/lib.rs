@@ -30,7 +30,7 @@ mod vello_sink;
 #[cfg(feature = "gpu")]
 use blitz_dom::Document;
 use blitz_dom::{BaseDocument, StyleThreading};
-use blitz_paint::paint_scene;
+use blitz_paint::{paint_scene, paint_scene_expanded};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_core::{Element, VirtualDom};
 use dioxus_core_macro::rsx;
@@ -725,9 +725,16 @@ impl ProductVelloSession {
     /// sample space stays chrome-free. The host composites the chrome
     /// scenes over the content at reserved raster strips (see the desktop
     /// host's produce + the blit shader).
+    ///
+    /// `clip_expand_css` widens the painter's root culling clip by that many
+    /// CSS px on every side — the desktop passes `CHAT_OVERSCAN_CSS` so the
+    /// virtualized window's lead rows paint into the overscan strips the blit
+    /// samples at rest and mid-gesture. The single-scene `paint` keeps the
+    /// upstream viewport-exact culling (Android paints chrome inline).
     pub fn paint_split(
         &mut self,
         filter: vello_sink::VelloFilter,
+        clip_expand_css: f32,
     ) -> Result<
         (
             ProducerOutput,
@@ -757,7 +764,7 @@ impl ProductVelloSession {
                 composer: &mut composer_sink,
                 route: std::cell::Cell::new(anyrender::ChromeRoute::Main),
             };
-            paint_scene(
+            paint_scene_expanded(
                 &mut router,
                 &mut inner,
                 f64::from(self.scale),
@@ -765,6 +772,7 @@ impl ProductVelloSession {
                 self.height,
                 0,
                 0,
+                clip_expand_css,
             );
         }
         vello_sink.close_unbalanced_layers();

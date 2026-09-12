@@ -793,6 +793,21 @@ pub(crate) fn virtualized_window(
     // the range itself must stay inside it.
     let lead_start = span.start.saturating_sub(2);
     let trail_end = (span.end + 2).min(viewport.index().len());
+    if std::env::var("NEOTA_WIN_DEBUG").is_ok() {
+        let rows: Vec<String> = (0..viewport.index().len())
+            .filter_map(|i| {
+                viewport
+                    .index()
+                    .height_at(i)
+                    .map(|(id, h, _)| format!("{}:{:.0}", id.0, h))
+            })
+            .collect();
+        eprintln!(
+            "[win-debug] scroll={scroll:.1} extent={extent:.1} budget={budget:.1} start={start:.1} span={:?}->{:?} lead={lead_start} trail={trail_end} rows=[{}]",
+            span.start, span.end,
+            rows.join(" "),
+        );
+    }
     // px of the first window row hidden above the viewport top. The painter
     // pulls the message canvas up by exactly this amount so rows land at
     // their true scrolled positions: the window selection alone only swaps

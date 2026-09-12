@@ -22,15 +22,15 @@ use blitz_dom::node::{
     ListItemLayout, ListItemLayoutPosition, Marker, NodeData, RasterImageData, TextInputData,
     TextNodeData,
 };
-use blitz_dom::{BaseDocument, ElementData, Node, local_name};
+use blitz_dom::{local_name, BaseDocument, ElementData, Node};
 use blitz_traits::devtools::DevtoolSettings;
 
 use style::values::computed::{BorderCornerRadius, ColorOrAuto};
 use style::{
     dom::TElement,
     properties::{
-        ComputedValues, generated::longhands::visibility::computed_value::T as StyloVisibility,
-        style_structs::Font,
+        generated::longhands::visibility::computed_value::T as StyloVisibility,
+        style_structs::Font, ComputedValues,
     },
     values::{
         computed::{CSSPixelLength, Overflow},
@@ -72,6 +72,11 @@ pub struct BlitzDomPainter<'dom, 'a> {
     /// separate scenes via [`PaintScene::set_chrome_route`] so the desktop
     /// overscan raster keeps its scroll-band sample space chrome-free.
     pub(crate) chrome_depth: Cell<u32>,
+    /// NeoCompositor overscan runway (desktop only): the root culling clip
+    /// grows by this many CSS px on every side, so rows laid out above/below
+    /// the viewport (the scroll runway the blit samples mid-gesture and at
+    /// rest) still paint. Zero keeps the upstream viewport-exact culling.
+    pub(crate) clip_expand_css: f32,
 }
 
 impl<'dom, 'a> BlitzDomPainter<'dom, 'a> {
@@ -84,6 +89,7 @@ impl<'dom, 'a> BlitzDomPainter<'dom, 'a> {
         initial_x: f64,
         initial_y: f64,
         custom_widget_scenes: &'a CustomWidgetSceneMap,
+        clip_expand_css: f32,
     ) -> Self {
         let selection_ranges: HashMap<usize, (usize, usize)> = dom
             .get_text_selection_ranges()
@@ -110,6 +116,7 @@ impl<'dom, 'a> BlitzDomPainter<'dom, 'a> {
             selection_ranges,
             custom_widget_scenes,
             chrome_depth: Cell::new(0),
+            clip_expand_css,
         }
     }
 
@@ -172,8 +179,12 @@ impl<'dom, 'a> BlitzDomPainter<'dom, 'a> {
 
         // The root clip rectangle is the viewport (in screen coordinates, with the
         // initial offset already subtracted). Elements outside of this are culled, and
-        // scrollports narrow this rectangle further for their descendants.
-        let viewport_clip_rect = Rect::new(0.0, 0.0, self.width as f64, self.height as f64);
+        // scrollports narrow this rectangle further for their descendants. The
+        // NeoCompositor overscan runway expands it so rows laid out above/below
+        // the viewport still paint into the raster's overscan strips.
+        let expand = self.clip_expand_css.max(0.0) as f64 * self.scale;
+        let viewport_clip_rect =
+            Rect::new(0.0, -expand, self.width as f64, self.height as f64 + expand);
 
         self.render_element(
             scene,
@@ -1159,6 +1170,8 @@ impl ElementCx<'_, '_> {
                 initial_x,
                 initial_y,
                 self.custom_widget_scenes,
+                // Sub-documents own their viewport: no runway expansion.
+                0.0,
             );
             painter.paint_scene(scene);
         }

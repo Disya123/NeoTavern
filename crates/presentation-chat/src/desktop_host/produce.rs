@@ -166,15 +166,17 @@ impl App {
             }
         };
         let t_paint = std::time::Instant::now();
-        let (produced, scene, header_scene, composer_scene, _diag) =
-            match sess.paint_split(VelloFilter::full()) {
-                Ok(out) => out,
-                Err(err) => {
-                    eprintln!("[neocompositor-desktop] paint: {err}");
-                    self.dirty = true;
-                    return;
-                }
-            };
+        let (produced, scene, header_scene, composer_scene, _diag) = match sess.paint_split(
+            VelloFilter::full(),
+            neotavern_presentation_dioxus_shell::CHAT_OVERSCAN_CSS as f32,
+        ) {
+            Ok(out) => out,
+            Err(err) => {
+                eprintln!("[neocompositor-desktop] paint: {err}");
+                self.dirty = true;
+                return;
+            }
+        };
         let t_render = std::time::Instant::now();
         let list_ops = produced.list.ops.len();
         let scene_paths = scene.encoding().n_paths;
@@ -431,13 +433,17 @@ impl App {
         // produce never runs unless asked for. Probe dumps skip this
         // estimate-selected frame and capture the settle produce instead.
         let learned = self.session.learn_measured_heights(&self.message_rects);
-        if !learned {
-            if let Some(path) = self.snapshot_path.take() {
-                match present.snapshot(&path) {
-                    Ok(()) => eprintln!("[neocompositor-desktop] snapshot WROTE {path}"),
-                    Err(err) => eprintln!("[neocompositor-desktop] snapshot failed: {err}"),
-                }
+        // `--snapshot` stays SET: every produce overwrites the file, so the
+        // surviving capture is the LAST produced frame (a scripted gesture's
+        // settled end state), not whichever produce happened to be the first
+        // learning-stable one. `--dom-dump` keeps its one-shot semantics.
+        if let Some(path) = self.snapshot_path.clone() {
+            match present.snapshot(&path) {
+                Ok(()) => eprintln!("[neocompositor-desktop] snapshot WROTE {path}"),
+                Err(err) => eprintln!("[neocompositor-desktop] snapshot failed: {err}"),
             }
+        }
+        if !learned {
             if let Some(path) = self.dom_dump_path.take() {
                 let count = skeleton.nodes.len();
                 match write_slot_skeleton(&path, &skeleton) {
