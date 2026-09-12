@@ -392,9 +392,12 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         // the chrome split: the top reserves the header strip (header_h at
         // the raster's top edge), the bottom stops at the panel edge (the
         // composer paints into the raster's bottom strip) - the rows must
-        // never overlap the chrome strips.
+        // never overlap the chrome strips. NO `overflow:hidden`: a clip here
+        // would cull exactly the runway rows the blit samples mid-gesture
+        // (the window's lead span extends past the box top); the produce
+        // clamp bounds the sample window to the baked extents instead.
         viewport_style: format!(
-            "position:absolute;left:0;right:0;top:-{}px;bottom:0;box-sizing:border-box;overflow:hidden;background:transparent;",
+            "position:absolute;left:0;right:0;top:-{}px;bottom:0;box-sizing:border-box;background:transparent;",
             CHAT_OVERSCAN_CSS - header_h
         ),
         // React parity: full-height viewport (header/composer are absolute
