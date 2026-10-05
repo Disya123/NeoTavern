@@ -1,0 +1,24 @@
+# ADR-0057 Phase 1 refactor-stability golden corpus — FrameSnapshot digests
+# (FNV-1a over quantized 1/4-px geometry; see snapshot.rs). One line per
+# checkpoint: <name>@<width>x<height> = <digest>.
+#
+# Regenerate after an intentional geometry change:
+#   UPDATE_GOLDENS=1 cargo test --manifest-path crates/Cargo.toml #     -p neotavern-presentation-scene-chat-pilot --test refactor_stability
+#
+# Deterministic across machines: golden font faces are bundled with
+# system_fonts off (design system); digests carry no scene epochs.
+# Geometry-only gate (INV-7): product truth is tests/phase1_gate.rs on
+# the real Kernel.
+caret-left-3@1100x760 = 18234057506725324239
+cyrillic@1100x760 = 102440186148867725
+open@1100x760 = 3100498682773551864
+open@620x800 = 12166160583981420943
+open@900x220 = 7675582893224812937
+open@900x700 = 13561565486988176992
+replaced@1100x760 = 16855323853777295070
+select-all@1100x760 = 2872331608629897902
+sent@1100x760 = 1113143487915455511
+typed@1100x760 = 14409254162243390127
+typed@620x800 = 14831305393304963544
+wrap-long@900x220 = 3944481668327472019
+wrap-long@900x700 = 9710680756451678794

@@ -92,6 +92,27 @@ with the wire label in the filename (`fake-wire-dev` / `kernel`).
 Developer evidence only: `artifacts/` is gitignored, CI gates stay
 behavioral (INV-6/INV-7).
 
+## Refactor-stability suite (file goldens)
+
+`tests/refactor_stability.rs` runs a scripted FakeWire journey
+(open across 4 viewports → typing → select-all → replace → caret moves →
+Cyrillic clusters → wrap regimes → send) and folds every step's
+`FrameSnapshot` digest against the committed
+`tests/golden/frame-digests.txt`. A second fresh run must reproduce every
+digest bit-for-bit (determinism self-check) before the comparison.
+
+- Gates GEOMETRY/editing stability across refactors of the arena,
+  layout, text engine, snapshot or projection — not a product claim
+  (INV-7): product truth stays gated by `phase1_gate.rs` on the real
+  Kernel.
+- Deterministic across machines: the golden font faces are bundled with
+  `system_fonts: false`; digests quantize to 1/4 px and carry no scene
+  epochs.
+- Intentional geometry change → regenerate with
+  `UPDATE_GOLDENS=1 cargo test -p neotavern-presentation-scene-chat-pilot
+  --test refactor_stability`, review the diff, commit it with the change
+  (the update run fails on purpose so nothing lands blind).
+
 ## Dependencies
 
 - `neotavern-presentation-scene` (platform core — product-free)
@@ -127,5 +148,6 @@ cargo run -p neotavern-presentation-scene-chat-pilot --features desktop-host \
 
 Phase 1 gate green (journey + hit tests on the real Kernel); the winit
 desktop bridge and the local raster harness are in (FakeWire + Kernel
-modes; rasters verified pixel-level against the theme tokens). Not yet:
+modes; rasters verified pixel-level against the theme tokens); the
+file-based refactor-stability digest corpus is committed. Not yet:
 Android adapter, IME composition seam, message-list scrolling.

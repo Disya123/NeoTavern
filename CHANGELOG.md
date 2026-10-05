@@ -72,6 +72,25 @@
   clipboard shortcuts, DPI > 1 stretches the CSS-px raster linearly
   until the physical-scale layout pass.
 
+- **ADR-0057 Phase 1 — file-based refactor-stability digest corpus
+  (`tests/refactor_stability.rs` +
+  `tests/golden/frame-digests.txt`).** The Phase-1 gate's
+  "refactor-stability suite green" criterion is now a committed file:
+  a scripted FakeWire journey (open across the 4 golden viewports,
+  typing, select-all, whole-buffer replace, caret moves, Cyrillic
+  clusters through the Onest face, long-paragraph wrap regimes, send +
+  stream completion) folds 13 named `FrameSnapshot` digests (FNV-1a,
+  quantized 1/4 px), compared against the committed goldens with a
+  per-checkpoint CHANGED/MISSING/NEW report. A fresh second run must
+  reproduce every digest bit-for-bit before comparison (determinism
+  self-check: arena, HashMap order, stream pump). Machine-portable by
+  construction: the golden font faces are bundled with
+  `system_fonts: false`, scene epochs stay outside the hash. INV-7
+  framing: this gates GEOMETRY/editing stability only — product truth
+  stays gated by `phase1_gate.rs` on the real Kernel. Intentional
+  geometry changes regenerate via `UPDATE_GOLDENS=1`; the update run
+  fails on purpose so no golden lands blind.
+
 - **ADR-0057 Phase 1 — draft restart rehydration over the Product Wire
   (`chats.messages.drafts.list`).** New wire op (99th; registry + fixtures
   → codegen → kernel dispatch arm + SQLite impl, newest-first
