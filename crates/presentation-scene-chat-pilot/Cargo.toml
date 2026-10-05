@@ -1,0 +1,24 @@
+[package]
+name = "neotavern-presentation-scene-chat-pilot"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# ADR-0057 Phase 1 chat-screen pilot: the first product surface mounted on
+# the presentation-scene platform. Projection-only — it maps ChatSession
+# route state to a Scene and routes host input back through the session's
+# command surface. The pilot is NOT the shipped desktop UI: the legacy
+# contour still ships (ADR-0057 phase gates).
+
+[dependencies]
+neotavern-presentation-scene = { path = "../presentation-scene" }
+neotavern-presentation-chat = { path = "../presentation-chat" }
+contracts-generated = { path = "../contracts-generated" }
+
+[dev-dependencies]
+neotavern-presentation-kernel-wire = { path = "../presentation-kernel-wire" }
+tempfile = "3"
+
+[[test]]
+name = "phase1_gate"
+path = "tests/phase1_gate.rs"

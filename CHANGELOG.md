@@ -4,6 +4,50 @@
 
 ### Added
 
+- **ADR-0057 Phase 1 increment A — presentation-scene platform core
+  (`crates/presentation-scene`).** Product-free retained-scene platform
+  core for the native contour: epoch-validated scene arena with
+  slot-reuse honesty (`SceneId`), token-only styling model (no literal
+  colors/spacing/radii/control sizes — hardcoding bans of AGENTS §14 hold
+  in Rust), the golden-dark theme resolving the React `--st-*` tokens,
+  a char-boundary-safe editor core (cursor/selection ops, IME composition
+  seam) — the single text-editing model for every host bridge, a scene
+  tree with FieldId-keyed editors that survive node churn (INV-1),
+  Parley text engine (shape, caret geometry, point→byte-index,
+  per-line selection rects — one geometry, INV-2), taffy layout with the
+  Parley measure closure and retained taffy nodes for stable scene ids,
+  a `FrameSnapshot` fold (paint order, focus order, input frames,
+  semantic a11y items, deterministic FNV geometry digest for the
+  refactor-stability golden, INV-2/INV-3), reverse-paint-order
+  hit-testing with caret-byte resolution through the same shaped text,
+  and a Vello paint encoding (`gpu` feature) — headless-encodable, the
+  single render path (INV-3). 33 unit tests; `cargo test -p
+  neotavern-presentation-scene` green. No product surface mounted yet;
+  the chat-screen pilot projection is the next increment.
+
+- **ADR-0057 Phase 1 chat-screen pilot
+  (`crates/presentation-scene-chat-pilot`) — gate green on the real
+  Kernel.** `ChatPilot` projects `ChatSession` route state onto the
+  retained scene (stable per-message scene ids keyed by durable message
+  ids; header, message rows, streaming row, composer input, send button)
+  and routes host input back through the session command surface:
+  `apply_composer_op` (editor-core op → text syncs to the session; the
+  caret never leaves the editor core, INV-1/INV-4) and `handle_hit`
+  (send button sends, composer clicks position the caret through the
+  snapshot's shaped text, INV-2). The Phase 1 gate
+  (`tests/phase1_gate.rs`) runs the full journey against the real Kernel
+  in an isolated SQLite root: open → caret/selection editing → caret
+  geometry round-trip through the snapshot → send via the hit-tested
+  button → stream completes durably → reopen verifies both messages in
+  SQLite → restart restores the unsent draft → digest invariants (same
+  state → same digest, changed state → changed digest, no NaN rects).
+  The editor-core `Insert { batch }` op gained drain semantics (the
+  flushed batch leaves the pending queue) — the pilot caught the old
+  index-forever semantics re-inserting stale text, proving the
+  unit-testable input model (INV-4) on a real surface. The pilot is not
+  the shipped desktop UI: the winit desktop bridge and GPU raster goldens
+  (local-only) are the next increments; the legacy contour still ships.
+
 - **ADR-0057 Phase 1 — draft restart rehydration over the Product Wire
   (`chats.messages.drafts.list`).** New wire op (99th; registry + fixtures
   → codegen → kernel dispatch arm + SQLite impl, newest-first
@@ -72,13 +116,6 @@
 
 ### Changed
 
-- Desktop chat scroll: the eased visual is now held at the painted runway
-  edge on long frames. A 95 ms frame could ease-jump past the whole
-  directional cap between land decisions (drift −281 px observed) and the
-  same frame's blit then sampled past the baked rows into the wallpaper
-  filler strip. The host clamps `visual_scroll_css` to
-  `presented ± runway_caps` every frame, and the ack land tolerates the
-  clamp pin's f32 ULP with a half-epsilon fire window.
 - Native desktop chat scroll now runs at the monitor's refresh rate with a
   handful of produces per gesture (follow-up: "8% CPU at 30fps is terrible —
   I have a 144 Hz screen, it must be 144 fps at <4%"). The 30 fps
