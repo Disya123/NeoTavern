@@ -574,6 +574,7 @@ fn handle_unary(
             with_db_opt(db, |db| product::message_revisions_list(db, req))
         }
         "chats.messages.drafts.get" => with_db_opt(db, |db| product::message_drafts_get(db, req)),
+        "chats.messages.drafts.list" => with_db_opt(db, |db| product::message_drafts_list(db, req)),
         "chats.messages.drafts.save" => with_db_opt(db, |db| product::message_drafts_save(db, req)),
         "chats.messages.drafts.commit" => {
             with_db_opt(db, |db| product::message_drafts_commit(db, req))

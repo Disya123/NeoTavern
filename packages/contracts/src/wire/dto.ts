@@ -1125,6 +1125,24 @@ export const GetMessageDraftRequestDtoSchema = Type.Object(
 );
 export type GetMessageDraftRequestDto = Static<typeof GetMessageDraftRequestDtoSchema>;
 
+/** List message drafts request DTO (`wire.request.message-draft-list`). */
+export const ListMessageDraftsRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.message-draft-list', additionalProperties: false },
+);
+export type ListMessageDraftsRequestDto = Static<typeof ListMessageDraftsRequestDtoSchema>;
+
+/** List message drafts result DTO (`wire.result.message-draft-list`). */
+export const ListMessageDraftsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(MessageDraftDtoSchema),
+  },
+  { $id: 'wire.result.message-draft-list', additionalProperties: false },
+);
+export type ListMessageDraftsResultDto = Static<typeof ListMessageDraftsResultDtoSchema>;
+
 /** Save message draft request DTO (`wire.request.message-draft-save`). */
 export const SaveMessageDraftRequestDtoSchema = Type.Object(
   {
@@ -2599,11 +2617,13 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.message-variant-activate': ActivateMessageVariantRequestDtoSchema,
   'wire.request.message-revisions-list': ListMessageRevisionsRequestDtoSchema,
   'wire.request.message-draft-get': GetMessageDraftRequestDtoSchema,
+  'wire.request.message-draft-list': ListMessageDraftsRequestDtoSchema,
   'wire.request.message-draft-save': SaveMessageDraftRequestDtoSchema,
   'wire.request.message-draft-commit': CommitMessageDraftRequestDtoSchema,
   'wire.request.message-draft-discard': DiscardMessageDraftRequestDtoSchema,
   'wire.result.message-variant-list': ListMessageVariantsResultDtoSchema,
   'wire.result.message-revision-list': ListMessageRevisionsResultDtoSchema,
+  'wire.result.message-draft-list': ListMessageDraftsResultDtoSchema,
   'wire.request.start-generation': StartGenerationRequestDtoSchema,
   'wire.request.cancel-generation': CancelGenerationRequestDtoSchema,
   'wire.request.get-generation-run': GetGenerationRunRequestDtoSchema,

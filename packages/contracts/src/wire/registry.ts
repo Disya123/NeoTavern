@@ -678,6 +678,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'chats.messages.drafts.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.message-draft-list',
+    'wire.result.message-draft-list',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
     'chats.messages.drafts.save',
     'transactional',
     'idempotent',
@@ -2546,6 +2560,12 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     true,
     MESSAGE_DRAFT_VALUE,
   ),
+  fx('message-draft-list-request', 'chats.messages.drafts.list', 'request', true, {
+    chatId: UUID_CHAT,
+  }),
+  fx('message-draft-list-response', 'chats.messages.drafts.list', 'response', true, {
+    items: [MESSAGE_DRAFT_VALUE],
+  }),
   fx('message-draft-save-request', 'chats.messages.drafts.save', 'request', true, {
     chatId: UUID_CHAT,
     role: 'assistant',
@@ -2584,6 +2604,9 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     chatId: UUID_CHAT,
     role: 'narrator',
     content: 'x',
+  }),
+  fx('neg-message-draft-list-bad-chat', 'chats.messages.drafts.list', 'request', false, {
+    chatId: 42,
   }),
   fx('generation-cancel-response', 'generation.cancel', 'response', true, {}),
   fx('generation-get-response', 'generation.get', 'response', true, GENERATION_RUN_VALUE),

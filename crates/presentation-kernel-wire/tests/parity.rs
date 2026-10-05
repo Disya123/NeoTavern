@@ -461,3 +461,50 @@ fn drop_stream_unsubscribes_without_cancelling_the_run() {
         "the dropped run finishes on the writer thread without a consumer"
     );
 }
+
+/// Restart rehydration: an unsent composer draft saved over the wire is
+/// durable in the Kernel, and a session that re-opens the same data root
+/// restores it through `chats.messages.drafts.list` — no remembered id
+/// (the gap this closes: the row existed but the UI could not learn it).
+/// FakeWire has no counterpart: nothing survives an in-memory restart.
+#[test]
+fn kernel_restart_restores_the_unsent_draft() {
+    let (mut kernel, root) = kernel_wire();
+    let chat = seed_parity_workspace(&mut kernel, "Drafts", 2).expect("kernel seed");
+    {
+        let mut session = ChatSession::open(kernel, Some(&chat)).expect("open before restart");
+        session
+            .set_composer_text("unsent restart draft")
+            .expect("composer typing saves the draft over the wire");
+        assert!(
+            session.state().last_error.is_none(),
+            "draft save must not record an error: {:?}",
+            session.state().last_error
+        );
+        // Session and wire drop here — nothing survives in memory.
+    }
+
+    // Re-open the SAME data root: a fresh kernel wire + fresh session.
+    let wire = KernelProductWire::open(&root).expect("kernel reopens the data root");
+    let mut session = ChatSession::open(wire, Some(&chat)).expect("open after restart");
+    assert_eq!(
+        session.state().composer_text,
+        "unsent restart draft",
+        "the durable draft restores the composer after a restart"
+    );
+    assert!(
+        session.state().last_error.is_none(),
+        "rehydration must not record an error: {:?}",
+        session.state().last_error
+    );
+
+    // Editing continues from the restored draft (the id persists across
+    // the restart — the follow-up save updates the same row).
+    session
+        .set_composer_text("unsent restart draft, continued")
+        .expect("typing continues on the restored draft");
+    assert_eq!(
+        session.state().composer_text,
+        "unsent restart draft, continued"
+    );
+}

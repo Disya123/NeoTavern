@@ -372,4 +372,36 @@ impl<W: ProductWire> ChatSession<W> {
         }
         Ok(())
     }
+
+    /// Restores the composer from the open chat's newest uncommitted user
+    /// draft (`chats.messages.drafts.list`, newest first). This is the
+    /// restart-rehydration path: the draft row is durable in the Kernel,
+    /// and this read makes it discoverable without a remembered id — the
+    /// old gap where a restart lost an unsent composer. Called when a chat
+    /// becomes the open chat (session open, chat switch); failure is
+    /// recorded but never blocks the chat.
+    pub fn hydrate_draft(&mut self) {
+        let Some(chat_id) = self.chat_id.clone() else {
+            return;
+        };
+        let result = self.call_decode(
+            "chats.messages.drafts.list",
+            &RequestMessageDraftList { chat_id },
+            decode_result_message_draft_list,
+        );
+        match result {
+            Ok(ResultMessageDraftList { items }) => {
+                let newest = items.into_iter().find(|draft| {
+                    draft.role == MessageRole::User
+                        && draft.committed_message_id.is_none()
+                        && !draft.content.is_empty()
+                });
+                if let Some(draft) = newest {
+                    self.state.composer_text = draft.content.clone();
+                    self.state.draft = Some(draft);
+                }
+            }
+            Err(err) => self.record_error(err),
+        }
+    }
 }

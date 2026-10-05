@@ -20,7 +20,8 @@ use contracts_generated::generated::{
     MessageDto, MessageRevisionDto, MessageRole, MessageVariantDto, PagedCharacters, PagedChats,
     PagedMessages, PersonaDto, PresetDto, RequestListPresets, ResultChatSnapshot, ResultEmpty,
     ResultListLorebooks, ResultListMemories, ResultListPersonas, ResultListPresets,
-    ResultMessageRevisionList, ResultMessageVariantList, ResultSnapshotsRollback, SnapshotOrigin,
+    ResultMessageDraftList, ResultMessageRevisionList, ResultMessageVariantList,
+    ResultSnapshotsRollback, SnapshotOrigin,
 };
 use contracts_generated::Issue;
 use neotavern_storage::open::Database;
@@ -2073,6 +2074,84 @@ pub fn message_drafts_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, 
     let dto = query_message_draft(db.conn(), &req.chat_id, &req.draft_id)?
         .ok_or_else(|| not_found("MESSAGE_DRAFT", &req.draft_id))?;
     validate(&dto, generated::validate_message_draft_dto)?;
+    encode(&dto)
+}
+
+/// `chats.messages.drafts.list` — list a chat's server-side drafts, newest
+/// first. This is the rehydration read: a session (re)opening a chat picks
+/// the newest uncommitted `user` draft from this list to restore the
+/// composer — closing the restart gap where the draft row exists but the
+/// UI could not learn its id. Missing chat → `CHAT_NOT_FOUND` (the chat id
+/// scopes the read).
+pub fn message_drafts_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_message_draft_list(request)?;
+    let chat_id = req.chat_id.clone();
+    if !chat_exists(db.conn(), &chat_id)? {
+        return Err(not_found("CHAT", &chat_id));
+    }
+    let mut items: Vec<MessageDraftDto> = Vec::new();
+    {
+        let conn = db.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, chat_id, role, content, sequence, revision, committed_message_id, \
+                 created_at, updated_at FROM message_drafts WHERE chat_id = ?1 \
+                 ORDER BY updated_at DESC, id ASC",
+            )
+            .map_err(|e| sqlite(e, "message_drafts_list: prepare"))?;
+        let mut rows = stmt
+            .query(params![&chat_id])
+            .map_err(|e| sqlite(e, "message_drafts_list: query"))?;
+        while let Some(row) = rows
+            .next()
+            .map_err(|e| sqlite(e, "message_drafts_list: read row"))?
+        {
+            let role: String = row
+                .get(2)
+                .map_err(|e| sqlite(e, "message_drafts_list: read role"))?;
+            let role = match role.as_str() {
+                "system" => MessageRole::System,
+                "user" => MessageRole::User,
+                "assistant" => MessageRole::Assistant,
+                "tool" => MessageRole::Tool,
+                other => {
+                    return Err(KernelError::new(
+                        KernelErrorCode::Internal,
+                        format!("invalid draft role in database: {other}"),
+                    ));
+                }
+            };
+            items.push(MessageDraftDto {
+                id: row
+                    .get(0)
+                    .map_err(|e| sqlite(e, "message_drafts_list: id"))?,
+                chat_id: row
+                    .get(1)
+                    .map_err(|e| sqlite(e, "message_drafts_list: chat_id"))?,
+                role,
+                content: row
+                    .get(3)
+                    .map_err(|e| sqlite(e, "message_drafts_list: content"))?,
+                sequence: row
+                    .get(4)
+                    .map_err(|e| sqlite(e, "message_drafts_list: sequence"))?,
+                revision: row
+                    .get(5)
+                    .map_err(|e| sqlite(e, "message_drafts_list: revision"))?,
+                committed_message_id: row
+                    .get(6)
+                    .map_err(|e| sqlite(e, "message_drafts_list: committed_message_id"))?,
+                created_at: row
+                    .get(7)
+                    .map_err(|e| sqlite(e, "message_drafts_list: created_at"))?,
+                updated_at: row
+                    .get(8)
+                    .map_err(|e| sqlite(e, "message_drafts_list: updated_at"))?,
+            });
+        }
+    }
+    let dto = ResultMessageDraftList { items };
+    validate(&dto, generated::validate_result_message_draft_list)?;
     encode(&dto)
 }
 

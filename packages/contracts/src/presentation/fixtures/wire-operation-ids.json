@@ -23,6 +23,7 @@
   "chats.messages.drafts.commit",
   "chats.messages.drafts.discard",
   "chats.messages.drafts.get",
+  "chats.messages.drafts.list",
   "chats.messages.drafts.save",
   "chats.messages.list",
   "chats.messages.revisions.list",

@@ -20,11 +20,11 @@ use contracts_generated::generated::{
     ResultDiagnosticsExportSettings, ResultDiagnosticsExportWireVersion,
     ResultImportsCharacterCard, ResultListBackups, ResultListLorebookEntries, ResultListLorebooks,
     ResultListMemories, ResultListPersonas, ResultListPresets, ResultListProviderConfigs,
-    ResultListProviders, ResultListTools, ResultMessageRevisionList, ResultMessageVariantList,
-    ResultPluginsList, ResultProfileExport, ResultProfileImport, ResultProfilesCreate,
-    ResultProfilesList, ResultSecretsLock, ResultSecretsStatus, ResultSettings,
-    ResultSnapshotsList, ResultSnapshotsRollback, ResultThemesList, SettingsItem, SnapshotOrigin,
-    ThemesItem, ToolSpec,
+    ResultListProviders, ResultListTools, ResultMessageDraftList, ResultMessageRevisionList,
+    ResultMessageVariantList, ResultPluginsList, ResultProfileExport, ResultProfileImport,
+    ResultProfilesCreate, ResultProfilesList, ResultSecretsLock, ResultSecretsStatus,
+    ResultSettings, ResultSnapshotsList, ResultSnapshotsRollback, ResultThemesList, SettingsItem,
+    SnapshotOrigin, ThemesItem, ToolSpec,
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -1723,6 +1723,20 @@ impl ProductWire for FakeWire {
             "chats.messages.drafts.get" => {
                 let draft = self.get_draft(&payload)?;
                 self.wrap_call(operation_id, to_value(&draft))
+            }
+            "chats.messages.drafts.list" => {
+                let chat_id = payload_str(&payload, "chatId")?;
+                let mut items: Vec<MessageDraftDto> = self
+                    .drafts
+                    .values()
+                    .filter(|draft| draft.chat_id == chat_id)
+                    .cloned()
+                    .collect();
+                // Newest first, mirroring the Kernel's
+                // `ORDER BY updated_at DESC` so rehydration picks the same
+                // row on both wires.
+                items.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+                self.wrap_call(operation_id, to_value(&ResultMessageDraftList { items }))
             }
             "chats.messages.drafts.commit" => {
                 let committed = self.commit_draft(&payload)?;

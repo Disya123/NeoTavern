@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-09-05T21:45:00.850Z",
+  "generatedAt": "2026-10-04T23:25:32.081Z",
   "rows": [
     {
       "hosts": {
@@ -80,12 +80,13 @@
       },
       "id": "chats.messages.variants-revisions-drafts",
       "milestone": "M5",
-      "notes": "Этап 4 slice 2: kernel wire ops (schema migration 008; swipe variants list/create/delete/activate, immutable content revisions recorded on content change, server-side streaming drafts get/save/commit/discard with idempotent commit) with component tests in kernel_crud. М5 slice 11: chats.messages.update accepts optional content + meta (wire.free-object), MessageDto carries meta verbatim, ChatPage edit flows route through updateChatMessage (ui-legacy-surface 60 → 57); slice 12: the chat/home wallpaper URL moved into the wallpaperBackgroundUrl transport helper — the legacy plane keeps the asset route URL, the kernel plane honestly returns null (backgrounds are a legacy file contour with no kernel store), ui-legacy-surface 57 → 56. UI cutover complete (status raised to Integrated, ARC-10, M5 slice 47): stored-variant swipes, the variant picker, activation, the revision-history card and content edits all route through the wire facade in kernel mode (wireBridge readMessageVariants/activateMessageVariant/swipeMessageToPosition + readMessageRevisions + updateChatMessage); the legacy sidecar routes keep the full-fidelity legacy entities for the legacy plane only. Server-side streaming drafts stay a kernel-internal mechanism (get/save/commit/discard) — the composer draft is session-local by design (AGENTS.md §13) and is not migrated to the wire.",
+      "notes": "Этап 4 slice 2: kernel wire ops (schema migration 008; swipe variants list/create/delete/activate, immutable content revisions recorded on content change, server-side streaming drafts get/save/commit/discard with idempotent commit) with component tests in kernel_crud. М5 slice 11: chats.messages.update accepts optional content + meta (wire.free-object), MessageDto carries meta verbatim, ChatPage edit flows route through updateChatMessage (ui-legacy-surface 60 → 57); slice 12: the chat/home wallpaper URL moved into the wallpaperBackgroundUrl transport helper — the legacy plane keeps the asset route URL, the kernel plane honestly returns null (backgrounds are a legacy file contour with no kernel store), ui-legacy-surface 57 → 56. UI cutover complete (status raised to Integrated, ARC-10, M5 slice 47): stored-variant swipes, the variant picker, activation, the revision-history card and content edits all route through the wire facade in kernel mode (wireBridge readMessageVariants/activateMessageVariant/swipeMessageToPosition + readMessageRevisions + updateChatMessage); the legacy sidecar routes keep the full-fidelity legacy entities for the legacy plane only. ADR-0057 Phase 1: the native composer already persists its unsent draft over the wire on typing (drafts.save, role=user); the new drafts.list op rehydrates the newest uncommitted user draft on session open and after a restart — closing the gap where the durable row existed but the UI could not learn its id. The React contour keeps its session-local composer draft (AGENTS.md §13); drafts.list is consumed by the native contour only.",
       "title": "Message variants, revisions and drafts",
       "wireOps": [
         "chats.messages.drafts.commit",
         "chats.messages.drafts.discard",
         "chats.messages.drafts.get",
+        "chats.messages.drafts.list",
         "chats.messages.drafts.save",
         "chats.messages.revisions.list",
         "chats.messages.variants.activate",

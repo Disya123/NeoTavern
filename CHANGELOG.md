@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Added
+
+- **ADR-0057 Phase 1 — draft restart rehydration over the Product Wire
+  (`chats.messages.drafts.list`).** New wire op (99th; registry + fixtures
+  → codegen → kernel dispatch arm + SQLite impl, newest-first
+  `ORDER BY updated_at DESC`, chat-scoped, `CHAT_NOT_FOUND` on an unknown
+  chat): the native composer — already persisting its unsent draft over
+  the wire on typing (`drafts.save`, role=user) — now restores the newest
+  uncommitted user draft when a chat becomes the open chat (session open,
+  chat switch). Closes the restart gap where the durable draft row
+  existed but the UI could not learn its id after a process restart
+  (`reload_draft` needed an in-memory id; its only caller was a test).
+  Verified end-to-end on the real Kernel:
+  `kernel_restart_restores_the_unsent_draft` (open → type → drop session
+  and wire → reopen the same data root → composer restored, typing
+  continues on the same draft row). FakeWire implements the op with the
+  same newest-first contract (INV-7: fake parity only, never a product
+  claim). React contour unaffected (its composer draft stays
+  session-local, AGENTS §13).
+
 ### Architecture
 
 - **Native-first product UI: own retained-scene platform over mature

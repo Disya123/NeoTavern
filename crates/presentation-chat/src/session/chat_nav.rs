@@ -117,6 +117,9 @@ impl<W: ProductWire> ChatSession<W> {
                     Ok(page) => self.absorb_latest_page(page),
                     Err(err) => self.record_error(err),
                 }
+                // The switched-in chat's uncommitted draft restores the
+                // composer (same rehydration as a restart).
+                self.hydrate_draft();
                 self.load_chat_list();
                 self.bump_scene();
             }
@@ -208,6 +211,9 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
         let page = self.list_messages(&chat_id, None)?;
         self.absorb_latest_page(page);
+        // Restart rehydration: the durable draft row (if any) restores the
+        // composer without a remembered id.
+        self.hydrate_draft();
         Ok(())
     }
 

@@ -11,7 +11,7 @@ use contracts_generated::generated::{
     CharacterDto, ChatDto, LorebookDto, LorebookEntryDto, MessageDraftDto, MessageDto, MessageRole,
     MessageVariantDto, PagedCharacters, PagedChats, PagedMessages, PersonaDto, ResultEmpty,
     ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
-    ResultMessageRevisionList, ResultMessageVariantList,
+    ResultMessageDraftList, ResultMessageRevisionList, ResultMessageVariantList,
 };
 use neotavern_storage::legacy::convert_legacy;
 use neotavern_storage::restore::stage_candidate;
@@ -1550,6 +1550,19 @@ fn message_variants_revisions_drafts_round_trip() {
     assert_eq!(fetched.content, "Streaming… more");
     assert_eq!(fetched.revision, 2);
 
+    // The list read powers restart rehydration: the same draft is visible
+    // without knowing its id.
+    let listed = dispatch_decoded::<ResultMessageDraftList>(
+        &kernel,
+        "chats.messages.drafts.list",
+        json!({ "chatId": chat_id }),
+    )
+    .expect("drafts.list must succeed");
+    assert_eq!(listed.items.len(), 1);
+    assert_eq!(listed.items[0].id, draft_id);
+    assert_eq!(listed.items[0].content, "Streaming… more");
+    assert_eq!(listed.items[0].committed_message_id, None);
+
     // commit materializes the message once; replay is idempotent.
     let committed = dispatch_decoded::<MessageDto>(
         &kernel,
@@ -1589,6 +1602,17 @@ fn message_variants_revisions_drafts_round_trip() {
         json!({ "chatId": chat_id, "draftId": draft_id }),
     )
     .expect("draft discard must succeed");
+
+    let listed_after_discard = dispatch_decoded::<ResultMessageDraftList>(
+        &kernel,
+        "chats.messages.drafts.list",
+        json!({ "chatId": chat_id }),
+    )
+    .expect("drafts.list after discard must succeed");
+    assert!(
+        listed_after_discard.items.is_empty(),
+        "discarded draft disappears from the rehydration list"
+    );
 
     // the committed message is a real chat message, listed once.
     let messages = dispatch_decoded::<PagedMessages>(
@@ -1720,6 +1744,28 @@ fn message_variants_revisions_drafts_error_paths() {
     assert_eq!(
         draft_get_err.product.expect("product dto").code,
         "MESSAGE_DRAFT_NOT_FOUND"
+    );
+
+    // drafts.list scoping: another chat reads an empty list (not an error),
+    // and an unknown chat is CHAT_NOT_FOUND.
+    let other_chat_list = dispatch_decoded::<ResultMessageDraftList>(
+        &kernel,
+        "chats.messages.drafts.list",
+        json!({ "chatId": chat_id2 }),
+    )
+    .expect("drafts.list on a chat without drafts must succeed");
+    assert!(other_chat_list.items.is_empty());
+
+    let draft_list_err = dispatch_json(
+        &kernel,
+        "chats.messages.drafts.list",
+        json!({ "chatId": "99999999-9999-4999-8999-999999999999" }),
+    )
+    .expect_err("drafts.list on a missing chat must fail");
+    assert_eq!(draft_list_err.code, KernelErrorCode::NotFound);
+    assert_eq!(
+        draft_list_err.product.expect("product dto").code,
+        "CHAT_NOT_FOUND"
     );
 
     let save_err = dispatch_json(
