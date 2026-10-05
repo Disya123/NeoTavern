@@ -27,6 +27,9 @@ use neotavern_presentation_scene::style::{
 use neotavern_presentation_scene::text::TextEngine;
 use neotavern_presentation_scene::{CursorOp, Editor, FieldId, SceneId};
 
+#[cfg(feature = "desktop-host")]
+pub mod desktop;
+
 use contracts_generated::generated::MessageRole;
 
 /// `SceneAction` id of the send button.
@@ -300,5 +303,19 @@ impl ChatPilot {
 
     pub fn send_button_id(&self) -> SceneId {
         self.send_button
+    }
+}
+
+#[cfg(feature = "gpu")]
+impl ChatPilot {
+    /// Encodes the snapshot into a vello scene — the single paint path
+    /// (INV-3): the host owns the [`vello::Scene`] and the GPU surface,
+    /// this maps snapshot geometry to vello draw commands and nothing else.
+    pub fn render(&self, snapshot: &FrameSnapshot, vello_scene: &mut vello::Scene) {
+        neotavern_presentation_scene::render::render_frame(snapshot, &self.theme, vello_scene);
+    }
+
+    pub fn theme(&self) -> &neotavern_presentation_scene::Theme {
+        &self.theme
     }
 }

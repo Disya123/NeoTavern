@@ -74,8 +74,10 @@ impl SceneLayouter {
 
         // Read back absolute geometry in scene paint order; re-shape text
         // at the final content width for caret/paint geometry.
-        let mut pass = LayoutPass::default();
-        pass.viewport = viewport;
+        let mut pass = LayoutPass {
+            viewport,
+            ..LayoutPass::default()
+        };
         let mut out = Vec::new();
         accumulate(scene, &self.taffy, &self.map, root_id, (0.0, 0.0), &mut out);
         pass.nodes = out;

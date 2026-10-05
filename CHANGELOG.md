@@ -45,8 +45,32 @@
   flushed batch leaves the pending queue) — the pilot caught the old
   index-forever semantics re-inserting stale text, proving the
   unit-testable input model (INV-4) on a real surface. The pilot is not
-  the shipped desktop UI: the winit desktop bridge and GPU raster goldens
-  (local-only) are the next increments; the legacy contour still ships.
+  the shipped desktop UI; the legacy contour still ships.
+
+- **ADR-0057 Phase 1 — winit desktop bridge + local raster harness for
+  the pilot (`scene-pilot`, feature `desktop-host`).** Dev evidence host
+  behind `--features desktop-host --bin scene-pilot`: a winit 0.30
+  window with a minimal wgpu present — one vello render of the
+  `FrameSnapshot` into an `Rgba8Unorm` raster, then a fullscreen blit
+  onto the swapchain (deliberately NOT the legacy `PresentSurface`,
+  whose chrome/wallpaper/overscan contracts belong to the frozen
+  contour; INV-3 stays per-surface). Keyboard maps to editor-core
+  `CursorOp`s (typing, backspace/delete, arrows+Shift, Home/End, Ctrl+A;
+  plain Enter sends, Shift+Enter inserts a newline — INV-4), mouse
+  clicks hit-test through the one snapshot (INV-2), stream pumping runs
+  at ≤30 updates/s (AGENTS §24) from `about_to_wait` until the terminal
+  event, resize reconfigures at frame time, DPI changes cold re-produce.
+  Two wire modes: FakeWire (title-tagged `— FAKE WIRE (dev)`, INV-7) and
+  `--root <dir>` over the real Kernel (seeds a demo chat only into an
+  empty workspace). `--golden <dir>` renders the pilot offscreen at the
+  m0-d2 golden corpus sizes (1100×760, 900×700, 620×800, 900×220) into
+  PNGs — local-only evidence (`artifacts/` is gitignored, never CI);
+  both modes verified pixel-level against the theme tokens (canvas
+  `#151311`, accent `#e38a62`, glyph antialiasing). Honest bridge
+  limits: no wheel mapping (the pilot's message column is not
+  scrollable — no parallel geometry may fake it), only Ctrl+A of the
+  clipboard shortcuts, DPI > 1 stretches the CSS-px raster linearly
+  until the physical-scale layout pass.
 
 - **ADR-0057 Phase 1 — draft restart rehydration over the Product Wire
   (`chats.messages.drafts.list`).** New wire op (99th; registry + fixtures

@@ -161,7 +161,9 @@ impl ShapedText {
         self.layout
             .lines()
             .flat_map(|line| {
-                let metrics = line.metrics().clone();
+                // LineMetrics is Copy — copy it out so the returned
+                // iterator doesn't borrow `line` (E0515 otherwise).
+                let metrics = *line.metrics();
                 line.items().map(move |item| (metrics, item))
             })
             .filter_map(|(line_metrics, item)| match item {

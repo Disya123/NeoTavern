@@ -10,10 +10,42 @@ publish = false
 # command surface. The pilot is NOT the shipped desktop UI: the legacy
 # contour still ships (ADR-0057 phase gates).
 
+[features]
+default = []
+# Paint through the shared vello path (INV-3): ChatPilot::render + the
+# vello types in this crate. Layout/text/snapshot/hit stay CPU-side.
+gpu = ["neotavern-presentation-scene/gpu", "dep:vello"]
+# The Phase-1 dev desktop bridge (winit window + wgpu surface) and the
+# local-only raster harness (`scene-pilot --golden`). Dev evidence only —
+# never CI, never the shipped desktop UI.
+desktop-host = [
+    "gpu",
+    "dep:winit",
+    "dep:wgpu",
+    "dep:pollster",
+    "dep:png",
+    "dep:serde_json",
+    "dep:neotavern-presentation-kernel-wire",
+]
+
 [dependencies]
 neotavern-presentation-scene = { path = "../presentation-scene" }
 neotavern-presentation-chat = { path = "../presentation-chat" }
 contracts-generated = { path = "../contracts-generated" }
+vello = { version = "0.9.0", optional = true, default-features = false, features = [
+    "wgpu",
+] }
+winit = { version = "0.30", optional = true }
+wgpu = { version = "29.0.3", optional = true, default-features = false, features = [
+    "std",
+    "wgsl",
+    "vulkan",
+    "gles",
+] }
+pollster = { version = "0.4", optional = true }
+png = { version = "0.18", optional = true }
+serde_json = { version = "1", optional = true }
+neotavern-presentation-kernel-wire = { path = "../presentation-kernel-wire", optional = true }
 
 [dev-dependencies]
 neotavern-presentation-kernel-wire = { path = "../presentation-kernel-wire" }
@@ -22,3 +54,8 @@ tempfile = "3"
 [[test]]
 name = "phase1_gate"
 path = "tests/phase1_gate.rs"
+
+[[bin]]
+name = "scene-pilot"
+path = "src/bin/scene_pilot.rs"
+required-features = ["desktop-host"]

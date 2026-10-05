@@ -3898,7 +3898,13 @@ dependencies = [
  "neotavern-presentation-chat",
  "neotavern-presentation-kernel-wire",
  "neotavern-presentation-scene",
+ "png 0.18.1",
+ "pollster",
+ "serde_json",
  "tempfile",
+ "vello",
+ "wgpu",
+ "winit",
 ]
 
 [[package]]

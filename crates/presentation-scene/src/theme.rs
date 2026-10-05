@@ -154,7 +154,7 @@ impl Theme {
     }
 
     pub fn font_family(&self, t: FontStackToken) -> &'static str {
-        *fnv_map::get(&self.font_stacks, &t).expect("theme covers every FontStackToken")
+        fnv_map::get(&self.font_stacks, &t).expect("theme covers every FontStackToken")
     }
 }
 

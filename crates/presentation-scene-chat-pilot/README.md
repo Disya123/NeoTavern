@@ -43,10 +43,61 @@ an isolated tempdir data root:
 - snapshot invariants: no NaN/inf rects, same state → same digest,
   changed state → changed digest (refactor-stability seam).
 
+## Desktop bridge (feature `desktop-host`, dev evidence host)
+
+`scene-pilot` mounts the pilot in a winit 0.30 window with a minimal
+wgpu present: one vello render of the snapshot into an `Rgba8Unorm`
+raster, then a fullscreen-triangle blit onto the swapchain — NOT the
+legacy `PresentSurface` (that pipeline carries the frozen contour's
+chrome/wallpaper/overscan contracts; the pilot owns its ~200-line
+present, INV-3).
+
+```bash
+cargo run --manifest-path crates/Cargo.toml \
+  -p neotavern-presentation-scene-chat-pilot \
+  --features desktop-host --bin scene-pilot
+```
+
+- default: FakeWire demo chat — the window title carries the INV-7
+  `— FAKE WIRE (dev)` label;
+- `--root <dir>`: the real Rust Kernel over a SQLite data root (seeds a
+  demo chat only when the workspace is empty; existing workspaces open
+  as-is);
+- keyboard → editor-core `CursorOp`s (type, backspace/delete, arrows +
+  Shift select, Home/End, Ctrl+A; plain `Enter` sends, `Shift+Enter`
+  inserts a newline); mouse clicks hit-test through the one snapshot;
+- stream pumping runs in `about_to_wait` at ≤30 updates/s (AGENTS §24)
+  until the terminal event;
+- resize reconfigures at frame time (events only record the size); DPI
+  changes re-produce cold.
+
+Known bridge limits (honest scope): the wheel is not mapped (the pilot's
+message column is not scrollable yet — no parallel geometry may fake
+it); only `Ctrl+A` of the clipboard shortcuts is mapped (paste/cut need
+an arboard seam with the Phase-3 IME seam); DPI > 1 stretches the
+CSS-px raster linearly (crispness waits for the physical-scale layout
+pass).
+
+## Local raster harness (never CI)
+
+```bash
+cargo run --manifest-path crates/Cargo.toml \
+  -p neotavern-presentation-scene-chat-pilot \
+  --features desktop-host --bin scene-pilot -- --golden artifacts/scene-pilot-goldens
+```
+
+Writes one PNG per golden-corpus size (1100×760, 900×700, 620×800,
+900×220 — the m0-d2 `chat-golden` corpus) on an offscreen wgpu device,
+with the wire label in the filename (`fake-wire-dev` / `kernel`).
+Developer evidence only: `artifacts/` is gitignored, CI gates stay
+behavioral (INV-6/INV-7).
+
 ## Dependencies
 
 - `neotavern-presentation-scene` (platform core — product-free)
 - `neotavern-presentation-chat` (`ChatSession` — command surface)
+- feature `desktop-host`: `winit`, `wgpu`, `vello`, `pollster`, `png`,
+  `serde_json`, `neotavern-presentation-kernel-wire` (the `--root` mode)
 - dev: `neotavern-presentation-kernel-wire` (real-Kernel journey tests),
   `tempfile`
 
@@ -57,6 +108,9 @@ the scene core depends on neither (see its README).
 
 ```bash
 cargo test -p neotavern-presentation-scene-chat-pilot
+cargo clippy -p neotavern-presentation-scene-chat-pilot --features desktop-host
+cargo run -p neotavern-presentation-scene-chat-pilot --features desktop-host \
+  --bin scene-pilot            # windowed dev host (see above)
 ```
 
 ## Constraints
@@ -71,6 +125,7 @@ cargo test -p neotavern-presentation-scene-chat-pilot
 
 ## Status (2026-10)
 
-Phase 1 gate green (journey + hit tests on the real Kernel). Not yet:
-winit desktop bridge (`desktop-host` feature — next increment), GPU
-raster goldens (local-only), Android adapter.
+Phase 1 gate green (journey + hit tests on the real Kernel); the winit
+desktop bridge and the local raster harness are in (FakeWire + Kernel
+modes; rasters verified pixel-level against the theme tokens). Not yet:
+Android adapter, IME composition seam, message-list scrolling.

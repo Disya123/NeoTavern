@@ -92,3 +92,6 @@ apps/android/milestone-c-captures/
 # Python bytecode
 __pycache__/
 .zcode/
+
+# Local-only GPU raster evidence (ADR-0057 desktop bridge): never committed.
+artifacts/
