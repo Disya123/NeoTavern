@@ -26,9 +26,9 @@
 //! - Only `Ctrl+A` of the clipboard-family shortcuts is mapped (the
 //!   editor core implements `SelectAll`); paste/cut need an arboard seam
 //!   alongside the Phase-3 IME composition seam.
-//! - DPI > 1: the vello raster is produced in CSS px and stretched by
-//!   the linear blit — fractional-DPI crispness waits for the layout
-//!   pass carrying physical scale.
+//! - DPI: the vello raster is produced at the device scale
+//!   (`render_frame_at_scale`, raster = CSS px × density) and the blit
+//!   samples it 1:1 — text lands on physical pixels, no stretching.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -156,6 +156,16 @@ fn css_size(phys: (u32, u32), density: f32) -> (u32, u32) {
     )
 }
 
+/// Physical raster px: the CSS viewport scaled by the device density —
+/// the vello target the blit samples 1:1.
+fn raster_size(css: (u32, u32), density: f32) -> (u32, u32) {
+    let d = density.max(1.0);
+    (
+        ((css.0 as f32) * d).ceil().max(1.0) as u32,
+        ((css.1 as f32) * d).ceil().max(1.0) as u32,
+    )
+}
+
 /// One vello render of the snapshot into an `Rgba8Unorm` raster, then a
 /// fullscreen-triangle blit onto the swapchain. `Fifo` + the swapchain
 /// `present` pace the frames; the host parks in `Wait` between inputs.
@@ -216,13 +226,14 @@ fn alloc_raster(
     device: &wgpu::Device,
     bind_layout: &wgpu::BindGroupLayout,
     sampler: &wgpu::Sampler,
-    css: (u32, u32),
+    size: (u32, u32),
 ) -> (wgpu::Texture, wgpu::TextureView, wgpu::BindGroup) {
+    // `size` is PHYSICAL raster px: CSS viewport × device scale.
     let raster = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("scene-pilot-raster"),
         size: wgpu::Extent3d {
-            width: css.0.max(1),
-            height: css.1.max(1),
+            width: size.0.max(1),
+            height: size.1.max(1),
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
@@ -257,7 +268,7 @@ fn alloc_raster(
 }
 
 impl Gpu {
-    fn open(window: &Arc<Window>, phys: (u32, u32), css: (u32, u32)) -> Result<Self, String> {
+    fn open(window: &Arc<Window>, phys: (u32, u32), raster: (u32, u32)) -> Result<Self, String> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             flags: wgpu::InstanceFlags::from_build_config().with_env(),
@@ -368,16 +379,17 @@ impl Gpu {
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
-        let (raster, raster_view, bind) = alloc_raster(&device, &bind_layout, &sampler, css);
+        let (raster_texture, raster_view, bind) =
+            alloc_raster(&device, &bind_layout, &sampler, raster);
         Ok(Self {
             device,
             queue,
             surface,
             config,
             renderer,
-            raster,
+            raster: raster_texture,
             raster_view,
-            raster_size: css,
+            raster_size: raster,
             sampler,
             pipeline,
             bind_layout,
@@ -388,21 +400,23 @@ impl Gpu {
     /// Swapchain re-configure + raster re-allocation, atomically at
     /// frame time (resize events only record the size — the old config
     /// keeps presenting a consistent frame until here).
-    fn reconfigure(&mut self, phys: (u32, u32), css: (u32, u32)) {
+    fn reconfigure(&mut self, phys: (u32, u32), raster: (u32, u32)) {
         self.config.width = phys.0.max(1);
         self.config.height = phys.1.max(1);
         self.surface.configure(&self.device, &self.config);
-        if self.raster_size != css {
-            let (raster, raster_view, bind) =
-                alloc_raster(&self.device, &self.bind_layout, &self.sampler, css);
-            self.raster = raster;
-            self.raster_view = raster_view;
-            self.bind = bind;
-            self.raster_size = css;
+        if self.raster_size != raster {
+            let (new_raster, new_view, new_bind) =
+                alloc_raster(&self.device, &self.bind_layout, &self.sampler, raster);
+            self.raster = new_raster;
+            self.raster_view = new_view;
+            self.bind = new_bind;
+            self.raster_size = raster;
         }
     }
 
-    fn render(&mut self, vello_scene: &vello::Scene, css: (u32, u32)) {
+    /// Rasterizes the (already scale-encoded) vello scene into the
+    /// `raster`-sized target and blits it onto the swapchain.
+    fn render(&mut self, vello_scene: &vello::Scene, raster: (u32, u32)) {
         let mut outcome = self.surface.get_current_texture();
         if matches!(
             outcome,
@@ -425,13 +439,13 @@ impl Gpu {
                 return;
             }
         };
-        if self.raster_size != css {
-            self.reconfigure((self.config.width, self.config.height), css);
+        if self.raster_size != raster {
+            self.reconfigure((self.config.width, self.config.height), raster);
         }
         let params = vello::RenderParams {
             base_color: vello::peniko::Color::from_rgba8(0, 0, 0, 0),
-            width: css.0.max(1),
-            height: css.1.max(1),
+            width: raster.0.max(1),
+            height: raster.1.max(1),
             antialiasing_method: vello::AaConfig::Area,
         };
         if let Err(err) = self.renderer.render_to_texture(
@@ -538,8 +552,9 @@ impl Host {
         };
         let phys = (self.size_phys.0.max(1), self.size_phys.1.max(1));
         let css = css_size(phys, self.density);
+        let raster = raster_size(css, self.density);
         if gpu.config.width != phys.0 || gpu.config.height != phys.1 {
-            gpu.reconfigure(phys, css);
+            gpu.reconfigure(phys, raster);
             self.dirty = true;
         }
         if self.dirty || self.snapshot.is_none() {
@@ -550,9 +565,12 @@ impl Host {
         let Some(snapshot) = self.snapshot.as_ref() else {
             return;
         };
+        // Paint at the device scale: the scene encodes CSS-px geometry
+        // multiplied by the density, the raster is physical — text lands
+        // on real pixels instead of a stretched blit.
         let mut vello_scene = vello::Scene::new();
-        self.pilot.render(snapshot, &mut vello_scene);
-        gpu.render(&vello_scene, css);
+        self.pilot.render(snapshot, &mut vello_scene, self.density);
+        gpu.render(&vello_scene, raster);
     }
 
     /// Mouse press → one hit through the single geometry. Disjoint field
@@ -664,7 +682,8 @@ impl ApplicationHandler for Host {
         self.size_phys = (inner.width.max(1), inner.height.max(1));
         self.density = window.scale_factor() as f32;
         let css = css_size(self.size_phys, self.density);
-        let gpu = match Gpu::open(&window, self.size_phys, css) {
+        let raster = raster_size(css, self.density);
+        let gpu = match Gpu::open(&window, self.size_phys, raster) {
             Ok(gpu) => gpu,
             Err(err) => {
                 eprintln!("[scene-pilot] gpu: {err}");
@@ -800,7 +819,9 @@ pub fn render_pngs(
     for (width, height) in GOLDEN_SIZES {
         let snapshot = pilot.frame((width as f32, height as f32));
         let mut vello_scene = vello::Scene::new();
-        pilot.render(&snapshot, &mut vello_scene);
+        // Goldens raster at CSS-px scale 1:1 — pixel-identical across
+        // machines with any monitor density.
+        pilot.render(&snapshot, &mut vello_scene, 1.0);
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("scene-pilot-golden-raster"),

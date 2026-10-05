@@ -91,6 +91,20 @@
   geometry changes regenerate via `UPDATE_GOLDENS=1`; the update run
   fails on purpose so no golden lands blind.
 
+- **ADR-0057 Phase 1 — physical-scale paint
+  (`render_frame_at_scale`).** The vello encode path gained a device
+  scale: every rect, radius, stroke width and glyph transform is
+  multiplied at paint time, so the desktop bridge rasters at
+  `CSS px × density` and the blit samples 1:1 — fractional-DPI text
+  lands on real pixels instead of the stretched linear blit the bridge
+  shipped an hour earlier. The snapshot geometry is untouched (INV-2:
+  CSS px stays the one geometry; hit-tests, a11y bounds and the digest
+  corpus never see a scale), and `render_frame` keeps its scale-1
+  contract. Unit test: the encoded vello path stream doubles its
+  coordinates at 2:1 (canvas 400×700 paints 800/1400; no stale CSS-px
+  edge survives). The committed digest goldens stay byte-identical —
+  geometry is orthogonal to paint.
+
 - **ADR-0057 Phase 1 — draft restart rehydration over the Product Wire
   (`chats.messages.drafts.list`).** New wire op (99th; registry + fixtures
   → codegen → kernel dispatch arm + SQLite impl, newest-first

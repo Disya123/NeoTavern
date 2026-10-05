@@ -310,9 +310,17 @@ impl ChatPilot {
 impl ChatPilot {
     /// Encodes the snapshot into a vello scene — the single paint path
     /// (INV-3): the host owns the [`vello::Scene`] and the GPU surface,
-    /// this maps snapshot geometry to vello draw commands and nothing else.
-    pub fn render(&self, snapshot: &FrameSnapshot, vello_scene: &mut vello::Scene) {
-        neotavern_presentation_scene::render::render_frame(snapshot, &self.theme, vello_scene);
+    /// this maps snapshot geometry to vello draw commands and nothing
+    /// else. `scale` is the device scale (DPI/density): the host rasters
+    /// at `css × scale` physical pixels and samples 1:1 — the snapshot
+    /// geometry itself stays CSS-px (INV-2).
+    pub fn render(&self, snapshot: &FrameSnapshot, vello_scene: &mut vello::Scene, scale: f32) {
+        neotavern_presentation_scene::render::render_frame_at_scale(
+            snapshot,
+            &self.theme,
+            vello_scene,
+            scale,
+        );
     }
 
     pub fn theme(&self) -> &neotavern_presentation_scene::Theme {

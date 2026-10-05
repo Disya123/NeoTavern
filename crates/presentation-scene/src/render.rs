@@ -4,229 +4,234 @@
 //! `vello::Scene`. There is no second renderer behind a guard and no
 //! style recomputation here — colors resolve from tokens at this boundary
 //! only.
+//!
+//! Device scale: [`render_frame_at_scale`] encodes the SAME CSS-px
+//! snapshot geometry multiplied by a device scale (desktop DPI, Android
+//! density). The snapshot itself never changes — hit-tests, a11y bounds
+//! and digests stay CSS-px; only paint addresses physical pixels.
 
 use vello::kurbo::{Affine, Rect as KRect, RoundedRect, Stroke};
 use vello::peniko::{Brush, Color, Fill};
 use vello::{NormalizedCoord, Scene as VelloScene};
 
-use crate::snapshot::{FrameSnapshot, PaintData};
+use crate::snapshot::{FrameSnapshot, PaintData, Rect};
+use crate::style::ColorToken;
 use crate::theme::{Rgba, Theme};
 
-/// Encodes one frame. `vello_scene` is reset per frame by the host; this
-/// function only appends.
+/// Encodes one frame at CSS-px scale 1:1 (phones at density 1.0, the
+/// offscreen golden harness). `vello_scene` is reset per frame by the
+/// host; this function only appends.
 pub fn render_frame(snapshot: &FrameSnapshot, theme: &Theme, vello_scene: &mut VelloScene) {
+    render_frame_at_scale(snapshot, theme, vello_scene, 1.0);
+}
+
+/// Encodes one frame at a device scale: every rect, radius, stroke width
+/// and glyph transform is multiplied by `scale`, so the host rasters at
+/// physical resolution (`css size × scale`) and samples the result 1:1 —
+/// fractional-DPI text lands on real pixels instead of a stretched
+/// blit. The snapshot geometry is untouched (INV-2: CSS px is the one
+/// geometry; scale is a paint-time fact only).
+pub fn render_frame_at_scale(
+    snapshot: &FrameSnapshot,
+    theme: &Theme,
+    vello_scene: &mut VelloScene,
+    scale: f32,
+) {
+    let mut enc = Enc {
+        theme,
+        scene: vello_scene,
+        s: (scale.max(0.0)) as f64,
+    };
+
     // Root canvas background first.
-    let canvas = theme.color(crate::style::ColorToken::SurfaceCanvas);
-    vello_scene.fill(
-        Fill::NonZero,
-        Affine::IDENTITY,
-        &brush(canvas),
+    enc.fill_rect(
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: snapshot.viewport.0,
+            h: snapshot.viewport.1,
+        },
+        ColorToken::SurfaceCanvas,
         None,
-        &KRect::new(
-            0.0,
-            0.0,
-            snapshot.viewport.0 as f64,
-            snapshot.viewport.1 as f64,
-        ),
     );
 
     for node in &snapshot.nodes {
-        let rect = node.rect;
-        let krect = KRect::new(
-            rect.x as f64,
-            rect.y as f64,
-            (rect.x + rect.w) as f64,
-            (rect.y + rect.h) as f64,
-        );
         if let Some(bg) = node.background {
-            let color = theme.color(bg);
-            match node.radius {
-                Some(token) => {
-                    let rr = RoundedRect::new(
-                        krect.x0,
-                        krect.y0,
-                        krect.x1,
-                        krect.y1,
-                        (theme.radius(token) as f64).min(krect.height() / 2.0),
-                    );
-                    vello_scene.fill(Fill::NonZero, Affine::IDENTITY, &brush(color), None, &rr);
-                }
-                None => {
-                    vello_scene.fill(Fill::NonZero, Affine::IDENTITY, &brush(color), None, &krect);
-                }
-            }
+            enc.fill_rect(node.rect, bg, node.radius);
         }
         if let Some(border_token) = node.border {
-            let color = theme.color(border_token);
-            let width = 1.0; // hairline; the theme contract finalizes in Phase 2
-            match node.radius {
-                Some(token) => {
-                    let rr = RoundedRect::new(
-                        krect.x0,
-                        krect.y0,
-                        krect.x1,
-                        krect.y1,
-                        theme.radius(token) as f64,
-                    );
-                    vello_scene.stroke(
-                        &Stroke::new(width),
-                        Affine::IDENTITY,
-                        &stroke_brush(color),
-                        None,
-                        &rr,
-                    );
-                }
-                None => {
-                    vello_scene.stroke(
-                        &Stroke::new(width),
-                        Affine::IDENTITY,
-                        &stroke_brush(color),
-                        None,
-                        &krect,
-                    );
-                }
-            }
+            enc.stroke_rect(node.rect, border_token, node.radius);
         }
         match &node.paint {
             PaintData::Nothing => {}
             PaintData::Text { shaped, origin } => {
-                draw_text(
-                    shaped,
-                    *origin,
-                    crate::style::ColorToken::TextPrimary,
-                    theme,
-                    vello_scene,
-                );
+                enc.draw_shaped(shaped, *origin, enc.theme.color(ColorToken::TextPrimary));
             }
             PaintData::Button { shaped, origin } => {
-                draw_text(
-                    shaped,
-                    *origin,
-                    crate::style::ColorToken::AccentText,
-                    theme,
-                    vello_scene,
-                );
+                enc.draw_shaped(shaped, *origin, enc.theme.color(ColorToken::AccentText));
             }
             PaintData::Input { field } => {
-                draw_input(snapshot, field, theme, vello_scene);
+                enc.draw_input(snapshot, field);
             }
         }
     }
 }
 
-fn draw_input(
-    snapshot: &FrameSnapshot,
-    field: &crate::editor::FieldId,
-    theme: &Theme,
-    vello_scene: &mut VelloScene,
-) {
-    let Some(frame) = snapshot.inputs.get(field) else {
-        return;
-    };
-    let empty = frame.shaped.byte_len() == 0;
-    if empty {
-        if let Some(ph) = &frame.placeholder {
-            draw_shaped(
-                ph,
-                frame.text_origin,
-                theme.color(crate::style::ColorToken::TextMuted),
-                vello_scene,
-            );
+/// One frame's encode context: theme resolution + the device scale.
+/// All coordinate math flows through [`Enc::s`] so nothing can paint at
+/// a half-forgotten scale.
+struct Enc<'a> {
+    theme: &'a Theme,
+    scene: &'a mut VelloScene,
+    s: f64,
+}
+
+impl Enc<'_> {
+    /// Rect in device px (scaled from the snapshot's CSS px).
+    fn krect(&self, r: Rect) -> KRect {
+        KRect::new(
+            r.x as f64 * self.s,
+            r.y as f64 * self.s,
+            (r.x + r.w) as f64 * self.s,
+            (r.y + r.h) as f64 * self.s,
+        )
+    }
+
+    fn brush(&self, color: Rgba) -> Brush {
+        Brush::Solid(color.to_peniko())
+    }
+
+    fn fill_rect(&mut self, r: Rect, token: ColorToken, radius: Option<crate::style::RadiusToken>) {
+        self.fill_rect_alpha(r, token, 1.0, radius);
+    }
+
+    fn fill_rect_alpha(
+        &mut self,
+        r: Rect,
+        token: ColorToken,
+        alpha: f32,
+        radius: Option<crate::style::RadiusToken>,
+    ) {
+        let color = self.theme.color(token).with_alpha(alpha);
+        let krect = self.krect(r);
+        match radius {
+            Some(token) => {
+                let radius = (self.theme.radius(token) as f64 * self.s)
+                    .min(krect.height() / 2.0)
+                    .min(krect.width() / 2.0);
+                let rr = RoundedRect::new(krect.x0, krect.y0, krect.x1, krect.y1, radius);
+                self.scene.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    &self.brush(color),
+                    None,
+                    &rr,
+                );
+            }
+            None => {
+                self.scene.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    &self.brush(color),
+                    None,
+                    &krect,
+                );
+            }
         }
-    } else {
-        draw_shaped(
-            &frame.shaped,
-            frame.text_origin,
-            theme.color(crate::style::ColorToken::TextPrimary),
-            vello_scene,
-        );
     }
-    // Selection behind the caret.
-    for sel in &frame.selection_rects {
-        let r = KRect::new(
-            sel.x as f64,
-            sel.y as f64,
-            (sel.x + sel.w) as f64,
-            (sel.y + sel.h) as f64,
-        );
-        vello_scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            &brush(
-                theme
-                    .color(crate::style::ColorToken::Accent)
-                    .with_alpha(0.4),
-            ),
-            None,
-            &r,
-        );
+
+    fn stroke_rect(
+        &mut self,
+        r: Rect,
+        token: ColorToken,
+        radius: Option<crate::style::RadiusToken>,
+    ) {
+        let color = self.theme.color(token);
+        let krect = self.krect(r);
+        // Hairline; the theme contract finalizes in Phase 2. Scales with
+        // the device scale so a 1.5× monitor keeps a crisp 1.5-px stroke.
+        let width = 1.0 * self.s;
+        match radius {
+            Some(radius_token) => {
+                let rr = RoundedRect::new(
+                    krect.x0,
+                    krect.y0,
+                    krect.x1,
+                    krect.y1,
+                    self.theme.radius(radius_token) as f64 * self.s,
+                );
+                self.scene.stroke(
+                    &Stroke::new(width),
+                    Affine::IDENTITY,
+                    &self.brush(color),
+                    None,
+                    &rr,
+                );
+            }
+            None => {
+                self.scene.stroke(
+                    &Stroke::new(width),
+                    Affine::IDENTITY,
+                    &self.brush(color),
+                    None,
+                    &krect,
+                );
+            }
+        }
     }
-    if let Some(caret) = frame.caret_rect {
-        let r = KRect::new(
-            caret.x as f64,
-            caret.y as f64,
-            (caret.x + caret.w) as f64,
-            (caret.y + caret.h) as f64,
-        );
-        vello_scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            &brush(theme.color(crate::style::ColorToken::Accent)),
-            None,
-            &r,
-        );
+
+    fn draw_input(&mut self, snapshot: &FrameSnapshot, field: &crate::editor::FieldId) {
+        let Some(frame) = snapshot.inputs.get(field) else {
+            return;
+        };
+        let empty = frame.shaped.byte_len() == 0;
+        if empty {
+            if let Some(placeholder) = &frame.placeholder {
+                let color = self.theme.color(ColorToken::TextMuted);
+                self.draw_shaped(placeholder, frame.text_origin, color);
+            }
+        } else {
+            let color = self.theme.color(ColorToken::TextPrimary);
+            self.draw_shaped(&frame.shaped, frame.text_origin, color);
+        }
+        // Selection behind the caret: the accent at 0.4 alpha.
+        for sel in &frame.selection_rects {
+            self.fill_rect_alpha(*sel, ColorToken::Accent, 0.4, None);
+        }
+        if let Some(caret) = frame.caret_rect {
+            self.fill_rect(caret, ColorToken::Accent, None);
+        }
     }
-}
 
-fn draw_text(
-    shaped: &crate::text::ShapedText,
-    origin: (f32, f32),
-    color_token: crate::style::ColorToken,
-    theme: &Theme,
-    vello_scene: &mut VelloScene,
-) {
-    draw_shaped(shaped, origin, theme.color(color_token), vello_scene);
-}
-
-fn draw_shaped(
-    shaped: &crate::text::ShapedText,
-    origin: (f32, f32),
-    color: Rgba,
-    vello_scene: &mut VelloScene,
-) {
-    let transform = Affine::translate((origin.0 as f64, origin.1 as f64));
-    for paint_run in shaped.paint_runs() {
-        let run = paint_run.run.run();
-        let coords: Vec<NormalizedCoord> = run
-            .normalized_coords()
-            .iter()
-            .map(|&c| NormalizedCoord::from(c))
-            .collect();
-        vello_scene
-            .draw_glyphs(run.font())
-            .font_size(run.font_size())
-            .hint(false)
-            .normalized_coords(&coords)
-            .transform(transform)
-            .brush(&brush(color))
-            .brush_alpha(1.0)
-            .draw(
-                Fill::NonZero,
-                paint_run.run.positioned_glyphs().map(|g| vello::Glyph {
-                    id: g.id,
-                    x: g.x,
-                    y: g.y,
-                }),
-            );
+    fn draw_shaped(&mut self, shaped: &crate::text::ShapedText, origin: (f32, f32), color: Rgba) {
+        let transform =
+            Affine::scale(self.s) * Affine::translate((origin.0 as f64, origin.1 as f64));
+        for paint_run in shaped.paint_runs() {
+            let run = paint_run.run.run();
+            let coords: Vec<NormalizedCoord> = run
+                .normalized_coords()
+                .iter()
+                .map(|&c| NormalizedCoord::from(c))
+                .collect();
+            let glyph_brush = self.brush(color);
+            self.scene
+                .draw_glyphs(run.font())
+                .font_size(run.font_size())
+                .hint(false)
+                .normalized_coords(&coords)
+                .transform(transform)
+                .brush(&glyph_brush)
+                .brush_alpha(1.0)
+                .draw(
+                    Fill::NonZero,
+                    paint_run.run.positioned_glyphs().map(|g| vello::Glyph {
+                        id: g.id,
+                        x: g.x,
+                        y: g.y,
+                    }),
+                );
+        }
     }
-}
-
-fn brush(color: Rgba) -> Brush {
-    Brush::Solid(color.to_peniko())
-}
-
-fn stroke_brush(color: Rgba) -> Brush {
-    brush(color)
 }
 
 impl Rgba {
@@ -303,6 +308,51 @@ mod tests {
         assert!(
             !encoding.draw_tags.is_empty(),
             "draw objects must be encoded"
+        );
+    }
+
+    /// Device scale doubles the encoded rect coordinates (the vello path
+    /// stream stores f32 coordinates bitwise): the 400×700 viewport
+    /// paints 400/700 at 1:1 and 800/1400 at 2:1. The snapshot never
+    /// changes — scale is paint-time only.
+    #[test]
+    fn device_scale_moves_the_encoded_canvas_to_physical_pixels() {
+        let mut s = Scene::new();
+        let root = s.root();
+        s.append_child(
+            root,
+            SceneNode::text(vec![TextRun::plain("scaled", TextTokens::body())]),
+        );
+        let snap = build(&mut s);
+        let mut css = VelloScene::new();
+        render_frame_at_scale(&snap, &Theme::golden_dark(), &mut css, 1.0);
+        let mut hidpi = VelloScene::new();
+        render_frame_at_scale(&snap, &Theme::golden_dark(), &mut hidpi, 2.0);
+
+        let as_f32 = |scene: &VelloScene| -> Vec<f32> {
+            scene
+                .encoding()
+                .path_data
+                .iter()
+                .map(|bits| f32::from_bits(*bits))
+                .collect()
+        };
+        let css = as_f32(&css);
+        let hidpi = as_f32(&hidpi);
+        assert_eq!(
+            css.iter().any(|c| (c - 400.0).abs() < 0.01),
+            true,
+            "scale 1.0 must paint the CSS-px viewport edge"
+        );
+        assert!(css.iter().any(|c| (c - 700.0).abs() < 0.01));
+        assert!(
+            hidpi.iter().any(|c| (c - 800.0).abs() < 0.01),
+            "scale 2.0 must paint the doubled viewport edge"
+        );
+        assert!(hidpi.iter().any(|c| (c - 1400.0).abs() < 0.01));
+        assert!(
+            !hidpi.iter().any(|c| (c - 400.0).abs() < 0.01),
+            "no stale CSS-px edge may survive at 2:1"
         );
     }
 }

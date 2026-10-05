@@ -69,14 +69,15 @@ cargo run --manifest-path crates/Cargo.toml \
 - stream pumping runs in `about_to_wait` at ≤30 updates/s (AGENTS §24)
   until the terminal event;
 - resize reconfigures at frame time (events only record the size); DPI
-  changes re-produce cold.
+  changes re-produce cold;
+- the vello raster is encoded at the device scale
+  (`render_frame_at_scale`, raster = CSS px × density) and the blit
+  samples it 1:1 — text lands on physical pixels, no stretching.
 
 Known bridge limits (honest scope): the wheel is not mapped (the pilot's
 message column is not scrollable yet — no parallel geometry may fake
 it); only `Ctrl+A` of the clipboard shortcuts is mapped (paste/cut need
-an arboard seam with the Phase-3 IME seam); DPI > 1 stretches the
-CSS-px raster linearly (crispness waits for the physical-scale layout
-pass).
+an arboard seam with the Phase-3 IME seam).
 
 ## Local raster harness (never CI)
 
