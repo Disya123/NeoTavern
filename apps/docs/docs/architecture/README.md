@@ -34,10 +34,11 @@ Index of the internal documentation. Each major topic has its own folder.
 - [Operations inventory](architecture/operations-inventory.md) — current `/api/v2` surface, feature ownership/routing.
 - [Product Wire Contracts](architecture/wire-contracts.md) — canonical contracts, codegen, handshake, corpus.
 - [Presentation boundary](architecture/presentation-boundary.md) — Milestone A **PASS**; Milestone B **PASS**; live Product Wire chat route (Milestone C STARTED, core chat journey batch PASS, native TalkBack DEFERRED_BY_OWNER / WEBVIEW_FALLBACK, cutover STARTED/CANARY, canary_batch PASS, not RFC C PASS); [ADR-0052](adr/0052-webview-removal.md) cutover contract; [ADR-0053](adr/0053-android-120hz-release-budget.md) 120 Hz budget; [ADR-0054](adr/0054-plugin-visual-surface-contained.md) plugin WebSurface.
+- [Native presentation platform](architecture/native-presentation-platform.md) — product UI = native own retained-scene platform over taffy/Parley/Vello ([ADR-0057](adr/0057-native-first-own-scene-platform.md), owner direction 2026-10-04): seven non-negotiable invariants, native theme contract, editor-core input model, adapter conformance gates, phased delivery with kill-gates; Dioxus/Blitz browser-form emulation feature-frozen and deleted at the Phase-4 gate; plugin UI surface = host-rendered slots + PluginVisualSurface IR (§11) with no browser engines in product clients — [ADR-0058](adr/0058-no-web-plugin-ir-platform.md) no-web end state: Web Client and plugin WebSurface sunset with the legacy contour.
 - [ADR-0051](adr/0051-android-talkback-webview-fallback.md) — native Dioxus TalkBack deferred; TalkBack/touch exploration selects WebView before a Rust host.
 - [ADR-0052](adr/0052-webview-removal.md) — production no-WebView cutover contract (Proposed until owner-signed PARITY).
 - [ADR-0053](adr/0053-android-120hz-release-budget.md) — calibrated 120 Hz `input-to-present` budget (p99 ≤ 12 ms).
-- [ADR-0054](adr/0054-plugin-visual-surface-contained.md) — plugin frontend CONTAINED in WebSurface; not a Dioxus rewrite.
+- [ADR-0054](adr/0054-plugin-visual-surface-contained.md) — plugin frontend CONTAINED in WebSurface; not a Dioxus rewrite. **Superseded end-state by [ADR-0058](adr/0058-no-web-plugin-ir-platform.md)** (no WebSurface in native clients).
 - [Milestone C physical runbook](rfc/milestone-c-physical-runbook.md) — Xiaomi journey batch PASS; FAILED_ATTEMPT preserved; harness stamp is not canary.
 - [Milestone C guarded canary](rfc/milestone-c-canary.md) — `MainActivity` selector STARTED/CANARY; physical canary batch PASS; not RFC C PASS.
 - [Known baseline failures](architecture/known-baseline-failures.md) — `KNOWN_BASELINE_FAILURE` fingerprints; not a green full baseline; not a B PASS waiver.
@@ -54,7 +55,7 @@ Index of the internal documentation. Each major topic has its own folder.
 - [Theme SDK](theme-sdk/README.md) — tokens, skins, shells, safe mode, `data-*` hooks.
 - [Prompt pipeline](prompt-pipeline/README.md) — stages, instruct formats, context shifting.
 - [Data and SQLite](data/README.md) — schema, WAL/FTS5, files, cache.
-- [Desktop](desktop/README.md) — Tauri 2 + Node sidecar, Web Client, updates.
+- [Desktop](desktop/README.md) — Tauri 2 + Node sidecar, Web Client (legacy-transition artifact, sunset by [ADR-0058](adr/0058-no-web-plugin-ir-platform.md)), updates.
 - [Rust UI style port](desktop/rust-ui-style-port.md) — петля быстрой итерации: React CSS → pack → hot stylesheet → pixel-diff/oracle gate; DOM-паритет слотов (`scripts/dom-parity/`) для сравнения React и NeoCompositor без угадывания по скриншоту.
 - [NeoCompositor host (desktop)](desktop/neocompositor-desktop-host.md) — общий для Android/Windows/macOS хост презентации: `PresentSurface` в `presentation-chat` + `neocompositor-desktop` (winit), тот же пайплайн, что у Android-`SurfaceView`.
 - [Android](android/README.md) — WebView + JNI local host, mobile-ffi bridge protocol, Keystore secrets.
@@ -96,7 +97,11 @@ Index of the internal documentation. Each major topic has its own folder.
   physical M-1 waiver).
 - [Changelog](https://github.com/Disya123/NeoTavern/blob/main/CHANGELOG.md).
 
-## Commands
+## Audits
+
+- [Аудит общей Rust-ветки, 2026-10-04](audits/rust-app/README.md) — воспроизводимые дефекты Kernel, ChatSession, native presentation и адаптеров; причины, приоритеты, протокол проверок и план исправлений. Физические Android/macOS/Linux и packaged Tauri runtime не подтверждены этим аудитом.
+
+## Development commands
 
 ```bash
 pnpm install          # install dependencies

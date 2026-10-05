@@ -1,12 +1,15 @@
 # ADR-0054: Plugin frontend stays CONTAINED in WebSurface (no silent Dioxus rewrite)
 
-Date: 2026-08-20. Status: **Accepted**.
+Date: 2026-08-20. Status: **Accepted**. **Superseded end-state by
+[ADR-0058](0058-no-web-plugin-ir-platform.md)**: native clients do not host
+a WebSurface at all — plugin UI is host-rendered slots + PluginVisualSurface
+IR; this ADR remains the transitional record for the Dioxus cutover period.
 
 Related: [ADR-0039](0039-legacy-compatibility-authority-boundary.md)
 (legacy authority boundary), [ADR-0050](0050-visual-surface-ingress-vs-plugin.md)
 (`VisualSurfaceFrameIngress` is Milestone B; public `PluginVisualSurface` is
 Milestone D), [ADR-0052](0052-webview-removal.md) (production no-WebView
-cutover of the *main screen*),
+cutover of the _main screen_),
 [presentation-compatibility-matrix.md](../rfc/presentation-compatibility-matrix.md).
 
 This ADR is the **PluginVisualSurface** contract the Android Rust cutover
@@ -23,7 +26,7 @@ The Android Dioxus/NeoCompositor host is becoming the main-screen renderer
 
 Silently reimplementing those surfaces as Rust RSX would be a Plugin SDK
 rewrite. ADR-0050 already forbids claiming public `PluginVisualSurface` as
-part of Milestone B. The cutover still needs an honest *host* answer: where
+part of Milestone B. The cutover still needs an honest _host_ answer: where
 do plugin UIs live after the main Activity no longer mounts a product
 WebView?
 
@@ -34,7 +37,7 @@ WebView?
    render through Dioxus → Blitz → NeoCompositor. They consume Product Wire
    only (`plugins.list` / `enable` / `disable` / `install` / `uninstall`
    included).
-2. **Plugin *frontend* slots stay CONTAINED.** Arbitrary plugin DOM, iframe
+2. **Plugin _frontend_ slots stay CONTAINED.** Arbitrary plugin DOM, iframe
    RPC, and legacy `window.SillyTavern` run only in a sandboxed
    `WebSurface` (separate process when shipped). Dioxus must not execute
    plugin HTML/JS or mount unmanaged islands.
@@ -73,5 +76,5 @@ WebView?
 
 **Owner:** Disya123 `<gamedisya@gmail.com>`
 **Target date:** same gate as ADR-0052. The WebSurface process is a
-follow-up host slice; this ADR freezes the *boundary*, not the process
+follow-up host slice; this ADR freezes the _boundary_, not the process
 implementation.

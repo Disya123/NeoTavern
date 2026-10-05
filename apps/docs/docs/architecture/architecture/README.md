@@ -252,6 +252,20 @@ gate passes.
   (independent physical PERF/device-loss registry). Milestone C **STARTED**
   **STARTED / CANARY**; physical canary batch **PASS**. WebView remains
   rollback; D3 DEFERRED.
+- [Native presentation platform (ADR-0057)](../adr/0057-native-first-own-scene-platform.md)
+  — the product UI target becomes an own retained-scene platform over
+  mature primitives (taffy/Parley/Vello): seven non-negotiable
+  invariants, native theme contract, editor-core input model,
+  adapter-bridged platforms and phase gates with kill-criteria. The
+  Dioxus/Blitz browser-form emulation is feature-frozen and deleted at
+  the Phase-4 gate; React keeps the transitional legacy-UI and
+  design-oracle roles only — the Web Client and any plugin WebSurface
+  are sunset by
+  [ADR-0058](../adr/0058-no-web-plugin-ir-platform.md) (no browser
+  engines in product clients; plugin UI = host-rendered slots + IR).
+  Normative spec:
+  [native-presentation-platform.md](native-presentation-platform.md);
+  evidence base: [2026-10-04 Rust-branch audit](../audits/rust-app/README.md).
 - [Known baseline failures](known-baseline-failures.md) — recorded
   `KNOWN_BASELINE_FAILURE` fingerprints. They do not invalidate PERF-18/19/20
   evidence. Both listed rows are **FIXED**. Gated by

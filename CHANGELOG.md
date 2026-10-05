@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+### Architecture
+
+- **Native-first product UI: own retained-scene platform over mature
+  primitives (ADR-0057, owner direction 2026-10-04).** The product UI
+  path is native-only: the browser-form emulation layers leave the
+  product contour — Dioxus/native-dom VDOM, blitz-dom + stylo CSS
+  cascade, the hand-rolled CSS baking, the `shell_hit` parallel
+  geometry and the Blueprint-vs-RSX guard duality are replaced by an
+  own retained-scene platform built over taffy (layout), Parley (text)
+  and Vello/wgpu (paint), governed by seven non-negotiable invariants
+  (single state truth / single geometry / single render path / single
+  input model / single stream driver / bridges-only adapters /
+  behavioral evidence against the real Kernel). React keeps only its
+  assigned roles — remote Web Client (ADR-0043), legacy migration plane
+  (ADR-0038) and CONTAINED plugin WebSurface (ADR-0054) — and is no
+  longer the product UI target. The old Dioxus/Blitz contour is
+  feature-frozen (defect/security fixes and the pilot comparison
+  baseline only) and is deleted at the Phase-4 gate; ADR-0049-D2 and
+  ADR-0056 supersede there, ADR-0051's WebView accessibility fallback is
+  retired by native semantic-tree evidence at Phase 3. Normative
+  platform spec:
+  `docs/architecture/native-presentation-platform.md`; evidence base:
+  the 2026-10-04 Rust-branch audit (`docs/audits/rust-app/`). The AGENTS.md
+  §2/§13/§14/§21/§23 amendments recording the new contour split were applied
+  in the same change (platform spec §9). This change is documentation-only:
+  no product code, contracts, schemas or migrations were modified.
+
+- **No-web end state (ADR-0058, owner direction 2026-10-04 — "web не будет
+  больше").** Native product clients embed no browser engine at all. The
+  plugin UI platform of record is declarative slots (ADR-0037) + the
+  `PluginVisualSurface` IR pulled forward from ADR-0050 Milestone D into the
+  ADR-0057 platform Phases 2–3: a versioned, bounded scene-fragment schema
+  with token-only styling, INV-4 input, semantic-tree accessibility,
+  ADR-0022 z-order and permission-gated crash isolation — plugins ship data
+  and handlers, never markup, pixels or engines; the ADR-0054 plugin
+  WebSurface is superseded (no WebSurface in native clients ever). SillyTavern
+  web-extension compatibility becomes a property of the legacy/React contour
+  only, alive exactly as long as it (ADR-0038 timeline; ADR-0057 Phase-4
+  gate) and ending with a mandatory migration guide to the native Plugin
+  SDK. The Remote Web Client (ADR-0043) sunsets as a product: it remains
+  installable only while the legacy contour is the shipped desktop UI;
+  remote access after the transition is a recorded future native-client
+  connection mode over remote-http (ADR-0030), not a shipped capability.
+  Documentation-only decision record: no product code, contracts, schemas or
+  migrations were modified; the capability matrix and compatibility-matrix
+  rows keep describing the transitional code until it actually changes.
+  AGENTS.md §1/§2/§13/§17/§18/§19/§21 amendments applied in the same change.
+
 ### Changed
 
 - Native desktop chat scroll now runs at the monitor's refresh rate with a

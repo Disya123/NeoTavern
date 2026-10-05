@@ -2,7 +2,11 @@
 
 - **Status:** accepted (decision in force; referenced by ADR-0038 and
   `AGENTS.md` since the M0 baseline — this ADR records the decision that the
-  references point to)
+  references point to). **Sunset by
+  [ADR-0058](0058-no-web-plugin-ir-platform.md)**: the Web Client remains
+  installable only while the legacy contour is the shipped desktop UI and is
+  not part of the Kernel-native era; its truthfulness rules stay in force
+  while it exists.
 - **Date:** 2026-08-14
 - **Related:** [ADR-0038](0038-canonical-rust-kernel-core.md),
   [ADR-0030](0030-remote-http-adapter.md),

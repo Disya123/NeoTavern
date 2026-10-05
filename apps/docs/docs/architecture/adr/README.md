@@ -4,6 +4,58 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0058: No-web end state — plugin UI is host-rendered IR; no browser engines in product clients
+
+**Accepted (owner direction, 2026-10-04 — "web не будет больше"; phased, no
+user-facing capability is removed before its replacement exists).** Native
+clients embed no browser engine: plugin UI renders only through declarative
+slots (ADR-0037) and the `PluginVisualSurface` IR pulled forward from
+ADR-0050 Milestone D into the ADR-0057 platform Phases 2–3 — plugins ship
+data and handlers, never markup, pixels or engines; token-only styling,
+INV-4 input, semantic-tree a11y, permission gates with crash isolation.
+SillyTavern web-extension compatibility is a property of the legacy/React
+contour, alive exactly as long as it, ending with a mandatory migration
+guide. The Remote Web Client (ADR-0043) sunsets as a product: remote access
+after the transition is a future native-client connection mode over
+remote-http (ADR-0030). Supersedes ADR-0054's WebSurface provision (ADR-0052's
+retain-WebSurface clause included). Full decision:
+[ADR-0058](0058-no-web-plugin-ir-platform.md); plugin UI surface spec:
+[native-presentation-platform.md](../architecture/native-presentation-platform.md)
+§11.
+
+## ADR-0057: Native-first product UI — own retained-scene platform over mature primitives
+
+**Accepted (owner direction, 2026-10-04; phased with kill-gates).** The
+product UI is **native and only native**: the browser-form emulation
+(Dioxus/native-dom VDOM, blitz-dom + stylo cascade, hand-rolled CSS
+baking, four vendor patches) leaves the product path, replaced by an
+own retained-scene platform built over mature primitives (taffy, Parley,
+Vello/wgpu) and governed by seven non-negotiable invariants (single
+state truth, single geometry, single render path, single input model,
+single stream driver, bridges-only adapters, behavioral evidence against
+the real Kernel). React keeps only the transitional roles — legacy plane
+(ADR-0038) and design oracle — while the Web Client and plugin WebSurface
+roles are sunset by ADR-0058; it is no longer the product UI target.
+Dioxus/Blitz is feature-frozen and deleted only at the Phase-4 gate;
+ADR-0049-D2 and ADR-0056 are superseded there. Full decision:
+[ADR-0057](0057-native-first-own-scene-platform.md); normative platform
+spec:
+[native-presentation-platform.md](../architecture/native-presentation-platform.md).
+
+## ADR-0056: Blueprint as the canonical chat chrome renderer (staged flip)
+
+**Stage 1 done (internal host).** `neocompositor-desktop` renders the inner
+chat chrome from the embedded canonical document by default; opt-outs are
+`--legacy-chrome` / `NEOTA_LEGACY_CHROME=1` (safe mode, also used by the
+golden capture gate), then `--blueprint <path|embedded>` and
+`NEOTA_CHAT_BLUEPRINT_DOC=<path>`. Compact height is document-covered and
+pinned by a `900×220` golden row; overlay/nested are retired as probe-only
+scenarios. The release-artifact matrix (`pnpm blueprint:packaged-check`)
+verifies default/rollback behavior including broken-document fallback;
+Tauri bundles do not ship this host today. Remaining for a public
+announcement: zero open P0 + explicit product decision.
+Full decision: [ADR-0056](0056-blueprint-canonical-chat-render.md).
+
 ## ADR-0055: Experimental React UI oracle and renderer-neutral UiBlueprint pilot
 
 **Experimental / pilot only.** React fixture capture is build-time migration
@@ -17,6 +69,10 @@ Plugin DOM islands and legacy `window.SillyTavern` are not rewritten into
 Dioxus. The Plugins rail panel lists Product Wire `plugins.*` rows; frontend
 slots run only in a sandboxed `WebSurface`. Public `PluginVisualSurface`
 stays Milestone D ([ADR-0050](0050-visual-surface-ingress-vs-plugin.md)).
+**Superseded end-state by
+[ADR-0058](0058-no-web-plugin-ir-platform.md)**: native clients host no
+WebSurface at all — plugin UI is host-rendered slots + IR; this record
+remains the transitional contract for the cutover period.
 Full decision: [ADR-0054](0054-plugin-visual-surface-contained.md).
 
 ## ADR-0053: Android 120-Hz release-budget calibration
@@ -168,6 +224,10 @@ if ever required it needs its own ADR/RFC passing the ТЗ §11.3.2 criteria
 browser secrets, provider CORS model, mobile Safari lifecycle, offline E2E);
 until then standalone capability is `Not supported` (ARC-12). This ADR records
 the decision that ADR-0038 and `AGENTS.md` already reference as "ADR-0043".
+**Sunset as a product by
+[ADR-0058](0058-no-web-plugin-ir-platform.md)**: the Web Client remains
+installable only while the legacy contour is the shipped desktop UI; its
+remote-only and ARC-12 truthfulness rules stay in force while it exists.
 Full decision, alternatives and consequences:
 [ADR-0043](0043-web-client-remote-only.md).
 
