@@ -114,6 +114,15 @@ impl ScrollAckLoop {
         self.cap_older_css.min(self.cap_newer_css)
     }
 
+    /// Directional runway caps as last set by the host: `(older, newer)` in
+    /// CSS px. The host clamps the eased visual against them every frame so
+    /// a long frame's ease step cannot outrun the baked canvas between land
+    /// decisions (the blit would sample past the painted rows into the
+    /// wallpaper filler).
+    pub fn runway_caps(&self) -> (f32, f32) {
+        (self.cap_older_css, self.cap_newer_css)
+    }
+
     /// Visual offset minus the presented window: what the blit shift / fast
     /// path unacked delta should display right now.
     pub fn drift(&self, visual_css: f32) -> f32 {
@@ -141,10 +150,17 @@ impl ScrollAckLoop {
             return None;
         }
         if gesture_active {
+            // Half-epsilon tolerance: the host clamps the eased visual to
+            // `presented ± cap` every frame, and the f32 round-trip of that
+            // pin (`(presented + cap) - presented`) can land an ULP below
+            // the cap — an exact `>=` would then never fire and hold the
+            // visual at the runway edge until the gesture ends. Firing up
+            // to `LANDED_EPSILON_CSS` early is within the cap's own jitter
+            // margin.
             let over = if drift > 0.0 {
-                drift >= self.cap_older_css
+                drift >= self.cap_older_css - LANDED_EPSILON_CSS
             } else {
-                drift <= -self.cap_newer_css
+                drift <= -(self.cap_newer_css - LANDED_EPSILON_CSS)
             };
             over.then_some(drift)
         } else {
@@ -302,5 +318,30 @@ mod tests {
         assert_eq!(loop_.presented(), 0.0);
         assert_eq!(loop_.due(0.0, false), None);
         assert_eq!(loop_.drift(0.0), 0.0);
+    }
+
+    #[test]
+    fn runway_caps_expose_directional_bound_for_the_host_clamp() {
+        // Before the first produce the caps are infinite: the host clamp is
+        // a no-op on an unbaked raster.
+        let mut loop_ = ScrollAckLoop::new(0.0);
+        assert_eq!(loop_.runway_caps(), (f32::INFINITY, f32::INFINITY));
+        loop_.set_runway_caps(300.0, 60.0);
+        assert_eq!(loop_.runway_caps(), (300.0, 60.0));
+    }
+
+    #[test]
+    fn cap_decision_tolerates_the_host_clamp_pin() {
+        // The host pins the eased visual at presented ± cap every frame;
+        // the f32 round-trip of that pin can read the drift an ULP below
+        // the cap. The decision must still fire — an exact `>=` would hold
+        // the visual at the runway edge until the gesture ends and then
+        // snap to the target on the final land.
+        let mut loop_ = ScrollAckLoop::new(0.0);
+        loop_.set_cap(200.0);
+        let pinned = 200.0 - LANDED_EPSILON_CSS / 2.0;
+        assert!(loop_.due(pinned, true).is_some(), "clamp pin must fire");
+        // A full epsilon below still holds: real inside-runway drift.
+        assert_eq!(loop_.due(199.0, true), None);
     }
 }

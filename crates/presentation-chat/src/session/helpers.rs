@@ -780,19 +780,34 @@ pub(crate) fn virtualized_window(
     let span = viewport
         .index()
         .span_covering(start, start + viewport_height);
-    // Overscan (144fps scroll): bake the two neighbouring rows on each side
-    // of the band into the paint window. The viewport box extends
-    // `CHAT_OVERSCAN_CSS` above and below the panel and clips them, so the
-    // extra rows paint as runway under the translucent chrome — the blit
-    // shift presents real rows on the leading edge instead of the wallpaper
-    // filler strip, and the scroll ack cap derives from the painted canvas
-    // extents (`chat_canvas_top_css` / `chat_canvas_bottom_css`). Two rows
-    // (not one): the cap is bounded by the box, and small rows must not
-    // drag the land cadence up. Row-index extension, not px:
-    // `span_covering` falls back to `first` for offsets past the extent, so
-    // the range itself must stay inside it.
-    let lead_start = span.start.saturating_sub(2);
-    let trail_end = (span.end + 2).min(viewport.index().len());
+    // Overscan (144fps scroll): bake neighbouring rows on each side of the
+    // band into the paint window until the runway covers the drift the blit
+    // can present. The ack cap tops out at `ACK_CAP_MAX_CSS`, but a long
+    // frame's ease step outruns it between land decisions (drift −281px
+    // observed on a 95ms frame), and a row-count overscan (±2) left
+    // small-row chats with ~12px of painted runway — the sample went past
+    // the canvas extents and flashed the wallpaper filler strip at the band
+    // edge on every gesture. Bake a px runway of `CHAT_OVERSCAN_CSS` per
+    // side instead: it matches the raster overscan the host can hold (the
+    // extents clamp to it in produce), covers the cap plus jitter, and the
+    // blit keeps presenting real rows on the leading edge instead of the
+    // filler. Row-index floors stay (`span_covering` falls back to `first`
+    // for offsets past the extent, so the base range must stay inside it).
+    let runway_target_css = neotavern_presentation_dioxus_shell::CHAT_OVERSCAN_CSS as f64;
+    let index_len = viewport.index().len();
+    let row_px = |i: usize| -> f64 { viewport.index().height_at(i).map_or(0.0, |(_, h, _)| h) };
+    let mut lead_start = span.start.saturating_sub(2);
+    let mut lead_px: f64 = (lead_start..span.start).map(row_px).sum();
+    while lead_start > 0 && lead_px < runway_target_css {
+        lead_start -= 1;
+        lead_px += row_px(lead_start);
+    }
+    let mut trail_end = (span.end + 2).min(index_len);
+    let mut trail_px: f64 = (span.end..trail_end).map(row_px).sum();
+    while trail_end < index_len && trail_px < runway_target_css {
+        trail_px += row_px(trail_end);
+        trail_end += 1;
+    }
     if std::env::var("NEOTA_WIN_DEBUG").is_ok() {
         let rows: Vec<String> = (0..viewport.index().len())
             .filter_map(|i| {
@@ -1261,5 +1276,46 @@ mod height_estimate_tests {
         // A re-learn of an existing id refreshes without re-inserting order.
         state.learn_height_correction("m599", 120.0, 90.0);
         assert_eq!(state.height_correction("m599"), Some(120.0));
+    }
+
+    #[test]
+    fn overscan_window_bakes_a_pixel_runway_per_side() {
+        // 40 uniform small rows (48px estimate + 40px pitch = 88 index px):
+        // the old ±2-row overscan baked ~176px of runway, and small-row
+        // chats landed at ~12px after the pad margin — one long frame's
+        // ease step (drift −281px observed) sampled past the canvas
+        // extents and flashed the wallpaper filler at the band edge. The
+        // window must bake a full CHAT_OVERSCAN_CSS of runway per side.
+        let messages: Vec<MessageDto> = (0..40)
+            .map(|i| {
+                let mut row = msg("");
+                row.id = format!("m{i}");
+                row.sequence = i as i64;
+                row
+            })
+            .collect();
+        let macros = crate::macros::MacroContext::default();
+        let viewport_h = 514.0;
+        let (_, _, hidden_above, canvas_height) = virtualized_window(
+            &messages,
+            viewport_h,
+            1000.0, // mid-chat: rows exist on both sides
+            "Assistant",
+            &macros,
+            &HashMap::new(),
+        );
+        let target = neotavern_presentation_dioxus_shell::CHAT_OVERSCAN_CSS as f64;
+        // Lead runway: the distance from the paint-window top to the
+        // viewport top covers the px target.
+        assert!(
+            hidden_above >= target,
+            "lead runway {hidden_above} < {target}"
+        );
+        // Trail runway: canvas bottom minus the viewport bottom. Derived:
+        // Σ(lead..trail) − 32 − hidden_above − vh, where the first span row
+        // hides up to one row height (88) and the span tiles the viewport.
+        // Floor: 256 (trail px) − 88 − 32 = 136.
+        let below = canvas_height - hidden_above - viewport_h;
+        assert!(below >= 136.0, "trail runway {below} < 136");
     }
 }

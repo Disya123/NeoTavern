@@ -52,6 +52,13 @@
 
 ### Changed
 
+- Desktop chat scroll: the eased visual is now held at the painted runway
+  edge on long frames. A 95 ms frame could ease-jump past the whole
+  directional cap between land decisions (drift −281 px observed) and the
+  same frame's blit then sampled past the baked rows into the wallpaper
+  filler strip. The host clamps `visual_scroll_css` to
+  `presented ± runway_caps` every frame, and the ack land tolerates the
+  clamp pin's f32 ULP with a half-epsilon fire window.
 - Native desktop chat scroll now runs at the monitor's refresh rate with a
   handful of produces per gesture (follow-up: "8% CPU at 30fps is terrible —
   I have a 144 Hz screen, it must be 144 fps at <4%"). The 30 fps

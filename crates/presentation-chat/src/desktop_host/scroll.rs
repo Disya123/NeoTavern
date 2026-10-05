@@ -111,6 +111,18 @@ impl App {
     /// drift lands through the ack epsilon.
     pub(super) fn advance_and_land_scroll(&mut self) {
         self.advance_scroll_animations();
+        // Hold the visual at the runway edge: a long frame's ease step can
+        // jump the whole cap between land decisions (drift −281px observed
+        // on a 95ms frame), and the blit of this very frame samples the
+        // still-presented raster at that drift — past the painted canvas
+        // the filler strip flashes. The ease target is untouched, so the
+        // animation continues from the held edge as soon as the ack land
+        // (same frame, when the re-produce completes) rebases the window.
+        let (cap_older, cap_newer) = self.ack.runway_caps();
+        let presented = self.ack.presented();
+        self.visual_scroll_css = self
+            .visual_scroll_css
+            .clamp(presented - cap_newer, presented + cap_older);
         if let Some(shift) = self
             .ack
             .due(self.visual_scroll_css, self.scroll_animation_active())
