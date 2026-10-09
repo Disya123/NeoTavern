@@ -31,6 +31,8 @@ impl<W: ProductWire> ChatSession<W> {
             asset_store: neotavern_presentation_m0_d2::AssetStore::new(),
             characters_revision: 0,
             characters_cards: RefCell::new(None),
+            characters_cursor: None,
+            chats_cursor: None,
         };
         if let Err(err) = session.load_workspace() {
             session.record_error(err);

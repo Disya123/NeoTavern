@@ -776,29 +776,45 @@ impl FakeWire {
             .ok_or_else(|| Self::product("LOREBOOK_NOT_FOUND", "lorebookId", lorebook_id))
     }
 
-    fn list_characters(&self, limit: i64) -> PagedCharacters {
+    /// UI-03 parity: the fake honors the cursor contract — pages carry a
+    /// cursor while rows remain, `None` marks the exact last page. The
+    /// encoding is fake-local (`offset:N`), not the Kernel's keyset blob;
+    /// the CONTRACT SHAPE (cursor in, cursor out, page bounds) is what
+    /// parity tests exercise (INV-7: never a product claim).
+    fn page_cursor(after: usize, total: usize) -> Option<String> {
+        (after < total).then(|| format!("offset:{after}"))
+    }
+
+    fn page_offset(cursor: Option<&str>) -> usize {
+        cursor
+            .and_then(|c| c.strip_prefix("offset:"))
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(0)
+    }
+
+    fn list_characters(&self, limit: i64, cursor: Option<&str>) -> PagedCharacters {
         let mut items: Vec<CharacterDto> = self.characters.values().cloned().collect();
         items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        let skip = Self::page_offset(cursor);
         let cap = limit.clamp(1, 200) as usize;
-        if items.len() > cap {
-            items.truncate(cap);
-        }
+        let total = items.len();
+        let items: Vec<_> = items.into_iter().skip(skip).take(cap).collect();
         PagedCharacters {
             items,
-            next_cursor: None,
+            next_cursor: Self::page_cursor(skip + cap, total),
         }
     }
 
-    fn list_chats(&self, limit: i64) -> PagedChats {
+    fn list_chats(&self, limit: i64, cursor: Option<&str>) -> PagedChats {
         let mut items: Vec<ChatDto> = self.chats.values().cloned().collect();
         items.sort_by(|a, b| a.id.cmp(&b.id));
+        let skip = Self::page_offset(cursor);
         let cap = limit.clamp(1, 200) as usize;
-        if items.len() > cap {
-            items.truncate(cap);
-        }
+        let total = items.len();
+        let items: Vec<_> = items.into_iter().skip(skip).take(cap).collect();
         PagedChats {
             items,
-            next_cursor: None,
+            next_cursor: Self::page_cursor(skip + cap, total),
         }
     }
 
@@ -1385,8 +1401,10 @@ impl ProductWire for FakeWire {
                 self.wrap_call(operation_id, to_value(&created))
             }
             "characters.list" => {
-                let page = self
-                    .list_characters(payload.get("limit").and_then(Value::as_i64).unwrap_or(50));
+                let page = self.list_characters(
+                    payload.get("limit").and_then(Value::as_i64).unwrap_or(50),
+                    payload.get("cursor").and_then(Value::as_str),
+                );
                 self.wrap_call(operation_id, to_value(&page))
             }
             "characters.get" => {
@@ -1467,8 +1485,10 @@ impl ProductWire for FakeWire {
                 self.wrap_call(operation_id, to_value(&created))
             }
             "chats.list" => {
-                let page =
-                    self.list_chats(payload.get("limit").and_then(Value::as_i64).unwrap_or(50));
+                let page = self.list_chats(
+                    payload.get("limit").and_then(Value::as_i64).unwrap_or(50),
+                    payload.get("cursor").and_then(Value::as_str),
+                );
                 self.wrap_call(operation_id, to_value(&page))
             }
             "chats.get" => {

@@ -197,6 +197,29 @@
 
 ### Fixed
 
+- Character and chat catalogs reach past the first page (UI-03 audit
+  class, ADR-0057 Phase-2 gate item "paginated catalogs reach item
+  101+"). The session discarded the Kernel's keyset cursor on every
+  `characters.list` / `chats.list` call and the character browser's
+  Load More only grew the resident DOM window — everything past the
+  first 50 rows was unreachable no matter how many times the user
+  pressed it. The session now stores the server-issued cursor, fetches
+  the next page through it (Load More first reveals already-resident
+  rows, then fetches; the resident set grows only on explicit user
+  action), appends without duplicates by stable id, and advances a
+  cursor only after the page that re-issued it decoded cleanly — errors
+  and cancellations keep the previous page boundary. `load_more_chats`
+  gives chat panels the same reach. FakeWire implements the same
+  cursor contract (cursor out while rows remain, none on the exact last
+  page) so fixture parity can no longer hide the defect (INV-7: the
+  product claim is gated by the Kernel run, not the fake). Gate test:
+  `catalog_pagination_reaches_item_101_over_the_real_kernel` — 101
+  characters and 55 chats seeded over the real Kernel, paged through
+  the session command surface only; every seeded row arrives, 101/55
+  distinct ids, exhausted load-more is a clean no-op, and no client-side
+  arithmetic decides a page boundary (INV-1). Full-library search
+  across unresident rows remains a separate canonical capability and
+  is NOT claimed here.
 - The desktop chrome split is REWRITTEN as a three-texture contract
   (breaking the single-raster strip packing whose offset math bred a whole
   class of presentation bugs). The content scene now renders into the

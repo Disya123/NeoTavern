@@ -27,7 +27,10 @@ impl<W: ProductWire> ChatSession<W> {
         chat_result
     }
 
-    /// Refresh the home/chats panel list (`chats.list`).
+    /// Refresh the home/chats panel list (`chats.list`). A refresh is a
+    /// first page: the resident list is replaced and the server cursor
+    /// re-bases (UI-03: the cursor is the Kernel's keyset truth — the
+    /// old code discarded it and chats past 50 were unreachable).
     pub(crate) fn load_chat_list(&mut self) {
         match self.call_decode(
             "chats.list",
@@ -38,8 +41,42 @@ impl<W: ProductWire> ChatSession<W> {
             },
             decode_paged_chats,
         ) {
-            Ok(PagedChats { items, .. }) => self.state.chat_list = items,
+            Ok(PagedChats { items, next_cursor }) => {
+                self.state.chat_list = items;
+                self.chats_cursor = next_cursor;
+            }
             Err(err) => self.record_error(err),
+        }
+    }
+
+    /// Home/chats panel "load more": fetch the next server page through
+    /// the stored cursor (UI-03). Appends without duplicates (stable
+    /// ids); the cursor advances only on a clean decode, so an error or
+    /// a cancelled call keeps the previous page boundary instead of
+    /// silently skipping items. `false` = no further pages exist.
+    pub fn load_more_chats(&mut self) -> bool {
+        let Some(cursor) = self.chats_cursor.clone() else {
+            return false;
+        };
+        match self.call_decode(
+            "chats.list",
+            &RequestListChats {
+                character_id: None,
+                cursor: Some(cursor),
+                limit: Some(PAGE_LIMIT),
+            },
+            decode_paged_chats,
+        ) {
+            Ok(PagedChats { items, next_cursor }) => {
+                append_unique(&mut self.state.chat_list, items, |row| row.id.as_str());
+                self.chats_cursor = next_cursor;
+                self.bump_scene();
+                true
+            }
+            Err(err) => {
+                self.record_error(err);
+                false
+            }
         }
     }
 
@@ -226,7 +263,7 @@ impl<W: ProductWire> ChatSession<W> {
             },
             decode_paged_characters,
         ) {
-            Ok(PagedCharacters { items, .. }) => {
+            Ok(PagedCharacters { items, next_cursor }) => {
                 if self.state.selected_character_id.is_none() {
                     self.state.selected_character_id = items.first().map(|row| row.id.clone());
                     self.load_character_draft();
@@ -235,6 +272,9 @@ impl<W: ProductWire> ChatSession<W> {
                     self.state.pinned_character_id = self.state.selected_character_id.clone();
                 }
                 self.state.characters = items;
+                // UI-03: keep the server cursor — the catalog continues
+                // past the first page through `load_more_characters`.
+                self.characters_cursor = next_cursor;
                 self.characters_revision += 1;
                 self.hydrate_character_avatars();
             }
@@ -248,10 +288,43 @@ impl<W: ProductWire> ChatSession<W> {
         self.load_character_draft();
     }
 
-    /// React `characters.load-more`: reveal one more page of the browser.
-    /// Paging bounds the DOM, not the fetch — the catalog is in memory.
+    /// React `characters.load-more`, UI-03 fix. Two honest steps in order:
+    /// first reveal one more resident page (the DOM window — the old
+    /// behavior, unchanged), and only when the window already shows
+    /// everything resident does the catalog FETCH the next server page
+    /// through the keyset cursor. The resident set grows only on explicit
+    /// user action (no eager full-library load); appends dedup by stable
+    /// id; the cursor advances only on a clean decode (errors and
+    /// cancellations keep the previous page boundary); the filtered-card
+    /// cache invalidates with the catalog revision.
     pub fn load_more_characters(&mut self) {
-        self.state.character_browser_limit += CHARACTERS_PAGE;
+        if self.state.character_browser_limit < self.state.characters.len() {
+            self.state.character_browser_limit += CHARACTERS_PAGE;
+            self.bump_scene();
+            return;
+        }
+        let Some(cursor) = self.characters_cursor.clone() else {
+            // Catalog exhausted server-side: nothing to reveal, nothing
+            // to fetch. A no-op, not an error.
+            return;
+        };
+        match self.call_decode(
+            "characters.list",
+            &RequestListCharacters {
+                cursor: Some(cursor),
+                limit: Some(PAGE_LIMIT),
+            },
+            decode_paged_characters,
+        ) {
+            Ok(PagedCharacters { items, next_cursor }) => {
+                append_unique(&mut self.state.characters, items, |row| row.id.as_str());
+                self.characters_cursor = next_cursor;
+                self.state.character_browser_limit += CHARACTERS_PAGE;
+                self.characters_revision += 1;
+                self.hydrate_character_avatars();
+            }
+            Err(err) => self.record_error(err),
+        }
         self.bump_scene();
     }
 

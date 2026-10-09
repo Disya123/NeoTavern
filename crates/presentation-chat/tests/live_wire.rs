@@ -1,7 +1,7 @@
 use neotavern_presentation_chat::{
     ensure_isolated_10k_workspace, start_flagged_route, start_flagged_session, ChatRouteError,
-    ChatSession, FakeWire, StreamFrame, DEMO_CHAT_ID, ISOLATED_10K_COUNT, ISOLATED_10K_PROFILE,
-    ISOLATED_10K_TITLE, PAGE_LIMIT,
+    ChatSession, FakeWire, ProductWire, StreamFrame, DEMO_CHAT_ID, ISOLATED_10K_COUNT,
+    ISOLATED_10K_PROFILE, ISOLATED_10K_TITLE, PAGE_LIMIT,
 };
 use neotavern_presentation_dioxus_shell::{ProductChrome, PRODUCT_PATH_VISIBLE};
 use serde_json::json;
@@ -538,5 +538,95 @@ fn chat_scroll_window_is_continuous_and_pins_both_edges() {
     assert!(
         hidden_max.abs() <= 1.0,
         "max pins the content start, got {hidden_max}"
+    );
+}
+
+/// UI-03 parity on the fixture transport (INV-7: fake parity only — the
+/// product claim is `catalog_pagination_reaches_item_101_over_the_real_kernel`
+/// in the kernel-wire suite). The fake implements the SAME cursor contract
+/// the kernel does — pages carry a cursor while rows remain, the exact
+/// last page carries none — so a green fake run still proves nothing that
+/// the kernel run hasn't already gated; it only keeps the fixture honest.
+#[test]
+fn fake_wire_honors_cursor_pagination_on_character_and_chat_catalogs() {
+    let mut wire = FakeWire::empty();
+    // 120 characters, 75 chats — multi-page on both catalogs.
+    let mut character_ids = Vec::new();
+    for index in 0..120 {
+        let call = wire
+            .call(
+                "characters.create",
+                json!({
+                    "name": format!("Fake page {index:03}"),
+                    "description": format!("fixture pagination row {index}"),
+                }),
+            )
+            .expect("fixture create");
+        character_ids.push(
+            call.result
+                .get("id")
+                .cloned()
+                .expect("fixture create returns an id"),
+        );
+    }
+    for (index, character_id) in character_ids.iter().enumerate().take(75) {
+        wire.call(
+            "chats.create",
+            json!({
+                "characterId": character_id,
+                "title": format!("Fake chat {index:03}"),
+            }),
+        )
+        .expect("fixture chat create");
+    }
+
+    let mut session = ChatSession::open(wire, None).expect("open over the paged fixture");
+    assert!(
+        session.state().last_error.is_none(),
+        "open must stay clean: {:?}",
+        session.state().last_error
+    );
+    assert_eq!(session.state().characters.len(), PAGE_LIMIT as usize);
+    assert_eq!(session.state().chat_list.len(), PAGE_LIMIT as usize);
+
+    // Load more until the fixture's cursor exhausts; the catalogs are
+    // 120/75 — several pages each.
+    for _ in 0..10 {
+        session.load_more_characters();
+    }
+    assert_eq!(
+        session.state().characters.len(),
+        120,
+        "fixture cursor reaches the tail"
+    );
+    let mut ids = std::collections::HashSet::new();
+    for row in &session.state().characters {
+        assert!(
+            ids.insert(row.id.clone()),
+            "fixture boundary must not duplicate"
+        );
+    }
+    assert_eq!(ids.len(), 120);
+
+    for _ in 0..4 {
+        session.load_more_chats();
+    }
+    assert_eq!(
+        session.state().chat_list.len(),
+        75,
+        "fixture chat pages complete"
+    );
+    let mut chat_ids = std::collections::HashSet::new();
+    for row in &session.state().chat_list {
+        assert!(
+            chat_ids.insert(row.id.clone()),
+            "fixture chat boundary must not duplicate"
+        );
+    }
+    assert_eq!(chat_ids.len(), 75);
+    assert!(
+        session.state().last_error.is_none(),
+        "pagination over the fixture must stay clean: {:?}",
+        session.state().last_error
     );
 }

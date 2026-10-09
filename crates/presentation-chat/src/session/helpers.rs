@@ -16,6 +16,20 @@ pub(crate) fn slash_command_name(message: &str) -> String {
     }
 }
 
+/// Append cursor-paged rows, skipping ids already resident (UI-03).
+/// Keyset pages arrive in a stable order, so the dedup is a boundary
+/// guard (a re-served first row, a page overlap) — it must never become
+/// a reason to drop legitimately distinct rows.
+pub(crate) fn append_unique<T>(list: &mut Vec<T>, incoming: Vec<T>, id_of: impl Fn(&T) -> &str) {
+    let mut known: std::collections::HashSet<String> =
+        list.iter().map(|row| id_of(row).to_string()).collect();
+    for row in incoming {
+        if known.insert(id_of(&row).to_string()) {
+            list.push(row);
+        }
+    }
+}
+
 pub(crate) fn settings_string(items: &[SettingsItem], key: &str) -> Option<String> {
     let item = items.iter().find(|row| row.key == key)?;
     if let Some(text) = item.value.as_str() {

@@ -508,3 +508,130 @@ fn kernel_restart_restores_the_unsent_draft() {
         "unsent restart draft, continued"
     );
 }
+
+/// Phase 2 gate item (ADR-0057 §7): "paginated catalogs (UI-03 class)
+/// reach item 101+". The UI-03 audit class — `load_chat_list` /
+/// `load_characters` discarded the server cursor and `load_more` never
+/// fetched — is closed against the REAL Kernel: 101 characters and 55
+/// chats seeded over the wire, then paged through the session command
+/// surface only. No client-side arithmetic decides the page boundary;
+/// the Kernel's keyset cursor is the only truth (INV-1).
+#[test]
+fn catalog_pagination_reaches_item_101_over_the_real_kernel() {
+    let (mut kernel, _keep_root) = kernel_wire();
+    let call = |wire: &mut KernelProductWire, op: &str, payload| {
+        wire.call(op, payload).expect("seed call succeeds")
+    };
+    for index in 0..101usize {
+        let character = call(
+            &mut kernel,
+            "characters.create",
+            json!({
+                "name": format!("Paginator {index:03}"),
+                "description": format!("UI-03 pagination witness {index}"),
+            }),
+        );
+        let character_id = character
+            .result
+            .get("id")
+            .cloned()
+            .expect("characters.create returns the id");
+        if index < 55 {
+            call(
+                &mut kernel,
+                "chats.create",
+                json!({
+                    "characterId": character_id,
+                    "title": format!("Page chat {index:03}"),
+                }),
+            );
+        }
+    }
+
+    let mut session = ChatSession::open(kernel, None).expect("session opens");
+    let no_error = |session: &ChatSession<KernelProductWire>| {
+        assert!(
+            session.state().last_error.is_none(),
+            "pagination must not record an error: {:?}",
+            session.state().last_error
+        );
+    };
+
+    // First page: 50 rows resident, the tail is cursor-locked away. The
+    // page ORDER is the Kernel's (`created_at DESC, id DESC` — ties break
+    // newest-first), so the test asserts reachability, not composition.
+    let first_page_names: std::collections::HashSet<String> = session
+        .state()
+        .characters
+        .iter()
+        .map(|row| row.name.clone())
+        .collect();
+    let absent: Vec<usize> = (0..101usize)
+        .filter(|index| !first_page_names.contains(&format!("Paginator {index:03}")))
+        .collect();
+    assert_eq!(
+        absent.len(),
+        51,
+        "the 51 remaining rows are behind the cursor"
+    );
+    assert_eq!(
+        session.state().chat_list.len(),
+        50,
+        "chat first page is 50 of 55"
+    );
+
+    // Load more until the server says the catalog ends.
+    for _ in 0..8 {
+        session.load_more_characters();
+        no_error(&session);
+    }
+    assert_eq!(
+        session.state().characters.len(),
+        101,
+        "the whole catalog arrives"
+    );
+
+    // No page boundary duplicates: 101 rows, 101 distinct stable ids.
+    let mut ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for row in &session.state().characters {
+        assert!(ids.insert(row.id.clone()), "duplicate id across pages");
+    }
+    assert_eq!(ids.len(), 101);
+    // EVERY seeded row is reachable — items 51 and 101 included (the
+    // Phase-2 gate), and nothing was lost at the boundaries.
+    for index in 0..101usize {
+        let name = format!("Paginator {index:03}");
+        assert!(
+            session
+                .state()
+                .characters
+                .iter()
+                .any(|row| row.name == name),
+            "{name} must be reachable through cursor pagination"
+        );
+    }
+
+    // Exhausted load-more is a clean no-op: no fetch, no error.
+    let resident = session.state().characters.len();
+    session.load_more_characters();
+    assert_eq!(session.state().characters.len(), resident);
+    no_error(&session);
+
+    // Chats: one more page reaches 55; the exact last page carries no
+    // cursor, so the second load-more reports exhaustion.
+    assert!(session.load_more_chats(), "chat page 2 exists");
+    assert_eq!(session.state().chat_list.len(), 55);
+    let mut chat_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for row in &session.state().chat_list {
+        assert!(
+            chat_ids.insert(row.id.clone()),
+            "duplicate chat id across pages"
+        );
+    }
+    assert_eq!(chat_ids.len(), 55);
+    assert!(
+        !session.load_more_chats(),
+        "55 is the exact end — no cursor"
+    );
+    no_error(&session);
+}

@@ -641,6 +641,13 @@ pub struct ChatSession<W: ProductWire> {
     /// Filtered+sorted cards shared with the shell view as an `Arc`, rebuilt
     /// only when the revision, search or sort changes.
     characters_cards: RefCell<Option<CharacterCardsCache>>,
+    /// UI-03 fix: the server-issued pagination cursors of the last
+    /// `characters.list` / `chats.list` page. Truth is the Kernel's keyset
+    /// cursor (INV-1); the session never invents one, never pages past
+    /// `None`, and only advances a cursor after the page that re-issued it
+    /// decoded cleanly (errors keep the previous cursor).
+    characters_cursor: Option<String>,
+    chats_cursor: Option<String>,
 }
 
 impl<W: ProductWire> ChatSession<W> {
