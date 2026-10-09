@@ -2330,6 +2330,20 @@ impl ProductWire for FakeWire {
                 self.ok_call(operation_id, json!({}))
             }
             "settings.update" => {
+                // INV-7 (UI-01): the fixture obeys the SAME canonical
+                // contract as the Kernel — the settings key must match the
+                // lowercase pattern and the value must be an Object, so a
+                // green fake run can no longer hide a contract violation
+                // the real Kernel would reject. The error kind mirrors the
+                // kernel's decode-failure mapping (Transport, not a
+                // product error).
+                if let Err(issues) =
+                    contracts_generated::generated::validate_request_settings_update(&payload)
+                {
+                    return Err(ChatRouteError::Transport(format!(
+                        "settings.update request failed contract validation: {issues:?}"
+                    )));
+                }
                 let req: RequestSettingsUpdate = serde_json::from_value(payload.clone())?;
                 for entry in &req.settings {
                     let key = &entry.key;

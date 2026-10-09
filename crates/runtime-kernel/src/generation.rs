@@ -726,8 +726,18 @@ pub(crate) fn stream_start(
                     vec![("chatId".to_string(), req.chat_id.clone())],
                 ));
             }
-            let provider = req.provider.clone();
-            let model = req.model.clone();
+            // UI-01 (ADR-0057 Phase 2): explicit request values win; a
+            // request that omits them resolves through the DURABLE
+            // selection chain — settings `activeproviderconfigid` →
+            // `provider_configs` row → provider kind + model (INV-1:
+            // the Kernel resolves; the session never reads product
+            // state to build a request). A dangling selection is a
+            // stable product error, and no selection at all keeps the
+            // documented Preview default (`fake`).
+            let (provider, model) = match req.provider.clone() {
+                Some(provider) => (Some(provider), req.model.clone()),
+                None => resolve_active_provider(db, req.model.clone())?,
+            };
             let snapshot_json =
                 snapshot_json(&req.chat_id, &req.message, &req.provider, &req.model);
             (None, req.chat_id.clone(), 1, provider, model, snapshot_json)
@@ -782,6 +792,56 @@ pub(crate) fn stream_start(
         notice_tx,
         notice_rx,
     })
+}
+
+/// Resolves the effective `(provider, model)` for a `generation.start`
+/// request that omits them — the UI-01 fix (ADR-0057 Phase 2). The
+/// durable chain, all inside the Kernel (INV-1):
+///
+/// 1. settings row `activeproviderconfigid` names the active profile;
+/// 2. that `provider_configs` row contributes the provider KIND and the
+///    configured model (`config.model`, or the first entry of the
+///    `models` array the adapter normalizer understands);
+/// 3. no selection at all keeps the documented Preview default
+///    (`fake`), so first-run and fixture flows stay honest;
+/// 4. a selection pointing at a DELETED profile is a stable product
+///    error (`PROVIDER_CONFIG_NOT_FOUND`) — never a silent `fake`
+///    substitution.
+///
+/// An explicit `model` in the request still wins (per-send override).
+fn resolve_active_provider(
+    db: &mut Database,
+    explicit_model: Option<String>,
+) -> Result<(Option<String>, Option<String>), KernelError> {
+    let Some(config_id) =
+        crate::settings::read_setting_scalar(db.conn(), "activeproviderconfigid")?
+    else {
+        return Ok((Some("fake".to_string()), explicit_model));
+    };
+    let Some((provider, config)) =
+        crate::providers_config::load_config_by_id(db.conn(), &config_id)?
+    else {
+        return Err(KernelError::product(
+            "PROVIDER_CONFIG_NOT_FOUND",
+            vec![("providerConfigId".to_string(), config_id)],
+        ));
+    };
+    let model = explicit_model.or_else(|| {
+        config
+            .get("model")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+            .or_else(|| {
+                config
+                    .get("models")
+                    .and_then(serde_json::Value::as_array)
+                    .and_then(|items| items.first())
+                    .and_then(|item| item.get("id"))
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string)
+            })
+    });
+    Ok((Some(provider), model))
 }
 
 /// The sanitized request snapshot stored on the run and reused by retry:

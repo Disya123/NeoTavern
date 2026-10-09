@@ -630,3 +630,55 @@ fn fake_wire_honors_cursor_pagination_on_character_and_chat_catalogs() {
         session.state().last_error
     );
 }
+
+/// UI-01 fixture parity (INV-7: fake parity only — the product claim is
+/// `provider_selection_reaches_generation_over_the_real_kernel` in the
+/// kernel-wire suite). The fixture transport now enforces the SAME
+/// canonical settings contract as the Kernel: lowercase keys + Object
+/// values are accepted, the old camelCase + scalar shape is rejected —
+/// so a green fake run can no longer hide a contract violation. The
+/// session's provider selection rides the canonical shape and projects
+/// only after the durable write lands.
+#[test]
+fn provider_selection_settings_rows_follow_the_canonical_contract_on_the_fixture() {
+    // The old shape is rejected by the fixture, exactly like the Kernel
+    // rejects it (lowercase key pattern, Object value).
+    let mut wire = FakeWire::demo();
+    let rejected = wire.call(
+        "settings.update",
+        json!({ "settings": [ { "key": "activeProviderConfigId", "value": { "value": "x" } } ] }),
+    );
+    assert!(
+        rejected.is_err(),
+        "camelCase settings keys are contract violations the fixture must reject"
+    );
+    let scalar_rejected = wire.call(
+        "settings.update",
+        json!({ "settings": [ { "key": "activeproviderconfigid", "value": "x" } ] }),
+    );
+    assert!(
+        scalar_rejected.is_err(),
+        "a bare scalar settings value violates the wire shape"
+    );
+
+    // The session command surface rides the canonical shape end to end.
+    let configs = wire
+        .call("providers.config.list", json!({}))
+        .expect("fixture lists its demo profile");
+    let profile_id = configs.result["items"][0]["id"]
+        .as_str()
+        .expect("demo profile id")
+        .to_string();
+    let mut session = ChatSession::open(wire, None).expect("open");
+    session.select_provider(&profile_id);
+    assert_eq!(
+        session.state().active_provider_id.as_deref(),
+        Some(profile_id.as_str()),
+        "the selection projects after the canonical write lands"
+    );
+    assert!(
+        session.state().last_error.is_none(),
+        "canonical write must stay clean: {:?}",
+        session.state().last_error
+    );
+}

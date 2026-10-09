@@ -155,7 +155,16 @@ writer-coordinator thread:
 Generation execution now routes through portable provider adapters
 (`provider-sdk`) instead of the Phase 6 inline fake. The kernel registers
 the built-in adapters (`built-in-providers`) and hands each run to the
-adapter resolved from the run's `provider` field (default `fake`).
+adapter resolved from the run's `provider` field. A `generation.start`
+that omits `provider`/`model` no longer silently substitutes `fake`:
+the kernel resolves the DURABLE selection first — the settings row
+`activeproviderconfigid` names a `provider_configs` row, and that row's
+provider kind + configured model (`config.model`, or the first
+`models[].id`) land on the run (UI-01, INV-1: sessions never read
+product state to build requests). A selection pointing at a deleted
+profile fails the start with the stable `PROVIDER_CONFIG_NOT_FOUND`
+product error; no selection at all keeps the documented Preview default
+(`fake`). Explicit request values still win over the resolved ones.
 
 - **`providers::ProviderRegistry`** — stable-order adapter list:
   `new_builtins()` registers `FakeProvider` (id `fake`, model `fake-1`);
@@ -199,6 +208,10 @@ adapter resolved from the run's `provider` field (default `fake`).
   | `Cancelled`        | cancelled terminal (`generation.cancelled`) | —                              |
 
   An unknown `provider` field (no registered adapter) fails the run with
-  `PROVIDER_UNAVAILABLE` — unchanged product behavior. Secret values never
+  `PROVIDER_UNAVAILABLE` — unchanged product behavior. A `generation.start`
+  whose durable selection (`activeproviderconfigid`) points at a deleted
+  `provider_configs` row fails the START with the stable product error
+  `PROVIDER_CONFIG_NOT_FOUND` (params: `providerConfigId`) — never a silent
+  `fake` fallback. Secret values never
   appear in request snapshots, event payloads, error payloads or `Debug`
   output (`SecretValue` prints `<redacted>`).

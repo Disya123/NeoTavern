@@ -186,6 +186,45 @@ fn query_all_settings(db: &mut Database) -> Result<Vec<SettingsItem>, KernelErro
     )
 }
 
+/// Reads one settings row's scalar string value (UI-01, ADR-0057
+/// Phase-2 INV-1: the durable selection chain — settings key →
+/// `provider_configs` row — is resolved INSIDE the Kernel; sessions and
+/// hosts never re-read product state to build requests).
+///
+/// Both stored forms resolve: canonical writes store the documented
+/// `{ "value": X }` wrapper; legacy-converted rows may store bare
+/// scalars (ADR-0046 waiver 8). `None` = the key is absent, a present
+/// non-string value resolves to `None` (the caller decides whether that
+/// is an error).
+pub(crate) fn read_setting_scalar(
+    conn: &rusqlite::Connection,
+    key: &str,
+) -> Result<Option<String>, KernelError> {
+    let mut stmt = conn
+        .prepare("SELECT value_json FROM settings WHERE key = ?1")
+        .map_err(|e| sqlite(e, "read_setting: prepare"))?;
+    let mut rows = stmt
+        .query(rusqlite::params![key])
+        .map_err(|e| sqlite(e, "read_setting: query"))?;
+    let Some(row) = rows.next().map_err(|e| sqlite(e, "read_setting: read"))? else {
+        return Ok(None);
+    };
+    let value_json: String = row.get(0).map_err(|e| sqlite(e, "read_setting: column"))?;
+    let value: serde_json::Value = serde_json::from_str(&value_json).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("settings.value_json is not valid JSON: {err}"),
+        )
+    })?;
+    let inner = match &value {
+        serde_json::Value::Object(obj) if obj.len() == 1 && obj.contains_key("value") => {
+            obj.get("value").expect("single-key object checked")
+        }
+        _ => &value,
+    };
+    Ok(inner.as_str().map(str::to_string))
+}
+
 /// `diagnostics.export` — SEC-07 allowlist diagnostics bundle.
 ///
 /// Request: `wire.request.empty`; response: `wire.result.diagnostics-export`.

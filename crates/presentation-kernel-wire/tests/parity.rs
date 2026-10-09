@@ -635,3 +635,142 @@ fn catalog_pagination_reaches_item_101_over_the_real_kernel() {
     );
     no_error(&session);
 }
+
+/// UI-01 (ADR-0057 Phase 2): the selected provider profile REACHES
+/// generation over the real Kernel. The old session wrote a camelCase
+/// `activeProviderConfigId` settings row that canonical validation
+/// rejected while the UI kept showing the profile as active, and
+/// `generation.start` (provider: None) silently substituted `fake`. The
+/// chain now: canonical row (`activeproviderconfigid`, Object value) →
+/// the Kernel resolves the active `provider_configs` row when the
+/// request omits provider/model (INV-1 — sessions never read product
+/// state to build requests) → the durable run carries the selected
+/// provider + configured model → the selection survives a restart → a
+/// selection pointing at a deleted profile is a STABLE error, never a
+/// silent `fake`.
+#[test]
+fn provider_selection_reaches_generation_over_the_real_kernel() {
+    let (mut kernel, root) = kernel_wire();
+    let chat = seed_parity_workspace(&mut kernel, "UI-01", 1).expect("kernel seed");
+
+    // The old write shape is rejected by the Kernel's OWN request
+    // validation (lowercase key pattern): this is the exact mutation the
+    // session used to issue while displaying the selection as active.
+    let rejected = kernel.call(
+        "settings.update",
+        json!({ "settings": [ { "key": "activeProviderConfigId", "value": { "value": "x" } } ] }),
+    );
+    assert!(
+        rejected.is_err(),
+        "camelCase settings keys are contract violations the Kernel must reject"
+    );
+
+    // Durable profile + canonical selection row. The `fake` adapter's
+    // model is a step-grammar string (`steps=3;tokens-per-step=24`) — a
+    // REAL valid model for the provider, not a sentinel.
+    let profile = kernel
+        .call(
+            "providers.config.set",
+            json!({
+                "provider": "fake",
+                "name": "ui01-profile",
+                "config": { "model": "steps=3;tokens-per-step=24" },
+            }),
+        )
+        .expect("providers.config.set");
+    let profile_id = profile
+        .result
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .expect("profile id")
+        .to_string();
+    kernel
+        .call(
+            "settings.update",
+            json!({ "settings": [ { "key": "activeproviderconfigid", "value": { "value": profile_id } } ] }),
+        )
+        .expect("canonical settings row lands");
+
+    // Send WITHOUT provider/model: the Kernel resolves through the
+    // durable selection and the run carries the selected authority.
+    let mut session = ChatSession::open(kernel, Some(&chat)).expect("session opens");
+    assert_eq!(
+        session.state().active_provider_id.as_deref(),
+        Some(profile_id.as_str()),
+        "the durable provider selection hydrates on open"
+    );
+    session
+        .send(Some("provider selection probe"))
+        .expect("send");
+    pump_stream(&mut session);
+    assert!(
+        session.state().last_error.is_none(),
+        "send stays clean: {:?}",
+        session.state().last_error
+    );
+    let run_id = session
+        .state()
+        .active_run_id
+        .clone()
+        .expect("completed run id");
+    drop(session); // releases the data root for the restart leg
+
+    // The selection AND the run authority survive the restart.
+    let mut wire = KernelProductWire::open(&root).expect("kernel reopens the data root");
+    let run = wire
+        .call("generation.get", json!({ "workflowId": run_id }))
+        .expect("run readable after restart");
+    assert_eq!(
+        run.result.get("provider"),
+        Some(&json!("fake")),
+        "the run carries the selected profile's provider kind"
+    );
+    assert_eq!(
+        run.result.get("model"),
+        Some(&json!("steps=3;tokens-per-step=24")),
+        "the run carries the selected profile's configured model"
+    );
+    let mut session = ChatSession::open(wire, Some(&chat)).expect("session reopens");
+    assert_eq!(
+        session.state().active_provider_id.as_deref(),
+        Some(profile_id.as_str()),
+        "the selection survives the restart"
+    );
+
+    // Dangling selection: delete the profile (the session clears the row
+    // canonically), then re-select the deleted id and send — a STABLE
+    // product error, not a silent `fake` fallback.
+    session.load_provider_configs();
+    assert!(
+        session
+            .state()
+            .provider_configs
+            .iter()
+            .any(|item| item.id == profile_id),
+        "the seeded profile is listed"
+    );
+    session.open_provider_delete(&profile_id);
+    session.confirm_provider_delete();
+    assert!(session.state().last_error.is_none(), "delete stays clean");
+    assert_eq!(
+        session.state().active_provider_id,
+        None,
+        "deleting the active profile clears the selection"
+    );
+    session.select_provider(&profile_id);
+    // The start fails synchronously (no stream handle is created), so the
+    // error is already recorded by `send` — nothing to pump.
+    session
+        .send(Some("dangling selection probe"))
+        .expect("send records the error instead of failing");
+    let code = session
+        .state()
+        .last_error
+        .as_ref()
+        .map(|err| err.code.clone())
+        .unwrap_or_default();
+    assert_eq!(
+        code, "PROVIDER_CONFIG_NOT_FOUND",
+        "a dangling selection is a stable product error"
+    );
+}

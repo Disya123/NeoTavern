@@ -117,6 +117,44 @@ fn query_provider_config(
     }
 }
 
+/// Loads one provider config row by its stable id — the durable
+/// selection chain of UI-01/ADR-0057 Phase 2: `generation.start` without
+/// explicit provider/model resolves the ACTIVE profile through this read
+/// (INV-1: the Kernel resolves its own state; sessions never do).
+/// `None` = no row with that id (the caller maps it to a stable error).
+pub(crate) fn load_config_by_id(
+    conn: &rusqlite::Connection,
+    id: &str,
+) -> Result<Option<(String, serde_json::Value)>, KernelError> {
+    let mut stmt = conn
+        .prepare("SELECT provider, config_json FROM provider_configs WHERE id = ?1")
+        .map_err(|e| sqlite(e, "load_config_by_id: prepare"))?;
+    let mut rows = stmt
+        .query(params![id])
+        .map_err(|e| sqlite(e, "load_config_by_id: query"))?;
+    match rows
+        .next()
+        .map_err(|e| sqlite(e, "load_config_by_id: read row"))?
+    {
+        Some(row) => {
+            let provider: String = row
+                .get(0)
+                .map_err(|e| sqlite(e, "load_config_by_id: provider"))?;
+            let config_json: String = row
+                .get(1)
+                .map_err(|e| sqlite(e, "load_config_by_id: config_json"))?;
+            let config: serde_json::Value = serde_json::from_str(&config_json).map_err(|err| {
+                KernelError::new(
+                    KernelErrorCode::Internal,
+                    format!("provider_configs.config_json is not valid JSON: {err}"),
+                )
+            })?;
+            Ok(Some((provider, config)))
+        }
+        None => Ok(None),
+    }
+}
+
 /// Validates and serializes a config DTO through the generated checker.
 fn finish(dto: &ProviderConfigDto) -> Result<Vec<u8>, KernelError> {
     validate(dto, generated::validate_provider_config_dto)?;

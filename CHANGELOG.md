@@ -197,6 +197,38 @@
 
 ### Fixed
 
+- The selected provider profile now REACHES generation (UI-01 audit
+  class, ADR-0057 Phase 2). Two stacked defects: the session wrote the
+  selection as a camelCase `activeProviderConfigId` settings row with a
+  scalar value — the canonical contract (`wire.settings.item`) requires
+  a lowercase key and an Object value, so the Kernel rejected the write
+  while the UI kept showing the profile as active; and
+  `generation.start` sent `provider: None, model: None`, which the
+  Kernel silently substituted with `fake` + an empty model — the
+  durable selection was never read. The chain now: every session
+  settings write (provider selection, preset selection/apply/import/
+  duplicate/delete, profile create/delete) rides the canonical shape;
+  selections project onto the UI only AFTER the durable write lands
+  (INV-1); the Kernel resolves an omitted provider/model through the
+  durable chain — settings `activeproviderconfigid` → the
+  `provider_configs` row → provider kind + configured model
+  (`config.model` or the first `models[].id`) land on the run; the
+  selection hydrates on open and survives a restart; a selection
+  pointing at a deleted profile fails the start with the stable
+  `PROVIDER_CONFIG_NOT_FOUND` product error instead of silently running
+  `fake`; explicit per-send values still win. FakeWire enforces the same
+  canonical settings contract (the old shape is rejected there too), so
+  fixture runs can no longer hide the violation (INV-7). Gate test:
+  `provider_selection_reaches_generation_over_the_real_kernel` —
+  profile + canonical row + send with NO provider/model, the durable
+  run carries the selected provider and the profile's model, both
+  survive a restart, and the dangling-selection start errors stably.
+  Known remaining limits (honest, not fixed here): the API-key
+  resolution for a provider KIND still picks that kind's first
+  alphabetically-ordered profile when several exist (single-profile
+  reality today); the native profile dialog still creates profiles
+  without endpoint/model fields (session `providers.config.set` passes
+  `config: None`) — that is shell-surface work in the panel migration.
 - Character and chat catalogs reach past the first page (UI-03 audit
   class, ADR-0057 Phase-2 gate item "paginated catalogs reach item
   101+"). The session discarded the Kernel's keyset cursor on every

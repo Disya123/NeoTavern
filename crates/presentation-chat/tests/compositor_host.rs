@@ -6843,18 +6843,80 @@ fn character_cards_cache_is_shared_until_catalog_or_inputs_change() {
 
 #[test]
 fn character_browser_pages_via_load_more() {
+    use neotavern_presentation_chat::ProductWire;
     use neotavern_presentation_chat::ShellAction;
     use neotavern_presentation_m0_d2::inspect_slot_skeleton;
     use std::sync::Arc;
 
-    let (mut session, _) =
-        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    // A 119-character fixture on top of the demo catalog: page 1 is 50
+    // rows and the cursor chain reaches the tail through load-more
+    // (UI-03 — the old session just grew the DOM window and everything
+    // past the first page was unreachable). The demo seeds a few of its
+    // own characters, so the total is measured, not assumed.
+    let mut wire = FakeWire::demo();
+    let demo_total = wire
+        .call("characters.list", serde_json::json!({ "limit": 200 }))
+        .expect("fixture list")
+        .result["items"]
+        .as_array()
+        .expect("items")
+        .len();
+    for index in 0..119usize {
+        wire.call(
+            "characters.create",
+            serde_json::json!({
+                "name": format!("Browser page {index:03}"),
+                "description": format!("paged browser row {index}"),
+            }),
+        )
+        .expect("fixture character create");
+    }
+    let total = demo_total + 119;
+
+    let (mut session, _) = start_flagged_session(Some("1"), wire, None, None).expect("route");
     let before = session.shell_view().character_browser_limit;
+    assert_eq!(
+        session.state().characters.len(),
+        50.min(total),
+        "first page is 50 rows"
+    );
     session.apply_shell_action(ShellAction::LoadMoreCharacters);
     assert_eq!(
         session.shell_view().character_browser_limit,
         before + 50,
-        "load-more reveals one page (React useCharacters limit: 50)"
+        "load-more fetches one cursor page (React useCharacters limit: 50)"
+    );
+    assert_eq!(
+        session.state().characters.len(),
+        100.min(total),
+        "the catalog grows by the fetched page"
+    );
+    assert!(
+        session.state().last_error.is_none(),
+        "load-more stays clean: {:?}",
+        session.state().last_error
+    );
+    session.apply_shell_action(ShellAction::LoadMoreCharacters);
+    assert_eq!(
+        session.state().characters.len(),
+        150.min(total),
+        "the tail page lands"
+    );
+    // The exact end carries no cursor: further load-more is a clean no-op.
+    session.apply_shell_action(ShellAction::LoadMoreCharacters);
+    assert_eq!(
+        session.state().characters.len(),
+        150.min(total),
+        "an exhausted catalog does not grow"
+    );
+    assert_eq!(
+        session.shell_view().character_browser_limit,
+        before + 2 * 50,
+        "the window no longer grows past the exhausted catalog"
+    );
+    assert!(
+        session.state().last_error.is_none(),
+        "exhaustion is a no-op, not an error"
     );
 
     // The grid lays out only the current page: a hand-built view with more

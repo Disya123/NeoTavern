@@ -242,10 +242,14 @@ impl<W: ProductWire> ChatSession<W> {
             return;
         }
         let fallback = PresetGenerationData::default();
-        let tokens = settings_unwrapped(items, "maxContextTokens")
+        // Canonical settings rows (UI-01): lowercase keys. The writers now
+        // emit `maxcontexttokens` / `generationdefaults` /
+        // `activegenerationpresetid`; `settings_unwrapped` accepts both the
+        // `{"value": X}` wrapper and legacy bare scalars.
+        let tokens = settings_unwrapped(items, "maxcontexttokens")
             .and_then(Value::as_i64)
             .unwrap_or(fallback.max_context_tokens);
-        let defaults = settings_unwrapped(items, "generationDefaults")
+        let defaults = settings_unwrapped(items, "generationdefaults")
             .map(merge_preset_defaults_value)
             .unwrap_or_else(|| {
                 serde_json::to_value(&fallback.generation_defaults).unwrap_or_else(|_| json!({}))
@@ -254,12 +258,24 @@ impl<W: ProductWire> ChatSession<W> {
         self.state.preset_draft_defaults = defaults;
         self.state.preset_unlocked_context = tokens > CONTEXT_TOKEN_DEFAULT_MAX;
         self.clear_preset_value_edit();
-        if let Some(value) = settings_unwrapped(items, "activeGenerationPresetId") {
+        if let Some(value) = settings_unwrapped(items, "activegenerationpresetid") {
             if value.is_null() {
                 self.state.active_preset_id = None;
             } else if let Some(id) = value.as_str() {
                 if !id.is_empty() {
                     self.state.active_preset_id = Some(id.to_string());
+                }
+            }
+        }
+        // UI-01: the durable provider selection hydrates from the same
+        // settings snapshot — the choice survives a restart (INV-1: the
+        // session projects the Kernel's row, it never re-picks one).
+        if let Some(value) = settings_unwrapped(items, "activeproviderconfigid") {
+            if value.is_null() {
+                self.state.active_provider_id = None;
+            } else if let Some(id) = value.as_str() {
+                if !id.is_empty() {
+                    self.state.active_provider_id = Some(id.to_string());
                 }
             }
         }

@@ -5,18 +5,23 @@
 //! assignment).
 use super::*;
 impl<W: ProductWire> ChatSession<W> {
-    /// Selects a provider card (`settings.update` key `activeProviderConfigId`,
-    /// React `ProviderProfileEditor` Connect flow persistence).
+    /// Selects a provider card (`settings.update` key `activeproviderconfigid`,
+    /// React `ProviderProfileEditor` Connect flow persistence). UI-01 fix:
+    /// the canonical settings row is a lowercase key with an Object value —
+    /// the old camelCase key + scalar violated `wire.settings.item` and the
+    /// Kernel rejected the write while the UI kept showing the profile as
+    /// active. The projection now lands only AFTER the durable write
+    /// succeeds (INV-1).
     pub fn select_provider(&mut self, id: &str) {
-        self.state.active_provider_id = Some(id.to_string());
         let req = RequestSettingsUpdate {
             settings: vec![RequestSettingsUpdateSettings {
-                key: "activeProviderConfigId".into(),
-                value: json!(id),
+                key: "activeproviderconfigid".into(),
+                value: json!({ "value": id }),
             }],
         };
         match self.call_value("settings.update", &req) {
             Ok(_) => {
+                self.state.active_provider_id = Some(id.to_string());
                 self.state.status_message = Some("Provider selected.".into());
             }
             Err(err) => self.record_error(err),
@@ -24,12 +29,14 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
-    /// Selects a generation preset card (`settings.update` key
-    /// `activeGenerationPresetId`, React `GenerationPresetEditor`). Like
-    /// React `selectPreset`, the preset values are applied too:
-    /// maxContextTokens + generationDefaults ride the same settings.update.
+    /// Selects a generation preset card (`settings.update` keys
+    /// `activegenerationpresetid` / `maxcontexttokens` /
+    /// `generationdefaults`, React `GenerationPresetEditor`). Like React
+    /// `selectPreset`, the preset values are applied too. UI-01 fix:
+    /// canonical lowercase keys + Object values (the camelCase + scalar
+    /// form violated `wire.request.settings.update`); the active id is
+    /// claimed only AFTER the durable write succeeds (INV-1).
     pub fn select_preset(&mut self, id: &str) {
-        self.state.active_preset_id = Some(id.to_string());
         if let Some(preset) = self.state.presets.iter().find(|item| item.id == id) {
             let parsed: PresetGenerationData =
                 serde_json::from_value(preset.data.clone()).unwrap_or_default();
@@ -43,50 +50,53 @@ impl<W: ProductWire> ChatSession<W> {
             let req = RequestSettingsUpdate {
                 settings: vec![
                     RequestSettingsUpdateSettings {
-                        key: "activeGenerationPresetId".into(),
-                        value: json!(id),
+                        key: "activegenerationpresetid".into(),
+                        value: json!({ "value": id }),
                     },
                     RequestSettingsUpdateSettings {
-                        key: "maxContextTokens".into(),
-                        value: json!(parsed.max_context_tokens),
+                        key: "maxcontexttokens".into(),
+                        value: json!({ "value": parsed.max_context_tokens }),
                     },
                     RequestSettingsUpdateSettings {
-                        key: "generationDefaults".into(),
-                        value: serde_json::to_value(&parsed.generation_defaults)
-                            .unwrap_or_else(|_| json!({})),
+                        key: "generationdefaults".into(),
+                        value: json!({ "value": serde_json::to_value(&parsed.generation_defaults)
+                            .unwrap_or_else(|_| json!({})) }),
                     },
                 ],
             };
             match self.call_value("settings.update", &req) {
                 Ok(_) => {
+                    self.state.active_preset_id = Some(id.to_string());
                     self.state.status_message = Some("Preset selected.".into());
                 }
                 Err(err) => self.record_error(err),
             }
         } else {
+            self.state.active_preset_id = Some(id.to_string());
             self.state.status_message = Some("Preset selected.".into());
         }
         self.bump_scene();
     }
 
-    /// Applies the current draft (`settings.update` maxContextTokens +
-    /// generationDefaults + activeGenerationPresetId; React `applyDraft`).
+    /// Applies the current draft (`settings.update` `maxcontexttokens` +
+    /// `generationdefaults` + `activegenerationpresetid`; React
+    /// `applyDraft`). Canonical rows: lowercase keys, Object values.
     pub fn apply_preset_draft(&mut self) {
         self.commit_preset_value_edit();
         let defaults = self.state.preset_draft_defaults.clone();
         let req = RequestSettingsUpdate {
             settings: vec![
                 RequestSettingsUpdateSettings {
-                    key: "maxContextTokens".into(),
-                    value: json!(self.state.preset_draft_max_context),
+                    key: "maxcontexttokens".into(),
+                    value: json!({ "value": self.state.preset_draft_max_context }),
                 },
                 RequestSettingsUpdateSettings {
-                    key: "generationDefaults".into(),
-                    value: defaults,
+                    key: "generationdefaults".into(),
+                    value: json!({ "value": defaults }),
                 },
                 RequestSettingsUpdateSettings {
-                    key: "activeGenerationPresetId".into(),
-                    value: json!(self.state.active_preset_id.clone()),
+                    key: "activegenerationpresetid".into(),
+                    value: json!({ "value": self.state.active_preset_id }),
                 },
             ],
         };
@@ -200,17 +210,17 @@ impl<W: ProductWire> ChatSession<W> {
                 let apply = RequestSettingsUpdate {
                     settings: vec![
                         RequestSettingsUpdateSettings {
-                            key: "activeGenerationPresetId".into(),
-                            value: json!(dto.id.clone()),
+                            key: "activegenerationpresetid".into(),
+                            value: json!({ "value": dto.id.clone() }),
                         },
                         RequestSettingsUpdateSettings {
-                            key: "maxContextTokens".into(),
-                            value: json!(parsed.max_context_tokens),
+                            key: "maxcontexttokens".into(),
+                            value: json!({ "value": parsed.max_context_tokens }),
                         },
                         RequestSettingsUpdateSettings {
-                            key: "generationDefaults".into(),
-                            value: serde_json::to_value(&parsed.generation_defaults)
-                                .unwrap_or_else(|_| json!({})),
+                            key: "generationdefaults".into(),
+                            value: json!({ "value": serde_json::to_value(&parsed.generation_defaults)
+                                .unwrap_or_else(|_| json!({})) }),
                         },
                     ],
                 };
@@ -443,15 +453,17 @@ impl<W: ProductWire> ChatSession<W> {
                 .map(|dto| dto.id)
                 .and_then(|id| {
                     // A created preset becomes the active one, exactly like
-                    // React `submitNameAction`.
+                    // React `submitNameAction`. Canonical row (UI-01); the
+                    // id is claimed only after the write lands (INV-1).
                     let req = RequestSettingsUpdate {
                         settings: vec![RequestSettingsUpdateSettings {
-                            key: "activeGenerationPresetId".into(),
-                            value: json!(id.clone()),
+                            key: "activegenerationpresetid".into(),
+                            value: json!({ "value": id.clone() }),
                         }],
                     };
-                    self.state.active_preset_id = Some(id);
-                    self.call_value("settings.update", &req).map(|_| ())
+                    self.call_value("settings.update", &req).map(|_| {
+                        self.state.active_preset_id = Some(id);
+                    })
                 })
         };
         match outcome {
@@ -495,13 +507,17 @@ impl<W: ProductWire> ChatSession<W> {
             Ok(dto) => {
                 let sel = RequestSettingsUpdate {
                     settings: vec![RequestSettingsUpdateSettings {
-                        key: "activeGenerationPresetId".into(),
-                        value: json!(dto.id.clone()),
+                        key: "activegenerationpresetid".into(),
+                        value: json!({ "value": dto.id.clone() }),
                     }],
                 };
-                let _ = self.call_value("settings.update", &sel);
-                self.state.active_preset_id = Some(dto.id);
-                self.state.status_message = Some("Preset duplicated.".into());
+                match self.call_value("settings.update", &sel) {
+                    Ok(_) => {
+                        self.state.active_preset_id = Some(dto.id);
+                        self.state.status_message = Some("Preset duplicated.".into());
+                    }
+                    Err(err) => self.record_error(err),
+                }
                 self.load_presets_list();
             }
             Err(err) => self.record_error(err),
@@ -533,13 +549,19 @@ impl<W: ProductWire> ChatSession<W> {
         };
         match self.call_value("presets.delete", &req) {
             Ok(_) => {
+                // The preset row is gone; clear the durable selection with
+                // the canonical Object form (UI-01 — a bare JSON null
+                // violated the wire shape). A failed clear records the
+                // error; the local state still reflects the deleted row.
                 let clear = RequestSettingsUpdate {
                     settings: vec![RequestSettingsUpdateSettings {
-                        key: "activeGenerationPresetId".into(),
-                        value: Value::Null,
+                        key: "activegenerationpresetid".into(),
+                        value: json!({ "value": null }),
                     }],
                 };
-                let _ = self.call_value("settings.update", &clear);
+                if let Err(err) = self.call_value("settings.update", &clear) {
+                    self.record_error(err);
+                }
                 self.state.active_preset_id = None;
                 self.state.status_message = Some("Preset deleted.".into());
                 self.load_presets_list();
@@ -628,17 +650,28 @@ impl<W: ProductWire> ChatSession<W> {
         };
         match self.call_decode("providers.config.set", &req, decode_provider_config_dto) {
             Ok(dto) => {
+                // Canonical settings row (UI-01): lowercase key + Object
+                // value; the selection is claimed only after the durable
+                // write lands (INV-1).
                 let sel = RequestSettingsUpdate {
                     settings: vec![RequestSettingsUpdateSettings {
-                        key: "activeProviderConfigId".into(),
-                        value: json!(dto.id.clone()),
+                        key: "activeproviderconfigid".into(),
+                        value: json!({ "value": dto.id }),
                     }],
                 };
-                let _ = self.call_value("settings.update", &sel);
-                self.state.active_provider_id = Some(dto.id);
-                self.close_provider_create();
-                self.reload_provider_configs();
-                self.state.status_message = Some("Profile saved.".into());
+                match self.call_value("settings.update", &sel) {
+                    Ok(_) => {
+                        self.state.active_provider_id = Some(dto.id.clone());
+                        self.close_provider_create();
+                        self.reload_provider_configs();
+                        self.state.status_message = Some("Profile saved.".into());
+                    }
+                    Err(err) => {
+                        self.record_error(err);
+                        self.close_provider_create();
+                        self.reload_provider_configs();
+                    }
+                }
             }
             Err(err) => {
                 let code = err.reason_code().to_string();
@@ -682,13 +715,22 @@ impl<W: ProductWire> ChatSession<W> {
         match self.call_value("providers.config.delete", &req) {
             Ok(_) => {
                 if was_active {
+                    // Clear the dangling selection with the canonical
+                    // Object form (UI-01 — bare null violated the wire
+                    // shape). The profile row is already gone, so the
+                    // local state drops it either way; a failed clear
+                    // records the error, and the Kernel's generation
+                    // resolution reports PROVIDER_CONFIG_NOT_FOUND
+                    // instead of silently falling back to `fake`.
                     let clear = RequestSettingsUpdate {
                         settings: vec![RequestSettingsUpdateSettings {
-                            key: "activeProviderConfigId".into(),
-                            value: Value::Null,
+                            key: "activeproviderconfigid".into(),
+                            value: json!({ "value": null }),
                         }],
                     };
-                    let _ = self.call_value("settings.update", &clear);
+                    if let Err(err) = self.call_value("settings.update", &clear) {
+                        self.record_error(err);
+                    }
                     self.state.active_provider_id = None;
                 }
                 self.reload_provider_configs();
