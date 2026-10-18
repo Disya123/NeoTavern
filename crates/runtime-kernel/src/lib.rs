@@ -541,9 +541,7 @@ fn handle_unary(
         "characters.list" => with_db_opt(db, |db| product::characters_list(db, req)),
         "characters.get" => with_db_opt(db, |db| product::characters_get(db, req)),
         "characters.card.get" => with_db_opt(db, |db| product::characters_card_get(db, req)),
-        "characters.card.update" => {
-            with_db_opt(db, |db| product::characters_card_update(db, req))
-        }
+        "characters.card.update" => with_db_opt(db, |db| product::characters_card_update(db, req)),
         "characters.create" => with_db_opt(db, |db| product::characters_create(db, req)),
         "characters.update" => with_db_opt(db, |db| product::characters_update(db, req)),
         "characters.delete" => with_db_opt(db, |db| product::characters_delete(db, req)),

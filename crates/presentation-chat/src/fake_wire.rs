@@ -1528,12 +1528,24 @@ impl ProductWire for FakeWire {
             "chats.update" => {
                 let chat_id = payload_str(&payload, "chatId")?;
                 let title = payload.get("title").and_then(Value::as_str);
+                // Kernel semantics (UI-08): a present `personaId` rebinds
+                // the chat's persona (unknown persona → PERSONA_NOT_FOUND);
+                // an omitted one leaves the binding untouched.
+                let persona_id = payload.get("personaId").and_then(Value::as_str);
+                if let Some(persona_id) = persona_id {
+                    if !self.personas.contains_key(persona_id) {
+                        return Err(Self::product("PERSONA_NOT_FOUND", "personaId", persona_id));
+                    }
+                }
                 let updated = {
                     let Some(chat) = self.chats.get_mut(&chat_id) else {
                         return Err(Self::product("CHAT_NOT_FOUND", "chatId", &chat_id));
                     };
                     if let Some(title) = title {
                         chat.title = title.to_string();
+                    }
+                    if let Some(persona_id) = persona_id {
+                        chat.persona_id = Some(persona_id.to_string());
                     }
                     chat.clone()
                 };
@@ -1826,43 +1838,49 @@ impl ProductWire for FakeWire {
                 self.wrap_call(operation_id, to_value(&created))
             }
             "personas.update" => {
+                // Kernel semantics: only the fields present change;
+                // name/description/avatar stay untouched when omitted, and
+                // `isDefault: true` promotes this persona to the single
+                // default (the previous holder is demoted — UI-08).
                 let persona_id = payload_str(&payload, "personaId")?;
-                let mut persona =
+                let name = payload.get("name").and_then(Value::as_str);
+                let description = payload.get("description").and_then(Value::as_str);
+                let avatar = payload.get("avatar").and_then(Value::as_str);
+                let is_default = payload.get("isDefault").and_then(Value::as_bool);
+                {
+                    let Some(persona) = self.personas.get_mut(&persona_id) else {
+                        return Err(Self::product("PERSONA_NOT_FOUND", "personaId", &persona_id));
+                    };
+                    if let Some(name) = name {
+                        persona.name = name.to_string();
+                    }
+                    if let Some(description) = description {
+                        persona.description = Some(description.to_string());
+                    }
+                    if let Some(avatar) = avatar {
+                        persona.avatar = Some(avatar.to_string());
+                    }
+                    if let Some(is_default) = is_default {
+                        persona.is_default = is_default;
+                    }
+                }
+                if is_default == Some(true) {
+                    for (id, persona) in self.personas.iter_mut() {
+                        if id != &persona_id {
+                            persona.is_default = false;
+                        }
+                    }
+                }
+                let updated =
                     self.personas.get(&persona_id).cloned().ok_or_else(|| {
                         Self::product("PERSONA_NOT_FOUND", "personaId", &persona_id)
                     })?;
-                if let Some(name) = payload.get("name").and_then(Value::as_str) {
-                    persona.name = name.to_string();
-                }
-                if let Some(description) = payload.get("description").and_then(Value::as_str) {
-                    persona.description = Some(description.to_string());
-                }
-                persona.updated_at = TS.into();
-                self.insert_persona(persona.clone());
-                self.wrap_call(operation_id, to_value(&persona))
+                self.wrap_call(operation_id, to_value(&updated))
             }
             "personas.delete" => {
                 let persona_id = payload_str(&payload, "personaId")?;
                 self.personas.remove(&persona_id);
                 self.ok_call(operation_id, json!({}))
-            }
-            "personas.update" => {
-                // Kernel semantics: only the fields present change;
-                // avatar/isDefault stay untouched when omitted.
-                let persona_id = payload_str(&payload, "personaId")?;
-                let name = payload.get("name").and_then(Value::as_str);
-                let description = payload.get("description").and_then(Value::as_str);
-                let Some(persona) = self.personas.get_mut(&persona_id) else {
-                    return Err(Self::product("PERSONA_NOT_FOUND", "personaId", &persona_id));
-                };
-                if let Some(name) = name {
-                    persona.name = name.to_string();
-                }
-                if let Some(description) = description {
-                    persona.description = Some(description.to_string());
-                }
-                let updated = persona.clone();
-                self.wrap_call(operation_id, to_value(&updated))
             }
             "lorebooks.list" => {
                 let character_id = payload
@@ -2215,10 +2233,7 @@ impl ProductWire for FakeWire {
                     .unwrap_or_else(|| json!({}));
                 self.wrap_call(
                     operation_id,
-                    to_value(&CharacterCard {
-                        character_id,
-                        card,
-                    }),
+                    to_value(&CharacterCard { character_id, card }),
                 )
             }
             "characters.card.update" => {
@@ -2228,7 +2243,8 @@ impl ProductWire for FakeWire {
                 if let Err(issues) =
                     contracts_generated::generated::validate_request_characters_card_update(
                         &payload,
-                    ) {
+                    )
+                {
                     return Err(ChatRouteError::Transport(format!(
                         "characters.card.update request failed contract validation: {issues:?}"
                     )));

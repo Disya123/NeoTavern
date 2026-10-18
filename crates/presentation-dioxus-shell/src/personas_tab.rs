@@ -260,6 +260,12 @@ fn persona_edit_tab(view: &ProductShellView) -> Element {
     };
     let tokens = view.persona_description_draft.chars().count() / 4;
     let token_label = format!("Tokens: {tokens}");
+    // UI-08: the Chat connection reflects the OPEN chat's durable
+    // personaId — active when this persona is bound, and honestly
+    // disabled when no chat is open at all (nothing to bind to). The
+    // open-chat fact is the chat view's non-empty title.
+    let chat_bound = view.chat_persona_id.as_deref() == Some(persona.id.as_str());
+    let chat_missing = view.chat.title.is_empty();
     rsx! {
         div {
             class: "PersonasPanel_editor",
@@ -327,9 +333,15 @@ fn persona_edit_tab(view: &ProductShellView) -> Element {
                 div {
                     class: "PersonasPanel_connections",
                     role: "group",
+                    // UI-08: the connections buttons are wired actions, and
+                    // their state reflects DURABLE bindings only — Default
+                    // is the kernel's `is_default` flag, Chat is this
+                    // chat's `personaId`. A failed mutation never flips a
+                    // badge (projection after success, INV-1).
                     button {
                         class: "PersonasPanel_connectionButton",
                         r#type: "button",
+                        "data-part": "persona-default",
                         "data-state": if persona.is_default || persona.is_active { "active" } else { "inactive" },
                         {icon("Crown", 18)}
                         span { class: "PersonasPanel_connectionLabel", "Default" }
@@ -337,6 +349,7 @@ fn persona_edit_tab(view: &ProductShellView) -> Element {
                     button {
                         class: "PersonasPanel_connectionButton",
                         r#type: "button",
+                        "data-part": "persona-character",
                         "data-state": "inactive",
                         disabled: true,
                         title: "Per-character persona binding is not available yet.",
@@ -346,7 +359,14 @@ fn persona_edit_tab(view: &ProductShellView) -> Element {
                     button {
                         class: "PersonasPanel_connectionButton",
                         r#type: "button",
-                        "data-state": "inactive",
+                        "data-part": "persona-chat",
+                        "data-state": if chat_bound { "active" } else { "inactive" },
+                        disabled: chat_missing,
+                        title: if chat_missing {
+                            "Open a chat to bind this persona to it."
+                        } else {
+                            "Bind this persona to the open chat."
+                        },
                         {icon("ChatsCircle", 18)}
                         span { class: "PersonasPanel_connectionLabel", "Chat" }
                     }

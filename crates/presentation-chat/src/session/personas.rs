@@ -110,6 +110,83 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
+    /// UI-08, connections "Default": promote the selected persona to the
+    /// app-wide default. Two durable writes: `personas.update`
+    /// `isDefault: true` (the kernel's single-default invariant demotes
+    /// the previous holder) and `settings.update` `active-persona-id`
+    /// (the persona becomes the active one, so hydration restores both).
+    /// The projection lands only after both writes succeed; a failed
+    /// mutation leaves the badges untouched and records the error.
+    pub fn set_persona_default(&mut self) {
+        let Some(id) = self.state.selected_persona_id.clone() else {
+            return;
+        };
+        let req = RequestUpdatePersona {
+            persona_id: id.clone(),
+            name: None,
+            description: None,
+            avatar: None,
+            is_default: Some(true),
+        };
+        let Ok(updated) = self.call_decode("personas.update", &req, decode_persona_dto) else {
+            // call_decode already recorded the route error.
+            self.bump_scene();
+            return;
+        };
+        let active_req = RequestSettingsUpdate {
+            settings: vec![RequestSettingsUpdateSettings {
+                key: "active-persona-id".into(),
+                value: json!({ "value": updated.id.clone() }),
+            }],
+        };
+        if let Err(err) = self.call_value("settings.update", &active_req) {
+            self.record_error(err);
+            self.bump_scene();
+            return;
+        }
+        // Projection after success: the list re-reads the durable flag
+        // (load_personas re-hydrates `active-persona-id` too).
+        self.load_personas();
+        self.state.active_persona_id = Some(updated.id.clone());
+        self.state.status_message = Some(format!("{} is the default persona now.", updated.name));
+        self.bump_scene();
+    }
+
+    /// UI-08, connections "Chat": bind the selected persona to the OPEN
+    /// chat (`chats.update` `personaId` — the durable per-chat binding;
+    /// the kernel validates PERSONA_NOT_FOUND). Without an open chat the
+    /// tap is an honest capability error, never a fake success. The
+    /// effective chat-persona badge derives from `state.chat`, which only
+    /// changes when the write succeeded.
+    pub fn bind_persona_to_chat(&mut self) {
+        let Some(persona_id) = self.state.selected_persona_id.clone() else {
+            return;
+        };
+        let Some(chat_id) = self.chat_id.clone() else {
+            self.record_error(ChatRouteError::Product(ErrorDto {
+                code: "CAPABILITY_UNAVAILABLE".into(),
+                params: json!({ "operationId": "personas.bind.chat", "reason": "no-chat-open" }),
+                trace_id: None,
+                correlation_id: None,
+            }));
+            self.bump_scene();
+            return;
+        };
+        let req = RequestUpdateChat {
+            chat_id,
+            title: None,
+            persona_id: Some(persona_id),
+        };
+        match self.call_decode("chats.update", &req, decode_chat_dto) {
+            Ok(updated) => {
+                self.state.chat = Some(updated);
+                self.state.status_message = Some("Persona bound to this chat.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
     pub fn set_persona_tab(&mut self, tab: &str) {
         self.state.persona_tab = tab.to_string();
         self.bump_scene();

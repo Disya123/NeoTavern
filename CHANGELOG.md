@@ -197,6 +197,54 @@
 
 ### Fixed
 
+- Startup hydration survives the built-in defaults (UI-06 audit class,
+  ADR-0057 Phase 2). The session applied its static view defaults AFTER
+  loading the kernel settings snapshot, so a persisted ru locale / text
+  prompt setup opened as `en/ltr/chat` until the user re-entered each
+  setting — the loaded values were overwritten before ever being shown.
+  Defaults now land BEFORE hydration (the kernel snapshot wins), and a
+  corrupt setting degrades to defaults instead of breaking the open.
+  Gate: `prefs_hydrate_and_persist_over_the_real_kernel` — persist ru +
+  the text prompt mode over the real Kernel, reopen, and the loaded
+  settings ARE the state (the audit's own reproduction run).
+- The appearance and startup preferences persist and take effect
+  (UI-07 audit class, ADR-0057 Phase 2). UI scale, contrast, font
+  profile, motion, chat style, avatar style, message positions, panel
+  opacity, glass blur and the startup preference changed only an
+  in-memory label — every restart reset them, and `open_home_on_load`
+  never controlled anything. They now ride ONE canonical settings row
+  (`ui.appearance`, an Object value via `settings.update`, the same
+  contract every other writer uses): hydration on open validates each
+  field against its choice domain (unknown values keep defaults), each
+  cycle/step/toggle writes the row and rolls its state mutation back
+  when the Kernel rejects it (a failed write never leaves the UI
+  claiming a value the Kernel does not hold), and the startup branch
+  consumes `open_home_on_load` — the workspace opens with the resting
+  home panel over the chat exactly when the preference says so. The
+  same gate test covers the restart leg (scale/startup pref hydrate and
+  the workspace opens accordingly).
+- The persona Default/Chat connections are durable bindings (UI-08 audit
+  class, ADR-0057 Phase 2). Three stacked defects: the buttons rendered
+  enabled with no action behind them; the kernel's
+  `personas.update {isDefault: true}` set the flag and THEN cleared
+  every flagged row — including the one just set — leaving the table
+  with NO default persona after any promotion (create was unaffected);
+  and the active persona changed only in memory. Now the kernel keeps
+  the promoted persona's flag (single-default invariant: clear-others
+  runs after a successful update and skips the promoted row; a new
+  promotion assertion covers it in `persona_crud_round_trip`), the
+  Default connection writes the durable flag plus the canonical
+  `active-persona-id` settings row, and the Chat connection binds the
+  persona to the open chat through `chats.update` `personaId` (the
+  kernel already validated it; the fixture now does too — and no longer
+  carries a dead duplicate `personas.update` arm). Badges project only
+  after success: a failed mutation records the stable error
+  (`PERSONA_NOT_FOUND`) and leaves the effective value untouched. The
+  hit map routes the connections row, and the skeleton exposes
+  `persona-default` / `persona-character` (honestly disabled) /
+  `persona-chat`. Gate:
+  `persona_bindings_are_durable_over_the_real_kernel` — promote, bind,
+  restart: flag, active persona and chat binding all survive.
 - The character editor reads and writes REAL card fields (UI-02 audit
   class, ADR-0057 Phase 2). Four stacked defects: the editor SYNTHESIZED
   a first message, creator notes and a greeting for every character

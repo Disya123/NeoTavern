@@ -588,15 +588,20 @@ fn query_persona(conn: &rusqlite::Connection, id: &str) -> Result<Option<Persona
     row.map(row_to_persona).transpose()
 }
 
-/// Clears the `is_default` flag on every persona — the single-default
+/// Clears the `is_default` flag on every OTHER persona — the single-default
 /// invariant (legacy `PersonaRepository.clearDefault`), called on create and
-/// update before a persona is marked default, inside the caller's
-/// transaction. Returns [`StorageError`] so the `Database::transaction`
-/// closure can `?` it directly.
-fn clear_persona_default(tx: &rusqlite::Transaction) -> Result<(), StorageError> {
+/// update after a persona is marked default, inside the caller's
+/// transaction. `keep` is the persona that just earned the flag (on create
+/// it is not inserted yet, so the clear is unconditioned in effect).
+/// Returns [`StorageError`] so the `Database::transaction` closure can `?`
+/// it directly.
+fn clear_persona_default_except(
+    tx: &rusqlite::Transaction,
+    keep: &str,
+) -> Result<(), StorageError> {
     tx.execute(
-        "UPDATE personas SET is_default = 0 WHERE is_default = 1",
-        [],
+        "UPDATE personas SET is_default = 0 WHERE is_default = 1 AND id != ?1",
+        params![keep],
     )
     .map_err(|e| StorageError::from_sqlite(e, "personas: clear default"))?;
     Ok(())
@@ -741,14 +746,13 @@ pub fn characters_card_update(db: &mut Database, request: &[u8]) -> Result<Vec<u
     if exists.is_none() {
         return Err(not_found("CHARACTER", &id));
     }
-    let ext_json = serde_json::to_string(&serde_json::json!({ "_card": req.card })).map_err(
-        |err| {
+    let ext_json =
+        serde_json::to_string(&serde_json::json!({ "_card": req.card })).map_err(|err| {
             KernelError::new(
                 KernelErrorCode::Internal,
                 format!("characters.card.update: serialize ext: {err}"),
             )
-        },
-    )?;
+        })?;
     db.transaction(|tx| {
         tx.execute(
             "UPDATE characters SET ext_json = ?1, updated_at = ?2 WHERE id = ?3",
@@ -3394,7 +3398,7 @@ pub fn personas_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     let is_default = req.is_default.unwrap_or(false);
     db.transaction(|tx| {
         if is_default {
-            clear_persona_default(tx)?;
+            clear_persona_default_except(tx, &id)?;
         }
         tx.execute(
             "INSERT INTO personas (id, name, description, avatar, is_default, created_at, updated_at) \
@@ -3463,7 +3467,10 @@ pub fn personas_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
             return Ok(false);
         }
         if req.is_default == Some(true) {
-            clear_persona_default(tx)?;
+            // UI-08: promote AFTER a successful update and keep this
+            // persona's flag — clearing ALL flagged rows (the old order)
+            // left the table with no default persona at all.
+            clear_persona_default_except(tx, &id)?;
         }
         Ok(true)
     })?;

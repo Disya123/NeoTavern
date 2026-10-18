@@ -412,6 +412,11 @@ impl<W: ProductWire> ChatSession<W> {
             tag_input: self.state.tag_input.clone(),
             panel_scroll_css: self.state.panel_scroll_css,
             personas: self.persona_cards(),
+            chat_persona_id: self
+                .state
+                .chat
+                .as_ref()
+                .and_then(|chat| chat.persona_id.clone()),
             selected_persona_id: self.state.selected_persona_id.clone(),
             persona_tab: self.state.persona_tab.clone(),
             persona_search: self.state.persona_search.clone(),

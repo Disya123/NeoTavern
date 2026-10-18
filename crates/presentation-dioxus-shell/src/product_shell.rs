@@ -387,6 +387,10 @@ pub struct ProductShellView {
     /// The panel body applies it as a negative top margin.
     pub panel_scroll_css: f32,
     pub personas: Vec<PersonaCardView>,
+    /// The OPEN chat's durable persona binding (UI-08): the persona
+    /// editor's "Chat" connection state reflects this kernel field, never
+    /// a local intent. `None` = no open chat or an unbound chat.
+    pub chat_persona_id: Option<String>,
     pub selected_persona_id: Option<String>,
     pub persona_tab: String,
     pub persona_search: String,
@@ -628,6 +632,7 @@ impl Default for ProductShellView {
             tag_input: String::new(),
             panel_scroll_css: 0.0,
             personas: Vec::new(),
+            chat_persona_id: None,
             selected_persona_id: None,
             persona_tab: "cards".into(),
             persona_search: String::new(),

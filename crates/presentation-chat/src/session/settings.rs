@@ -202,9 +202,110 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.macro_variables = settings_macro_variables(&items);
                 self.hydrate_instruct_settings(&items);
                 self.hydrate_generation_settings(&items);
+                self.hydrate_ui_appearance(&items);
             }
             Err(err) => self.record_error(err),
         }
+    }
+
+    /// UI-07: the appearance/startup preferences hydrate from the ONE
+    /// canonical settings row `ui.appearance` (an Object value; inner keys
+    /// camelCase). Unknown or out-of-domain values keep the built-in
+    /// default — a corrupt row degrades to defaults instead of crashing
+    /// the session, and the fields the row does not carry stay at their
+    /// defaults (honest absence).
+    pub(crate) fn hydrate_ui_appearance(&mut self, items: &[SettingsItem]) {
+        let Some(value) = settings_unwrapped(items, "ui.appearance") else {
+            return;
+        };
+        let Some(obj) = value.as_object() else {
+            return;
+        };
+        let choice = |key: &str, domain: &[&str]| -> Option<String> {
+            obj.get(key)
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .filter(|candidate| domain.contains(&candidate.as_str()))
+        };
+        if let Some(scale) = choice("scale", UI_SCALES) {
+            self.state.ui_scale = scale;
+        }
+        if let Some(contrast) = choice("contrast", UI_CONTRASTS) {
+            self.state.ui_contrast = contrast;
+        }
+        if let Some(font) = choice("fontProfile", UI_FONT_PROFILES) {
+            self.state.ui_font_profile = font;
+        }
+        if let Some(motion) = choice("motion", UI_MOTIONS) {
+            self.state.ui_motion = motion;
+        }
+        if let Some(style) = choice("chatStyle", CHAT_STYLES) {
+            self.state.chat_style = style;
+        }
+        if let Some(style) = choice("avatarStyle", CHAT_AVATAR_STYLES) {
+            self.state.chat_avatar_style = style;
+        }
+        if let Some(position) = choice("userMessagePosition", MESSAGE_POSITIONS) {
+            self.state.user_message_position = position;
+        }
+        if let Some(position) = choice("characterMessagePosition", MESSAGE_POSITIONS) {
+            self.state.character_message_position = position;
+        }
+        if let Some(opacity) = obj.get("opacity").and_then(Value::as_u64) {
+            self.state.ui_opacity = opacity.min(100) as u32;
+        }
+        if let Some(blur) = obj.get("glassBlur").and_then(Value::as_u64) {
+            self.state.ui_glass_blur = blur.min(40) as u32;
+        }
+        if let Some(open) = obj.get("openHomeOnLoad").and_then(Value::as_bool) {
+            self.state.open_home_on_load = open;
+        }
+    }
+
+    /// UI-07: persist the whole appearance preference set as the ONE
+    /// canonical `ui.appearance` settings row (`settings.update`, Object
+    /// value — the same shape every other writer emits). The caller
+    /// applies its state mutation first and reverts it when this fails,
+    /// so a failed write never leaves the UI claiming a value the Kernel
+    /// does not hold (projection-after-success, INV-1).
+    fn persist_ui_appearance(&mut self) {
+        let value = json!({
+            "scale": self.state.ui_scale,
+            "contrast": self.state.ui_contrast,
+            "fontProfile": self.state.ui_font_profile,
+            "motion": self.state.ui_motion,
+            "chatStyle": self.state.chat_style,
+            "avatarStyle": self.state.chat_avatar_style,
+            "userMessagePosition": self.state.user_message_position,
+            "characterMessagePosition": self.state.character_message_position,
+            "opacity": self.state.ui_opacity,
+            "glassBlur": self.state.ui_glass_blur,
+            "openHomeOnLoad": self.state.open_home_on_load,
+        });
+        let req = RequestSettingsUpdate {
+            settings: vec![RequestSettingsUpdateSettings {
+                key: "ui.appearance".into(),
+                value: json!({ "value": value }),
+            }],
+        };
+        if let Err(err) = self.call_value("settings.update", &req) {
+            self.record_error(err);
+        }
+    }
+
+    /// UI-07 helper: apply `mutation` to the appearance state, persist the
+    /// new set, and roll the mutation back when the write fails — the
+    /// visible value stays exactly what the Kernel confirmed. A failure
+    /// from an EARLIER, unrelated operation does not trigger the rollback.
+    pub(crate) fn update_ui_appearance(&mut self, mutation: impl FnOnce(&mut ChatRouteState)) {
+        let clean_before = self.state.last_error.is_none();
+        let rollback = appearance_snapshot(&self.state);
+        mutation(&mut self.state);
+        self.persist_ui_appearance();
+        if clean_before && self.state.last_error.is_some() {
+            appearance_restore(&mut self.state, rollback);
+        }
+        self.bump_scene();
     }
 
     pub(crate) fn hydrate_instruct_settings(&mut self, items: &[SettingsItem]) {
@@ -1256,4 +1357,52 @@ impl<W: ProductWire> ChatSession<W> {
         self.state.instruct_form_error = None;
         self.bump_scene();
     }
+}
+
+/// Rollback copy of the appearance preference set (UI-07): taken before a
+/// state mutation, restored when the `settings.update` write fails so the
+/// UI never shows a value the Kernel rejected.
+#[derive(Clone, Debug)]
+struct AppearanceSnapshot {
+    ui_scale: String,
+    ui_contrast: String,
+    ui_font_profile: String,
+    ui_motion: String,
+    chat_style: String,
+    chat_avatar_style: String,
+    user_message_position: String,
+    character_message_position: String,
+    ui_opacity: u32,
+    ui_glass_blur: u32,
+    open_home_on_load: bool,
+}
+
+fn appearance_snapshot(state: &ChatRouteState) -> AppearanceSnapshot {
+    AppearanceSnapshot {
+        ui_scale: state.ui_scale.clone(),
+        ui_contrast: state.ui_contrast.clone(),
+        ui_font_profile: state.ui_font_profile.clone(),
+        ui_motion: state.ui_motion.clone(),
+        chat_style: state.chat_style.clone(),
+        chat_avatar_style: state.chat_avatar_style.clone(),
+        user_message_position: state.user_message_position.clone(),
+        character_message_position: state.character_message_position.clone(),
+        ui_opacity: state.ui_opacity,
+        ui_glass_blur: state.ui_glass_blur,
+        open_home_on_load: state.open_home_on_load,
+    }
+}
+
+fn appearance_restore(state: &mut ChatRouteState, snapshot: AppearanceSnapshot) {
+    state.ui_scale = snapshot.ui_scale;
+    state.ui_contrast = snapshot.ui_contrast;
+    state.ui_font_profile = snapshot.ui_font_profile;
+    state.ui_motion = snapshot.ui_motion;
+    state.chat_style = snapshot.chat_style;
+    state.chat_avatar_style = snapshot.chat_avatar_style;
+    state.user_message_position = snapshot.user_message_position;
+    state.character_message_position = snapshot.character_message_position;
+    state.ui_opacity = snapshot.ui_opacity;
+    state.ui_glass_blur = snapshot.ui_glass_blur;
+    state.open_home_on_load = snapshot.open_home_on_load;
 }

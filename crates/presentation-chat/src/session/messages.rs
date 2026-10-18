@@ -276,17 +276,21 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     /// Step UI opacity by a signed delta, clamped to `[0, 100]` (React range slider / stepper).
+    /// UI-07: the value persists with the appearance set; a failed write rolls back.
     pub fn step_ui_opacity(&mut self, delta: i32) {
-        let current = self.state.ui_opacity as i32;
-        self.state.ui_opacity = (current + delta).clamp(0, 100) as u32;
-        self.bump_scene();
+        self.update_ui_appearance(|state| {
+            let current = state.ui_opacity as i32;
+            state.ui_opacity = (current + delta).clamp(0, 100) as u32;
+        });
     }
 
     /// Step glass blur by a signed delta, clamped to `[0, 40]` (React range slider / stepper).
+    /// UI-07: the value persists with the appearance set; a failed write rolls back.
     pub fn step_ui_glass_blur(&mut self, delta: i32) {
-        let current = self.state.ui_glass_blur as i32;
-        self.state.ui_glass_blur = (current + delta).clamp(0, 40) as u32;
-        self.bump_scene();
+        self.update_ui_appearance(|state| {
+            let current = state.ui_glass_blur as i32;
+            state.ui_glass_blur = (current + delta).clamp(0, 40) as u32;
+        });
     }
 
     /// Toggle the snapshots menu (React `ChatSnapshotsMenu` header trigger).

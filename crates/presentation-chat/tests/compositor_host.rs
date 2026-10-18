@@ -71,10 +71,14 @@ fn surface_size_converts_physical_pixels_to_css() {
 fn demo_session_loads_characters_list_for_character_manager() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
-    // React `ui.ts` startup: the app opens IN THE CHAT — sidebar closed,
-    // resting panel `home`. The character manager loads on demand.
+    // React `ui.ts` startup + UI-07: the persisted `open_home_on_load`
+    // (default TRUE) opens the workspace with the resting `home` panel
+    // over the chat. The character manager loads on demand.
+    let opened = session.shell_view();
+    assert_eq!(opened.panel, "home");
+    assert!(opened.sidebar_open);
+    session.apply_shell_action(ShellAction::ClosePanel);
     let closed = session.shell_view();
-    assert_eq!(closed.panel, "home");
     assert!(!closed.sidebar_open);
     session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     let shell = session.shell_view();
@@ -524,13 +528,17 @@ fn demo_session_hydrates_a_display_sized_avatar() {
 
 #[test]
 fn message_markdown_photos_hydrate_and_decode_in_scene() {
-    let (session, _) = start_flagged_session(
+    let (mut session, _) = start_flagged_session(
         Some("1"),
         FakeWire::with_message_count(3),
         Some(neotavern_presentation_chat::DEMO_CHAT_ID),
         None,
     )
     .expect("route");
+    // UI-07 startup: the default home panel opens OVER the chat — close it
+    // so the chat workspace (with the message `<img>`s) is the rendered
+    // surface this test asserts on.
+    session.apply_shell_action(ShellAction::ClosePanel);
     let store = session.asset_store();
     let photo_asset = "00000000-0000-4000-8000-000000009000";
     assert!(
@@ -4691,7 +4699,10 @@ fn toggle_rail_collapses_desktop_sidebar_and_keeps_the_rail() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1100, 760, 1.0);
-    // React startup: the chat is the screen (rail + chat, no panel).
+    // UI-07 startup: the persisted `open_home_on_load` (default TRUE)
+    // opens the resting home panel; the rail toggle then collapses the
+    // panel to the chat-first screen.
+    session.apply_shell_action(ShellAction::ClosePanel);
     assert!(!session.sidebar_open());
     assert!((chat_origin_x(&session.shell_view()) - 60.0).abs() < 0.5);
     session.apply_shell_action(ShellAction::ToggleRail);
@@ -5370,6 +5381,133 @@ fn persona_meta_update_over_product_wire() {
             .filter(|op| **op == "personas.update")
             .count(),
         1
+    );
+}
+
+/// UI-08 persona connections (React `PersonasPanel` edit tab): the
+/// previously inert Default/Chat buttons are wired durable actions. INV-7:
+/// `fake` — this exercises the session command surface and the fixture's
+/// `personas.update`/`chats.update` arms; the Kernel gate is
+/// `persona_bindings_are_durable_over_the_real_kernel` in
+/// `presentation-kernel-wire/tests/parity.rs`.
+#[test]
+fn persona_connections_default_and_chat_bind_durably_on_the_fixture() {
+    use neotavern_presentation_chat::ShellAction;
+    use neotavern_presentation_dioxus_shell::install_product_shell;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+
+    let mut wire = FakeWire::demo();
+    // A second, unflagged persona: promoting it must MOVE the default flag
+    // (the single-default invariant), never leave two or none.
+    use neotavern_presentation_chat::ProductWire;
+    let created = wire
+        .call(
+            "personas.create",
+            serde_json::json!({ "name": "Second Voice" }),
+        )
+        .expect("fixture persona create");
+    let second_id = created.result["id"]
+        .as_str()
+        .expect("persona id")
+        .to_string();
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        wire,
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("personas".into()));
+    session.select_persona(&second_id);
+    assert_eq!(session.shell_view().persona_tab, "edit");
+
+    // "Default": the promoted persona carries the flag and becomes active;
+    // the previous default (the demo persona) is demoted.
+    session.apply_shell_action(ShellAction::PersonaSetDefault);
+    assert!(
+        session.state().last_error.is_none(),
+        "set-default stays clean: {:?}",
+        session.state().last_error
+    );
+    assert_eq!(
+        session.state().active_persona_id.as_deref(),
+        Some(second_id.as_str()),
+        "the promoted persona becomes the active one"
+    );
+    let shell = session.shell_view();
+    let defaults: Vec<&str> = shell
+        .personas
+        .iter()
+        .filter(|item| item.is_default)
+        .map(|item| item.id.as_str())
+        .collect();
+    assert_eq!(
+        defaults,
+        vec![second_id.as_str()],
+        "exactly the promoted persona carries the default badge"
+    );
+    assert_eq!(
+        shell.status_message.as_deref(),
+        Some("Second Voice is the default persona now.")
+    );
+
+    // "Chat": the open chat carries the bound persona; the shell view
+    // projects it for the button state.
+    session.apply_shell_action(ShellAction::PersonaBindToChat);
+    assert!(
+        session.state().last_error.is_none(),
+        "bind-to-chat stays clean: {:?}",
+        session.state().last_error
+    );
+    assert_eq!(
+        session
+            .state()
+            .chat
+            .as_ref()
+            .and_then(|row| row.persona_id.as_deref()),
+        Some(second_id.as_str()),
+        "the chat carries the bound persona"
+    );
+    assert_eq!(
+        session.shell_view().chat_persona_id.as_deref(),
+        Some(second_id.as_str()),
+        "the Chat connection state reflects the durable binding"
+    );
+
+    // The skeleton exposes the wired connections row (the host hit map
+    // dispatches the same actions).
+    session.set_surface_size(1100, 760, 1.0);
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("persona skeleton");
+    for identity in ["persona-default", "persona-character", "persona-chat"] {
+        assert!(
+            skeleton.has_identity(identity),
+            "connections row exposes {identity}; identities={:?}",
+            skeleton.identities()
+        );
+    }
+
+    // A failed mutation cannot fake success: binding a persona id the
+    // store does not know surfaces the stable product error and leaves
+    // the effective chat-persona badge untouched (INV-1: projection only
+    // after a durable write). `ChatSession::open` always secures an open
+    // chat (starter flow), so the no-chat guard stays a defensive branch.
+    session.select_persona("0b1c2d3e-4f5a-4b8c-9d0e-1a2b3c4d5e99");
+    session.apply_shell_action(ShellAction::PersonaBindToChat);
+    let error = session.state().last_error.clone().expect("honest error");
+    assert_eq!(error.code, "PERSONA_NOT_FOUND");
+    assert_eq!(
+        session.shell_view().chat_persona_id.as_deref(),
+        Some(second_id.as_str()),
+        "the failed bind leaves the effective badge on the durable value"
     );
 }
 

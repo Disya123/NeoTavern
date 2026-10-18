@@ -237,7 +237,8 @@ fn character_card_get_update_round_trip() {
         "the export carries the stored card's first message"
     );
     assert_eq!(
-        exported["data"]["extensions"]["neo_tavern"]["unknown_key"], json!("keep-me"),
+        exported["data"]["extensions"]["neo_tavern"]["unknown_key"],
+        json!("keep-me"),
         "unknown extension metadata survives the roundtrip"
     );
     assert!(
@@ -1454,6 +1455,33 @@ fn persona_crud_round_trip() {
     )
     .expect("demote update must succeed");
     assert!(!demoted.is_default, "isDefault: false clears the flag");
+
+    // update with isDefault: true PROMOTES this persona to the single
+    // default (UI-08): the flag lands and the OTHER default (if any) is
+    // demoted — the old clear-ALL order left no default at all.
+    let first = dispatch_decoded::<PersonaDto>(
+        &kernel,
+        "personas.create",
+        json!({ "name": "Celene", "isDefault": true }),
+    )
+    .expect("third personas.create must succeed");
+    let promoted = dispatch_decoded::<PersonaDto>(
+        &kernel,
+        "personas.update",
+        json!({ "personaId": second.id, "isDefault": true }),
+    )
+    .expect("promote update must succeed");
+    assert!(
+        promoted.is_default,
+        "isDefault: true promotes the updated persona"
+    );
+    let displaced =
+        dispatch_decoded::<PersonaDto>(&kernel, "personas.get", json!({ "personaId": first.id }))
+            .expect("get the displaced default must succeed");
+    assert!(
+        !displaced.is_default,
+        "single-default invariant: promotion demotes the previous default"
+    );
 
     // delete → empty result; the follow-up get answers PERSONA_NOT_FOUND.
     dispatch_decoded::<ResultEmpty>(

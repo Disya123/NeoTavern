@@ -34,9 +34,9 @@ impl<W: ProductWire> ChatSession<W> {
             characters_cursor: None,
             chats_cursor: None,
         };
-        if let Err(err) = session.load_workspace() {
-            session.record_error(err);
-        }
+        // Static view defaults land BEFORE hydration (UI-06): the kernel
+        // settings snapshot must win over the built-in defaults, otherwise
+        // a persisted ru/RTL/text-prompt setup opens as en/ltr/chat.
         // React `ui.ts` initial shell state: the app starts IN THE CHAT
         // (`sidebarOpen: false`), and the sidebar's resting panel is `home`
         // (`activeSidebarPanel: 'home'`). The panel-over-chat startup this
@@ -82,6 +82,14 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.details_message_id = None;
         session.state.details_mode = "details".into();
         session.state.swipe_label_for = None;
+        if let Err(err) = session.load_workspace() {
+            session.record_error(err);
+        }
+        // UI-06/UI-07 startup branch: the persisted startup preference
+        // governs whether the workspace opens with the home panel over the
+        // chat (`open_home_on_load`) — a hydrated value decides, not the
+        // hardcoded default above.
+        session.state.sidebar_open = session.state.open_home_on_load;
         Ok(session)
     }
 

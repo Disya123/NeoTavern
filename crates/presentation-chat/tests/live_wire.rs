@@ -705,8 +705,7 @@ fn card_editor_reads_and_writes_real_card_fields_on_the_fixture() {
         "the demo card's own first message hydrates the editor"
     );
     assert_eq!(
-        draft.creator_notes,
-        "Demo fixture character for the native editor surfaces.",
+        draft.creator_notes, "Demo fixture character for the native editor surfaces.",
         "the demo card's own creator notes hydrate the editor"
     );
     assert_eq!(

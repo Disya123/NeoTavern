@@ -856,8 +856,7 @@ fn card_editor_roundtrips_real_fields_over_the_real_kernel() {
         .clone()
         .expect("the editor draft loads");
     assert_eq!(
-        draft.first_message,
-        "*Roundtrip opens a ledger.* The audit begins.",
+        draft.first_message, "*Roundtrip opens a ledger.* The audit begins.",
         "the first message is the imported card's own first_mes"
     );
     assert_eq!(
@@ -982,5 +981,192 @@ fn card_editor_roundtrips_real_fields_over_the_real_kernel() {
     assert_eq!(
         draft.creator_notes, "Edited for the UI-02 audit gate.",
         "the edited creator notes survive a restart"
+    );
+}
+
+/// UI-06/UI-07 audit gate (ADR-0057 Phase 2): startup hydration is not
+/// overwritten by defaults, and the appearance/startup preferences are
+/// durable. Witness = the audit's own reproduction: persist ru + the text
+/// prompt mode + a startup preference, reopen the session, and the loaded
+/// settings ARE the state — the exact run that used to show `en/ltr/chat`
+/// until the user re-entered the setting. The startup branch
+/// (`open_home_on_load`) governs whether the workspace opens with the home
+/// panel over the chat.
+#[test]
+fn prefs_hydrate_and_persist_over_the_real_kernel() {
+    let (mut kernel, root) = kernel_wire();
+    let chat = seed_parity_workspace(&mut kernel, "UI-06", 1).expect("kernel seed");
+    let mut session = ChatSession::open(kernel, Some(&chat)).expect("session opens");
+
+    // The audit journey, through the session command surface only.
+    session.cycle_language(); // en → ru
+    assert_eq!(session.state().language, "ru", "language cycles");
+    session.cycle_prompt_mode(); // chat → text
+    assert_eq!(
+        session
+            .state()
+            .prompt_template
+            .get("mode")
+            .and_then(serde_json::Value::as_str),
+        Some("text"),
+        "prompt mode cycles"
+    );
+    session.apply_shell_action(neotavern_presentation_chat::ShellAction::ToggleOpenHomeOnLoad);
+    session.apply_shell_action(neotavern_presentation_chat::ShellAction::CycleUiScale);
+    assert!(
+        session.state().last_error.is_none(),
+        "preference writes stay clean: {:?}",
+        session.state().last_error
+    );
+    assert_eq!(
+        session.state().ui_scale,
+        "large",
+        "ui scale cycles medium → large"
+    );
+    drop(session); // releases the data root
+
+    // Reopen: the loaded settings ARE the state (no en/ltr/chat rewind).
+    let wire = KernelProductWire::open(&root).expect("kernel reopens the data root");
+    let session = ChatSession::open(wire, Some(&chat)).expect("session reopens");
+    let state = session.state();
+    assert_eq!(
+        state.language, "ru",
+        "UI-06: the persisted language hydrates on startup"
+    );
+    assert_eq!(state.dir, "ltr", "the direction derives from the language");
+    assert_eq!(
+        state
+            .prompt_template
+            .get("mode")
+            .and_then(serde_json::Value::as_str),
+        Some("text"),
+        "UI-06: the persisted prompt mode hydrates on startup"
+    );
+    assert_eq!(
+        state.ui_scale, "large",
+        "UI-07: the appearance preference hydrates on startup"
+    );
+    assert!(
+        !state.open_home_on_load,
+        "UI-07: the startup preference hydrates on startup"
+    );
+    assert!(
+        !state.sidebar_open,
+        "UI-07: the startup preference governs the open workspace"
+    );
+}
+
+/// UI-08 audit gate (ADR-0057 Phase 2): the persona connections are DURABLE
+/// bindings. "Default" promotes the persona through `personas.update`
+/// `isDefault: true` (the kernel's single-default invariant demotes the
+/// previous holder) plus the canonical `active-persona-id` settings row;
+/// "Chat" binds the persona to the open chat through `chats.update`
+/// `personaId`. The kernel regression fixed here: the old
+/// `personas.update` cleared ALL default flags AFTER setting this one,
+/// leaving the table with no default persona at all. Everything survives a
+/// restart.
+#[test]
+fn persona_bindings_are_durable_over_the_real_kernel() {
+    let (mut kernel, root) = kernel_wire();
+    let chat = seed_parity_workspace(&mut kernel, "UI-08", 1).expect("kernel seed");
+
+    // Two personas: the first is the create-time default, the second
+    // starts unflagged.
+    let first = kernel
+        .call(
+            "personas.create",
+            json!({ "name": "First", "isDefault": true }),
+        )
+        .expect("first persona");
+    let first_id = first.result["id"].as_str().expect("persona id").to_string();
+    let second = kernel
+        .call("personas.create", json!({ "name": "Second" }))
+        .expect("second persona");
+    let second_id = second
+        .result
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .expect("persona id")
+        .to_string();
+
+    let mut session = ChatSession::open(kernel, Some(&chat)).expect("session opens");
+    session.select_persona(&second_id);
+
+    // "Default": durable flag + canonical active-persona row.
+    session.apply_shell_action(neotavern_presentation_chat::ShellAction::PersonaSetDefault);
+    assert!(
+        session.state().last_error.is_none(),
+        "set-default stays clean: {:?}",
+        session.state().last_error
+    );
+    assert_eq!(
+        session.state().active_persona_id.as_deref(),
+        Some(second_id.as_str()),
+        "the promoted persona becomes the active one"
+    );
+    let defaults: Vec<&str> = session
+        .state()
+        .personas
+        .iter()
+        .filter(|row| row.is_default)
+        .map(|row| row.id.as_str())
+        .collect();
+    assert_eq!(
+        defaults,
+        vec![second_id.as_str()],
+        "exactly the promoted persona carries the default flag"
+    );
+
+    // "Chat": durable per-chat binding.
+    session.apply_shell_action(neotavern_presentation_chat::ShellAction::PersonaBindToChat);
+    assert!(
+        session.state().last_error.is_none(),
+        "bind-to-chat stays clean: {:?}",
+        session.state().last_error
+    );
+    assert_eq!(
+        session
+            .state()
+            .chat
+            .as_ref()
+            .and_then(|row| row.persona_id.as_deref()),
+        Some(second_id.as_str()),
+        "the chat carries the bound persona"
+    );
+    assert_eq!(
+        session.shell_view().chat_persona_id.as_deref(),
+        Some(second_id.as_str()),
+        "the shell view projects the durable binding for the button state"
+    );
+    drop(session); // releases the data root
+
+    // Restart: flag, active persona and chat binding all survive — the
+    // reopened session hydrates the chat row with its bound persona.
+    let wire = KernelProductWire::open(&root).expect("kernel reopens the data root");
+    let mut session = ChatSession::open(wire, Some(&chat)).expect("session reopens");
+    assert_eq!(
+        session.state().active_persona_id.as_deref(),
+        Some(second_id.as_str()),
+        "the active persona hydrates from the canonical settings row"
+    );
+    let first_flag = session
+        .state()
+        .personas
+        .iter()
+        .find(|row| row.id == first_id)
+        .map(|row| row.is_default);
+    assert_eq!(
+        first_flag,
+        Some(false),
+        "the displaced default stays demoted"
+    );
+    assert_eq!(
+        session
+            .state()
+            .chat
+            .as_ref()
+            .and_then(|row| row.persona_id.as_deref()),
+        Some(second_id.as_str()),
+        "the chat binding survives the restart"
     );
 }

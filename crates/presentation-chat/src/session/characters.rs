@@ -538,55 +538,66 @@ impl<W: ProductWire> ChatSession<W> {
             }
             ShellAction::CycleLanguage => self.cycle_language(),
             ShellAction::ToggleOpenHomeOnLoad => {
-                self.state.open_home_on_load = !self.state.open_home_on_load;
-                self.bump_scene();
+                // UI-07: the startup preference persists with the rest of
+                // the appearance set and governs the next open.
+                self.update_ui_appearance(|state| {
+                    state.open_home_on_load = !state.open_home_on_load;
+                });
             }
             ShellAction::CycleUiScale => {
-                self.state.ui_scale = next_choice(UI_SCALES, &self.state.ui_scale).to_string();
-                self.bump_scene();
+                self.update_ui_appearance(|state| {
+                    state.ui_scale = next_choice(UI_SCALES, &state.ui_scale).to_string();
+                });
             }
             ShellAction::CycleContrast => {
-                self.state.ui_contrast =
-                    next_choice(UI_CONTRASTS, &self.state.ui_contrast).to_string();
-                self.bump_scene();
+                self.update_ui_appearance(|state| {
+                    state.ui_contrast = next_choice(UI_CONTRASTS, &state.ui_contrast).to_string();
+                });
             }
             ShellAction::CycleFontProfile => {
-                self.state.ui_font_profile =
-                    next_choice(UI_FONT_PROFILES, &self.state.ui_font_profile).to_string();
-                self.bump_scene();
+                self.update_ui_appearance(|state| {
+                    state.ui_font_profile =
+                        next_choice(UI_FONT_PROFILES, &state.ui_font_profile).to_string();
+                });
             }
             ShellAction::CycleMotion => {
-                self.state.ui_motion = next_choice(UI_MOTIONS, &self.state.ui_motion).to_string();
-                self.bump_scene();
+                self.update_ui_appearance(|state| {
+                    state.ui_motion = next_choice(UI_MOTIONS, &state.ui_motion).to_string();
+                });
             }
             ShellAction::CycleChatStyle => {
-                self.state.chat_style =
-                    next_choice(CHAT_STYLES, &self.state.chat_style).to_string();
-                self.bump_scene();
+                self.update_ui_appearance(|state| {
+                    state.chat_style = next_choice(CHAT_STYLES, &state.chat_style).to_string();
+                });
             }
             ShellAction::CycleChatAvatarStyle => {
-                self.state.chat_avatar_style =
-                    next_choice(CHAT_AVATAR_STYLES, &self.state.chat_avatar_style).to_string();
-                self.bump_scene();
+                self.update_ui_appearance(|state| {
+                    state.chat_avatar_style =
+                        next_choice(CHAT_AVATAR_STYLES, &state.chat_avatar_style).to_string();
+                });
             }
             ShellAction::CycleUserMessagePosition => {
-                self.state.user_message_position =
-                    next_choice(MESSAGE_POSITIONS, &self.state.user_message_position).to_string();
-                self.bump_scene();
+                self.update_ui_appearance(|state| {
+                    state.user_message_position =
+                        next_choice(MESSAGE_POSITIONS, &state.user_message_position).to_string();
+                });
             }
             ShellAction::CycleCharacterMessagePosition => {
-                self.state.character_message_position =
-                    next_choice(MESSAGE_POSITIONS, &self.state.character_message_position)
-                        .to_string();
-                self.bump_scene();
+                self.update_ui_appearance(|state| {
+                    state.character_message_position =
+                        next_choice(MESSAGE_POSITIONS, &state.character_message_position)
+                            .to_string();
+                });
             }
             ShellAction::CycleUiOpacity => {
-                self.state.ui_opacity = next_step(self.state.ui_opacity, 0, 100, 5);
-                self.bump_scene();
+                self.update_ui_appearance(|state| {
+                    state.ui_opacity = next_step(state.ui_opacity, 0, 100, 5);
+                });
             }
             ShellAction::CycleUiGlassBlur => {
-                self.state.ui_glass_blur = next_step(self.state.ui_glass_blur, 0, 40, 4);
-                self.bump_scene();
+                self.update_ui_appearance(|state| {
+                    state.ui_glass_blur = next_step(state.ui_glass_blur, 0, 40, 4);
+                });
             }
             ShellAction::StepUiOpacity(delta) => self.step_ui_opacity(delta),
             ShellAction::StepUiGlassBlur(delta) => self.step_ui_glass_blur(delta),
@@ -732,6 +743,8 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::ExportChat(id) => self.export_chat(&id),
             ShellAction::LorebookSaveMeta => self.save_lorebook_meta(),
             ShellAction::PersonaSaveMeta => self.save_persona_meta(),
+            ShellAction::PersonaSetDefault => self.set_persona_default(),
+            ShellAction::PersonaBindToChat => self.bind_persona_to_chat(),
             ShellAction::CharacterSaveMeta => self.save_character_meta(),
             ShellAction::AddCharacterTag => self.add_character_tag(),
             ShellAction::RemoveCharacterTag(tag) => self.remove_character_tag(&tag),
@@ -1044,7 +1057,11 @@ impl<W: ProductWire> ChatSession<W> {
                 draft.character_note_depth = card_field_u32(&card, "depth", 4);
                 draft.character_note_role = {
                     let role = card_field_str(&card, "role");
-                    if role.is_empty() { "system".into() } else { role }
+                    if role.is_empty() {
+                        "system".into()
+                    } else {
+                        role
+                    }
                 };
                 draft.talkativeness = card_field_f32(&card, "talkativeness", 0.5);
                 draft.alternate_greetings = card_field_strs(&card, "alternate_greetings");

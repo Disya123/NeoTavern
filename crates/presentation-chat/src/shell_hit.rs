@@ -327,6 +327,15 @@ pub enum ShellAction {
     /// Persona editor save (React `PersonasPanel` edit tab over
     /// `personas.update`; only changed fields cross the wire).
     PersonaSaveMeta,
+    /// Persona connections row, "Default" (UI-08): promote the selected
+    /// persona to the app-wide default (`personas.update` isDefault:true)
+    /// and make it the active persona (`settings.update`
+    /// `active-persona-id`) — both durable.
+    PersonaSetDefault,
+    /// Persona connections row, "Chat" (UI-08): bind the selected persona
+    /// to the open chat (`chats.update` personaId) — the durable per-chat
+    /// binding. No chat open → honest `CAPABILITY_UNAVAILABLE`.
+    PersonaBindToChat,
     /// Character editor kernel fields (`characters.update`: name /
     /// description / tags). React autosaves the draft (600 ms); native
     /// Save is explicit for name+description, tags persist on add/remove.
@@ -1542,6 +1551,23 @@ fn persona_edit_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit>
             return Some(ShellHit::Action(ShellAction::PersonaSaveMeta));
         }
         return Some(ShellHit::Absorb);
+    }
+    // Connections row (UI-08): Default / Character / Chat under the
+    // editor fields. Default promotes the persona (durable kernel flag +
+    // active-persona-id), Chat binds it to the open chat
+    // (`chats.update` personaId); the per-CHARACTER binding stays an
+    // honest disabled Absorb (no wire contract yet).
+    let connections_top = bar_bottom + SPACE_LG + 3.0 * (CONTROL_SM + SPACE_SM);
+    let connections_bottom = connections_top + CONTROL_SM;
+    if y >= connections_top && y < connections_bottom {
+        let inner = panel_x + pad;
+        let span = (panel_w - pad * 2.0).max(1.0);
+        let column = (((x - inner) / span) * 3.0).floor().clamp(0.0, 2.0) as usize;
+        return match column {
+            0 => Some(ShellHit::Action(ShellAction::PersonaSetDefault)),
+            1 => Some(ShellHit::Absorb),
+            _ => Some(ShellHit::Action(ShellAction::PersonaBindToChat)),
+        };
     }
     // Name field + description textarea absorb taps; typing focus is
     // bin-local via the part rects.
