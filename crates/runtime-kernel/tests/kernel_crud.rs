@@ -161,6 +161,140 @@ fn character_create_get_update_delete_round_trip() {
     assert_eq!(product.params["characterId"], json!(character_id));
 }
 
+/// UI-02 (ADR-0057 Phase 2): `characters.card.get` /
+/// `characters.card.update` — the canonical field-level card document.
+/// Honest absence (a column-created character has NO card → empty
+/// object, never a synthesized greeting), wholesale RMW (unknown
+/// extension keys ride verbatim), stable `CHARACTER_NOT_FOUND` errors,
+/// and the export prefers the stored card.
+#[test]
+fn character_card_get_update_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    let created = dispatch_json(
+        &kernel,
+        "characters.create",
+        json!({ "name": "Aria", "description": "A wandering bard" }),
+    )
+    .expect("create must succeed");
+    let character_id = created["id"].as_str().expect("id").to_string();
+
+    // Honest absence: a character created without a card has NO card —
+    // the get returns an empty object, not a fabricated greeting.
+    let fetched = dispatch_json(
+        &kernel,
+        "characters.card.get",
+        json!({ "characterId": character_id }),
+    )
+    .expect("card.get must succeed");
+    assert_eq!(fetched["characterId"], json!(character_id));
+    assert_eq!(fetched["card"], json!({}), "no card yet — honest absence");
+
+    // Wholesale RMW: the client's card lands verbatim, unknown extension
+    // keys included, and echoes back.
+    let card = json!({
+        "name": "Aria",
+        "description": "A wandering bard",
+        "first_mes": "*Aria tunes her lute.* Care for a song?",
+        "creator_notes": "Bard of the low roads.",
+        "alternate_greetings": ["*Aria winks.* Quiet corner tonight."],
+        "extensions": { "neo_tavern": { "unknown_key": "keep-me" } },
+    });
+    let updated = dispatch_json(
+        &kernel,
+        "characters.card.update",
+        json!({ "characterId": character_id, "card": card }),
+    )
+    .expect("card.update must succeed");
+    assert_eq!(updated["card"], card, "the stored card echoes back");
+
+    // get returns exactly what was stored.
+    let fetched = dispatch_json(
+        &kernel,
+        "characters.card.get",
+        json!({ "characterId": character_id }),
+    )
+    .expect("card.get after update must succeed");
+    assert_eq!(fetched["card"], card);
+
+    // The export prefers the stored card (import-roundtrip contract).
+    let export = dispatch_json(
+        &kernel,
+        "characters.export.card",
+        json!({ "characterId": character_id, "format": "json" }),
+    )
+    .expect("export must succeed");
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(export["contentBase64"].as_str().expect("base64"))
+        .expect("decoded export");
+    let exported: Value = serde_json::from_slice(&bytes).expect("export is JSON");
+    // A card without its own `spec` envelope is wrapped in a V2 container:
+    // the stored document rides under `data` with an honest warning.
+    assert_eq!(
+        exported["data"]["first_mes"], card["first_mes"],
+        "the export carries the stored card's first message"
+    );
+    assert_eq!(
+        exported["data"]["extensions"]["neo_tavern"]["unknown_key"], json!("keep-me"),
+        "unknown extension metadata survives the roundtrip"
+    );
+    assert!(
+        export["warnings"]
+            .as_array()
+            .expect("warnings array")
+            .iter()
+            .any(|warning| warning.as_str().unwrap_or_default().contains("wrapped")),
+        "the wrap is announced honestly: {:?}",
+        export["warnings"]
+    );
+
+    // A second update REPLACES the whole card document (the client RMWs;
+    // the kernel does not merge).
+    let slim = json!({ "name": "Aria", "first_mes": "*Aria waves.*" });
+    dispatch_json(
+        &kernel,
+        "characters.card.update",
+        json!({ "characterId": character_id, "card": slim }),
+    )
+    .expect("second card.update must succeed");
+    let fetched = dispatch_json(
+        &kernel,
+        "characters.card.get",
+        json!({ "characterId": character_id }),
+    )
+    .expect("card.get must succeed");
+    assert_eq!(fetched["card"], slim, "update is a wholesale replace");
+
+    // Missing character → stable product error on both ops. Each op gets
+    // its own request shape: `card.get` carries only the id (its schema
+    // is strict), so the decode contract violation cannot mask the
+    // product-level NOT_FOUND.
+    let missing = "0b1c2d3e-4f5a-4b8c-9d0e-1a2b3c4d5e99";
+    let err = dispatch_json(
+        &kernel,
+        "characters.card.get",
+        json!({ "characterId": missing }),
+    )
+    .expect_err("card.get on a missing character must fail");
+    assert_eq!(err.code, KernelErrorCode::NotFound);
+    let product = err.product.expect("product error must carry the wire dto");
+    assert_eq!(product.code, "CHARACTER_NOT_FOUND");
+    assert_eq!(product.params["characterId"], json!(missing));
+
+    let err = dispatch_json(
+        &kernel,
+        "characters.card.update",
+        json!({ "characterId": missing, "card": {} }),
+    )
+    .expect_err("card.update on a missing character must fail");
+    assert_eq!(err.code, KernelErrorCode::NotFound);
+    let product = err.product.expect("product error must carry the wire dto");
+    assert_eq!(product.code, "CHARACTER_NOT_FOUND");
+    assert_eq!(product.params["characterId"], json!(missing));
+}
+
 #[test]
 fn characters_list_cursor_pagination() {
     let root = tempfile::tempdir().expect("tempdir");

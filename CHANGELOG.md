@@ -197,6 +197,37 @@
 
 ### Fixed
 
+- The character editor reads and writes REAL card fields (UI-02 audit
+  class, ADR-0057 Phase 2). Four stacked defects: the editor SYNTHESIZED
+  a first message, creator notes and a greeting for every character
+  (`*{name} looks up.* Hey.` — strings the user never wrote); Save
+  diffed only name/description and silently dropped every card-field
+  edit; character create discarded the entered first message; and
+  duplicate copied only the canonical columns, losing the card. The
+  card document is now a canonical kernel-plane capability: two new
+  wire ops — `characters.card.get` (returns the SillyTavern object
+  preserved under `ext_json._card`; an EMPTY object for a cardless
+  character — honest absence, never a fabricated string) and
+  `characters.card.update` (a client read-modify-write stored verbatim,
+  so unknown extension keys ride through by construction; `updated_at`
+  bumps; `CHARACTER_NOT_FOUND` stable; 128 KiB budgets). The editor
+  hydrates the full draft field set from the real document (first_mes,
+  creator_notes, alternate_greetings, personality, scenario,
+  mes_example, system_prompt, post_history_instructions, creator,
+  character_version, depth/role, talkativeness — reads prefer the V2
+  `data` copy, writes keep `data` and the flat mirror coherent), Save
+  diffs the composed card against the loaded one and writes it only on
+  real change, create persists the entered first message as the new
+  card, and duplicate carries the source card over. Exports stay
+  coherent: they prefer the stored card (AGENTS §11 round trip), and
+  name/description edits land in the card copy too. FakeWire implements
+  the same ops with the same request validation (INV-7), and its demo
+  character carries a real card so fixture runs exercise the honest
+  path. Gate test: `card_editor_roundtrips_real_fields_over_the_real_kernel`
+  — import a card with a unique first message/notes/greetings plus
+  unknown extension metadata, open the editor (real fields, no
+  synthesis), edit, Save, reselect, restart, export — the edit and the
+  unknown extensions survive every leg over the real Kernel.
 - The selected provider profile now REACHES generation (UI-01 audit
   class, ADR-0057 Phase 2). Two stacked defects: the session wrote the
   selection as a camelCase `activeProviderConfigId` settings row with a

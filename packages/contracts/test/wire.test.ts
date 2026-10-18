@@ -59,10 +59,14 @@ describe('product wire registry', () => {
     // chats.export (91 total); slice 42 (profile import) adds
     // profile.import (95 total); slice 44 (snapshot rollback) adds
     // chats.snapshots.rollback (96 total); slice 46 (snapshot list) adds
-    // chats.snapshots.list (97 total). The exact operation
+    // chats.snapshots.list (97 total); the drafts.list slice (UI-04) adds
+    // chats.messages.drafts.list (98 total — its wire.test bump was
+    // missed and is repaired here); ADR-0057 Phase 2 (UI-02) adds the
+    // canonical card-document pair characters.card.get/update (100 total
+    // plus drafts.list = 101). The exact operation
     // set is asserted so a registry edit that drops or renames an op fails
     // loudly.
-    expect(registry.operations).toHaveLength(98);
+    expect(registry.operations).toHaveLength(101);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -71,6 +75,8 @@ describe('product wire registry', () => {
       'characters.update',
       'characters.delete',
       'characters.export.card',
+      'characters.card.get',
+      'characters.card.update',
       'chats.list',
       'chats.get',
       'chats.messages.list',
@@ -90,6 +96,7 @@ describe('product wire registry', () => {
       'chats.messages.variants.activate',
       'chats.messages.revisions.list',
       'chats.messages.drafts.get',
+      'chats.messages.drafts.list',
       'chats.messages.drafts.save',
       'chats.messages.drafts.commit',
       'chats.messages.drafts.discard',

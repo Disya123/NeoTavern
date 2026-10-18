@@ -4,6 +4,113 @@
 //! public surface (AGENTS: no public contract changes without an explicit
 //! assignment).
 use super::*;
+use contracts_generated::generated::decode_character_card;
+
+// --- card field helpers (UI-02) ---------------------------------------------
+//
+// The card document is the SillyTavern object the kernel keeps under
+// `ext_json._card`. Reads prefer the V2 `data` copy (the spec's canonical
+// location) and fall back to the flat top-level keys (V1 + the V2
+// backcompat mirror); writes update BOTH places when `data` exists, so
+// an exported card never carries stale duplicates.
+
+/// Reads one card string field (empty string when absent — the editor
+/// renders honest absence, never a placeholder).
+fn card_field_str(card: &Value, key: &str) -> String {
+    card_container(card)
+        .and_then(|obj| obj.get(key))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn card_field_strs(card: &Value, key: &str) -> Vec<String> {
+    card_container(card)
+        .and_then(|obj| obj.get(key))
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn card_field_u32(card: &Value, key: &str, fallback: u32) -> u32 {
+    card_container(card)
+        .and_then(|obj| obj.get(key))
+        .and_then(Value::as_u64)
+        .and_then(|raw| u32::try_from(raw).ok())
+        .unwrap_or(fallback)
+}
+
+fn card_field_f32(card: &Value, key: &str, fallback: f32) -> f32 {
+    card_container(card)
+        .and_then(|obj| obj.get(key))
+        .and_then(Value::as_f64)
+        .map(|raw| raw as f32)
+        .unwrap_or(fallback)
+}
+
+/// The field container: `data` when the card is a V2 spec document, the
+/// object itself otherwise (V1 flat cards).
+fn card_container(card: &Value) -> Option<&serde_json::Map<String, Value>> {
+    let obj = card.as_object()?;
+    match obj.get("data").filter(|data| data.is_object()) {
+        Some(data) => data.as_object(),
+        None => Some(obj),
+    }
+}
+
+/// Composes the next card from the draft: a read-modify-write of the
+/// loaded card — every editor field lands in `data` (when present) and
+/// the flat mirror, and every key the editor does NOT touch rides along
+/// verbatim.
+fn compose_card_from_draft(draft: &CharacterDraftView) -> Value {
+    let mut card = draft.card.clone();
+    if !card.is_object() {
+        card = json!({});
+    }
+    let mut set_flat = |key: &str, value: Value| {
+        set_card_key(&mut card, key, value);
+    };
+    set_flat("name", json!(draft.name.trim()));
+    set_flat("description", json!(draft.description));
+    set_flat("personality", json!(draft.personality));
+    set_flat("scenario", json!(draft.scenario));
+    set_flat("first_mes", json!(draft.first_message));
+    set_flat("mes_example", json!(draft.example_dialogues));
+    set_flat("system_prompt", json!(draft.system_prompt));
+    set_flat(
+        "post_history_instructions",
+        json!(draft.post_history_instructions),
+    );
+    set_flat("creator", json!(draft.creator));
+    set_flat("creator_notes", json!(draft.creator_notes));
+    set_flat("character_version", json!(draft.character_version));
+    set_flat("character_note", json!(draft.character_note));
+    set_flat("depth", json!(draft.character_note_depth));
+    set_flat("role", json!(draft.character_note_role));
+    set_flat("talkativeness", json!(draft.talkativeness));
+    set_flat("alternate_greetings", json!(draft.alternate_greetings));
+    card
+}
+
+/// Writes one key into the flat top level AND the `data` copy when the
+/// card is a V2 spec document (both places must stay coherent).
+fn set_card_key(card: &mut Value, key: &str, value: Value) {
+    if let Some(obj) = card.as_object_mut() {
+        obj.insert(key.to_string(), value.clone());
+        if let Some(data) = obj.get_mut("data").filter(|data| data.is_object()) {
+            if let Some(data_obj) = data.as_object_mut() {
+                data_obj.insert(key.to_string(), value);
+            }
+        }
+    }
+}
+
 impl<W: ProductWire> ChatSession<W> {
     pub fn set_create_description(&mut self, value: &str) {
         self.state.create_description = value.to_string();
@@ -16,6 +123,9 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     /// Create a character via `characters.create` and refresh the list.
+    /// UI-02: an entered first message no longer evaporates — it lands as
+    /// the new character's card document (`characters.card.update`),
+    /// so reselect/restart/export all see it.
     pub fn confirm_create_character(&mut self) {
         let name = self.state.create_name.trim().to_string();
         if name.is_empty() {
@@ -30,15 +140,32 @@ impl<W: ProductWire> ChatSession<W> {
         } else {
             Some(self.state.create_description.clone())
         };
+        let first_message = self.state.create_first_message.trim().to_string();
         let req = RequestCreateCharacter {
-            name,
-            description,
+            name: name.clone(),
+            description: description.clone(),
             tags: None,
             avatar_asset_id: None,
             profile_id: None,
         };
         match self.call_decode("characters.create", &req, decode_character_dto) {
             Ok(created) => {
+                if !first_message.is_empty() {
+                    let mut card = json!({ "name": name });
+                    if let Some(description) = description.as_deref() {
+                        set_card_key(&mut card, "description", json!(description));
+                    }
+                    set_card_key(&mut card, "first_mes", json!(first_message));
+                    let card_req = RequestCharactersCardUpdate {
+                        character_id: created.id.clone(),
+                        card,
+                    };
+                    if let Err(err) =
+                        self.call_decode("characters.card.update", &card_req, |_| Ok(()))
+                    {
+                        self.record_error(err);
+                    }
+                }
                 self.state.create_dialog_open = false;
                 self.state.create_name.clear();
                 self.state.create_description.clear();
@@ -55,9 +182,10 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     /// Duplicate the selected character (`characters.create` with
-    /// `"{name} copy"`; React `duplicateSelectedCharacter`). Only the fields
-    /// the native create contract carries (name / description / tags /
-    /// avatar) are copied.
+    /// `"{name} copy"`; React `duplicateSelectedCharacter`). UI-02: the
+    /// card document rides along too (`characters.card.get` →
+    /// `characters.card.update`), so the duplicate keeps its first
+    /// message, notes, greetings and extension metadata.
     pub fn duplicate_selected_character(&mut self) {
         let Some(source) = self.state.selected_character_id.as_deref().and_then(|id| {
             self.state
@@ -68,6 +196,19 @@ impl<W: ProductWire> ChatSession<W> {
         }) else {
             return;
         };
+        let source_card = match self.call_decode(
+            "characters.card.get",
+            &RequestCharactersCardGet {
+                character_id: source.id.clone(),
+            },
+            decode_character_card,
+        ) {
+            Ok(result) => result.card,
+            Err(err) => {
+                self.record_error(err);
+                json!({})
+            }
+        };
         let req = RequestCreateCharacter {
             name: format!("{} copy", source.name),
             description: source.description.clone(),
@@ -77,6 +218,17 @@ impl<W: ProductWire> ChatSession<W> {
         };
         match self.call_decode("characters.create", &req, decode_character_dto) {
             Ok(created) => {
+                if source_card.as_object().is_some_and(|obj| !obj.is_empty()) {
+                    let card_req = RequestCharactersCardUpdate {
+                        character_id: created.id.clone(),
+                        card: source_card,
+                    };
+                    if let Err(err) =
+                        self.call_decode("characters.card.update", &card_req, |_| Ok(()))
+                    {
+                        self.record_error(err);
+                    }
+                }
                 self.state.selected_character_id = Some(created.id.clone());
                 self.state.pinned_character_id = Some(created.id.clone());
                 self.state.character_tab = "edit".into();
@@ -617,10 +769,28 @@ impl<W: ProductWire> ChatSession<W> {
         let next_description = draft.description.clone();
         let stored_description = stored.description.clone().unwrap_or_default();
         let description_change = next_description != stored_description;
-        if !name_change && !description_change {
+        // UI-02: the card fields ride the same save. The next card is a
+        // read-modify-write of the draft's loaded card — unknown
+        // extension keys ride through verbatim (AGENTS.md §11).
+        let next_card = compose_card_from_draft(&draft);
+        let card_change = next_card != draft.card;
+        if !name_change && !description_change && !card_change {
             self.state.status_message = Some("No changes.".into());
             self.bump_scene();
             return;
+        }
+        // Card first (the heavier payload); a failure here leaves the
+        // columns untouched and surfaces the error honestly.
+        if card_change {
+            let req = RequestCharactersCardUpdate {
+                character_id: draft.id.clone(),
+                card: next_card.clone(),
+            };
+            if let Err(err) = self.call_decode("characters.card.update", &req, |_| Ok(())) {
+                self.record_error(err);
+                self.bump_scene();
+                return;
+            }
         }
         let req = RequestUpdateCharacter {
             character_id: draft.id.clone(),
@@ -654,6 +824,8 @@ impl<W: ProductWire> ChatSession<W> {
                     if local.id == updated.id {
                         local.name = updated.name.clone();
                         local.description = updated.description.unwrap_or_default();
+                        // The draft's card is now the stored one.
+                        local.card = next_card;
                     }
                 }
                 self.state.status_message = Some(format!("Saved {}.", updated.name));
@@ -817,6 +989,10 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     /// Load the full draft for the currently selected character.
+    /// UI-02: the card fields hydrate from the REAL card document
+    /// (`characters.card.get` — the import's `ext_json._card`), never from
+    /// synthesized strings; a character without a card shows empty fields
+    /// (honest absence, not placeholder fiction).
     pub(crate) fn load_character_draft(&mut self) {
         let Some(id) = self.state.selected_character_id.clone() else {
             self.state.character_draft = None;
@@ -832,15 +1008,47 @@ impl<W: ProductWire> ChatSession<W> {
             decode_character_dto,
         ) {
             Ok(dto) => {
+                let card = match self.call_decode(
+                    "characters.card.get",
+                    &RequestCharactersCardGet {
+                        character_id: dto.id.clone(),
+                    },
+                    decode_character_card,
+                ) {
+                    Ok(result) => result.card,
+                    Err(err) => {
+                        // A failed card read records the error but still
+                        // opens the editor with the canonical columns —
+                        // the fields stay honestly empty.
+                        self.record_error(err);
+                        json!({})
+                    }
+                };
                 let mut draft = CharacterDraftView::default();
                 draft.id = dto.id.clone();
                 draft.name = dto.name.clone();
                 draft.description = dto.description.clone().unwrap_or_default();
                 draft.tags = dto.tags.clone();
                 draft.avatar_asset_id = dto.avatar_asset_id.clone();
-                draft.first_message = format!("*{} looks up.* Hey.", dto.name);
-                draft.creator_notes = format!("Character card for {}.", dto.name);
-                draft.alternate_greetings = vec![format!("*{} nods.* Good to see you.", dto.name)];
+                draft.personality = card_field_str(&card, "personality");
+                draft.scenario = card_field_str(&card, "scenario");
+                draft.first_message = card_field_str(&card, "first_mes");
+                draft.example_dialogues = card_field_str(&card, "mes_example");
+                draft.system_prompt = card_field_str(&card, "system_prompt");
+                draft.post_history_instructions =
+                    card_field_str(&card, "post_history_instructions");
+                draft.creator = card_field_str(&card, "creator");
+                draft.creator_notes = card_field_str(&card, "creator_notes");
+                draft.character_version = card_field_str(&card, "character_version");
+                draft.character_note = card_field_str(&card, "character_note");
+                draft.character_note_depth = card_field_u32(&card, "depth", 4);
+                draft.character_note_role = {
+                    let role = card_field_str(&card, "role");
+                    if role.is_empty() { "system".into() } else { role }
+                };
+                draft.talkativeness = card_field_f32(&card, "talkativeness", 0.5);
+                draft.alternate_greetings = card_field_strs(&card, "alternate_greetings");
+                draft.card = card;
                 self.state.character_draft = Some(draft);
                 self.state.expanded_greeting = None;
                 self.load_avatar_data_uri(dto.avatar_asset_id.as_deref());

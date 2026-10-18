@@ -46,6 +46,12 @@ pub struct CharacterDraftView {
     pub avatar_asset_id: Option<String>,
     /// Never a `data:` URI in the Dioxus tree. GPU overlay uses `avatar_asset_id`.
     pub avatar_data_uri: Option<String>,
+    /// The RAW card document this draft was loaded from (UI-02): the
+    /// SillyTavern object behind `characters.card.get`. Save does a
+    /// read-modify-write against it, so unknown extension keys ride
+    /// through verbatim; `{}` means the character has no card yet (the
+    /// draft fields are then a NEW card being composed).
+    pub card: serde_json::Value,
 }
 
 impl Default for CharacterDraftView {
@@ -72,6 +78,7 @@ impl Default for CharacterDraftView {
             talkativeness: 0.5,
             avatar_asset_id: None,
             avatar_data_uri: None,
+            card: serde_json::json!({}),
         }
     }
 }

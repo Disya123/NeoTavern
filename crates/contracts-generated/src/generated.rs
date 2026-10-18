@@ -27,6 +27,8 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "characters.update" => Some(65536),
         "characters.delete" => Some(2048),
         "characters.export.card" => Some(2048),
+        "characters.card.get" => Some(2048),
+        "characters.card.update" => Some(131072),
         "chats.list" => Some(4096),
         "chats.get" => Some(2048),
         "chats.messages.list" => Some(4096),
@@ -134,6 +136,8 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "characters.update" => Some(262144),
         "characters.delete" => Some(1024),
         "characters.export.card" => Some(262144),
+        "characters.card.get" => Some(131072),
+        "characters.card.update" => Some(131072),
         "chats.list" => Some(262144),
         "chats.get" => Some(262144),
         "chats.messages.list" => Some(262144),
@@ -4933,6 +4937,169 @@ pub fn validate_result_characters_export_card(value: &Value) -> Result<(), Vec<I
 
 pub fn decode_result_characters_export_card(bytes: &[u8]) -> Result<ResultCharactersExportCard, WireError> {
     crate::decode::<ResultCharactersExportCard>(validate_result_characters_export_card, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestCharactersCardGet {
+    #[serde(rename = "characterId")]
+    pub character_id: String,
+}
+
+pub(crate) fn check_request_characters_card_get(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("characterId").is_none() {
+            issues.push(Issue::new(join_path(path, "characterId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "characterId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_characters_card_get(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_characters_card_get(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_characters_card_get(bytes: &[u8]) -> Result<RequestCharactersCardGet, WireError> {
+    crate::decode::<RequestCharactersCardGet>(validate_request_characters_card_get, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CharacterCard {
+    #[serde(rename = "characterId")]
+    pub character_id: String,
+    pub card: Value,
+}
+
+pub(crate) fn check_character_card(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("characterId").is_none() {
+            issues.push(Issue::new(join_path(path, "characterId"), "RequiredProperty"));
+        }
+        if value.get("card").is_none() {
+            issues.push(Issue::new(join_path(path, "card"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("card") {
+            let child_path = join_path(path, "card");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "characterId" | "card") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_character_card(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_character_card(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_character_card(bytes: &[u8]) -> Result<CharacterCard, WireError> {
+    crate::decode::<CharacterCard>(validate_character_card, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestCharactersCardUpdate {
+    #[serde(rename = "characterId")]
+    pub character_id: String,
+    pub card: Value,
+}
+
+pub(crate) fn check_request_characters_card_update(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("characterId").is_none() {
+            issues.push(Issue::new(join_path(path, "characterId"), "RequiredProperty"));
+        }
+        if value.get("card").is_none() {
+            issues.push(Issue::new(join_path(path, "card"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("card") {
+            let child_path = join_path(path, "card");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "characterId" | "card") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_characters_card_update(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_characters_card_update(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_characters_card_update(bytes: &[u8]) -> Result<RequestCharactersCardUpdate, WireError> {
+    crate::decode::<RequestCharactersCardUpdate>(validate_request_characters_card_update, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-10-04T23:25:32.081Z",
+  "generatedAt": "2026-10-18T19:47:56.447Z",
   "rows": [
     {
       "hosts": {
@@ -24,9 +24,11 @@
       },
       "id": "characters.crud",
       "milestone": "M2",
-      "notes": "Kernel-owned ops with component tests; desktop/headless/android hosts Integrated/Implemented. Этап 2.10 (golden-flow UI cutover, шаг 2): the library CRUD hooks (useCharacters/useCharacter/useCreateCharacter/useUpdateCharacter/useDeleteCharacter) route through the facade `apps/web/src/api/wireBridge.ts` in kernel mode — wire ops + wire→UI translation with honest defaults (avatar URL, card fields personality/scenario/firstMessage etc. are not modelled by the wire contract yet and surface CAPABILITY_UNAVAILABLE via UnsupportedError when actually requested, never a silent downgrade); the browser/sidecar mode keeps the legacy /api/v2 routes unchanged. Kernel list is newest-first (cursor/limit only): search (q), tag filter and non-default sorts are honest UnsupportedError in kernel mode (Этап 4).",
+      "notes": "Kernel-owned ops with component tests; desktop/headless/android hosts Integrated/Implemented. Этап 2.10 (golden-flow UI cutover, шаг 2): the library CRUD hooks (useCharacters/useCharacter/useCreateCharacter/useUpdateCharacter/useDeleteCharacter) route through the facade `apps/web/src/api/wireBridge.ts` in kernel mode — wire ops + wire→UI translation with honest defaults (avatar URL, card fields personality/scenario/firstMessage etc. are not modelled by the wire contract yet and surface CAPABILITY_UNAVAILABLE via UnsupportedError when actually requested, never a silent downgrade); the browser/sidecar mode keeps the legacy /api/v2 routes unchanged. Kernel list is newest-first (cursor/limit only): search (q), tag filter and non-default sorts are honest UnsupportedError in kernel mode (Этап 4). ADR-0057 Phase 2 (UI-02): the card document is now canonical on the kernel plane — characters.card.get returns the SillyTavern object preserved under ext_json._card (an EMPTY object for a cardless character: honest absence, never a synthesized greeting/notes string) and characters.card.update stores a client read-modify-write verbatim (unknown extension keys ride through, updated_at bumps, CHARACTER_NOT_FOUND stable on both ops; request/response budget 128 KiB). The native editor hydrates first_mes/creator_notes/alternate_greetings and the full draft field set (personality/scenario/mes_example/system_prompt/post_history_instructions/creator/character_version/depth/role/talkativeness) from the real document, Save diffs and writes only on real change, character create persists the entered first message as the new card, and duplicate copies the source card — so reselect/restart/export all see real fields (export prefers the stored card, V2 data-copy and flat mirror are kept coherent).",
       "title": "Character CRUD",
       "wireOps": [
+        "characters.card.get",
+        "characters.card.update",
         "characters.create",
         "characters.delete",
         "characters.get",

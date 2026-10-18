@@ -681,6 +681,89 @@ pub fn characters_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kern
     encode(&dto)
 }
 
+/// `characters.card.get` (UI-02, ADR-0057 Phase 2) — the canonical
+/// field-level read of one character's card document: the SillyTavern
+/// object the import preserved under `ext_json._card`. A character
+/// created without a card container returns an EMPTY object — honest
+/// absence; the editor must never synthesize greeting/notes strings.
+pub fn characters_card_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_characters_card_get(request)?;
+    let id = req.character_id.clone();
+    let ext_json: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT ext_json FROM characters WHERE id = ?1",
+            params![&id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "characters.card.get: lookup"))?
+        .ok_or_else(|| not_found("CHARACTER", &id))?;
+    let card = match ext_json.as_deref() {
+        Some(text) => serde_json::from_str::<serde_json::Value>(text)
+            .map_err(|err| {
+                KernelError::new(
+                    KernelErrorCode::Internal,
+                    format!("characters.card.get: ext_json is not valid JSON: {err}"),
+                )
+            })?
+            .get("_card")
+            .cloned()
+            .filter(serde_json::Value::is_object)
+            .unwrap_or_else(|| serde_json::json!({})),
+        None => serde_json::json!({}),
+    };
+    let dto = generated::CharacterCard {
+        character_id: id,
+        card,
+    };
+    validate(&dto, generated::validate_character_card)?;
+    encode(&dto)
+}
+
+/// `characters.card.update` (UI-02) — read-modify-write: the client sends
+/// the card it read with its edits applied, so unknown extension keys
+/// ride along verbatim (AGENTS.md: never lose unknown card fields). The
+/// kernel stores the object under `ext_json._card` wholesale and bumps
+/// `updated_at`; the stored card echoes back.
+pub fn characters_card_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_characters_card_update(request)?;
+    let id = req.character_id.clone();
+    let exists: Option<i64> = db
+        .conn()
+        .query_row(
+            "SELECT 1 FROM characters WHERE id = ?1",
+            params![&id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "characters.card.update: lookup"))?;
+    if exists.is_none() {
+        return Err(not_found("CHARACTER", &id));
+    }
+    let ext_json = serde_json::to_string(&serde_json::json!({ "_card": req.card })).map_err(
+        |err| {
+            KernelError::new(
+                KernelErrorCode::Internal,
+                format!("characters.card.update: serialize ext: {err}"),
+            )
+        },
+    )?;
+    db.transaction(|tx| {
+        tx.execute(
+            "UPDATE characters SET ext_json = ?1, updated_at = ?2 WHERE id = ?3",
+            params![&ext_json, now(), &id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "characters.card.update: update"))
+    })?;
+    let dto = generated::CharacterCard {
+        character_id: id,
+        card: req.card,
+    };
+    validate(&dto, generated::validate_character_card)?;
+    encode(&dto)
+}
+
 /// `characters.create` — insert a new character and return it.
 pub fn characters_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_create_character(request)?;

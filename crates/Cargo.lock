@@ -3808,6 +3808,7 @@ dependencies = [
 name = "neotavern-presentation-kernel-wire"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "contracts-generated",
  "neotavern-presentation-chat",
  "neotavern-presentation-dioxus-shell",

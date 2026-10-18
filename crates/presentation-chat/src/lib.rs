@@ -64,6 +64,7 @@ pub mod scroll_ack;
 pub mod scroll_dynamics;
 pub use fake_wire::{
     FakeWire, DEMO_AVATAR_ASSET_ID, DEMO_CHARACTER_ID, DEMO_CHAT_ID, DEMO_LOREBOOK_ID,
+    DEMO_SERAPHINA_ID,
 };
 pub use hit_rects::{HitRect, HitRects, MessageActionKind, QuickIntent, TapIntent, TOUCH_SLOP_CSS};
 pub use seed::{

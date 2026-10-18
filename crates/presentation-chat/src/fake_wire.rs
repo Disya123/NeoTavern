@@ -1,14 +1,15 @@
 use contracts_generated::generated::{
-    AssetsItem, BackupDto, CardExportFormat, CharacterDto, ChatDto, DataActivationEntry,
-    EventEnvelope, GenerationEvent, GenerationStep, GenerationStepStatus, GenerationStepType,
-    LorebookDto, LorebookEntryDto, LorebookEntryInput, LorebookEntryPatch, MemoryDto, MemoryScope,
-    MessageDraftDto, MessageDto, MessageRevisionDto, MessageRole, MessageVariantDto,
-    PagedCharacters, PagedChats, PagedGenerationEvents, PagedMessages, PersonaDto, PluginsItem,
-    PresetDto, ProfileExportCounts, ProfilesItem, PromptBlock, PromptMessage, PromptPlan,
-    ProviderAvailability, ProviderCapabilities, ProviderConfigDto, ProviderDto, ProviderModel,
-    RequestAssetsPut, RequestBackupsRestore, RequestCharactersExportCard,
-    RequestCreateChatSnapshot, RequestCreateMemory, RequestCreatePreset, RequestDeleteMemory,
-    RequestDeletePreset, RequestDeleteProviderConfig, RequestGetPreset, RequestGetProviderConfig,
+    AssetsItem, BackupDto, CardExportFormat, CharacterCard, CharacterDto, ChatDto,
+    DataActivationEntry, EventEnvelope, GenerationEvent, GenerationStep, GenerationStepStatus,
+    GenerationStepType, LorebookDto, LorebookEntryDto, LorebookEntryInput, LorebookEntryPatch,
+    MemoryDto, MemoryScope, MessageDraftDto, MessageDto, MessageRevisionDto, MessageRole,
+    MessageVariantDto, PagedCharacters, PagedChats, PagedGenerationEvents, PagedMessages,
+    PersonaDto, PluginsItem, PresetDto, ProfileExportCounts, ProfilesItem, PromptBlock,
+    PromptMessage, PromptPlan, ProviderAvailability, ProviderCapabilities, ProviderConfigDto,
+    ProviderDto, ProviderModel, RequestAssetsPut, RequestBackupsRestore,
+    RequestCharactersCardUpdate, RequestCharactersExportCard, RequestCreateChatSnapshot,
+    RequestCreateMemory, RequestCreatePreset, RequestDeleteMemory, RequestDeletePreset,
+    RequestDeleteProviderConfig, RequestGetPreset, RequestGetProviderConfig,
     RequestImportsCharacterCard, RequestListGenerationEvents, RequestListMemories,
     RequestListProviderConfigs, RequestMessageRevisionsList, RequestProfileExport,
     RequestProfileImport, RequestProfileImportPolicy, RequestProfilesCreate, RequestProfilesDelete,
@@ -112,6 +113,11 @@ pub struct FakeWire {
     /// Character-card deduplication (`imports.character.card` re-import):
     /// content sha256 → existing character id.
     card_imports: HashMap<String, String>,
+    /// Character card documents (`characters.card.get` / `.update`):
+    /// character id → the card object, mirroring the kernel's
+    /// `ext_json._card` (an import seeds it; the editor's
+    /// read-modify-write updates it).
+    cards: HashMap<String, Value>,
     /// Memory store (`memories.*`; ТЗ §4.4 keyword retrieval). The kernel
     /// validates character scope against the character table.
     memories: Vec<MemoryDto>,
@@ -210,6 +216,7 @@ impl Default for FakeWire {
             },
             assets: HashMap::new(),
             card_imports: HashMap::new(),
+            cards: HashMap::new(),
             memories: Vec::new(),
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
@@ -229,6 +236,28 @@ impl FakeWire {
         wire.insert_character(demo_character());
         wire.insert_character(demo_seraphina());
         wire.insert_character(demo_vayle());
+        // UI-02: the demo character carries a REAL card document (the
+        // kernel-side equivalent of `ext_json._card` after an import), so
+        // the editor's first message / notes / greetings hydrate from real
+        // data — the fixture never leans on session-side synthesis.
+        wire.cards.insert(
+            DEMO_CHARACTER_ID.into(),
+            json!({
+                "spec": "character_card_v2",
+                "name": "Hazel",
+                "description": "[Hazel's Personality= \"sharp\", \"wry\", \"self-taught\", \"stubborn\", \"streetwise\"]",
+                "first_mes": "*Hazel looks up from her notebook.* Evening. You picked a noisy corner for a quiet chat.",
+                "creator_notes": "Demo fixture character for the native editor surfaces.",
+                "alternate_greetings": ["*Hazel smirks.* Back again? Sit."],
+                "data": {
+                    "name": "Hazel",
+                    "description": "[Hazel's Personality= \"sharp\", \"wry\", \"self-taught\", \"stubborn\", \"streetwise\"]",
+                    "first_mes": "*Hazel looks up from her notebook.* Evening. You picked a noisy corner for a quiet chat.",
+                    "creator_notes": "Demo fixture character for the native editor surfaces.",
+                    "alternate_greetings": ["*Hazel smirks.* Back again? Sit."]
+                },
+            }),
+        );
         wire.insert_persona(demo_persona());
         wire.insert_chat(demo_chat(2));
         wire.push_message(user_message(DEMO_CHAT_ID, 0, "Hello there"));
@@ -2162,6 +2191,10 @@ impl ProductWire for FakeWire {
                     .insert(character.id.clone(), character.clone());
                 self.card_imports
                     .insert(source_hash.clone(), character.id.clone());
+                // Kernel parity: the parsed card document rides under
+                // `ext_json._card`; the fixture keeps it for
+                // `characters.card.get` (UI-02 editor reads).
+                self.cards.insert(character.id.clone(), doc.clone());
                 self.wrap_call(
                     operation_id,
                     to_value(&ResultImportsCharacterCard {
@@ -2171,6 +2204,43 @@ impl ProductWire for FakeWire {
                         warnings: Vec::new(),
                     }),
                 )
+            }
+            "characters.card.get" => {
+                let character_id = payload_str(&payload, "characterId")?;
+                self.require_character(&character_id)?;
+                let card = self
+                    .cards
+                    .get(&character_id)
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
+                self.wrap_call(
+                    operation_id,
+                    to_value(&CharacterCard {
+                        character_id,
+                        card,
+                    }),
+                )
+            }
+            "characters.card.update" => {
+                // INV-7 (UI-02): the fixture validates the same canonical
+                // request contract as the Kernel (an object card), so a
+                // green fake run cannot hide a contract violation.
+                if let Err(issues) =
+                    contracts_generated::generated::validate_request_characters_card_update(
+                        &payload,
+                    ) {
+                    return Err(ChatRouteError::Transport(format!(
+                        "characters.card.update request failed contract validation: {issues:?}"
+                    )));
+                }
+                let req: RequestCharactersCardUpdate = serde_json::from_value(payload.clone())?;
+                self.require_character(&req.character_id)?;
+                let result = CharacterCard {
+                    character_id: req.character_id.clone(),
+                    card: req.card.clone(),
+                };
+                self.cards.insert(req.character_id, req.card);
+                self.wrap_call(operation_id, to_value(&result))
             }
             "characters.export.card" => {
                 let req: RequestCharactersExportCard = serde_json::from_value(payload.clone())?;
@@ -2186,14 +2256,20 @@ impl ProductWire for FakeWire {
                 if req.format != CardExportFormat::Json {
                     return Err(Self::product("VALIDATION", "format", "png"));
                 }
-                let card = json!({
-                    "spec": "character_card_v2",
-                    "data": {
-                        "name": character.name,
-                        "description": character.description,
-                        "tags": character.tags,
-                    },
-                });
+                // Kernel parity: a stored card document (import or editor
+                // update) exports verbatim; a column-only character
+                // rebuilds from the canonical columns.
+                let card = match self.cards.get(&req.character_id) {
+                    Some(stored) => stored.clone(),
+                    None => json!({
+                        "spec": "character_card_v2",
+                        "data": {
+                            "name": character.name,
+                            "description": character.description,
+                            "tags": character.tags,
+                        },
+                    }),
+                };
                 let payload = ResultCharactersExportCard {
                     filename: format!("card-{}.json", character.id),
                     content_type: "application/json".into(),

@@ -7,6 +7,8 @@
   "backups.create",
   "backups.list",
   "backups.restore",
+  "characters.card.get",
+  "characters.card.update",
   "characters.create",
   "characters.delete",
   "characters.export.card",

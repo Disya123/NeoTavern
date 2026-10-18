@@ -16,6 +16,7 @@ default = []
 desktop-host = ["neotavern-presentation-chat/desktop-host"]
 
 [dependencies]
+base64 = "0.22"
 contracts-generated = { path = "../contracts-generated" }
 neotavern-presentation-chat = { path = "../presentation-chat" }
 neotavern-presentation-dioxus-shell = { path = "../presentation-dioxus-shell" }

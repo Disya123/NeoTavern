@@ -128,6 +128,58 @@ export const CharacterCardExportResultDtoSchema = Type.Object(
 );
 export type CharacterCardExportResultDto = Static<typeof CharacterCardExportResultDtoSchema>;
 
+/**
+ * Character-card get request (`wire.request.characters.card.get`) — the
+ * canonical field-level read of one character's card document (UI-02,
+ * ADR-0057 Phase 2). The card is the SillyTavern-compatible object the
+ * import preserved under `ext_json._card`; a character created without a
+ * card container returns an EMPTY object (honest absence — the editor
+ * must never synthesize greeting/notes strings the user never wrote).
+ */
+export const CharacterCardGetRequestDtoSchema = Type.Object(
+  {
+    characterId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.characters.card.get', additionalProperties: false },
+);
+export type CharacterCardGetRequestDto = Static<typeof CharacterCardGetRequestDtoSchema>;
+
+/**
+ * Character-card document DTO (`wire.character.card`): the character's
+ * card object as an opaque JSON document. The wire validates only the
+ * container (an object) — the card's own fields (`first_mes`,
+ * `creator_notes`, `alternate_greetings`, unknown extension keys…) stay
+ * the card spec's business, so unknown metadata rides through verbatim
+ * (AGENTS.md: never lose unknown character-card fields). Byte bounds
+ * live on the operation limits, not the DTO.
+ */
+export const CharacterCardDtoSchema = Type.Object(
+  {
+    characterId: Type.String({ format: 'uuid' }),
+    card: Type.Object({}, { additionalProperties: true }),
+  },
+  { $id: 'wire.character.card', additionalProperties: false },
+);
+export type CharacterCardDto = Static<typeof CharacterCardDtoSchema>;
+
+/**
+ * Character-card update request
+ * (`wire.request.characters.card.update`): read-modify-write. The client
+ * sends the card it read (`characters.card.get` or an import result)
+ * with its edits applied — a wholesale replace that preserves unknown
+ * extension keys BY CONSTRUCTION, because the untouched keys ride along
+ * in the object. The kernel stores it verbatim under `ext_json._card`
+ * and bumps `updated_at`.
+ */
+export const CharacterCardUpdateRequestDtoSchema = Type.Object(
+  {
+    characterId: Type.String({ format: 'uuid' }),
+    card: Type.Object({}, { additionalProperties: true }),
+  },
+  { $id: 'wire.request.characters.card.update', additionalProperties: false },
+);
+export type CharacterCardUpdateRequestDto = Static<typeof CharacterCardUpdateRequestDtoSchema>;
+
 /** Chat export request (`wire.request.chats.export`). */
 export const ChatsExportRequestDtoSchema = Type.Object(
   {
@@ -2525,6 +2577,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.card.export.format': WireCardExportFormat,
   'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,
   'wire.result.characters.export.card': CharacterCardExportResultDtoSchema,
+  'wire.request.characters.card.get': CharacterCardGetRequestDtoSchema,
+  'wire.character.card': CharacterCardDtoSchema,
+  'wire.request.characters.card.update': CharacterCardUpdateRequestDtoSchema,
   'wire.request.chats.export': ChatsExportRequestDtoSchema,
   'wire.result.chats.export': ChatsExportResultDtoSchema,
   'wire.result.imports.character.card': CharacterCardImportResultDtoSchema,

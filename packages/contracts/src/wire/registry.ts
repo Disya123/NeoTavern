@@ -412,6 +412,34 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'characters.card.get',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.characters.card.get',
+    'wire.character.card',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    131072,
+    undefined,
+  ),
+  op(
+    'characters.card.update',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.characters.card.update',
+    'wire.character.card',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    131072,
+    131072,
+    undefined,
+  ),
+  op(
     'chats.list',
     'transactional',
     'idempotent',
@@ -2201,6 +2229,46 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('characters-export-card-png-request', 'characters.export.card', 'request', true, {
     characterId: UUID_CHARACTER,
     format: 'png',
+  }),
+  fx('characters-card-get-request', 'characters.card.get', 'request', true, {
+    characterId: UUID_CHARACTER,
+  }),
+  fx('characters-card-get-response', 'characters.card.get', 'response', true, {
+    characterId: UUID_CHARACTER,
+    card: {
+      name: 'Ada Lovelace',
+      description: 'First programmer',
+      first_mes: '*Ada looks up from her notes.* How may I assist you?',
+      creator_notes: 'Analytical engine pioneer.',
+      alternate_greetings: ['*Ada smiles.* Good evening.'],
+      extensions: { neo_tavern: { imported: true } },
+    },
+  }),
+  fx('characters-card-get-response-empty', 'characters.card.get', 'response', true, {
+    characterId: UUID_CHARACTER,
+    card: {},
+  }),
+  fx('characters-card-update-request', 'characters.card.update', 'request', true, {
+    characterId: UUID_CHARACTER,
+    card: {
+      name: 'Ada Lovelace',
+      description: 'First programmer',
+      first_mes: '*Ada looks up from her notes.* How may I assist you today?',
+      creator_notes: 'Analytical engine pioneer.',
+      alternate_greetings: ['*Ada smiles.* Good evening.', '*Ada nods.* Welcome back.'],
+      extensions: { neo_tavern: { imported: true } },
+    },
+  }),
+  fx('characters-card-update-response', 'characters.card.update', 'response', true, {
+    characterId: UUID_CHARACTER,
+    card: {
+      name: 'Ada Lovelace',
+      first_mes: '*Ada looks up from her notes.* How may I assist you today?',
+    },
+  }),
+  fx('neg-characters-card-update-card-not-object', 'characters.card.update', 'request', false, {
+    characterId: UUID_CHARACTER,
+    card: 'not-an-object',
   }),
   fx('chats-export-request', 'chats.export', 'request', true, { chatId: UUID_CHAT }),
   fx('lorebooks-get-request', 'lorebooks.get', 'request', true, {

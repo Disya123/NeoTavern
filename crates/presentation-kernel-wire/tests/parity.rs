@@ -774,3 +774,213 @@ fn provider_selection_reaches_generation_over_the_real_kernel() {
         "a dangling selection is a stable product error"
     );
 }
+
+/// UI-02 audit gate (ADR-0057 Phase 2, docs/audits/rust-app/PRESENTATION.md):
+/// the character editor reads and writes REAL card fields — no synthetic
+/// greeting/notes strings, no silently dropped edits — over the real Kernel
+/// in a durable data root. Witness: import a card with a unique first
+/// message, notes and greetings (plus unknown extension metadata) → open
+/// the editor → the draft shows the imported fields → edit the first
+/// message and the notes → Save → reselect → the edit is durable → the
+/// export carries the edit AND the unknown extensions verbatim → the same
+/// survives a full restart of the data root.
+#[test]
+fn card_editor_roundtrips_real_fields_over_the_real_kernel() {
+    fn b64(bytes: &[u8]) -> String {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    }
+
+    let (mut kernel, root) = kernel_wire();
+
+    // A spec-compliant V2 card: the flat mirror AND the `data` copy carry
+    // the unique witness fields; unknown extension metadata rides along.
+    let card_json = json!({
+        "spec": "character_card_v2",
+        "name": "UI-02 Roundtrip",
+        "description": "Audit UI-02 witness character",
+        "first_mes": "*Roundtrip opens a ledger.* The audit begins.",
+        "creator_notes": "Imported for the UI-02 audit gate.",
+        "alternate_greetings": ["*Roundtrip bows.* Second greeting."],
+        "extensions": { "neo_tavern": { "unknown_key": "keep-me" } },
+        "data": {
+            "name": "UI-02 Roundtrip",
+            "description": "Audit UI-02 witness character",
+            "first_mes": "*Roundtrip opens a ledger.* The audit begins.",
+            "creator_notes": "Imported for the UI-02 audit gate.",
+            "alternate_greetings": ["*Roundtrip bows.* Second greeting."],
+            "extensions": { "neo_tavern": { "unknown_key": "keep-me" } },
+        },
+    });
+    let asset = kernel
+        .call(
+            "assets.put",
+            json!({
+                "kind": "card",
+                "filename": "ui02-card.json",
+                "contentType": "application/json",
+                "contentBase64": b64(serde_json::to_string(&card_json).unwrap().as_bytes()),
+            }),
+        )
+        .expect("assets.put stages the card");
+    let asset_id = asset
+        .result
+        .get("asset")
+        .and_then(|asset| asset.get("id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("staged asset id")
+        .to_string();
+    let imported = kernel
+        .call("imports.character.card", json!({ "assetId": asset_id }))
+        .expect("imports.character.card");
+    let character_id = imported
+        .result
+        .get("character")
+        .and_then(|character| character.get("id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("imported character id")
+        .to_string();
+
+    // Open the session and select the imported character: the editor draft
+    // hydrates from the REAL card document — never a synthesized string.
+    let mut session = ChatSession::open(kernel, None).expect("session opens");
+    session.select_character(&character_id);
+    assert!(
+        session.state().last_error.is_none(),
+        "selection stays clean: {:?}",
+        session.state().last_error
+    );
+    let draft = session
+        .state()
+        .character_draft
+        .clone()
+        .expect("the editor draft loads");
+    assert_eq!(
+        draft.first_message,
+        "*Roundtrip opens a ledger.* The audit begins.",
+        "the first message is the imported card's own first_mes"
+    );
+    assert_eq!(
+        draft.creator_notes, "Imported for the UI-02 audit gate.",
+        "the creator notes are the imported card's own creator_notes"
+    );
+    assert_eq!(
+        draft.alternate_greetings,
+        vec!["*Roundtrip bows.* Second greeting.".to_string()],
+        "the alternate greetings are the imported card's own list"
+    );
+    assert!(
+        !draft.first_message.contains("looks up"),
+        "no synthetic greeting string may appear"
+    );
+    assert!(
+        !draft.creator_notes.starts_with("Character card for"),
+        "no synthetic notes string may appear"
+    );
+
+    // Edit the first message and the notes, then Save: both land through
+    // `characters.card.update` (the RMW keeps the unknown extensions).
+    session.set_character_first_message("*Roundtrip smiles.* Edited first message.");
+    session.set_character_creator_notes("Edited for the UI-02 audit gate.");
+    session.save_character_meta();
+    assert!(
+        session.state().last_error.is_none(),
+        "save stays clean: {:?}",
+        session.state().last_error
+    );
+    let status = session
+        .state()
+        .status_message
+        .clone()
+        .expect("save confirms with a status");
+    assert_eq!(status, "Saved UI-02 Roundtrip.", "save confirms the name");
+
+    // Reload the draft from the durable store (the reselect path): the
+    // edit is what loads back, not the pre-edit card.
+    session.refresh_characters();
+    assert!(
+        session.state().last_error.is_none(),
+        "refresh stays clean: {:?}",
+        session.state().last_error
+    );
+    let draft = session
+        .state()
+        .character_draft
+        .clone()
+        .expect("the draft reloads after reselect");
+    assert_eq!(
+        draft.first_message, "*Roundtrip smiles.* Edited first message.",
+        "the edited first message survives a reselect"
+    );
+    assert_eq!(
+        draft.creator_notes, "Edited for the UI-02 audit gate.",
+        "the edited creator notes survive a reselect"
+    );
+    assert_eq!(
+        draft.alternate_greetings,
+        vec!["*Roundtrip bows.* Second greeting.".to_string()],
+        "the untouched greeting list rides along"
+    );
+
+    // The export carries the edit AND the unknown extension metadata.
+    session.export_character_card(&character_id);
+    assert!(
+        session.state().last_error.is_none(),
+        "export stays clean: {:?}",
+        session.state().last_error
+    );
+    let export = session
+        .state()
+        .last_export
+        .clone()
+        .expect("the export parks its bytes");
+    let exported: serde_json::Value =
+        serde_json::from_slice(&export.bytes).expect("the export is a JSON card");
+    let field = |key: &str| -> String {
+        exported
+            .get("data")
+            .and_then(|data| data.get(key))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    assert_eq!(
+        field("first_mes"),
+        "*Roundtrip smiles.* Edited first message.",
+        "the exported card carries the edited first message"
+    );
+    assert_eq!(
+        field("creator_notes"),
+        "Edited for the UI-02 audit gate.",
+        "the exported card carries the edited creator notes"
+    );
+    assert_eq!(
+        exported
+            .get("data")
+            .and_then(|data| data.get("extensions"))
+            .and_then(|ext| ext.get("neo_tavern"))
+            .and_then(|nt| nt.get("unknown_key"))
+            .and_then(serde_json::Value::as_str),
+        Some("keep-me"),
+        "unknown extension metadata rides the roundtrip verbatim"
+    );
+
+    // Full restart of the data root: the same edited card loads.
+    drop(session); // releases the data root
+    let wire = KernelProductWire::open(&root).expect("kernel reopens the data root");
+    let mut session = ChatSession::open(wire, None).expect("session reopens");
+    session.select_character(&character_id);
+    let draft = session
+        .state()
+        .character_draft
+        .clone()
+        .expect("the draft loads after the restart");
+    assert_eq!(
+        draft.first_message, "*Roundtrip smiles.* Edited first message.",
+        "the edited first message survives a restart"
+    );
+    assert_eq!(
+        draft.creator_notes, "Edited for the UI-02 audit gate.",
+        "the edited creator notes survive a restart"
+    );
+}

@@ -85,6 +85,15 @@ Implemented operations (all over the kernel's single writable connection):
 
 - `characters.list` / `characters.get` / `characters.create` /
   `characters.update` / `characters.delete`
+- `characters.card.get` / `characters.card.update` (ADR-0057 Phase 2,
+  UI-02): the canonical field-level card document. `card.get` returns the
+  SillyTavern object preserved under `ext_json._card` (an EMPTY object for
+  a character created without a card — honest absence, never a
+  synthesized field); `card.update` stores a client read-modify-write
+  wholesale (unknown extension keys ride verbatim, `updated_at` bumps,
+  `CHARACTER_NOT_FOUND` stable on both ops). `characters.export.card`
+  prefers the stored document (import round trip); a card without its own
+  V2 `spec` envelope is wrapped in `chara_card_v2` with an honest warning.
 - `chats.list` / `chats.get` / `chats.messages.list`
 - `lorebooks.list` / `presets.list`
 

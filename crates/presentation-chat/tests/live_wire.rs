@@ -682,3 +682,75 @@ fn provider_selection_settings_rows_follow_the_canonical_contract_on_the_fixture
         session.state().last_error
     );
 }
+
+/// UI-02 on the fixture wire. INV-7: `fake` — this exercises the
+/// fixture's `characters.card.get` / `.update` arms (the demo card's
+/// real document fields, an honest empty draft for a cardless
+/// character, and the RMW save); the Kernel gate for the same scenario
+/// is `card_editor_roundtrips_real_fields_over_the_real_kernel` in
+/// `presentation-kernel-wire/tests/parity.rs`.
+#[test]
+fn card_editor_reads_and_writes_real_card_fields_on_the_fixture() {
+    let wire = FakeWire::demo();
+    let mut session = ChatSession::open(wire, None).expect("demo open");
+    session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
+    let draft = session
+        .state()
+        .character_draft
+        .clone()
+        .expect("hazel draft");
+    assert_eq!(
+        draft.first_message,
+        "*Hazel looks up from her notebook.* Evening. You picked a noisy corner for a quiet chat.",
+        "the demo card's own first message hydrates the editor"
+    );
+    assert_eq!(
+        draft.creator_notes,
+        "Demo fixture character for the native editor surfaces.",
+        "the demo card's own creator notes hydrate the editor"
+    );
+    assert_eq!(
+        draft.alternate_greetings,
+        vec!["*Hazel smirks.* Back again? Sit.".to_string()],
+        "the demo card's own greetings hydrate the editor"
+    );
+
+    // Edit → save → reload: the RMW write lands through card.update.
+    session.set_character_first_message("Edited over the fixture.");
+    session.save_character_meta();
+    assert!(
+        session.state().last_error.is_none(),
+        "fixture save stays clean: {:?}",
+        session.state().last_error
+    );
+    session.refresh_characters();
+    let draft = session
+        .state()
+        .character_draft
+        .clone()
+        .expect("draft reloads");
+    assert_eq!(
+        draft.first_message, "Edited over the fixture.",
+        "the edit survives a reload through the fixture's card store"
+    );
+    assert_eq!(
+        draft.alternate_greetings,
+        vec!["*Hazel smirks.* Back again? Sit.".to_string()],
+        "untouched card fields ride the read-modify-write"
+    );
+
+    // A cardless character (Seraphina has no demo card) shows honest
+    // absence: empty fields, no synthesized strings.
+    session.select_character(neotavern_presentation_chat::DEMO_SERAPHINA_ID);
+    let draft = session
+        .state()
+        .character_draft
+        .clone()
+        .expect("seraphina draft");
+    assert_eq!(draft.first_message, "", "no card — no fabricated greeting");
+    assert_eq!(draft.creator_notes, "", "no card — no fabricated notes");
+    assert!(
+        draft.alternate_greetings.is_empty(),
+        "no card — no fabricated greetings"
+    );
+}
