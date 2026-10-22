@@ -324,6 +324,12 @@ reaches the user through exactly two mechanisms, both **host-rendered**:
    Milestone D into Phases 2–3): a versioned, bounded scene-fragment
    schema — containers, text, image asset refs, buttons and inputs wired
    to the plugin's RPC handlers over the Product Wire plugin surface.
+   Schema v1 shipped at Phase 2:
+   `packages/plugin-sdk/src/visual-surface.ts` (fail-fast validation,
+   stable error codes, enforced bounds/counts) with its security review at
+   [docs/plugin-sdk/visual-surface-ir.md](../plugin-sdk/visual-surface-ir.md);
+   host rendering of fragments and the conformance scenarios remain the
+   Phase 3 deliverable.
 
 Platform rules for plugin fragments (normative):
 

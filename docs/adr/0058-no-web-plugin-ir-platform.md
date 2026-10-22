@@ -120,6 +120,10 @@ Facts that make the sunset cheap and honest:
 - New platform work lands in ADR-0057 Phases 2–3: the IR schema, its
   security review (untrusted fragments: bounds, counts, permissions,
   crash isolation) and plugin-slot conformance scenarios on every adapter.
+  Status: the schema v1 and its security review shipped at Phase 2
+  (`packages/plugin-sdk/src/visual-surface.ts`,
+  [visual-surface-ir.md](../plugin-sdk/visual-surface-ir.md)); host
+  rendering and conformance scenarios remain the Phase 3 deliverable.
 - ARC-12 concerns disappear with the surface itself; while the Web Client
   exists it keeps the ADR-0043 truthfulness rules unchanged.
 

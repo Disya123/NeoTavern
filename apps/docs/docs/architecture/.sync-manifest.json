@@ -270,7 +270,7 @@
     {
       "source": "adr/0058-no-web-plugin-ir-platform.md",
       "target": "adr/0058-no-web-plugin-ir-platform.md",
-      "sha256": "c4c85b629d730af734ad3f92146f0e0e391c071d5d3d35471eb71bf44d7da423"
+      "sha256": "49a74665172861490a8c0ffe75e8d80f9eeafcbec25dcb754a7ae5960135f213"
     },
     {
       "source": "adr/README.md",
@@ -315,7 +315,7 @@
     {
       "source": "architecture/native-presentation-platform.md",
       "target": "architecture/native-presentation-platform.md",
-      "sha256": "fd71034c4cafc2245e7b2fc5f4785a0f4f6d78dfea347c9e053a814b4e4f6bc6"
+      "sha256": "35afa29b905291908e1f6a699421f2cce452fc9351209611e3cec106eac2c92d"
     },
     {
       "source": "architecture/operations-inventory.md",
@@ -440,7 +440,7 @@
     {
       "source": "plugin-sdk/README.md",
       "target": "plugin-sdk/README.md",
-      "sha256": "abe59898a6657add051ccca644207c8524268baf97efa0f8dd135974a5758471"
+      "sha256": "79d8a41f16ccd01ac6dd9361338a81f0359917ef8ac1f5c51e0729138fcec45e"
     },
     {
       "source": "plugin-sdk/examples/rev4-overlay-game.md",
@@ -451,6 +451,11 @@
       "source": "plugin-sdk/rev4-api.md",
       "target": "plugin-sdk/rev4-api.md",
       "sha256": "92c21970d89776441c44c674fd1d203576a6c907a2dbc2c1846d38ffdafdba56"
+    },
+    {
+      "source": "plugin-sdk/visual-surface-ir.md",
+      "target": "plugin-sdk/visual-surface-ir.md",
+      "sha256": "a72a5eec5fda5d5687f3e8d464ad07af31e9d06c0ad6d46127f4d3d3e256dab1"
     },
     {
       "source": "prompt-pipeline/README.md",

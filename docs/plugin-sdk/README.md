@@ -296,6 +296,29 @@ The options contract and lifecycle are described in
 responsible for its own cleanup (AGENTS.md §17): the long-press timer and
 document listeners are removed by `destroy()`.
 
+## PluginVisualSurface IR (v1, native clients)
+
+Native clients host no plugin WebSurface (ADR-0058): a plugin's rich UI is a
+**fragment** — a versioned, bounded, host-rendered tree of data. The schema
+of record is `packages/plugin-sdk/src/visual-surface.ts`
+(`validateVisualSurfaceFragment()`; fail-fast, stable error codes):
+
+- envelope: `irVersion: 1`, reverse-DNS `surfaceId`, `placement`
+  (`sidebar` | `panel`), `title`, exactly one root `container`, and an
+  `actions` map binding control ids to the plugin's registered RPC handler
+  names (data and handlers — never markup, code or engines);
+- node kinds: `container` (row/column, `gap` as a Theme SDK token NAME — raw
+  numbers/colors are schema violations), `text`, `image` (plugin-staged
+  asset UUID + alt), `button`, `input` (FieldId-addressable);
+- enforced budgets: 256 nodes, depth 8, 32 children per container, 32
+  images, 32 inputs, 64 actions, 2048-char text, 256-char labels, 128-char
+  ids, 128 KiB serialized (transport-checked before parsing).
+
+The schema and its security review — bounds, counts, permissions, crash
+isolation, and the honest status of host rendering (ADR-0057 Phase 3
+deliverable) — are documented in
+[visual-surface-ir.md](visual-surface-ir.md).
+
 ## Backend
 
 ```ts

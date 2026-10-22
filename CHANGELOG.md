@@ -4,6 +4,32 @@
 
 ### Added
 
+- **`PluginVisualSurface` IR schema v1 + security review (ADR-0058;
+  ADR-0057 Phase 2 gate).** The declarative, host-rendered plugin UI
+  surface now has its versioned, bounded fragment schema:
+  `packages/plugin-sdk/src/visual-surface.ts` — a fragment envelope
+  (`irVersion: 1`, reverse-DNS `surfaceId`, closed `placement` set,
+  exactly one root `container`, an `actions` map binding control ids to
+  the plugin's registered RPC handler names — data and handlers, never
+  markup or code) and five node kinds (container with token-name gaps,
+  text, plugin-staged image refs, buttons, FieldId-addressable inputs).
+  `validateVisualSurfaceFragment()` enforces every normative budget
+  fail-fast with stable error codes: 256 nodes, depth 8, 32 children per
+  container, 32 images/inputs, 64 actions, 2048/256/128-char string
+  caps, token-only styling (a raw spacing number or color is a schema
+  violation), control characters rejected, dangling action references
+  rejected, unknown IR versions rejected closed. The validator reads a
+  container's child count before recursing and counts nodes during the
+  walk, so a hostile million-child fragment fails in bounded time
+  (behaviorally tested). The security review — bounds, counts,
+  permissions (named RPC bindings gated by the plugin's grants; the host
+  validates image-asset ownership) and crash isolation (a bad fragment
+  or handler degrades to an honest per-fragment error, never a host
+  freeze) — is recorded in `docs/plugin-sdk/visual-surface-ir.md`.
+  Status honesty: host rendering of fragments and the plugin-slot
+  conformance scenarios remain the ADR-0057 Phase 3 deliverable; until
+  then no surface claims IR-based plugin UI as shipped.
+
 - **ADR-0057 Phase 1 increment A — presentation-scene platform core
   (`crates/presentation-scene`).** Product-free retained-scene platform
   core for the native contour: epoch-validated scene arena with
