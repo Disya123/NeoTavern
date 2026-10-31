@@ -1,9 +1,14 @@
 # PluginVisualSurface IR v1 — schema and security review
 
-Status: **Accepted** (ADR-0057 Phase 2 gate item). The schema of record is
+Status: **Accepted; amended by ADR-0059** (originally the ADR-0057 Phase 2
+gate item). The schema survives the pivot as the versioned plugin-UI data
+contract; **host rendering of IR fragments is not shipped** — it binds to
+whatever native surface is actually built (none today:
+`crates/neocompositor` is experimental). The schema of record is
 [`packages/plugin-sdk/src/visual-surface.ts`](../../packages/plugin-sdk/src/visual-surface.ts);
 this document is the security review the platform gate requires
-([ADR-0058](../adr/0058-no-web-plugin-ir-platform.md),
+([ADR-0058](../adr/0058-no-web-plugin-ir-platform.md) as amended by ADR-0059;
+historical gate context:
 [native-presentation-platform.md §11](../architecture/native-presentation-platform.md)).
 Normative vocabulary: the fragment is data, the host renders. Plugins ship
 data and handlers — never markup, pixels or engines.

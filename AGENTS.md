@@ -25,12 +25,12 @@ Do not change the approved stack or public contracts without an explicit assignm
 
 The stack is governed by [ADR-0038](docs/adr/0038-canonical-rust-kernel-core.md)
 (canonical Rust Kernel core; Fastify/Drizzle is the legacy/migration contour),
-[ADR-0057](docs/adr/0057-native-first-own-scene-platform.md) (the product UI
-is the native presentation platform; the Dioxus/Blitz browser-form contour is
-feature-frozen and phased out),
-[ADR-0058](docs/adr/0058-no-web-plugin-ir-platform.md) (no-web end state:
-plugin UI is host-rendered slots + IR; the Web Client and plugin WebSurface
-sunset with the legacy contour) and the target architecture
+[ADR-0059](docs/adr/0059-react-primary-pivot.md) (React-primary pivot: the
+React contour is the product UI; the Dioxus/Blitz contour was removed;
+NeoCompositor stays experimental),
+[ADR-0058](docs/adr/0058-no-web-plugin-ir-platform.md) (plugin UI is
+host-rendered data — slots and the IR schema; no plugin WebSurface in any
+native surface) and the target architecture
 [ТЗ 10/10 rev2](NeoTavern_architecture_10_of_10_spec_2026-08-13.md).
 The "approved stack" is split into two planes:
 
@@ -38,32 +38,24 @@ The "approved stack" is split into two planes:
 
 - Rust Runtime Kernel — the canonical application core: the single owner of
   product logic and persistent state (SQLite ownership, migrations, generation
-  durability, backup/restore, provider and SecretStore ports).
+  durability, backup/restore, provider and SecretStore ports). The Rust
+  Headless host is the unified kernel-bearing backend target for VPS and
+  Desktop (ADR-0059 §4).
 - Product Wire Contracts (TypeBox) — the single cross-language contract
   source; generated TypeScript types and Rust DTOs.
-- Native presentation platform ([ADR-0057](docs/adr/0057-native-first-own-scene-platform.md)) —
-  the product UI plane for desktop and Android: an own retained-scene platform
-  over taffy/Parley/Vello, governed by the seven invariants of
-  [native-presentation-platform.md](docs/architecture/native-presentation-platform.md).
-  The Dioxus/Blitz browser-form contour is feature-frozen and leaves the
-  product path at the ADR-0057 Phase-4 gate. Plugin UI on native clients
-  renders only through declarative slots and the PluginVisualSurface IR
-  (ADR-0058) — no WebSurface, no embedded browser engine.
-- React 19.2 + Vite 8 for the React contour only — the legacy migration plane
-  (the shipped desktop UI until the gates) and the design oracle/reference
-  (ADR-0038/0055); TypeScript with `strict: true`. React is not the product
-  UI target (ADR-0057); the remote Web Client and plugin WebSurface roles are
-  sunset by [ADR-0058](docs/adr/0058-no-web-plugin-ir-platform.md).
-- TanStack Query for server state and Zustand for local UI state (React contour
-  only).
+- React 19.2 + Vite 8 — **the product UI** for desktop (Tauri/WebView), the
+  Android WebView app and the remote Web Client (ADR-0059); TypeScript with
+  `strict: true`. Blueprint chat rendering follows
+  [ADR-0056](docs/adr/0056-blueprint-canonical-chat-render.md).
+- NeoCompositor (`crates/neocompositor`) — experimental only (ADR-0059 §3):
+  a candidate for the Android live-glass rendering path; no product-UI
+  obligation, no product mounting.
+- TanStack Query for server state and Zustand for local UI state.
 - Radix Primitives as the headless component base; CSS Modules, CSS Custom
-  Properties, Cascade Layers, and Container Queries (React contour styling
-  stack).
-- i18next + react-i18next (React contour; the native contour consumes the same
-  locale resources through the platform's i18n binding).
-- Tauri 2.x as transitional desktop packaging until the ADR-0057 Phase-4 gate
-  (the product desktop UI target is the native host); pnpm workspaces for the
-  monorepo.
+  Properties, Cascade Layers, and Container Queries (product styling stack).
+- i18next + react-i18next.
+- Tauri 2.x as desktop packaging (WebView + React product UI); pnpm
+  workspaces for the monorepo.
 
 **Legacy-compat plane (feature-frozen migration adapter, ADR-0038):**
 
@@ -83,8 +75,9 @@ The "approved stack" is split into two planes:
 Live dual-write between `app.db` and `database.sqlite` is prohibited
 (ADR-0038). Do not replace React with another UI framework, SQLite with a
 server database, or Tauri with Electron without a separate architectural
-decision — for the product UI plane that decision is ADR-0057 (the native
-presentation platform). Any change to the canonical core requires an explicit
+decision — for the product UI plane the governing decision is ADR-0059
+(React-primary pivot; the native presentation platform was superseded).
+Any change to the canonical core requires an explicit
 assignment.
 
 ## 3. Expected structure
@@ -323,15 +316,13 @@ Write files atomically via a temporary file and rename.
 
 ## 13. Frontend
 
-There are two UI contours (ADR-0057). The **product UI** is the native
-presentation platform: an own retained-scene platform over
-taffy/Parley/Vello, governed by the seven invariants of
+The product UI is the React contour (ADR-0059): the shipped desktop app
+(Tauri/WebView), the Android WebView app and the remote Web Client all render
+the same React interface. The former native presentation contour was removed
+by the pivot; its historical specification is
 [native-presentation-platform.md](docs/architecture/native-presentation-platform.md)
-(single state truth, single geometry, single render path, single input
-model, single stream driver, bridges-only adapters, behavioral evidence).
-The **React contour** — the transitional legacy migration plane and the
-design oracle (the remote Web Client artifact sunsets with it, ADR-0058) —
-follows the rules below:
+(superseded), and `crates/neocompositor` survives only as an experimental
+crate with no product mounting (ADR-0059 §3). Product frontend rules:
 
 - The application is a React SPA without SSR.
 - Vite is used as the bundler and dev server, but not as the application's Plugin API.
@@ -365,7 +356,7 @@ Three theme levels:
 
 Themes may implement interfaces in the spirit of Wii U, macOS, KDE/GNOME, console, visual novel, or mobile client without changing chat logic.
 
-Mandatory styling stack (React contour):
+Mandatory styling stack:
 
 ```text
 CSS Modules
@@ -375,13 +366,10 @@ CSS Modules
 + data-component/data-part/data-state
 ```
 
-The native contour implements the same three theme levels through the native
-theme contract of
-[native-presentation-platform.md](docs/architecture/native-presentation-platform.md):
-design tokens, data-driven component skins and slot shells — themes are
-declarative data, never executed code. The hardcoding bans below apply to both
-contours (tokens by name; no literal colors, spacing, z-index or control
-sizes in components).
+The three theme levels are implemented through this stack: design tokens,
+data-driven component skins and slot shells — themes are declarative data,
+never executed code. (The former native-contour theme contract is retired
+with the platform, ADR-0059.)
 
 Layer order:
 
@@ -471,7 +459,13 @@ The frontend SDK can register:
 
 The backend SDK provides limited abstractions for routes, storage, events, logging, permission-checked fetch, providers, and a virtual filesystem.
 
-Frontend registrations render through the host: declarative semantic slots and the PluginVisualSurface IR on native clients (ADR-0058; see native-presentation-platform.md §11). Plugins ship data and handlers — never markup, DOM, or embedded engines. Native clients do not host a plugin WebSurface.
+Frontend registrations render through the host as data: declarative
+semantic slots, and the PluginVisualSurface IR schema (ADR-0058/0059) as the
+versioned contract for data-driven plugin UI on any native surface that is
+actually built (none ships today — `crates/neocompositor` is experimental,
+ADR-0059 §3). In the shipped React contour, rich plugin UI runs in the
+sandboxed iframe surface. Plugins ship data and handlers — never markup that
+bypasses the host, and no embedded engines.
 
 Every registration must return a cleanup function. After a plugin is disabled, nothing may remain:
 
@@ -498,7 +492,11 @@ window.$ / window.jQuery
 
 React provides unmanaged DOM islands for old extensions.
 
-These legacy web contracts are properties of the React/legacy contour and live exactly as long as it does (ADR-0038 timeline; ADR-0057 Phase-4 gate; ADR-0058). Native clients do not host DOM islands. A migration guide porting SillyTavern extensions to the native Plugin SDK (declarative slots + IR) is mandatory before the legacy sunset.
+These legacy web contracts are properties of the React contour — the product
+UI (ADR-0059) — and end on the ADR-0038 functional-migration timeline with a
+mandatory migration guide (ADR-0058). A migration guide porting SillyTavern
+extensions to the native Plugin SDK (declarative slots + the IR schema) is
+mandatory before that sunset.
 
 Legacy server plugins run through the Express compatibility host and are proxied under `/api/plugins/{id}/...`.
 
@@ -510,9 +508,10 @@ Do not promise compatibility with plugins that depend on incidental internal CSS
 
 - Do not use `node:vm` as a security sandbox.
 - Run untrusted backend plugins in a separate process with restrictions.
-- Use iframe + RPC for sandboxed plugin UI in the React contour; native clients
-  sandbox by construction — plugin UI is host-rendered slots + IR with
-  permission gates and crash isolation (ADR-0058).
+- Use iframe + RPC for sandboxed plugin UI in the product React contour
+  (ADR-0059); the IR-as-data principle (ADR-0058/0059) keeps any future
+  native surface free of plugin markup: slots + the versioned IR schema with
+  permission gates and crash isolation.
 - A theme package gets no access to chats, API keys, or the filesystem.
 - Check ZIP packages for path traversal.
 - Check permissions at install and update time.
@@ -537,11 +536,11 @@ The service worker caches only the app shell and static assets. Do not cache API
 
 ## 21. Desktop and Web Client
 
-Desktop (ADR-0038 honest default; ADR-0057 native-first target):
+Desktop (ADR-0038 honest default; ADR-0059 React-primary):
 
-- Tauri 2.x is the transitional desktop packaging; the product desktop UI
-  target is the native presentation host (ADR-0057). Tauri/WebView remains
-  until the ADR-0057 Phase-4 gate, then needs its own packaging ADR.
+- Tauri 2.x is the desktop packaging: the product desktop UI is the React
+  contour in the system WebView. The former "native presentation host"
+  target is void (ADR-0059); no packaging ADR is pending on it.
 - The Runtime Kernel is the canonical backend; the legacy Fastify backend runs
   only as the Node.js sidecar — the release default while the Kernel is a
   Preview, selectable via `NEOTA_DESKTOP_CHANNEL`/`NEOTA_LEGACY_SERVER=1`/
@@ -563,16 +562,15 @@ Desktop (ADR-0038 honest default; ADR-0057 native-first target):
 - App shutdown must properly terminate the sidecar.
 - The backend must not linger after the window closes.
 
-Web Client (remote-only; legacy-transition artifact — sunset as a product by
-ADR-0058):
+Web Client (remote-only; ADR-0043; retained as a product by ADR-0059):
 
-- the web artifact remains installable only while the legacy contour is the
-  shipped desktop UI; it is not part of the Kernel-native era;
-- remote access after the transition is a native-client connection mode over
-  remote-http (ADR-0030) — a recorded future capability, not a current claim;
-- while it exists it stays remote-only (ADR-0038/0043): the service worker
-  caches only the versioned app shell and static assets — API responses, SSE,
-  prompts, provider events and secrets never enter Cache Storage;
+- the React contour is the product UI, so the remote Web Client stays an
+  installable product artifact under its remote-only rules — it does not
+  sunset "with the legacy contour" (that ADR-0058 clause is amended by
+  ADR-0059);
+- it stays remote-only (ADR-0038/0043): the service worker caches only the
+  versioned app shell and static assets — API responses, SSE, prompts,
+  provider events and secrets never enter Cache Storage;
 - without a connection it shows an honest connection/offline screen and does
   not allow product mutations;
 - it must not pretend to be a standalone offline Node.js application or a
@@ -630,12 +628,13 @@ Must be tested:
 - instruct-format rendering;
 - thumbnail generation and invalidation.
 
-Presentation conformance (ADR-0057 INV-6/INV-7): the behavioral scenario
-suite is adapter-parameterized — identical scenarios and assertions run
-against every platform adapter (desktop, Android) and against the real
-Kernel in isolated data roots. A green run on one adapter grants nothing for
-another; FakeWire runs are labeled `fake` and never gate product claims.
-PASS records commit, binary, data seed and scenario.
+The former ADR-0057 presentation-conformance suite (INV-1..INV-7,
+adapter-parameterized scenarios) was retired with the native contour
+(ADR-0059). UI gates are the React-plane gates: Playwright E2E,
+accessibility, visual regression, plugin contract tests and the legacy
+compatibility suite. The honesty rule survives it: FakeWire-style fixture
+runs are labeled `fake` and never gate product claims; PASS records commit,
+binary, data seed and scenario.
 
 ### Resource containment (mandatory for heavy suites)
 

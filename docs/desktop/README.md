@@ -173,14 +173,18 @@ error; a clean exit is marked separately and leaves no orphan sidecar.
 
 ## Headless host
 
-Native UI tooling: the desktop host and its diagnostics are documented in
-[`neocompositor-desktop-host.md`](neocompositor-desktop-host.md); the
-style-port loop, DOM parity and pixel gates live in
-[`rust-ui-style-port.md`](rust-ui-style-port.md); editing chat UI as data
+Native UI tooling (historical, ADR-0059): the desktop host and its
+diagnostics are documented in
+[`neocompositor-desktop-host.md`](neocompositor-desktop-host.md) (host
+removed with the Dioxus/Blitz contour); the style-port loop, DOM parity and
+pixel gates live in [`rust-ui-style-port.md`](rust-ui-style-port.md)
+(obsolete — styles stay in the React contour); editing chat UI as data
 (blueprint documents) is covered step by step in
 [`chat-ui-recipe.md`](chat-ui-recipe.md); the native image pipeline
 (avatar overlay, wallpaper, in-scene image brushes) is audited in
-[`native-image-pipeline-audit.md`](native-image-pipeline-audit.md).
+[`native-image-pipeline-audit.md`](native-image-pipeline-audit.md)
+(historical — the native scene no longer mounts; ADR-0056 blueprint
+rendering belongs to the React plane).
 
 The Headless server is a **transport adapter over the Kernel**, not a second
 application core. `crates/adapters/remote-http` remains the library

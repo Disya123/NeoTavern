@@ -1,8 +1,18 @@
 # ADR-0058: No-web end state — plugin UI is host-rendered IR; no browser engines in product clients
 
-- Status: Accepted (owner direction, 2026-10-04 — "web не будет больше";
-  execution is phased: no user-facing capability is removed before its
-  replacement exists)
+# ADR-0058: No-web end state — plugin UI is host-rendered IR; no browser engines in product clients
+
+- Status: **Amended by [ADR-0059](0059-react-primary-pivot.md)
+  (2026-10-31)**: the React contour is no longer transitional — the Web
+  Client does not sunset "with the legacy contour" (it remains a product
+  under ADR-0043 remote-only rules), and the shipped plugin UI path is the
+  React contour's declarative slots + sandboxed iframe surface. The
+  no-WebSurface-in-native-clients rule and the IR-as-data principle stand;
+  the IR v1 schema remains a versioned SDK surface with host rendering
+  bound to whatever native surface is actually built.
+- Original status: Accepted (owner direction, 2026-10-04 — "web не будет
+  больше"; execution is phased: no user-facing capability is removed before
+  its replacement exists)
 - Date: 2026-10-04
 
 ## Context

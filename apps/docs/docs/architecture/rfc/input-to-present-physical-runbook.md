@@ -2,7 +2,7 @@
 editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/input-to-present-physical-runbook.md
 ---
 
-# Input-to-present physical Perfetto runbook
+﻿# Input-to-present physical Perfetto runbook
 
 **Status:** lab procedure. The debug present loop is on
 `PresentationInputActivity` (window swapchain, compositor `HandlerThread`).
@@ -16,7 +16,7 @@ almost_pass = false
 ```
 
 Host adjudicator:
-[`scripts/input-to-present-adjudicate.mjs`](https://github.com/Disya123/NeoTavern/blob/main/scripts/input-to-present-adjudicate.mjs)
+`scripts/input-to-present-adjudicate.mjs`
 (v3). Record:
 [`input-to-present-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/input-to-present-adjudication.json).
 
@@ -38,12 +38,12 @@ Stable identifiers must join one chain:
 
 ```text
 MotionEvent(sequence, eventTime)
-→ bounded enqueue
-→ compositor consume
-→ SampledFrame(frameId, vsyncId)
-→ GPU submit
-→ SurfaceFlinger latch
-→ actual display present
+в†’ bounded enqueue
+в†’ compositor consume
+в†’ SampledFrame(frameId, vsyncId)
+в†’ GPU submit
+в†’ SurfaceFlinger latch
+в†’ actual display present
 ```
 
 UI thread only `try_push`es. Correlate `vsyncId` from the debug adapter
@@ -78,12 +78,12 @@ published separately as diagnostic **gesture age**.
 
 ## RFC budgets (not a one-refresh PASS threshold)
 
-[RFC §14.1](neoui-v4-android-presentation-backend.md):
+[RFC В§14.1](neoui-v4-android-presentation-backend.md):
 
 ```text
-60 Hz  → 16.67 ms   (pacing only)
-90 Hz  → 11.11 ms   (pacing only)
-120 Hz → 8.33 ms    (normative gate)
+60 Hz  в†’ 16.67 ms   (pacing only)
+90 Hz  в†’ 11.11 ms   (pacing only)
+120 Hz в†’ 8.33 ms    (normative gate)
 ```
 
 These numbers are deadlines for a **renderer-controlled frame
@@ -105,17 +105,17 @@ input_to_present = actualPresentTime - eventTime
 Before PASS the adjudicator also requires:
 
 - APK `BOUND` to `55a3174` or a subsequent clean commit;
-- warm-up ≥ 1 s and 60 s continuous-scroll at the **actually locked**
+- warm-up в‰Ґ 1 s and 60 s continuous-scroll at the **actually locked**
   120 Hz mode;
 - `actualPresentTime` from FrameTimeline/SurfaceFlinger;
 - MotionEvent, Choreographer, and present timestamps in one clock
   domain;
-- unique `sequence → targetVsyncId → actual present`;
+- unique `sequence в†’ targetVsyncId в†’ actual present`;
 - trace packets/buffers not lost;
 - exclusion reasons listed; `unknown` is application-caused;
-- ≥99% renderer-controlled opportunities on time;
-- application misses `<1%`, streak ≤ 2;
-- bounded input / Product Wire / compositor queues (≤ 64);
+- в‰Ґ99% renderer-controlled opportunities on time;
+- application misses `<1%`, streak в‰¤ 2;
+- bounded input / Product Wire / compositor queues (в‰¤ 64);
 - no producer/layout/shaping/raster on compositor-only scroll;
 - raw input-to-present p50/p95/p99 published separately.
 
@@ -127,17 +127,17 @@ PASS.
 
 Run on the debug host (`PresentationInputActivity`), not `MainActivity`:
 
-| Extra / fixture        | What to prove                                    |
-| ---------------------- | ------------------------------------------------ |
-| `scroll_fling`         | ordinary scroll and fling                        |
-| `nested_handoff`       | nested horizontal/vertical latch handoff         |
-| `sticky_fixed`         | sticky/fixed hit after async scroll              |
-| `selection_autoscroll` | selection drag + edge autoscroll                 |
-| `coalesced_move`       | historical / coalesced MOVE, original timestamps |
-| `focus_cancel`         | `CANCEL` on focus / window / surface loss        |
-| `refresh_60/90`        | pacing only                                      |
-| `refresh_120`          | locked 120 Hz + 60 s continuous-scroll           |
-| `refresh_transition`   | 60→120→90 without changing physical fling speed  |
+| Extra / fixture        | What to prove                                       |
+| ---------------------- | --------------------------------------------------- |
+| `scroll_fling`         | ordinary scroll and fling                           |
+| `nested_handoff`       | nested horizontal/vertical latch handoff            |
+| `sticky_fixed`         | sticky/fixed hit after async scroll                 |
+| `selection_autoscroll` | selection drag + edge autoscroll                    |
+| `coalesced_move`       | historical / coalesced MOVE, original timestamps    |
+| `focus_cancel`         | `CANCEL` on focus / window / surface loss           |
+| `refresh_60/90`        | pacing only                                         |
+| `refresh_120`          | locked 120 Hz + 60 s continuous-scroll              |
+| `refresh_transition`   | 60в†’120в†’90 without changing physical fling speed |
 
 `I2P_FIXTURE=all` runs the full set. `I2P_HZ` / `I2P_WARMUP_MS` /
 `I2P_SCROLL_MS` override the 120 Hz window. Cookie `targetVsyncId` is the
@@ -149,8 +149,8 @@ Choreographer stream.
 Physical Xiaomi / Vulkan. Close Android Studio first. Emulator serials
 are excluded. Host logcat is streamed from t0 (`adb logcat -s NeoTavernI2P`);
 do not dump the logd ring at the end. Perfetto config keeps FrameTimeline
-and light gfx/view/input atrace so the 256 MiB buffer holds the whole
-session (sched ftrace overflowed the first 128 MiB capture).
+and light gfx/view/input atrace so the 256вЂЇMiB buffer holds the whole
+session (sched ftrace overflowed the first 128вЂЇMiB capture).
 
 ```text
 M0_D1A_FEATURES=gpu,android-jni bash apps/android/scripts/build-m0-d1a-libs.sh
@@ -160,7 +160,7 @@ node scripts/input-to-present-perfetto-capture.mjs --serial=8f5c2b7c
 node scripts/input-to-present-adjudicate.mjs --fixture=apps/android/input-to-present-captures/<stamp>/<stamp>-fixture.json --write
 ```
 
-Perfetto config: [`scripts/input-to-present.pbtxt`](https://github.com/Disya123/NeoTavern/blob/main/scripts/input-to-present.pbtxt)
+Perfetto config: `scripts/input-to-present.pbtxt`
 (`android.surfaceflinger.frametimeline` plus `android.log` tag `NeoTavernI2P`).
 The config is pushed to `/data/misc/perfetto-configs`; stdin+`--background` on Windows adb can start an empty session. Cookies come from the streamed host logcat;
 FrameTimeline `actualPresentTime` is converted from the trace clock onto

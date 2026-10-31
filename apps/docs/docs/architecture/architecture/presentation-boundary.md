@@ -2,7 +2,7 @@
 editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/presentation-boundary.md
 ---
 
-# Presentation boundary (Milestone A)
+﻿# Presentation boundary (Milestone A)
 
 **Status:**
 
@@ -18,9 +18,9 @@ production cutover = STARTED / CANARY
 canary_batch = PASS
 ```
 
-Milestone A **PASS** is the feature-flagged Product Wire shell, React ↔
+Milestone A **PASS** is the feature-flagged Product Wire shell, React в†”
 Dioxus canonical projection parity, and presentation-path streaming tests.
-Milestone B **PASS** is the independent physical PERF-01…22 / device-loss
+Milestone B **PASS** is the independent physical PERF-01вЂ¦22 / device-loss
 registry. Neither is a production migration, Milestone C PASS, or an unguarded
 `MainActivity` cutover. Cutover is **STARTED / CANARY**.
 
@@ -31,25 +31,25 @@ registry. Neither is a production migration, Milestone C PASS, or an unguarded
 [ADR-0053](../adr/0053-android-120hz-release-budget.md),
 [ADR-0054](../adr/0054-plugin-visual-surface-contained.md),
 [d1-d2-decision.md](../rfc/d1-d2-decision.md).
-**D3:** **DEFERRED** — Android may take a Rust presentation path; Web stays
+**D3:** **DEFERRED** вЂ” Android may take a Rust presentation path; Web stays
 React. Rollback is the acting React/WebView host.
 
 This is not a production migration and not Milestone C PASS.
 
-## Audit (RFC §49)
+## Audit (RFC В§49)
 
-| Deliverable                              | Status                                        | Where                                                                                                       |
-| ---------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Product Wire                             | **present**                                   | `packages/contracts/src/wire/` (97 operations, kernel dispatch 1:1)                                         |
-| Canonical view models                    | **present**; **React ↔ Dioxus parity tested** | Shared fixture `packages/contracts/src/presentation/fixtures/canonical-chat.json`                           |
-| Typed commands                           | **PASS** (boundary)                           | Presentation may issue only Product Wire `operationId`s (`packages/contracts/src/presentation/boundary.ts`) |
-| React Web adapter                        | **present**                                   | `apps/web` + `@neotavern/neobackend` over Product Wire                                                      |
-| Dioxus presentation shell                | **present (flagged)**                         | `crates/presentation-dioxus-shell`. Not `MainActivity`. `NEOTA_DIOXUS_SHELL=1` is non-default               |
-| Fixture recorder                         | **PASS** (boundary)                           | `recordPresentationFixture` in the boundary module                                                          |
-| Generation / backpressure tests          | **present** (presentation-path)               | Stale generation drop + bounded stream cap; React ↔ Dioxus golden projection                                |
-| PresentationCompatibilityMatrix          | **baseline**                                  | [presentation-compatibility-matrix.md](../rfc/presentation-compatibility-matrix.md)                         |
-| Theme / Plugin / i18n / legacy inventory | **baseline**                                  | same matrix; no silent supersede                                                                            |
-| D3 plan                                  | **accepted as DEFERRED**                      | Android Rust path + Web React; no unification mandate                                                       |
+| Deliverable                              | Status                                          | Where                                                                                                       |
+| ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Product Wire                             | **present**                                     | `packages/contracts/src/wire/` (97 operations, kernel dispatch 1:1)                                         |
+| Canonical view models                    | **present**; **React в†” Dioxus parity tested** | Shared fixture `packages/contracts/src/presentation/fixtures/canonical-chat.json`                           |
+| Typed commands                           | **PASS** (boundary)                             | Presentation may issue only Product Wire `operationId`s (`packages/contracts/src/presentation/boundary.ts`) |
+| React Web adapter                        | **present**                                     | `apps/web` + `@neotavern/neobackend` over Product Wire                                                      |
+| Dioxus presentation shell                | **present (flagged)**                           | `crates/presentation-dioxus-shell`. Not `MainActivity`. `NEOTA_DIOXUS_SHELL=1` is non-default               |
+| Fixture recorder                         | **PASS** (boundary)                             | `recordPresentationFixture` in the boundary module                                                          |
+| Generation / backpressure tests          | **present** (presentation-path)                 | Stale generation drop + bounded stream cap; React в†” Dioxus golden projection                              |
+| PresentationCompatibilityMatrix          | **baseline**                                    | [presentation-compatibility-matrix.md](../rfc/presentation-compatibility-matrix.md)                         |
+| Theme / Plugin / i18n / legacy inventory | **baseline**                                    | same matrix; no silent supersede                                                                            |
+| D3 plan                                  | **accepted as DEFERRED**                        | Android Rust path + Web React; no unification mandate                                                       |
 
 ## Rules
 
@@ -77,11 +77,11 @@ This is not a production migration and not Milestone C PASS.
 ## Surfaces
 
 ```text
-react-web                  — production Web / desktop UI (migration golden)
-webview-android-rollback   — production Android default (retained until Character Manager visual golden PASS)
-dioxus-android-canary      — MainActivity selector; STARTED / CANARY; not default
-dioxus-android-chat-route  — PresentationChatActivity; NeoCompositor SurfaceView; same Kernel; canary + debug harness
-dioxus-android-design-system — packed React fonts/tokens/icons/CSS; Character Manager RSX STARTED; visual golden NOT PASS
+react-web                  вЂ” production Web / desktop UI (migration golden)
+webview-android-rollback   вЂ” production Android default (retained until Character Manager visual golden PASS)
+dioxus-android-canary      вЂ” MainActivity selector; STARTED / CANARY; not default
+dioxus-android-chat-route  вЂ” PresentationChatActivity; NeoCompositor SurfaceView; same Kernel; canary + debug harness
+dioxus-android-design-system вЂ” packed React fonts/tokens/icons/CSS; Character Manager RSX STARTED; visual golden NOT PASS
 ```
 
 ## Milestone B
@@ -112,7 +112,7 @@ selection go through `crates/presentation-session` (one
 `FrameTransaction`, logical selection, `DeltaToken`). Host product-path
 corpus for PERF-01 / PERF-02 / PERF-16 lives in
 `presentation-session` `tests/product_path_perf.rs`
-(Wire → flagged Dioxus → Blitz → session → compositor). That host
+(Wire в†’ flagged Dioxus в†’ Blitz в†’ session в†’ compositor). That host
 corpus is **not** an independent PASS. Independent stamps:
 [`docs/rfc/perf-18-20-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-18-20-adjudication.json).
 Debug-only
@@ -129,7 +129,7 @@ declared. The Android MotionEvent / Choreographer adapter is host-side in
 `crates/neocompositor` (`platform_input`) plus debug
 `PresentationInputActivity`; production `MainActivity` / default JNI stay
 on WebView. Status: `PASS`. Host adjudicator
-[`scripts/input-to-present-adjudicate.mjs`](https://github.com/Disya123/NeoTavern/blob/main/scripts/input-to-present-adjudicate.mjs)
+`scripts/input-to-present-adjudicate.mjs`
 does not treat `Choreographer#doFrame` as present and does not compare raw
 `input-to-present` to one refresh. Physical FrameTimeline /
 SurfaceFlinger stamp `2026-08-18T16-28-13-285Z`
@@ -138,8 +138,8 @@ SurfaceFlinger stamp `2026-08-18T16-28-13-285Z`
 Raw input-to-present p99 `20.65 ms` on that device is a
 **reference-device baseline**, not a release budget; the calibrated budget is
 now defined by [ADR-0053](../adr/0053-android-120hz-release-budget.md)
-(`p99 ≤ 12 ms`, `composite_only_frames > 0`, `layout_rebuilds_on_scroll == 0`
-under the 60 s capped 10k fling) and **physically reproduced on 8f5c2b7c** (`logcat` `composite_only_frames=69390 layout_rebuilds_on_scroll=0 paint_rebuilds_on_scroll=0` during the 10k fling; `perf22` `gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan glass=8 under_glass=true fallback_policy=OpaquePanel`). **2026-08-20 158M APK** (`35073544` `libneotavern_presentation_chat.so` in `src/main` **and** `src/debug`) with `live_open` auto-create (`8 … error=none`, was `4 … EMPTY_LIBRARY`), header `+12` (`Character Ma…`), and `safe_mode` `MainActivity` is staged; host `compositor_host` `26 passed` already proves `composite_only_frames>0` on the harness. The `PARITY` cutover rows still require the owner signature (Disya123) + `≤1 dp` overlay evidence.
+(`p99 в‰¤ 12 ms`, `composite_only_frames > 0`, `layout_rebuilds_on_scroll == 0`
+under the 60 s capped 10k fling) and **physically reproduced on 8f5c2b7c** (`logcat` `composite_only_frames=69390 layout_rebuilds_on_scroll=0 paint_rebuilds_on_scroll=0` during the 10k fling; `perf22` `gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan glass=8 under_glass=true fallback_policy=OpaquePanel`). **2026-08-20 158M APK** (`35073544` `libneotavern_presentation_chat.so` in `src/main` **and** `src/debug`) with `live_open` auto-create (`8 вЂ¦ error=none`, was `4 вЂ¦ EMPTY_LIBRARY`), header `+12` (`Character MaвЂ¦`), and `safe_mode` `MainActivity` is staged; host `compositor_host` `26 passed` already proves `composite_only_frames>0` on the harness. The `PARITY` cutover rows still require the owner signature (Disya123) + `в‰¤1 dp` overlay evidence.
 The single `sf_gpu_deadline_missed` exclusion is admissible only because
 the same trace confirms timely app submit.
 Non-sampleable surface fallback (PERF-22) is **PASS** on the physical
@@ -163,7 +163,7 @@ Independent records:
 [device-loss-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/device-loss-adjudication.json).
 The machine-checkable B-exit registry
 [`docs/rfc/milestone-b-exit.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-b-exit.json) is
-`milestone_b=PASS` with independent physical records for PERF-01…22 and
+`milestone_b=PASS` with independent physical records for PERF-01вЂ¦22 and
 device-loss. `almost_pass=false`. Production cutover remains
 `NOT_STARTED`. Individual records keep `milestone_b=STARTED`.
 Remaining physical fixtures were one debug Android batch
@@ -178,7 +178,7 @@ PERF-18/19/20 evidence inadmissible.
 
 ## Milestone C
 
-Feature-flagged Android chat workspace (RFC §51). `PresentationChatActivity`
+Feature-flagged Android chat workspace (RFC В§51). `PresentationChatActivity`
 is the home-screen launcher and hosts the live Product Wire route in
 `crates/presentation-chat`. History, streaming, send, retry, prepend, drafts,
 Character Manager (`characters.list` / `create` / `get` / `update` / `delete`),
@@ -188,7 +188,7 @@ in-memory `FakeWire`; the Activity talks to the existing Kernel via
 the network. Rail destinations render native Dioxus surfaces (Characters,
 Personas, Lorebooks, Backgrounds, AI Settings, Plugins catalog, Settings,
 Chats). Plugin frontend islands stay CONTAINED in WebSurface
-([ADR-0054](../adr/0054-plugin-visual-surface-contained.md)). **WebView is not a route fallback** — missing JNI or a canary
+([ADR-0054](../adr/0054-plugin-visual-surface-contained.md)). **WebView is not a route fallback** вЂ” missing JNI or a canary
 fault stays on this Activity. Optional `NEOTA_SAFE_MODE=1` no longer
 escapes to `MainActivity`.
 
@@ -196,7 +196,7 @@ The visible window is virtualized through `crates/chat-viewport`
 (`waited_on_producer=false`). The host mirrors that same snapshot for
 a11y/IME (invisible platform composer) while NeoCompositor paints App
 Shell, Character Manager, header, viewport, messages, and composer chrome
-onto a `SurfaceView` at device density (`DisplayMetrics.density` → Blitz
+onto a `SurfaceView` at device density (`DisplayMetrics.density` в†’ Blitz
 `hidpi_scale`). Density-aware hit testing maps rail / tabs / New / cards
 onto session mutations. It is not a second chat. Snapshot TextViews are
 not the primary renderer.
@@ -210,7 +210,7 @@ launcher icon opens `PresentationChatActivity` with the Rust renderer
 harness for instrumented tests and is **not** the home-screen entry.
 Production APK packages `libneotavern_presentation_chat.so`. Kernel and
 `filesDir/neotavern` stay shared. Isolated 10k remains a debug harness
-profile (`NEOTA_CHAT_PROFILE=isolated-10k` → `filesDir/neotavern-isolated-10k`).
+profile (`NEOTA_CHAT_PROFILE=isolated-10k` в†’ `filesDir/neotavern-isolated-10k`).
 Physical canary batch is **PASS**
 ([milestone-c-canary.md](../rfc/milestone-c-canary.md)).
 
@@ -223,23 +223,23 @@ drop an accepted durable row. Physical stamp `2026-08-18T21-55-58-696Z` stays a 
 **`FAILED_ATTEMPT`**. Stamp `2026-08-19T10-29-35-149Z` is the successful
 journey batch (**PASS**) on the same Xiaomi debug harness: send round-trip,
 isolated 10k, Gboard InputConnection keys, lifecycle. TalkBack was operator-waived (**SKIPPED**, not PASS). That skip
-does **not** satisfy RFC §51 TalkBack; native Dioxus TalkBack is
+does **not** satisfy RFC В§51 TalkBack; native Dioxus TalkBack is
 **DEFERRED_BY_OWNER** and the product accessibility path is
 **WEBVIEW_FALLBACK** ([ADR-0051](../adr/0051-android-talkback-webview-fallback.md)).
 ([milestone-c-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-c-adjudication.json),
 [runbook](../rfc/milestone-c-physical-runbook.md)). Milestone C is
-**STARTED**, not RFC §51 PASS. Cutover is **STARTED / CANARY**;
+**STARTED**, not RFC В§51 PASS. Cutover is **STARTED / CANARY**;
 `canary_batch` is **PASS**. Chat workspace on flagged Dioxus Android
 remains **DEFERRED** in the compatibility matrix until owner-signed PARITY.
 
-## Porting rules (React → NeoCompositor)
+## Porting rules (React в†’ NeoCompositor)
 
 Standing rules for every port step. They are not negotiable per-panel; a
 change that breaks one is a regression, not a fix.
 
 1. **React is the golden source.** `apps/web` + `@neotavern/ui` is the
    reference renderer and it stays untouched. If the Rust side and React
-   disagree, the port is wrong — never React.
+   disagree, the port is wrong вЂ” never React.
 2. **Never edit React styles.** The compiled `product.css` (and the fonts,
    `--st-*` tokens, Phosphor paths, CSS-module geometry) is copied bit-for-bit
    by the design-system packer. No local overrides, no `!important`, no
@@ -258,12 +258,12 @@ change that breaks one is a regression, not a fix.
 5. **Packer-only token baking.** When Blitz cannot consume a declaration
    (`:root` custom properties, `color-mix()`, compact drawer selectors,
    logical `*-block-*`, `env(safe-area-inset-*)`, `mask-image` icons), the
-   packer flattens it to the React-resolved value — it never invents a
+   packer flattens it to the React-resolved value вЂ” it never invents a
    style. Every bake is listed in `crates/presentation-design-system` with
    its source token.
 6. **Parity is the gate, and it is measured.** A screenshot or readback that
    drifts from React is not patched by dress-up; it is a regression to
-   investigate. Bit-for-bit (compact) / `≤1 dp` (density) or an explicit
+   investigate. Bit-for-bit (compact) / `в‰¤1 dp` (density) or an explicit
    owner waiver is required before a step counts as done.
 7. **Only honest artifacts.** A native shell via vello/wgpu on the shared
    host; no blueprint/svg lookalikes standing in for the real surface, and
@@ -303,7 +303,7 @@ contract as Dioxus RSX (`data-component="message-markdown"`), not as HTML.
 Backgrounds are an honest empty Kernel catalog.
 Plugin DOM islands are not RSX. Header/card avatars
 resolve `avatarAssetId` via `assets.content`, decode/resize off the Vello
-path to a 192×192 premultiplied RGBA thumbnail (`object-fit: cover` crop),
+path to a 192Г—192 premultiplied RGBA thumbnail (`object-fit: cover` crop),
 and upload once onto the same GPU device/queue as NeoCompositor
 (`ImagePaintOp`, `readbacks=0`, `xdev=0`). Blitz never receives a `data:`
 URI and Vello never samples an `Image` brush (that path blacks the
@@ -317,7 +317,7 @@ texture handle, with a 10px CSS rounded clip. Packed Phosphor `mask-image`
 adapter has them, one `SharedGpuContext` / `DeviceEpoch`). Format
 capabilities must include storage-write `Rgba8Unorm` (non-sRGB,
 premultiplied). The compositor samples a GPU-converted texture
-(`STORAGE` → GPU copy or compute convert → `TEXTURE_BINDING`), not the
+(`STORAGE` в†’ GPU copy or compute convert в†’ `TEXTURE_BINDING`), not the
 storage target itself. CPU Vello is only the explicit
 `NEOTA_SOFTWARE_RASTER_DEBUG=1` flag. A one-path GPU rect is plumbing
 only: each diagnostic raster uses a **new** storage/sampled pair so a
@@ -341,11 +341,11 @@ without images if raster fails. Blitz does not sample the raster on device yet.
 The React card formatter is `description || "No character
 description yet."` with a 2-line clamp. Blitz does not paint
 `text-overflow: ellipsis`; the header title string is ellipsized in RSX
-(`panel_header_title`/`character_manager_title` now subtract `header gap 12` + `Rail 60 + padding 32 + avatar 44`, so `Character Ma…` matches React `flex + ellipsis` on `407px` phone — previously `Character Manag`). The header divider is a sibling under the header row so a
+(`panel_header_title`/`character_manager_title` now subtract `header gap 12` + `Rail 60 + padding 32 + avatar 44`, so `Character MaвЂ¦` matches React `flex + ellipsis` on `407px` phone вЂ” previously `Character Manag`). The header divider is a sibling under the header row so a
 `width:100%` flex item cannot squeeze the title. Selected cards set
 `background:#492a20` / `border-color:#e38a62` inline because attribute
 selectors are not reliable in this Stylo subset; `pinned = pinned.or(selected)` fallback now makes Hazel `fill PushPin #e38a62` like `CharactersPage.tsx` `pinnedCharacterId` (previously `outline` when `pinned=None`). Native Android composer/Send views
 are destroyed while the sidebar Character Manager is open so those labels
-cannot leak into screenshots. **2026-08-20:** header/pin parity reduces opaque diff to `≤1dp` pending owner signature (`8f5c2b7c` 1220×2712, `app-debug.apk` `158412530` `35073544` with `product.css` paren-aware fix + `PresentationChatActivity` `singleTask` + `live_open` auto-create); `NeoGlass` host markers remain omitted in this `158M` candidate until that signature, but the candidate is staged for `GateP:P1` glass (`BackdropBarrier`/`GlassBoundary` `PERF-18 PASS` on Vulkan, `compositor_host` `26 passed` `composite_only_frames>0` on harness, `120-Hz` `p99≤12ms` `CALIBRATED_PENDING_PHYSICAL`) — enabled for qualified devices, degraded `CONTAINED` on others after signature. Safe mode fallback is now `NEOTA_SAFE_MODE=1` → `MainActivity` (`dumpsys topResumedActivity=.MainActivity`) as `milestone-c-physical-runbook` expects. **2026-08-20 live_open:** `session.rs:936` `load_open_chat` now `chats.list` → `characters.list` → `chats.create` (or `characters.create` → `chats.create`) on a clean `pm clear` DB so `chat_route=true … 8 … error=none` (`8f5c2b7c` `158412530` `35073544`, was `4 … EMPTY_LIBRARY`); `isolated_10k` (`PAGE_LIMIT` virtualization, `HeightIndex`, `TileCache`) benefits likewise and is staged for the `60s` `10k` `composite_only_frames>0` re-run. Rail panels other than Character Manager
+cannot leak into screenshots. **2026-08-20:** header/pin parity reduces opaque diff to `в‰¤1dp` pending owner signature (`8f5c2b7c` 1220Г—2712, `app-debug.apk` `158412530` `35073544` with `product.css` paren-aware fix + `PresentationChatActivity` `singleTask` + `live_open` auto-create); `NeoGlass` host markers remain omitted in this `158M` candidate until that signature, but the candidate is staged for `GateP:P1` glass (`BackdropBarrier`/`GlassBoundary` `PERF-18 PASS` on Vulkan, `compositor_host` `26 passed` `composite_only_frames>0` on harness, `120-Hz` `p99в‰¤12ms` `CALIBRATED_PENDING_PHYSICAL`) вЂ” enabled for qualified devices, degraded `CONTAINED` on others after signature. Safe mode fallback is now `NEOTA_SAFE_MODE=1` в†’ `MainActivity` (`dumpsys topResumedActivity=.MainActivity`) as `milestone-c-physical-runbook` expects. **2026-08-20 live_open:** `session.rs:936` `load_open_chat` now `chats.list` в†’ `characters.list` в†’ `chats.create` (or `characters.create` в†’ `chats.create`) on a clean `pm clear` DB so `chat_route=true вЂ¦ 8 вЂ¦ error=none` (`8f5c2b7c` `158412530` `35073544`, was `4 вЂ¦ EMPTY_LIBRARY`); `isolated_10k` (`PAGE_LIMIT` virtualization, `HeightIndex`, `TileCache`) benefits likewise and is staged for the `60s` `10k` `composite_only_frames>0` re-run. Rail panels other than Character Manager
 are native RSX catalogs; they do not fall back to WebView. Plugin pages
 still require the CONTAINED WebSurface (ADR-0054).

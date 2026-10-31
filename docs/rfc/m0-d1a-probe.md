@@ -1,4 +1,4 @@
-# M0-D1a paint-seam probe
+﻿# M0-D1a paint-seam probe
 
 **Status:** program **M0-D1a PASS** via host-side evidence-admission
 ([`m0-d1a-adjudication.json`](m0-d1a-adjudication.json)). Gate P remains
@@ -7,8 +7,8 @@ PASS. This is **not** `D1=Track D GO`. The crate/logcat bit
 `android_gpu_capture=false` is expected: the probe cannot self-admit.
 PRE-GATE desktop/AVD runs stay unadmitted as D1a evidence.
 
-**RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §48  
-**Crate:** [`crates/presentation-m0`](../../crates/presentation-m0/README.md)
+**RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) В§48  
+**Crate:** `crates/presentation-m0`
 **Adjudicator:** `node scripts/m0-d1a-adjudicate.mjs`
 
 Architectural wording in the RFC is not evidence. This file records what the
@@ -34,24 +34,24 @@ the probe builds.
 
 ```text
 wallpaper Image
-→ BackdropBarrier glass A
-→ vector UI PaintChunk
-→ BeginEffectScope (opacity 0.85)
-→ vector UI PaintChunk (clipped)
-→ BackdropBarrier glass B (overlaps A)
-→ EndEffectScope
-→ overlay PaintChunk (translated spatial node)
+в†’ BackdropBarrier glass A
+в†’ vector UI PaintChunk
+в†’ BeginEffectScope (opacity 0.85)
+в†’ vector UI PaintChunk (clipped)
+в†’ BackdropBarrier glass B (overlaps A)
+в†’ EndEffectScope
+в†’ overlay PaintChunk (translated spatial node)
 ```
 
 Compiled pass kinds (golden):
 
 ```text
-raster → glass → raster → raster → glass → raster
+raster в†’ glass в†’ raster в†’ raster в†’ glass в†’ raster
 ```
 
 Chunks are never merged across a `BackdropBarrier`. Glass B keeps the ancestor
 opacity scope. Overlay keeps a distinct spatial node (translate). Glass B uses
-a nested clip rect; the glass pass scissors to `ROI ∩ clip`.
+a nested clip rect; the glass pass scissors to `ROI в€© clip`.
 
 Text is a **shaped vector stand-in**. Real glyphs from Dioxus/Blitz are M0-D2.
 
@@ -67,14 +67,14 @@ Text is a **shaped vector stand-in**. Real glyphs from Dioxus/Blitz are M0-D2.
    that target; this is upstream behaviour, not a fork). The result is blended
    onto a compositor **accumulator**.
 3. Each glass pass: **same-device** `copy_texture_to_texture` of the ROI only
-   (≤ 256×256 snapshot; D1a ROIs are 140×80) into a sampleable texture, then a
+   (в‰¤ 256Г—256 snapshot; D1a ROIs are 140Г—80) into a sampleable texture, then a
    WGSL 5-tap blur+tint writes the ROI on the accumulator. No
    `Renderer::register_texture` atlas copy. No `map_async`. No second device.
 
 Vello does not keep an uncleared destination for later sampling. The probe
 treats that as compositor-owned accumulation, not as a required Vello fork.
 
-## Host-side admission (2026-08-17) — M0-D1a PASS
+## Host-side admission (2026-08-17) вЂ” M0-D1a PASS
 
 Record: [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json)
 (`schema: m0-d1a-adjudication/v1`). Lab command:
@@ -101,15 +101,15 @@ Physical capture stamp `2026-08-17T17-18-59-431Z` (feature on) vs control
 `2d72a3c`. Capture tooling pin `5df24c8`. Device Xiaomi `8f5c2b7c`
 (`23122PCD1G` / `garnet`, Adreno 710).
 
-| Check                                                   | Result                                                                                                                                                       |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| SHA-256 of `.rdc`, XML, capture/control logs, bound APK | recorded; APK matches bind                                                                                                                                   |
-| Pass order                                              | `ROI-1 → glass-1 → raster/blit mutations → ROI-2 → glass-2`                                                                                                  |
-| ROI identity                                            | resource **299** `m0-d1a-accumulator` → **303** `m0-d1a-glass-roi`; 140×80 at (24,40) and (80,70); both smaller than 320×200                                 |
-| No full-scene flatten                                   | four blit passes onto the accumulator; no full-target `vkCmdCopyImage` of the accumulator; `vello.flatten` is path tessellation, not a scene flatten         |
-| No readback / second device                             | no `vkMapMemory` / `vkCmdCopyImageToBuffer`; one product `VkDevice` (id `55`)                                                                                |
-| 100-frame lifetime                                      | golden counters on both runs; `acc_bytes=774144` unchanged; `capture_ended=true`; no validation hits                                                         |
-| Capture vs control counters/timeline                    | identical `devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100` and golden timeline; first-frame CPU µs is **not** required to match |
+| Check                                                   | Result                                                                                                                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SHA-256 of `.rdc`, XML, capture/control logs, bound APK | recorded; APK matches bind                                                                                                                                    |
+| Pass order                                              | `ROI-1 в†’ glass-1 в†’ raster/blit mutations в†’ ROI-2 в†’ glass-2`                                                                                           |
+| ROI identity                                            | resource **299** `m0-d1a-accumulator` в†’ **303** `m0-d1a-glass-roi`; 140Г—80 at (24,40) and (80,70); both smaller than 320Г—200                              |
+| No full-scene flatten                                   | four blit passes onto the accumulator; no full-target `vkCmdCopyImage` of the accumulator; `vello.flatten` is path tessellation, not a scene flatten          |
+| No readback / second device                             | no `vkMapMemory` / `vkCmdCopyImageToBuffer`; one product `VkDevice` (id `55`)                                                                                 |
+| 100-frame lifetime                                      | golden counters on both runs; `acc_bytes=774144` unchanged; `capture_ended=true`; no validation hits                                                          |
+| Capture vs control counters/timeline                    | identical `devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100` and golden timeline; first-frame CPU Вµs is **not** required to match |
 
 The 1437-byte GLES file `2026-08-17T16-53-54-457Z-d1a.rdc` stays
 `WRONG_API_CAPTURE / NON-ADMISSIBLE`. Desktop/AVD PRE-GATE logs stay
@@ -129,9 +129,9 @@ cargo run --manifest-path crates/Cargo.toml -p neotavern-presentation-m0 --featu
 | `devices_created`        | 1                                               |
 | `cpu_readbacks`          | 0                                               |
 | `cross_device_copies`    | 0                                               |
-| `same_device_roi_copies` | 200 (2 glasses × 100 frames)                    |
-| `raster_passes`          | 400 (4 raster × 100)                            |
-| `glass_passes`           | 200 (2 glasses × 100)                           |
+| `same_device_roi_copies` | 200 (2 glasses Г— 100 frames)                   |
+| `raster_passes`          | 400 (4 raster Г— 100)                           |
+| `glass_passes`           | 200 (2 glasses Г— 100)                          |
 | `frames`                 | 100                                             |
 | `android_gpu_capture`    | false                                           |
 | crate verdict            | **BLOCKED**                                     |
@@ -152,7 +152,7 @@ Two different questions. Do not collapse them.
 | Upstream Vello/wgpu API enough for this static seam? | **provisional** (non-admissible) | Shared device, sampleable RT, ROI glass, no readback on desktop Vulkan and emulator GLES. Not a D1a PASS.                                                               |
 | Limited supported fork needed?                       | **not indicated**                | Compositor accumulator is host code, not a Vello patch. Emulator gfxstream Vulkan is skipped, not patched.                                                              |
 | Replace paint substrate?                             | **not indicated** on these hosts | No readback / cross-device / dual-device failure on desktop Vulkan or emulator GLES.                                                                                    |
-| RFC §48 D1a **exit**                                 | **met** (host-side)              | Physical Vulkan capture + eight adjudication checks in [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json). Probe log `capture=false` does not override that record. |
+| RFC В§48 D1a **exit**                                | **met** (host-side)              | Physical Vulkan capture + eight adjudication checks in [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json). Probe log `capture=false` does not override that record. |
 
 Do **not** record this as milestone M0 `PASS`, `PATCH`, or `REPLACE`, or as
 `D1=Track D GO`. Headless and AVD success remains partial evidence. The
@@ -173,7 +173,7 @@ cargo ndk -t x86_64 -t arm64-v8a build --release -p neotavern-presentation-m0 --
 | arm64-v8a | `libneotavern_presentation_m0.so` (~6.8 MiB, debug jniLibs) |
 
 Debug-only Activity `com.neotavern.mobile.M0D1aActivity` loads that library.
-It is **not** the launcher (MAIN+DEFAULT, no LAUNCHER — required so AGI
+It is **not** the launcher (MAIN+DEFAULT, no LAUNCHER вЂ” required so AGI
 `gapit packages` can see it) and is **not** in `libneotavern_android_jni.so`.
 Production WebView path is unchanged. `.so` files are gitignored.
 
@@ -220,7 +220,7 @@ This is **not** a production-phone Vulkan run and **not** a D1a PASS.
 
 | Attempt                                                     | Result                                                                                                                                                      |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default `RenderContext::device(None)`                       | `no compatible wgpu adapter` — emulator Vulkan `conformance_version.major == 0` is hidden unless `ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER`                    |
+| Default `RenderContext::device(None)`                       | `no compatible wgpu adapter` вЂ” emulator Vulkan `conformance_version.major == 0` is hidden unless `ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER`                  |
 | Goldfish/GFXStream Vulkan (SwiftShader **and** host NVIDIA) | SIGSEGV in `vulkan.ranchu.so` `ResourceTracker::on_vkQueueSubmit` on the first Vello `render_to_texture` submit. Probe now **skips** those Vulkan adapters. |
 | `-gpu swiftshader_indirect` GLES 3.0                        | No compute; Vello cannot run. Use `-gpu host` (GLES 3.1) for this AVD.                                                                                      |
 
@@ -242,11 +242,11 @@ the bound APK, capture tool, or compositor cut changes.
 
 ```text
 clean source bundle (evidence_dirty=false; unrelated paths listed or absent)
-→ new APK built from that bundle (apk_linkage=BOUND via --bind-apk)
-→ physical Android production GPU
-→ GPU capture (two accumulator reads at barriers)
-→ host-side adjudicator (`android_gpu_capture=true` only there)
-→ D1a verdict
+в†’ new APK built from that bundle (apk_linkage=BOUND via --bind-apk)
+в†’ physical Android production GPU
+в†’ GPU capture (two accumulator reads at barriers)
+в†’ host-side adjudicator (`android_gpu_capture=true` only there)
+в†’ D1a verdict
 ```
 
 See [physical capture runbook](m0-d1a-physical-runbook.md) for the
@@ -302,12 +302,12 @@ revision is part of the bundle. `excluded_unrelated_paths` (root TZ copy)
 does not hide task-relevant dirty files. A dirty-tree hash plus an old APK
 is **not** an admitted M0 bundle.
 
-### Evening AVD D1a — `BLOCKED / NON-ADMISSIBLE`
+### Evening AVD D1a вЂ” `BLOCKED / NON-ADMISSIBLE`
 
 **BLOCKED / NON-ADMISSIBLE** on 2026-08-17 evening: `adb devices -l` listed
 only `emulator-5554` (`sdk_gphone64_x86_64`). No phone.
 
-The already-installed debug APK (44 432 284 bytes, SHA-256 `A661693E…BAEB`)
+The already-installed debug APK (44вЂЇ432вЂЇ284 bytes, SHA-256 `A661693EвЂ¦BAEB`)
 contained an **older** `libneotavern_presentation_m0.so` that does **not**
 match the current source bundle (no `timeline=` fields). Starting
 `M0D1aActivity` reproduced a GLES 3.1 100-frame run, but that binary cannot
@@ -323,7 +323,7 @@ Raw log (gitignored):
 Do not pair that APK hash with a later source-bundle JSON as if they were
 one revision. Physical production-backend D1a remains **BLOCKED** (no phone).
 
-### Post-`GateP:P1` rebuild (2026-08-17 night) — not D1a PASS
+### Post-`GateP:P1` rebuild (2026-08-17 night) вЂ” not D1a PASS
 
 Pinned commit `0167be5` (capture debug groups) + helper program fields
 updated to `GateP:P1` / M0 `ENTERED`. Clean evidence tree
@@ -331,7 +331,7 @@ updated to `GateP:P1` / M0 `ENTERED`. Clean evidence tree
 
 | Field                    | Value                                                              |
 | ------------------------ | ------------------------------------------------------------------ |
-| APK bytes                | 52 747 061                                                         |
+| APK bytes                | 52вЂЇ747вЂЇ061                                                     |
 | APK SHA-256              | `05d063dd5ac9ff916538e1eaf8d933a66a666cd6ea533c366d4c6a15a6ded834` |
 | `apk_linkage`            | `BOUND` (`--bind-apk`, `evidence_dirty=false`)                     |
 | `apk_source_commit`      | `58898226a896af14eaea94feec25d935727008fa`                         |
@@ -342,9 +342,9 @@ updated to `GateP:P1` / M0 `ENTERED`. Clean evidence tree
 | Physical USB             | **`BLOCKED_EXTERNAL`**                                             |
 | D1a verdict              | **`ENVIRONMENT_BLOCKED`** (physical Android + GPU capture missing) |
 
-This APK (`05d063dd…`) was the then-pinned binary for the next physical
+This APK (`05d063ddвЂ¦`) was the then-pinned binary for the next physical
 capture and was **not** admitted that night. AVD must not replace the
-phone. A later bound APK `478a4593…` (`2d72a3c`) is the admitted capture
+phone. A later bound APK `478a4593вЂ¦` (`2d72a3c`) is the admitted capture
 binary; see Host-side admission above.
 
 Host-only preflight (no phone):
@@ -363,7 +363,7 @@ node scripts/m0-d1a-capture-check.mjs --commands <stamp>-d1a-commands.txt
 That check does not flip `android_gpu_capture` and is not D1a PASS.
 Runbook: [m0-d1a-physical-runbook.md](m0-d1a-physical-runbook.md).
 
-### Capture tool switch (2026-08-17 night) — still not D1a PASS
+### Capture tool switch (2026-08-17 night) вЂ” still not D1a PASS
 
 Do **not** hunt a newer AGI. **3.3.3** is the last published release. The
 physical `.gfxtrace`
@@ -374,7 +374,7 @@ physical `.gfxtrace`
 `VkInstanceCreateInfo::pNext` for that parser.
 
 Capture tool is **RenderDoc v1.45** at `E:\renderdoc`
-([`tools/renderdoc.pin.json`](../../tools/renderdoc.pin.json)). Close
+(`tools/renderdoc.pin.json`). Close
 Android Studio. Use
 `node scripts/m0-d1a-renderdoc-capture.mjs --mode=control` (feature off)
 then `--mode=capture` after a `renderdoc-capture` rebuild and `--bind-apk`.
@@ -410,4 +410,4 @@ Gitignored bundle:
 - Production APK / `MainActivity` compositor
 - Theme SDK v2, Plugin IR, chat-route migration
 - 10k chat, 120 Hz percentile gate, scroll, input
-- NeoCompositor v1 crate layout (`neo-scene`, …)
+- NeoCompositor v1 crate layout (`neo-scene`, вЂ¦)

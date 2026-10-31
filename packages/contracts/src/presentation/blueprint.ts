@@ -19,10 +19,8 @@ export const UI_BLUEPRINT_FORMAT_V1 = 'neotavern.ui-blueprint.v1';
 export const UI_BLUEPRINT_SCHEMA_ID = 'https://neotavern.dev/schemas/ui-blueprint.v1.json';
 
 /**
- * Closed icon registry: mirrors `PHOSPHOR_REGULAR`
- * (`crates/presentation-design-system/generated/phosphor.rs`) — the only
- * glyphs a native renderer can draw. Additive policy: new ids append;
- * existing ids never change meaning.
+ * Closed icon registry (Phosphor regular set). Additive policy: new ids
+ * append; existing ids never change meaning.
  */
 export const UI_ICON_IDS = [
   'Plus',

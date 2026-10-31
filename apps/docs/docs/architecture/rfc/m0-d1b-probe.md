@@ -2,7 +2,7 @@
 editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/m0-d1b-probe.md
 ---
 
-# M0-D1b moving sampleable texture
+﻿# M0-D1b moving sampleable texture
 
 **Status:** program **M0-D1b PASS** on the host-side record
 [`m0-d1b-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json). The probe log stays
@@ -10,8 +10,8 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/m0-d1b-probe.m
 granted. D1a capture boundary, D1a evidence, and the D1a admission JSON
 are unchanged (`d1b=NOT_STARTED` in that file is historical).
 
-**RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §48 stage 2  
-**Crate:** [`crates/presentation-m0`](https://github.com/Disya123/NeoTavern/blob/main/crates/presentation-m0/README.md)  
+**RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) В§48 stage 2  
+**Crate:** `crates/presentation-m0`  
 **Lab:** [m0-d1b-physical-runbook.md](m0-d1b-physical-runbook.md)
 
 D1b adds one synthetic moving checker/gradient between vector UI and
@@ -24,17 +24,17 @@ rebuild and not a decoder/media/plugin/input path.
 
 ```text
 wallpaper
-→ GlassSurface A
-→ ordinary vector UI
-→ synthetic moving checker/gradient (64×64)
-→ overlapping GlassSurface B
-→ foreground overlay
+в†’ GlassSurface A
+в†’ ordinary vector UI
+в†’ synthetic moving checker/gradient (64Г—64)
+в†’ overlapping GlassSurface B
+в†’ foreground overlay
 ```
 
 Pass kinds:
 
 ```text
-raster → glass → raster → raster → moving → glass → raster
+raster в†’ glass в†’ raster в†’ raster в†’ moving в†’ glass в†’ raster
 ```
 
 First-frame API timeline (golden, generation 0):
@@ -56,27 +56,27 @@ stays at the bake count **4**. `layout_rebuilds=0`, `ui_rebuilds=0`.
 
 Glass B samples the accumulator **after** the moving blit (current frame
 generation: `sampled_gen == frame`). Its damage/ROI follows the moving dest
-and stays inside the original 140×80 glass bounds, smaller than the 320×200
-accumulator and the 256×256 snapshot.
+and stays inside the original 140Г—80 glass bounds, smaller than the 320Г—200
+accumulator and the 256Г—256 snapshot.
 
 ## Host-side admission (2026-08-17)
 
 Physical Xiaomi `8f5c2b7c` / Adreno 710 / Vulkan. Source commit
-`21b38c0`. Bound APK SHA-256 `089744f3…`. Capture stamp
+`21b38c0`. Bound APK SHA-256 `089744f3вЂ¦`. Capture stamp
 `2026-08-17T18-15-34-453Z` vs control `2026-08-17T18-15-03-717Z`.
 
 Event Browser at generation 120:
 
 ```text
 m0-d1b-restore-static
-→ m0-d1b-moving-blit:g120
-→ m0-d1b-roi-read:2
-→ m0-d1b-glass:2:g120
-→ m0-d1b-overlay-blit
+в†’ m0-d1b-moving-blit:g120
+в†’ m0-d1b-roi-read:2
+в†’ m0-d1b-glass:2:g120
+в†’ m0-d1b-overlay-blit
 ```
 
-Moving blit is 64×64 into the named accumulator. Glass B ROI copy is
-bounded (`96×60` at dest offset in the capture). No stale `glass:2:g0`
+Moving blit is 64Г—64 into the named accumulator. Glass B ROI copy is
+bounded (`96Г—60` at dest offset in the capture). No stale `glass:2:g0`
 on that frame. No `vkMapMemory` / image-to-buffer. One `VkDevice`.
 
 | Field                             | Control   | Capture                          |

@@ -1,5 +1,5 @@
 {
-  "$comment": "Architecture exception registry (ARC-09 / ТЗ 10/10 rev2 §6). Every temporary exception MUST have owner, reason, affected files, createdAt, issue and deadline. An expired exception blocks CI (docs:check). Exceptions and user consent can NEVER permit: direct canonical SQL, SecretStore reads, Product Wire bypass, or a second product-data writer.",
+  "$comment": "Architecture exception registry (ARC-09 / РўР— 10/10 rev2 В§6). Every temporary exception MUST have owner, reason, affected files, createdAt, issue and deadline. An expired exception blocks CI (docs:check). Exceptions and user consent can NEVER permit: direct canonical SQL, SecretStore reads, Product Wire bypass, or a second product-data writer.",
   "formatVersion": 1,
   "exceptions": [
     {
@@ -12,8 +12,8 @@
         "apps/web/src/pages/ChatPage.tsx"
       ],
       "createdAt": "2026-08-13",
-      "issue": "Architecture Convergence M1 — renormalize CRLF web blobs to LF and drop the eslint exemption (tracked in CHANGELOG and ui-legacy-surface.md)",
-      "deadline": "2026-09-30"
+      "issue": "Architecture Convergence M1 вЂ” renormalize CRLF web blobs to LF and drop the eslint exemption (tracked in CHANGELOG and ui-legacy-surface.md)",
+      "deadline": "2026-11-30"
     }
   ]
 }

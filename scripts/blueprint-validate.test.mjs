@@ -36,9 +36,16 @@ describe('blueprint document validator (M3)', () => {
   });
 
   it('rejects broken JSON with a diagnostic and exit code 1', () => {
-    const result = run(resolve(import.meta.dirname, 'chat-golden.mjs'));
-    expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/invalid JSON|INVALID/);
+    const dir = mkdtempSync(resolve(tmpdir(), 'neotavern-bp-'));
+    const path = resolve(dir, 'broken.json');
+    try {
+      writeFileSync(path, '{ not json at all', 'utf8');
+      const result = run(path);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(/invalid JSON|INVALID/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('requires at least one file argument', () => {

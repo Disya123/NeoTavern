@@ -2,6 +2,8 @@
 editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/desktop/rust-ui-style-port.md
 ---
 
+> **Устарело (ADR-0059, 2026-10-31):** перенос стилей в нативный Rust-рендер отменён — Dioxus/Blitz-контур удалён; стили остаются в React-контуре. Документ — историческая запись.
+
 # Rust UI style port — быстрая петля итерации
 
 Developer workflow для переноса стилей из React в нативный Rust-рендер
@@ -299,7 +301,7 @@ auto`, ни `position: relative` в CSS это не чинят — хойст-с
 задаётся inline-пикселями в `product_chat_app` (lib.rs) и `product_shell.rs`:
 
 - `<main>`: класс `AppShell_mainShifted` снят — его `margin-left: calc(60px +
-  min(clamp(...), calc(100% - 60px)))` Blitz резолвит неверно на широких окнах;
+min(clamp(...), calc(100% - 60px)))` Blitz резолвит неверно на широких окнах;
   маржин не нужен (flex-row уже ставит main после rail+panel), фон
   `rgba(27,25,23,0.7)` инлайнится;
 - workspace: `position:absolute; left:{chat_margin}px; width:{column}px` внутри

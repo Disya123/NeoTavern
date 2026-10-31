@@ -4,6 +4,40 @@
 
 ### Added
 
+- **ADR-0059: React-primary pivot — the branch `react-primary`.** The owner
+  decided (2026-10-31) that the React contour is THE product UI and the
+  native-first takeover is cancelled: the Rust Runtime Kernel,
+  SQLite/migrations/recovery and the React + Theme SDK + Plugin SDK stack
+  stay (React is no longer a "legacy plane with a sunset date"); the Rust
+  Headless host becomes the unified kernel-bearing backend target for VPS
+  and Desktop; **the Dioxus/Blitz presentation contour is removed now** —
+  12 crates (`presentation-m0`, `presentation-m0-d2`,
+  `presentation-dioxus-shell`, `presentation-chat`, `presentation-session`,
+  `presentation-kernel-wire`, `presentation-perf-probe`,
+  `presentation-design-system`, `presentation-blueprint`,
+  `presentation-scene`, `presentation-scene-chat-pilot`, `chat-viewport`),
+  the four vendor patches (`anyrender`, `blitz-dom`, `blitz-paint`,
+  `vello`), the M0/Milestone-B/PERF capture-adjudicate-golden script
+  family, `tools/presentation-codegen` and the CI jobs that built them;
+  **NeoCompositor stays as an experimental crate** (candidate for the
+  Android live-glass path, no product mounting, no milestone gates). The
+  workspace drops from 31 to 19 crates and compiles clean. The TypeScript
+  presentation contracts in `packages/contracts` (blueprint documents,
+  boundary, projection) are React-plane and stay; blueprint chat rendering
+  follows ADR-0056 again (its ADR-0057 supersession is void). ADR-0057 is
+  superseded in its product-UI goal (Phases 3–4 void; the document remains
+  the historical record; the Kernel-side data-integrity fixes landed and
+  stay landed); ADR-0058's end-state is amended (the Web Client does not
+  sunset "with the legacy contour"; the IR v1 schema remains the versioned
+  plugin-UI contract — see `docs/plugin-sdk/visual-surface-ir.md` — with
+  host rendering bound to whatever native surface is actually built);
+  ADR-0051's WebView-fallback posture is the product posture; ADR-0052's
+  no-WebView cutover is void. AGENTS §2/§13/§14/§17/§18/§19/§21/§23 are
+  amended to the single-contour reality. Decision record:
+  `docs/adr/0059-react-primary-pivot.md`. Note honestly: the audit-class
+  fixes UI-01..UI-08 from the previous commits rode on the removed native
+  session layer and are preserved in history, not in the tree.
+
 - **`PluginVisualSurface` IR schema v1 + security review (ADR-0058;
   ADR-0057 Phase 2 gate).** The declarative, host-rendered plugin UI
   surface now has its versioned, bounded fragment schema:

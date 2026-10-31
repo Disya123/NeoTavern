@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "737ac45de18eba112b80b5de591266b277900ef02d28fff22120ffc2c954b133"
+      "sha256": "097275c03b9257687d907ab100f2432ef3a2acbc572f789a30897b6bd3c09d9f"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -265,17 +265,22 @@
     {
       "source": "adr/0057-native-first-own-scene-platform.md",
       "target": "adr/0057-native-first-own-scene-platform.md",
-      "sha256": "e59afe6027e8fcc405c30309c2f3f6581d926f8f589e7957d8ffa8b44e036464"
+      "sha256": "be190df00c405fe4bdd81ff31467fefee687cdb78c068867d502ff7f8313d5e7"
     },
     {
       "source": "adr/0058-no-web-plugin-ir-platform.md",
       "target": "adr/0058-no-web-plugin-ir-platform.md",
-      "sha256": "49a74665172861490a8c0ffe75e8d80f9eeafcbec25dcb754a7ae5960135f213"
+      "sha256": "a4d09ad1f6c3e28d09d018f3ab8694a9f1dda8b8254cb66388ce49596e17bcc1"
+    },
+    {
+      "source": "adr/0059-react-primary-pivot.md",
+      "target": "adr/0059-react-primary-pivot.md",
+      "sha256": "2590b470c49a6d6180310a0baf0c2c498e3a31935219974a70993cbfe525e247"
     },
     {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "06e334049ed295419e9c3f09510812449114ec6c4c47b41cded1059a883b621e"
+      "sha256": "e7831a76db333c8881165f1e4534f397b9a57fbd03c118d08cc5558bc163f61f"
     },
     {
       "source": "android/README.md",
@@ -290,7 +295,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "569cd0741536162fa76daea7e71475a3270ac6ba50c27ab8b662bb7524e231cf"
+      "sha256": "722313e57b42f9c5d4729324d4f2d0c9543d9afaa9970f0d870e8b45be3f4428"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -315,7 +320,7 @@
     {
       "source": "architecture/native-presentation-platform.md",
       "target": "architecture/native-presentation-platform.md",
-      "sha256": "35afa29b905291908e1f6a699421f2cce452fc9351209611e3cec106eac2c92d"
+      "sha256": "5faf5355d019b3bef681fb19b7af2e75971ab460fc8f0a110ee4c095106a0fdc"
     },
     {
       "source": "architecture/operations-inventory.md",
@@ -330,7 +335,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "699688e42ebf028f8b8b97c07c30cfcef7e80d8f70e8555cfa4153ab34d978cf"
+      "sha256": "90506649edf2b955a46748eac0ed42e6507c539d84ad5bb3b5addbe0974e1533"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -365,7 +370,7 @@
     {
       "source": "audits/rust-app/INVENTORY.md",
       "target": "audits/rust-app/INVENTORY.md",
-      "sha256": "1a7218dbe3e19ad59a84d5f88d222edf2bcf4ebe627dd9eb2c51fe2bbcbae7c6"
+      "sha256": "551b934fcd5d2c2c8ceae26ba5761c98bd07c9333da2f2d21a8583b140e7cd75"
     },
     {
       "source": "audits/rust-app/KERNEL.md",
@@ -375,7 +380,7 @@
     {
       "source": "audits/rust-app/PLATFORMS.md",
       "target": "audits/rust-app/PLATFORMS.md",
-      "sha256": "724cf6104b3616684ba2ac4f314888dbca22416466686debd40915c2e79587f3"
+      "sha256": "86cac9ccadf5fa480bce3ffd8ca99bcf3beab98f438d8cce0dae546ebdbaebc4"
     },
     {
       "source": "audits/rust-app/PRESENTATION.md",
@@ -405,7 +410,7 @@
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "64383e9a0cada7837399560fe732b6fc11df9a978e7c25b9cee6f8b505eb2394"
+      "sha256": "43a53fd56947ad5bb3f40ea331450cf498bb743132f57f1dd156c434fa66c333"
     },
     {
       "source": "desktop/chat-ui-recipe.md",
@@ -420,12 +425,12 @@
     {
       "source": "desktop/neocompositor-desktop-host.md",
       "target": "desktop/neocompositor-desktop-host.md",
-      "sha256": "de4a35ecb1b4876c7ca5514f413700dbcf281ed6aa51b262e293300f7e07f190"
+      "sha256": "0a2538e66009fcfe4e64c109f1a15850301773f1567fa95e173416c5caf37377"
     },
     {
       "source": "desktop/rust-ui-style-port.md",
       "target": "desktop/rust-ui-style-port.md",
-      "sha256": "8781c4b796d66364d9d443d3c8c5f2f0bf156daebc821b17f1a0e0ba04212eda"
+      "sha256": "5f0a3cd00b1ad05a8a467d0efeafa17edb67e81e86466b580a2845fd044cf427"
     },
     {
       "source": "migrations/README.md",
@@ -455,7 +460,7 @@
     {
       "source": "plugin-sdk/visual-surface-ir.md",
       "target": "plugin-sdk/visual-surface-ir.md",
-      "sha256": "a72a5eec5fda5d5687f3e8d464ad07af31e9d06c0ad6d46127f4d3d3e256dab1"
+      "sha256": "266574c63e2f9730c0c85148efd1a2d3ff12421cc3219f8c49d787262e5db81e"
     },
     {
       "source": "prompt-pipeline/README.md",
@@ -485,17 +490,17 @@
     {
       "source": "rfc/input-to-present-physical-runbook.md",
       "target": "rfc/input-to-present-physical-runbook.md",
-      "sha256": "9eced881d1405ff12c14a96fc6c97dc33d930a1ce60363ced8b4439c1f3dde94"
+      "sha256": "5d5306eb0fb83752cbf0f712fe4c127156867ed68e690a01e1b39446a7c5bc02"
     },
     {
       "source": "rfc/m0-d1a-physical-runbook.md",
       "target": "rfc/m0-d1a-physical-runbook.md",
-      "sha256": "27fcb4910862a6f85326d686431078bf766ddbfd4161bc589baf549dc4d0046e"
+      "sha256": "29b4832fbd7cf30f2bb1812184c6191589e2d7e0374f5e0e44f173af21916c0e"
     },
     {
       "source": "rfc/m0-d1a-probe.md",
       "target": "rfc/m0-d1a-probe.md",
-      "sha256": "9ff2f3efc05b512bfec5b607b8395e7b8cc163ea387de793271609b775930d2b"
+      "sha256": "ed7ea446fe84e3da29b7ef661bcc6d8ef4add14393f389a3c994ceee2be7d406"
     },
     {
       "source": "rfc/m0-d1b-physical-runbook.md",
@@ -505,7 +510,7 @@
     {
       "source": "rfc/m0-d1b-probe.md",
       "target": "rfc/m0-d1b-probe.md",
-      "sha256": "f8ec3dda3229cf7e91ebd574f8257f9a18f481e3aec8ccc5de05f987b5144bec"
+      "sha256": "07bd6f9cd7dc848e73b892946dd9c8d267f443058f252304725d38b77e89c3b3"
     },
     {
       "source": "rfc/m0-d2-physical-runbook.md",
@@ -515,7 +520,7 @@
     {
       "source": "rfc/m0-d2-probe.md",
       "target": "rfc/m0-d2-probe.md",
-      "sha256": "e87527fe73158ff8e7dc0fdb5569010ba1be17166169799b67b452af83df6cbb"
+      "sha256": "afd6d7b8ef42a03ae612e19b86b53124151df2220c94647e32f65cff9bda19d5"
     },
     {
       "source": "rfc/m0-track-comparison.md",
@@ -545,7 +550,7 @@
     {
       "source": "rfc/perf-18-20-physical-runbook.md",
       "target": "rfc/perf-18-20-physical-runbook.md",
-      "sha256": "b4d4e2368e1deed958be423f509bdc9136d9ecfebea54ed3e40070d1f94a8ece"
+      "sha256": "46aa1d42288f2b201755452650753875c83cc73a60bbebeec6239437fc72f492"
     },
     {
       "source": "rfc/presentation-compatibility-matrix.md",

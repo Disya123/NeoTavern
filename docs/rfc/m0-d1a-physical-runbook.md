@@ -1,4 +1,4 @@
-# M0-D1a physical capture runbook
+﻿# M0-D1a physical capture runbook
 
 **Status:** lab procedure after `GateP:P1`. Program **M0-D1a PASS** is the
 host-side record [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json), not
@@ -6,14 +6,14 @@ the probe logcat bit. PRE-GATE desktop/AVD artifacts stay unadmitted. D1b
 may start; it is `NOT_STARTED` in the D1a JSON. `D1=Track D GO` is not
 granted.
 
-| Split                 | Status            | Meaning                                                                                                       |
-| --------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------- |
-| `capture_host`        | **`READY`**       | RenderDoc **v1.45** pinned at `E:\renderdoc`, AGI 3.3.3 archived at `E:\agi`, Java ≥ 11, adb, bound debug APK |
-| `physical_device`     | Xiaomi `8f5c2b7c` | Emulators remain excluded. Capture used Adreno 710 / Vulkan.                                                  |
-| D1a program           | **PASS**          | Host adjudicator admitted the Vulkan Event Browser tree                                                       |
-| `android_gpu_capture` | **true** (host)   | Probe log stays `capture=false`; only the admission record flips this bit                                     |
+| Split                 | Status            | Meaning                                                                                                         |
+| --------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------- |
+| `capture_host`        | **`READY`**       | RenderDoc **v1.45** pinned at `E:\renderdoc`, AGI 3.3.3 archived at `E:\agi`, Java в‰Ґ 11, adb, bound debug APK |
+| `physical_device`     | Xiaomi `8f5c2b7c` | Emulators remain excluded. Capture used Adreno 710 / Vulkan.                                                    |
+| D1a program           | **PASS**          | Host adjudicator admitted the Vulkan Event Browser tree                                                         |
+| `android_gpu_capture` | **true** (host)   | Probe log stays `capture=false`; only the admission record flips this bit                                       |
 
-**RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §48  
+**RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) В§48  
 **Decision:** [gate-p-decision-draft.md](gate-p-decision-draft.md)  
 **Probe:** [m0-d1a-probe.md](m0-d1a-probe.md)
 
@@ -21,10 +21,10 @@ granted.
 
 ```text
 clean source bundle (evidence_dirty=false)
-→ APK built from that commit (apk_linkage=BOUND via --bind-apk)
-→ physical Android production GPU (not AVD, not software renderer)
-→ GPU capture (RenderDoc v1.45): pass/resource order + two accumulator reads
-→ D1a verdict
+в†’ APK built from that commit (apk_linkage=BOUND via --bind-apk)
+в†’ physical Android production GPU (not AVD, not software renderer)
+в†’ GPU capture (RenderDoc v1.45): pass/resource order + two accumulator reads
+в†’ D1a verdict
 ```
 
 Counters, the host API timeline, and wgpu debug groups **do not** replace
@@ -35,15 +35,15 @@ recorded). Do not reuse PRE-GATE APK hashes.
 
 ## Capture labels the frame must show
 
-| Order                | Label / debug group                                       | Resource                                  |
-| -------------------- | --------------------------------------------------------- | ----------------------------------------- |
-| 1                    | `m0-d1a-clear-acc`                                        | write `m0-d1a-accumulator`                |
-| then, per raster     | Vello raster into `m0-d1a-vello`, blit `m0-d1a-blit-pass` | write accumulator                         |
-| barrier 1            | `m0-d1a-roi-read:1`                                       | **read** accumulator → `m0-d1a-glass-roi` |
-| barrier 1            | `m0-d1a-glass` / `m0-d1a-glass-pass`                      | sample snapshot, write accumulator ROI    |
-| … more raster/blit … |                                                           |                                           |
-| barrier 2            | `m0-d1a-roi-read:2`                                       | **read** accumulator → snapshot           |
-| barrier 2            | `m0-d1a-glass` / `m0-d1a-glass-pass`                      | sample snapshot, write accumulator ROI    |
+| Order                    | Label / debug group                                       | Resource                                    |
+| ------------------------ | --------------------------------------------------------- | ------------------------------------------- |
+| 1                        | `m0-d1a-clear-acc`                                        | write `m0-d1a-accumulator`                  |
+| then, per raster         | Vello raster into `m0-d1a-vello`, blit `m0-d1a-blit-pass` | write accumulator                           |
+| barrier 1                | `m0-d1a-roi-read:1`                                       | **read** accumulator в†’ `m0-d1a-glass-roi` |
+| barrier 1                | `m0-d1a-glass` / `m0-d1a-glass-pass`                      | sample snapshot, write accumulator ROI      |
+| вЂ¦ more raster/blit вЂ¦ |                                                           |                                             |
+| barrier 2                | `m0-d1a-roi-read:2`                                       | **read** accumulator в†’ snapshot           |
+| barrier 2                | `m0-d1a-glass` / `m0-d1a-glass-pass`                      | sample snapshot, write accumulator ROI      |
 
 Both ROI copies MUST be same-device copies of `m0-d1a-accumulator` at the
 barrier paint position. A CPU readback or a second device is FAIL/REPLACE,
@@ -51,7 +51,7 @@ not PASS.
 
 ## Capture host (pinned)
 
-Primary pin: [`tools/renderdoc.pin.json`](../../tools/renderdoc.pin.json) —
+Primary pin: `tools/renderdoc.pin.json` вЂ”
 **RenderDoc v1.45** (2026-07-02, built from
 `2fc0bc04cb95499635f63986a55bc6f67849dd9f`) at **`E:\renderdoc`**. Zip
 `RenderDoc_1.45_64.zip` SHA-256
@@ -63,9 +63,9 @@ Primary pin: [`tools/renderdoc.pin.json`](../../tools/renderdoc.pin.json) —
 Android layer APK
 `plugins/android/org.renderdoc.renderdoccmd.arm64.apk` SHA-256
 `cdf4c32582da36e37e1f226a47a488b1685ffb5c3cac006fa6187ede9f28b9f1`.
-Preset: [`tools/renderdoc-frame-capture.preset.json`](../../tools/renderdoc-frame-capture.preset.json).
+Preset: `tools/renderdoc-frame-capture.preset.json`.
 Official Android path: [Android capture guide](https://github.com/baldurk/renderdoc/blob/v1.x/docs/how/how_android_capture.rst)
-(File → Attach to Remote Context). Close Android Studio or disable its ADB
+(File в†’ Attach to Remote Context). Close Android Studio or disable its ADB
 integration so it does not steal the debuggable APK.
 
 AGI 3.3.3 remains pinned at `E:\agi` as an **archive** only
@@ -84,10 +84,10 @@ trigger. Debug-only feature `renderdoc-capture` (not implied by
 
 ```text
 StartFrameCapture(wgpu VkDevice / instance dispatch table)
-→ encode exact D1a frame
-→ queue.submit
-→ device.poll / fence completion
-→ EndFrameCapture
+в†’ encode exact D1a frame
+в†’ queue.submit
+в†’ device.poll / fence completion
+в†’ EndFrameCapture
 ```
 
 `RENDERDOC_GetAPI` is loaded from the injected layer; `renderdoc_app.h` is
@@ -99,7 +99,7 @@ as the device pointer captured GLES (`2026-08-17T16-53-54-457Z-d1a.rdc`,
 The debug manifest lists RenderDoc packages under `<queries>` so the
 Vulkan loader can see the layer APK on `targetSdk >= 30`.
 
-Host checks (RenderDoc + archived AGI, Java ≥ 11, adb, writable
+Host checks (RenderDoc + archived AGI, Java в‰Ґ 11, adb, writable
 `apps/android/m0-d1a-captures/`, bound debug APK):
 
 ```sh
@@ -122,11 +122,11 @@ would make `apk_source_commit` equal the tooling pin. APK provenance is the
 latest BOUND source bundle (`apk_linkage=BOUND`, `evidence_dirty=false`).
 Do not bind the APK to the tooling-only commit.
 
-| Field                    | Value                                                                                                                                    |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `capture_tooling_commit` | `5df24c8fa97ca2edce3d5627445c2b3e419d683c`                                                                                               |
-| `apk_source_commit`      | latest BOUND bundle (`apk_source_commit` ≠ tooling commit)                                                                               |
-| Last AGI-era bind        | `7487f12…` / SHA-256 `47b632b830188f264bd07ff06947ceabd96aea6064ecb96fd788c3e739c31391` — **stale after RenderDoc in-app + `<queries>`** |
+| Field                    | Value                                                                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `capture_tooling_commit` | `5df24c8fa97ca2edce3d5627445c2b3e419d683c`                                                                                                   |
+| `apk_source_commit`      | latest BOUND bundle (`apk_source_commit` в‰  tooling commit)                                                                                 |
+| Last AGI-era bind        | `7487f12вЂ¦` / SHA-256 `47b632b830188f264bd07ff06947ceabd96aea6064ecb96fd788c3e739c31391` вЂ” **stale after RenderDoc in-app + `<queries>`** |
 
 Rebind the debug APK after those probe-only changes. Do not capture an
 unbound or dirty tree.
@@ -134,7 +134,7 @@ unbound or dirty tree.
 When a physical phone is on USB, rebuild twice. Control APK is
 `gpu,android-jni` (feature off). Capture APK is
 `gpu,android-jni,renderdoc-capture`, then `--bind-apk` from a clean tree
-(`apk_source_commit` ≠ `5df24c8`).
+(`apk_source_commit` в‰  `5df24c8`).
 
 ```sh
 node scripts/m0-d1a-renderdoc-capture.mjs --mode=control
@@ -142,7 +142,7 @@ node scripts/m0-d1a-renderdoc-capture.mjs --mode=capture
 ```
 
 That command refuses `emulator-*` / qemu / goldfish / ranchu / `sdk_gphone`,
-requires Android 11+ (SDK ≥ 30), an ABI present in the APK, and a hardware
+requires Android 11+ (SDK в‰Ґ 30), an ABI present in the APK, and a hardware
 GPU (SwiftShader/qemu rejected). Capture mode installs the SHA-256-matching
 BOUND APK and the pinned RenderDoc arm64 layer APK, sets
 `VK_LAYER_RENDERDOC_Capture` as a GPU debug layer, launches
@@ -172,11 +172,11 @@ so `VK_EXT_debug_utils` labels (`m0-d1a-*`) land in the capture.
 ### RenderDoc GUI (Android Remote Context)
 
 1. Close Android Studio.
-2. File → Attach to Remote Context → the Xiaomi device.
+2. File в†’ Attach to Remote Context в†’ the Xiaomi device.
 3. Launch **`M0D1aActivity`**, not `MainActivity`.
 4. Event Browser must show, in order:
-   `m0-d1a-roi-read:1` → first glass dispatch → intermediate raster/blit →
-   `m0-d1a-roi-read:2` → second glass dispatch.
+   `m0-d1a-roi-read:1` в†’ first glass dispatch в†’ intermediate raster/blit в†’
+   `m0-d1a-roi-read:2` в†’ second glass dispatch.
 5. Resource viewer: identity and usage of `m0-d1a-accumulator` and
    `m0-d1a-glass-roi`. ROI copies are same-device. No CPU readback, no
    cross-device transfer.
@@ -200,7 +200,7 @@ node scripts/m0-d1a-capture-check.mjs --commands apps/android/m0-d1a-captures/<s
 
 That check does **not** admit D1a PASS and does **not** set
 `android_gpu_capture`. Admission is
-`node scripts/m0-d1a-adjudicate.mjs` →
+`node scripts/m0-d1a-adjudicate.mjs` в†’
 [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json).
 
 Trace names: `{stamp}-d1a.rdc`, `{stamp}-d1a.xml`,
@@ -211,9 +211,9 @@ Trace names: `{stamp}-d1a.rdc`, `{stamp}-d1a.xml`,
 
 Admitted Vulkan capture (`android_gpu_capture=true` in the host record only):
 `apps/android/m0-d1a-captures/2026-08-17T17-18-59-431Z-d1a.rdc`
-(1 487 376 bytes, SHA-256 `d45c45db…b11259`, `<driver>Vulkan</driver>`,
-both `m0-d1a-roi-read:1/2`, `vkCmdCopyImage` 299=`m0-d1a-accumulator` →
-303=`m0-d1a-glass-roi` at 140×80). APK SHA-256 `478a4593…` bound to
+(1вЂЇ487вЂЇ376 bytes, SHA-256 `d45c45dbвЂ¦b11259`, `<driver>Vulkan</driver>`,
+both `m0-d1a-roi-read:1/2`, `vkCmdCopyImage` 299=`m0-d1a-accumulator` в†’
+303=`m0-d1a-glass-roi` at 140Г—80). APK SHA-256 `478a4593вЂ¦` bound to
 `2d72a3c`. GLES 1437-byte `2026-08-17T16-53-54-457Z-d1a.rdc` stays
 `WRONG_API_CAPTURE / NON-ADMISSIBLE`.
 
@@ -254,15 +254,15 @@ them.
 
 Recorded 2026-08-17 after host-side adjudication of RenderDoc v1.45:
 
-| Need               | This host                                                                      |
-| ------------------ | ------------------------------------------------------------------------------ |
-| Physical Android   | Xiaomi `8f5c2b7c` (`23122PCD1G`, Adreno 710); emulators excluded               |
-| RenderDoc          | **pinned** v1.45 at `E:\renderdoc`                                             |
-| AGI                | **archived** 3.3.3 at `E:\agi` — `.gfxtrace` is `CAPTURED_BUT_NOT_REPLAYABLE`  |
-| Full SDK / NDK     | present at `E:\android_sdk` (NDK 27–29)                                        |
-| Gradle 8.9 on PATH | unpacked under `%TEMP%\gradle-8.9\` (repo has no `gradlew`)                    |
-| Readable GPU tree  | **admitted** — Event Browser shows both ROI reads and accumulator/ROI identity |
-| Paid device farm   | not used                                                                       |
+| Need               | This host                                                                        |
+| ------------------ | -------------------------------------------------------------------------------- |
+| Physical Android   | Xiaomi `8f5c2b7c` (`23122PCD1G`, Adreno 710); emulators excluded                 |
+| RenderDoc          | **pinned** v1.45 at `E:\renderdoc`                                               |
+| AGI                | **archived** 3.3.3 at `E:\agi` вЂ” `.gfxtrace` is `CAPTURED_BUT_NOT_REPLAYABLE`  |
+| Full SDK / NDK     | present at `E:\android_sdk` (NDK 27вЂ“29)                                        |
+| Gradle 8.9 on PATH | unpacked under `%TEMP%\gradle-8.9\` (repo has no `gradlew`)                      |
+| Readable GPU tree  | **admitted** вЂ” Event Browser shows both ROI reads and accumulator/ROI identity |
+| Paid device farm   | not used                                                                         |
 
 Program D1a is **PASS**. The probe still logs `android_gpu_capture=false`.
 Flip that bit only in the evidence-admission record (already done).

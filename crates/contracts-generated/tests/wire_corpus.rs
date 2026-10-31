@@ -6,8 +6,8 @@
 //! `crates/contracts-generated/src/generated.rs`).
 
 use contracts_generated::generated::{
-    decode_backup_dto, decode_character_dto, decode_chat_dto, decode_error_dto,
-    decode_event_envelope, decode_generation_event, decode_generation_run,
+    decode_backup_dto, decode_character_card, decode_character_dto, decode_chat_dto,
+    decode_error_dto, decode_event_envelope, decode_generation_event, decode_generation_run,
     decode_generation_status, decode_generation_step, decode_generation_step_status,
     decode_generation_step_type, decode_lorebook_dto, decode_lorebook_entry_dto,
     decode_lorebook_entry_input, decode_lorebook_entry_patch, decode_memory_dto,
@@ -18,7 +18,8 @@ use contracts_generated::generated::{
     decode_prompt_plan, decode_provider_availability, decode_provider_config_dto,
     decode_provider_dto, decode_provider_model, decode_request_assets_content,
     decode_request_assets_delete, decode_request_assets_get, decode_request_assets_put,
-    decode_request_backups_restore, decode_request_cancel_generation,
+    decode_request_assets_thumb, decode_request_backups_restore, decode_request_cancel_generation,
+    decode_request_characters_card_get, decode_request_characters_card_update,
     decode_request_characters_export_card, decode_request_chats_export,
     decode_request_create_character, decode_request_create_chat,
     decode_request_create_chat_snapshot, decode_request_create_lorebook,
@@ -38,10 +39,11 @@ use contracts_generated::generated::{
     decode_request_list_memories, decode_request_list_messages, decode_request_list_presets,
     decode_request_list_provider_configs, decode_request_message_draft_commit,
     decode_request_message_draft_discard, decode_request_message_draft_get,
-    decode_request_message_draft_save, decode_request_message_revisions_list,
-    decode_request_message_variant_activate, decode_request_message_variant_create,
-    decode_request_message_variant_delete, decode_request_message_variants_list,
-    decode_request_plugins_disable, decode_request_plugins_enable, decode_request_plugins_install,
+    decode_request_message_draft_list, decode_request_message_draft_save,
+    decode_request_message_revisions_list, decode_request_message_variant_activate,
+    decode_request_message_variant_create, decode_request_message_variant_delete,
+    decode_request_message_variants_list, decode_request_plugins_disable,
+    decode_request_plugins_enable, decode_request_plugins_install,
     decode_request_plugins_uninstall, decode_request_profile_export, decode_request_profile_import,
     decode_request_profiles_create, decode_request_profiles_delete, decode_request_profiles_rename,
     decode_request_retry_generation, decode_request_set_provider_config,
@@ -52,12 +54,13 @@ use contracts_generated::generated::{
     decode_request_update_lorebook_entry, decode_request_update_memory,
     decode_request_update_message, decode_request_update_persona, decode_request_update_preset,
     decode_response_envelope, decode_result_assets_content, decode_result_assets_get,
-    decode_result_assets_put, decode_result_backups_restore, decode_result_characters_export_card,
-    decode_result_chat_snapshot, decode_result_chats_export, decode_result_data_activation_status,
-    decode_result_diagnostics_export, decode_result_empty, decode_result_imports_character_card,
-    decode_result_list_backups, decode_result_list_lorebook_entries, decode_result_list_lorebooks,
-    decode_result_list_memories, decode_result_list_personas, decode_result_list_presets,
-    decode_result_list_provider_configs, decode_result_list_providers, decode_result_list_tools,
+    decode_result_assets_put, decode_result_assets_thumb, decode_result_backups_restore,
+    decode_result_characters_export_card, decode_result_chat_snapshot, decode_result_chats_export,
+    decode_result_data_activation_status, decode_result_diagnostics_export, decode_result_empty,
+    decode_result_imports_character_card, decode_result_list_backups,
+    decode_result_list_lorebook_entries, decode_result_list_lorebooks, decode_result_list_memories,
+    decode_result_list_personas, decode_result_list_presets, decode_result_list_provider_configs,
+    decode_result_list_providers, decode_result_list_tools, decode_result_message_draft_list,
     decode_result_message_revision_list, decode_result_message_variant_list,
     decode_result_plugins_install, decode_result_plugins_list, decode_result_profile_export,
     decode_result_profile_import, decode_result_profiles_create, decode_result_profiles_list,
@@ -180,6 +183,16 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.request.delete-character" => {
             corpus_case(schema_id, decode_request_delete_character, bytes, valid)
         }
+        "wire.request.characters.card.get" => {
+            corpus_case(schema_id, decode_request_characters_card_get, bytes, valid)
+        }
+        "wire.request.characters.card.update" => corpus_case(
+            schema_id,
+            decode_request_characters_card_update,
+            bytes,
+            valid,
+        ),
+        "wire.character.card" => corpus_case(schema_id, decode_character_card, bytes, valid),
         "wire.request.get-lorebook" => {
             corpus_case(schema_id, decode_request_get_lorebook, bytes, valid)
         }
@@ -377,6 +390,9 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.request.message-draft-get" => {
             corpus_case(schema_id, decode_request_message_draft_get, bytes, valid)
         }
+        "wire.request.message-draft-list" => {
+            corpus_case(schema_id, decode_request_message_draft_list, bytes, valid)
+        }
         "wire.request.message-draft-save" => {
             corpus_case(schema_id, decode_request_message_draft_save, bytes, valid)
         }
@@ -419,6 +435,9 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.result.list-memories" => {
             corpus_case(schema_id, decode_result_list_memories, bytes, valid)
         }
+        "wire.result.message-draft-list" => {
+            corpus_case(schema_id, decode_result_message_draft_list, bytes, valid)
+        }
         "wire.result.message-revision-list" => {
             corpus_case(schema_id, decode_result_message_revision_list, bytes, valid)
         }
@@ -448,6 +467,12 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
             corpus_case(schema_id, decode_request_assets_get, bytes, valid)
         }
         "wire.result.assets.get" => corpus_case(schema_id, decode_result_assets_get, bytes, valid),
+        "wire.request.assets.thumb" => {
+            corpus_case(schema_id, decode_request_assets_thumb, bytes, valid)
+        }
+        "wire.result.assets.thumb" => {
+            corpus_case(schema_id, decode_result_assets_thumb, bytes, valid)
+        }
         "wire.request.assets.content" => {
             corpus_case(schema_id, decode_request_assets_content, bytes, valid)
         }

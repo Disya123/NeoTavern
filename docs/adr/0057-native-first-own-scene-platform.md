@@ -1,8 +1,14 @@
 # ADR-0057: Native-first product UI — own retained-scene platform over mature primitives
 
-- Status: Accepted (owner direction, 2026-10-04; execution is phased with
-  explicit kill-gates — the legacy Dioxus/Blitz contour is deleted only by
-  the Phase-4 gate, never kept as a second product path)
+- Status: **Superseded (product-UI goal) by
+  [ADR-0059](0059-react-primary-pivot.md) on 2026-10-31** — the React
+  contour is the product UI and the Dioxus/Blitz contour was removed at the
+  pivot; Phases 3–4 and their gates are void. This document remains the
+  historical record of the native-platform program; its Kernel-side data
+  integrity findings (stage 1–2 fixes) landed and stay landed.
+- Original status: Accepted (owner direction, 2026-10-04; execution is
+  phased with explicit kill-gates — the legacy Dioxus/Blitz contour is
+  deleted only by the Phase-4 gate, never kept as a second product path)
 - Date: 2026-10-04
 
 ## Context

@@ -2,6 +2,8 @@
 editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/desktop/neocompositor-desktop-host.md
 ---
 
+> **Устарело (ADR-0059, 2026-10-31):** хост `neocompositor-desktop` удалён вместе с Dioxus/Blitz-контуром; документ сохранён как историческая запись (produce/height-feedback подход). Продуктовый десктоп — React-контур в WebView.
+
 # NeoCompositor host — Windows/macOS (общий с Android)
 
 Height feedback schedules another produce only for an accepted, positive,
@@ -668,7 +670,7 @@ key` — при скролле чата, смене панели с послед
 в `crates/Cargo.toml`, как у vello/anyrender): ареный GC отключён
 (`remove_node_if_unparented` — no-op), добавлен read-only
 `BaseDocument::node_count`. Детали и учёт утечки — в
-[`vendor/blitz-dom/NEOTAVERN_PATCH.md`](https://github.com/Disya123/NeoTavern/blob/main/crates/vendor/blitz-dom/NEOTAVERN_PATCH.md).
+`vendor/blitz-dom/NEOTAVERN_PATCH.md`.
 Без GC ничего не выбрасывается из арены, мёртвых id в стриме правок не
 существует. Отцепленные поддеревья копятся вместо этого (~33 узла на
 скролл-нотч) — десктопный хост ограничивает рост порогом 8192 узлов: по
@@ -1980,7 +1982,7 @@ blit-сдвиг замороженного растра с заливкой кр
   (80 байт) у обоих хостов; Android пишет flat-маппинг и старый банд — его
   поведение не менялось.
 - **Направленные капы из ранвея**: `ScrollAckLoop::set_runway_caps(older,
-  newer)` — кап привязан к ТОМУ краю, который сдвиг реально обнажает.
+newer)` — кап привязан к ТОМУ краю, который сдвиг реально обнажает.
   Знаки: визуальный офсет растёт к СТАРЫМ сообщениям (0 = низ/новейшие),
   blit сэмплит `doc − drift` (сдвиг контента = перемещение К визуалу), т.е.
   ПОЛОЖИТЕЛЬНЫЙ дрейф двигает контент ВНИЗ и обнажает ВЕРХНИЙ край полосы —
@@ -2092,7 +2094,7 @@ blit-сдвиг замороженного растра с заливкой кр
   (scroll-to max) — окно = верхние ряды, банд заполнен; трекинг свипа —
   монотонный ease-out (−94→−2px), 0 шагов назад; `header=37 / composer=83`
   путей сцен хрома не изменились. `cargo test -p neotavern-presentation-chat
-  --lib` (34) — зелёные; сломанные тест-таргеты m0-d2 — известный долг HEAD
+--lib` (34) — зелёные; сломанные тест-таргеты m0-d2 — известный долг HEAD
   (15 ошибок на чистом HEAD, stash-проверка), не этого среза.
 
   Верификация chrome-split (release-проба 5×`--wheel 40`, 1920×1009, 122
@@ -2104,6 +2106,7 @@ blit-сдвиг замороженного растра с заливкой кр
   местах); `cargo test -p neotavern-presentation-chat --features gpu` (51),
   shell (4), fmt/clippy по затронутым крейтам — зелёные (сломанный
   тест-таргет m0-d2 — известный долг HEAD, не этого среза).
+
 - **Snapshot-проба** читает среднее окно растра (origin y = overscan), так
   что goldens остаются размера окна.
 

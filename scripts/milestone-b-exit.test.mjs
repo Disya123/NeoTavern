@@ -27,7 +27,9 @@ describe('milestone B-exit registry', () => {
     expect(registry.input_to_present_p99_ns).toBe(P99_NS);
     expect(registry.input_to_present_p99_ms).toBe(20.65);
     expect(registry.input_to_present_p99_role).toBe(P99_ROLE);
-    expect(registry.release_budget_calibration_adr).toBeNull();
+    expect(registry.release_budget_calibration_adr).toBe(
+      'docs/adr/0053-android-120hz-release-budget.md',
+    );
     expect(result.ok).toBe(true);
     expect(result.can_pass).toBe(true);
     expect(result.milestone_b).toBe('PASS');
@@ -175,7 +177,11 @@ describe('milestone B-exit registry', () => {
   });
 
   it('does not treat raw i2p p99 as a release budget', () => {
+    // With the ADR-0053 calibration recorded, the role is unconstrained.
+    expect(evaluate(load()).failures).toEqual([]);
+    // Without a calibration ADR, the raw p99 is a baseline, not a budget.
     const forged = structuredClone(load());
+    forged.release_budget_calibration_adr = null;
     forged.input_to_present_p99_role = 'release-budget';
     const result = evaluate(forged);
     expect(result.failures.some((row) => row.includes('release budget'))).toBe(true);

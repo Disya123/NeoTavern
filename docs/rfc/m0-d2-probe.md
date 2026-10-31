@@ -1,4 +1,4 @@
-# M0-D2 Dioxus/Blitz producer seam
+﻿# M0-D2 Dioxus/Blitz producer seam
 
 **Status:** program **M0-D2 PASS** (host-side). Probe log `capture=false` is
 expected. Host-side D1a and D1b remain PASS (JSON unchanged). Normative M0 is
@@ -10,8 +10,8 @@ Admitted capture `2026-08-17T20-11-27-178Z` / control
 `2026-08-17T19-34-27-050Z` / `2026-08-17T19-41-18-304Z` are
 **REHEARSAL / NON-ADMISSIBLE**.
 
-**RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §48 stage 3  
-**Crate:** [`crates/presentation-m0-d2`](../../crates/presentation-m0-d2/README.md)  
+**RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) В§48 stage 3  
+**Crate:** `crates/presentation-m0-d2`  
 **Runbook:** [m0-d2-physical-runbook.md](m0-d2-physical-runbook.md)  
 **Admission:** [m0-d2-adjudication.json](m0-d2-adjudication.json)  
 **TrackComparison:** [m0-track-comparison.md](m0-track-comparison.md)
@@ -20,7 +20,7 @@ D1a/D1b used a host-authored display list. Stage 3 requires geometry and text
 to come from a real Dioxus `VirtualDom` and pinned Blitz layout/paint. A mock
 list pasted on after layout is forbidden. Canonical glass order comes from
 Blitz `render_element`, not a second DOM walk. The moving sample is inserted
-into that producer `NeoDisplayList` immediately before Glass B — not via
+into that producer `NeoDisplayList` immediately before Glass B вЂ” not via
 `static_d1b_scene()`.
 
 ## Pins (experimental, not production)
@@ -33,10 +33,10 @@ anyrender = 0.11.0 + host_node_marker patch (65 inserted lines with blitz-paint)
 
 These match `presentation-m0` Vello **0.9** / wgpu **29**. Rejected:
 
-- `dioxus-native 0.7.10` — Blitz 0.2 / anyrender 0.6 / older wgpu.
-- Full `dioxus-native 0.8` renderer crate — pulls a winit 0.31 window shell
+- `dioxus-native 0.7.10` вЂ” Blitz 0.2 / anyrender 0.6 / older wgpu.
+- Full `dioxus-native 0.8` renderer crate вЂ” pulls a winit 0.31 window shell
   into the workspace lockfile. Headless path is
-  `DioxusDocument` → `initial_build` → `BaseDocument::resolve` →
+  `DioxusDocument` в†’ `initial_build` в†’ `BaseDocument::resolve` в†’
   `blitz_paint::paint_scene`.
 
 Alpha/beta crates are marked experimental. They are not a D2 GO.
@@ -46,17 +46,17 @@ Alpha/beta crates are marked experimental. They are not a D2 GO.
 RFC allows a public recording sink, a small upstreamable hook, or another
 described bounded extension point.
 
-| Piece             | Implementation                                                                                                           |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Raster/text paint | Blitz `paint_scene` → `ProducerSink: PaintScene`                                                                         |
-| Glass             | `data-neoui="glass"` detected **inside** `blitz-paint` `render_element` after cull, before the node's background         |
-| Marker API        | default `PaintScene::host_node_marker` (no-op on stock backends)                                                         |
-| Display list      | Stream order only: `BeginEffectScope` → preceding draws → `BackdropBarrier(NodeId)` → following draws → `EndEffectScope` |
-| Moving sample     | Compositor `StubPayload::MovingSample` inserted **after** the Blitz seam, immediately before the last glass barrier      |
-| Diagnostic walk   | Preorder DOM glass ids. Must not define z-order                                                                          |
-| Ancestor effect   | Blitz opacity/clip `push_layer` around Glass B                                                                           |
+| Piece             | Implementation                                                                                                                   |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Raster/text paint | Blitz `paint_scene` в†’ `ProducerSink: PaintScene`                                                                               |
+| Glass             | `data-neoui="glass"` detected **inside** `blitz-paint` `render_element` after cull, before the node's background                 |
+| Marker API        | default `PaintScene::host_node_marker` (no-op on stock backends)                                                                 |
+| Display list      | Stream order only: `BeginEffectScope` в†’ preceding draws в†’ `BackdropBarrier(NodeId)` в†’ following draws в†’ `EndEffectScope` |
+| Moving sample     | Compositor `StubPayload::MovingSample` inserted **after** the Blitz seam, immediately before the last glass barrier              |
+| Diagnostic walk   | Preorder DOM glass ids. Must not define z-order                                                                                  |
+| Ancestor effect   | Blitz opacity/clip `push_layer` around Glass B                                                                                   |
 
-Patch set: [`crates/presentation-m0-d2/upstream/`](../../crates/presentation-m0-d2/upstream/README.md)
+Patch set: `crates/presentation-m0-d2/upstream/`
 (**65** inserted lines). Rebase: `anyrender 0.11.1` `git apply --check` succeeds
 (lib.rs hunks offset 3). `blitz-paint` 0.3.0-beta.1 is already latest crates.io
 (`NOT_AVAILABLE`, not `FAIL`). Layout/text files are not patched. If this hook
@@ -67,12 +67,12 @@ landing stays a missing capability; M0 only needs a bounded, reproducible patch.
 
 ```text
 Dioxus/Blitz PaintOps
-→ Glass A
-→ vector UI
-→ moving:gN
-→ ROI-2:gN
-→ Glass B:gN
-→ overlay
+в†’ Glass A
+в†’ vector UI
+в†’ moving:gN
+в†’ ROI-2:gN
+в†’ Glass B:gN
+в†’ overlay
 ```
 
 Motion does not rebuild the display list or the compiled pass graph:
@@ -94,7 +94,7 @@ glass, transform+clip+opacity, and balanced layer pops.
 
 `scripts/m0-d2-adjudicate.mjs` additionally requires:
 
-- real `VirtualDom → Blitz paint_scene` (`producer_source=…host-node-marker`)
+- real `VirtualDom в†’ Blitz paint_scene` (`producer_source=вЂ¦host-node-marker`)
 - both barriers from the paint hook (`glass_from_hook=2`)
 - opacity/clip scope kept on Glass B (crate tests)
 - `devices=1`, `readbacks=0`, `xdev=0`

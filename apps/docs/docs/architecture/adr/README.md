@@ -4,41 +4,48 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0059: React-primary pivot — the React contour is the product UI
+
+**Accepted (owner decision, 2026-10-31).** The React contour (apps/web on
+Tauri/WebView desktop, the Android WebView app, the remote Web Client) is the
+product UI — no native-contour takeover is planned. The Dioxus/Blitz
+presentation contour (12 presentation crates, four vendor patches, their
+capture/golden tooling and CI jobs) was removed at the pivot commit.
+NeoCompositor stays as an experimental crate (candidate for the Android
+live-glass path, no product mounting). The Rust Headless host becomes the
+unified kernel-bearing backend for VPS and Desktop; Fastify/Drizzle keeps its
+ADR-0038 role and is deleted gradually after the functional migration.
+Supersedes ADR-0057's product-UI goal (Phases 3–4 void) and amends ADR-0058's
+end-state (the Web Client does not sunset "with the legacy contour";
+ADR-0056's supersession is void; the IR v1 schema remains the versioned
+plugin-UI contract for any future native surface). Full decision:
+[ADR-0059](0059-react-primary-pivot.md).
+
 ## ADR-0058: No-web end state — plugin UI is host-rendered IR; no browser engines in product clients
 
 **Accepted (owner direction, 2026-10-04 — "web не будет больше"; phased, no
-user-facing capability is removed before its replacement exists).** Native
-clients embed no browser engine: plugin UI renders only through declarative
-slots (ADR-0037) and the `PluginVisualSurface` IR pulled forward from
-ADR-0050 Milestone D into the ADR-0057 platform Phases 2–3 — plugins ship
-data and handlers, never markup, pixels or engines; token-only styling,
-INV-4 input, semantic-tree a11y, permission gates with crash isolation.
-SillyTavern web-extension compatibility is a property of the legacy/React
-contour, alive exactly as long as it, ending with a mandatory migration
-guide. The Remote Web Client (ADR-0043) sunsets as a product: remote access
-after the transition is a future native-client connection mode over
-remote-http (ADR-0030). Supersedes ADR-0054's WebSurface provision (ADR-0052's
-retain-WebSurface clause included). Full decision:
-[ADR-0058](0058-no-web-plugin-ir-platform.md); plugin UI surface spec:
-[native-presentation-platform.md](../architecture/native-presentation-platform.md)
-§11.
+user-facing capability is removed before its replacement exists); amended by
+ADR-0059 (2026-10-31).** Plugin UI renders as host-rendered data —
+declarative slots (ADR-0037) and the `PluginVisualSurface` IR schema v1
+(packages/plugin-sdk, security review in
+[visual-surface-ir.md](../plugin-sdk/visual-surface-ir.md)) — plugins ship
+data and handlers, never markup, pixels or engines; no plugin WebSurface in
+any native surface. The shipped plugin UI path is the React contour's slots +
+sandboxed iframe surface; host rendering of IR fragments binds to whatever
+native surface is actually built. Supersedes ADR-0054's WebSurface provision.
+Full decision:
+[ADR-0058](0058-no-web-plugin-ir-platform.md).
 
 ## ADR-0057: Native-first product UI — own retained-scene platform over mature primitives
 
-**Accepted (owner direction, 2026-10-04; phased with kill-gates).** The
-product UI is **native and only native**: the browser-form emulation
-(Dioxus/native-dom VDOM, blitz-dom + stylo cascade, hand-rolled CSS
-baking, four vendor patches) leaves the product path, replaced by an
-own retained-scene platform built over mature primitives (taffy, Parley,
-Vello/wgpu) and governed by seven non-negotiable invariants (single
-state truth, single geometry, single render path, single input model,
-single stream driver, bridges-only adapters, behavioral evidence against
-the real Kernel). React keeps only the transitional roles — legacy plane
-(ADR-0038) and design oracle — while the Web Client and plugin WebSurface
-roles are sunset by ADR-0058; it is no longer the product UI target.
-Dioxus/Blitz is feature-frozen and deleted only at the Phase-4 gate;
-ADR-0049-D2 and ADR-0056 are superseded there. Full decision:
-[ADR-0057](0057-native-first-own-scene-platform.md); normative platform
+**Superseded (product-UI goal) by ADR-0059 (2026-10-31)** — kept as the
+historical record of the native-platform program executed through Phase 2
+(platform core, chat-screen pilot on the real Kernel, panel migration, state
+contracts, audit classes UI-01..UI-08 closed; the Kernel-side data-integrity
+fixes landed and stay landed). The product UI is **not** native: React is the
+product UI target again, and the Dioxus/Blitz contour was removed at the
+pivot rather than at a Phase-4 gate. Historical decision:
+[ADR-0057](0057-native-first-own-scene-platform.md); superseded platform
 spec:
 [native-presentation-platform.md](../architecture/native-presentation-platform.md).
 
