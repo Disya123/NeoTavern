@@ -997,6 +997,9 @@ export const en = {
     refreshBackups: 'Refresh backups',
     restoreBackup: 'Restore backup',
     restoredReload: 'Backup restored. Reload the app to apply it.',
+    deleteBackup: 'Delete',
+    deleteBackupConfirm: 'Delete this backup permanently? It cannot be recovered afterwards.',
+    deleteBackupAria: 'Delete backup',
     diagnostics: 'Diagnostics and recovery',
     diagnosticsHint:
       'Check local health, export a redacted report, rebuild search or clear regenerable cache.',

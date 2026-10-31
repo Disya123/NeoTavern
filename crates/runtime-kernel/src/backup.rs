@@ -22,9 +22,9 @@
 //! entry. The restored root then serves the same kernel instance — no
 //! restart required for the `committed` outcome.
 
-use contracts_generated::generated::{self, BackupDto, ResultListBackups};
+use contracts_generated::generated::{self, BackupDto, ResultBackupsDelete, ResultListBackups};
 use neotavern_storage::backup::{
-    create_backup, list_backups, restore_backup, BACKUP_DIR_SUFFIX, MAX_BACKUPS,
+    create_backup, delete_backup, list_backups, restore_backup, BACKUP_DIR_SUFFIX, MAX_BACKUPS,
 };
 use neotavern_storage::open::Database;
 
@@ -197,6 +197,37 @@ pub(crate) fn backups_restore(
         )
     });
     (db, bytes)
+}
+
+/// `backups.delete` — deletes a backup container (M7 slice).
+///
+/// Idempotent: a missing container resolves `{ deleted: false }` (repeated
+/// deletes converge) — the wire contract models NOT_FOUND away. The backup
+/// id is schema-validated (UUID format) before storage sees it; storage
+/// re-validates as defense in depth against non-wire callers.
+pub(crate) fn backups_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let request = generated::decode_request_backups_delete(request)?;
+    let deleted = delete_backup(db.root(), &request.backup_id).map_err(map_storage_error)?;
+    let dto = ResultBackupsDelete { deleted };
+    let value = serde_json::to_value(&dto).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize backups.delete response: {err}"),
+        )
+    })?;
+    generated::validate_result_backups_delete(&value).map_err(|issues| KernelError {
+        code: KernelErrorCode::ContractViolation,
+        message: "kernel backups.delete response failed validation".to_string(),
+        issues,
+        params: Vec::new(),
+        product: None,
+    })?;
+    serde_json::to_vec(&value).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize backups.delete response: {err}"),
+        )
+    })
 }
 
 /// Maps a storage failure onto a kernel error. Quota exhaustion becomes the

@@ -526,6 +526,29 @@ pub fn restore_backup(container: &Path, root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Deletes a backup container (M7 slice: wire `backups.delete`).
+///
+/// Path-safety: the id must parse as a UUID (kernel-generated ids always
+/// are) — anything else is rejected before any filesystem path is built, so
+/// traversal can never reach outside the backups directory. Idempotent: a
+/// missing container returns `Ok(false)` (repeated deletes converge).
+/// Provisional (`.tmp-`-marked) and foreign directories are never touched:
+/// only the exact `<uuid><BACKUP_DIR_SUFFIX>` container is removed.
+pub fn delete_backup(root: &Path, backup_id: &str) -> Result<bool> {
+    if uuid::Uuid::parse_str(backup_id).is_err() {
+        return Err(StorageError::new(
+            StorageErrorCode::Corrupt,
+            "invalid backup id (must be a UUID) — refusing to build a filesystem path",
+        ));
+    }
+    let container = backups_dir(root).join(format!("{backup_id}{BACKUP_DIR_SUFFIX}"));
+    if !container.is_dir() {
+        return Ok(false);
+    }
+    fs::remove_dir_all(&container).map_err(|e| io_err(e, "delete backup container"))?;
+    Ok(true)
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------

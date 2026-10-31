@@ -32,6 +32,7 @@ import {
   type PromptPlanDto,
   type WireGenerationEvent,
   type BackupsRestoreResultDto,
+  type BackupsDeleteResultDto,
   type DataActivationStatusResultDto,
   type ListBackupsResultDto,
   type ListLorebookEntriesResultDto,
@@ -347,6 +348,8 @@ export class LocalBackend implements NeoBackend {
       list: () => this.invoke<ListBackupsResultDto>('backups.list', {}, undefined),
       restore: (backupId, opts) =>
         this.invoke<BackupsRestoreResultDto>('backups.restore', { backupId }, opts),
+      del: (backupId, opts) =>
+        this.invoke<BackupsDeleteResultDto>('backups.delete', { backupId }, opts),
     };
     this.data = {
       activationStatus: (opts) =>

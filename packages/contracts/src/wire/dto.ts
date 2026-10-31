@@ -1661,6 +1661,28 @@ export const BackupsRestoreResultDtoSchema = Type.Object(
 );
 export type BackupsRestoreResultDto = Static<typeof BackupsRestoreResultDtoSchema>;
 
+/** Delete-backup request DTO (`wire.request.backups-delete`). */
+export const BackupsDeleteRequestDtoSchema = Type.Object(
+  {
+    /** The id of an existing backup container (see `backups.list`). */
+    backupId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.backups-delete', additionalProperties: false },
+);
+export type BackupsDeleteRequestDto = Static<typeof BackupsDeleteRequestDtoSchema>;
+
+/** Delete-backup result DTO (`wire.result.backups-delete`).
+ *
+ * Idempotent: `deleted: false` means the container was already gone (the
+ * operation still succeeds — repeated deletes converge). */
+export const BackupsDeleteResultDtoSchema = Type.Object(
+  {
+    deleted: Type.Boolean(),
+  },
+  { $id: 'wire.result.backups-delete', additionalProperties: false },
+);
+export type BackupsDeleteResultDto = Static<typeof BackupsDeleteResultDtoSchema>;
+
 /** One durable activation-journal entry (ТЗ §10.3, `wire.data.activation-entry`).
  * Statuses mirror the storage journal: `prepared`, `validated`,
  * `activation_pending`, `committed`, `rolled_back`. Root references are
@@ -2701,6 +2723,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.empty': EmptyResultDtoSchema,
   'wire.request.backups-restore': BackupsRestoreRequestDtoSchema,
   'wire.result.backups-restore': BackupsRestoreResultDtoSchema,
+  'wire.request.backups-delete': BackupsDeleteRequestDtoSchema,
+  'wire.result.backups-delete': BackupsDeleteResultDtoSchema,
   'wire.result.list-backups': ListBackupsResultDtoSchema,
   'wire.data.activation-entry': DataActivationEntryDtoSchema,
   'wire.data.activation-pending': DataActivationPendingDtoSchema,

@@ -1344,6 +1344,44 @@ fn backups_create_and_list_over_http() {
     assert_eq!(items.len(), 1, "exactly one backup on a fresh root");
 }
 
+/// M7 follow-up: `backups.delete` over `/rpc` (host parity with the direct
+/// kernel path) — create, delete (200 ok `{ deleted: true }`), a follow-up
+/// list is empty, and the repeat delete converges to `{ deleted: false }`.
+#[test]
+fn backups_delete_over_http() {
+    let server = TestServer::spawn();
+
+    let create = envelope_body(&rid(1), "backups.create", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create);
+    assert_eq!(response.status, 200, "backups.create answers HTTP 200");
+    let (_, created) = expect_ok(decode_envelope(&response.body));
+    let id = created["id"].as_str().expect("created backup has an id").to_string();
+
+    let delete = envelope_body(&rid(2), "backups.delete", json!({ "backupId": id }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &delete);
+    assert_eq!(response.status, 200, "backups.delete answers HTTP 200");
+    let (request_id, result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(2), "requestId is echoed");
+    gen::validate_result_backups_delete(&result).expect("delete result is wire-valid");
+    assert_eq!(result["deleted"], json!(true));
+
+    let list = envelope_body(&rid(3), "backups.list", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200, "backups.list answers HTTP 200");
+    let (_, result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(
+        result["items"].as_array().expect("items array").len(),
+        0,
+        "the deleted container is gone"
+    );
+
+    let again = envelope_body(&rid(4), "backups.delete", json!({ "backupId": id }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &again);
+    assert_eq!(response.status, 200, "repeat delete answers HTTP 200");
+    let (_, result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(result["deleted"], json!(false), "idempotent convergence");
+}
+
 /// M5 slice 38: the durable activation status over the HTTP host (host
 /// parity with the direct kernel path, ТЗ §10.2–§10.3) — the response is
 /// wire-valid, reports the v1 flat layout on a fresh root and stays

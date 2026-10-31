@@ -1,4 +1,10 @@
-import { ArrowClockwise, Database, DownloadSimple, SlidersHorizontal } from '@phosphor-icons/react';
+import {
+  ArrowClockwise,
+  Database,
+  DownloadSimple,
+  SlidersHorizontal,
+  Trash,
+} from '@phosphor-icons/react';
 import { useState, type ChangeEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +15,7 @@ import {
   useActivateTheme,
   useBackups,
   useCreateBackup,
+  useDeleteBackup,
   useInstallTheme,
   useLogout,
   useResetTheme,
@@ -533,9 +540,14 @@ function DataTab() {
   const backupsQuery = useBackups();
   const createBackupMutation = useCreateBackup();
   const restoreBackupMutation = useRestoreBackup();
+  const deleteBackupMutation = useDeleteBackup();
   const backups = backupsQuery.data ?? null;
-  const busy = createBackupMutation.isPending || restoreBackupMutation.isPending;
-  const lastBackupError = createBackupMutation.error ?? restoreBackupMutation.error;
+  const busy =
+    createBackupMutation.isPending ||
+    restoreBackupMutation.isPending ||
+    deleteBackupMutation.isPending;
+  const lastBackupError =
+    createBackupMutation.error ?? restoreBackupMutation.error ?? deleteBackupMutation.error;
   const backupError = lastBackupError ? errorText(lastBackupError) : null;
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
   const dateFormatter = new Intl.DateTimeFormat(i18n.language, {
@@ -562,6 +574,11 @@ function DataTab() {
         if (result.restartRequired) setBackupMessage(t('settings:restoredReload'));
       })
       .catch(() => undefined);
+  };
+
+  const deleteBackup = (id: string): void => {
+    setBackupMessage(null);
+    void deleteBackupMutation.mutateAsync(id).catch(() => undefined);
   };
 
   return (
@@ -626,9 +643,28 @@ function DataTab() {
                       })}
                     </small>
                   </span>
-                  <Button size="sm" onClick={() => void restoreBackup(backup.id)} disabled={busy}>
-                    {t('settings:restoreBackup')}
-                  </Button>
+                  <ActionBarGroup placement="secondary">
+                    <Button size="sm" onClick={() => void restoreBackup(backup.id)} disabled={busy}>
+                      {t('settings:restoreBackup')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      startIcon={<Trash aria-hidden="true" />}
+                      onClick={() => {
+                        // Destructive: require an explicit confirmation
+                        // (the snapshot is unrecoverable once removed).
+                        if (window.confirm(t('settings:deleteBackupConfirm'))) {
+                          deleteBackup(backup.id);
+                        }
+                      }}
+                      disabled={busy}
+                      data-part="backup-delete"
+                      aria-label={t('settings:deleteBackupAria')}
+                    >
+                      {t('settings:deleteBackup')}
+                    </Button>
+                  </ActionBarGroup>
                 </li>
               ))}
             </ul>

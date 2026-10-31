@@ -255,6 +255,48 @@ fn list_ignores_provisional_and_foreign_dirs() -> TestResult {
     Ok(())
 }
 
+/// M7 follow-up (`backups.delete`): uuid-gated path safety, idempotent
+/// missing-container semantics, and foreign/provisional dirs untouched.
+#[test]
+fn delete_backup_is_uuid_gated_idempotent_and_scoped() -> TestResult {
+    use neotavern_storage::backup::delete_backup;
+
+    let dir = tempfile::tempdir()?;
+    let root = dir.path();
+    let record = seed_and_backup(root, "00000000-0000-4000-8000-0000000000aa");
+
+    // Foreign + provisional dirs must survive deletes.
+    let foreign = backups_dir(root).join("notes");
+    fs::create_dir_all(&foreign)?;
+    let tmp_dir = backups_dir(root).join("00000000-0000-4000-8000-0000000000bb.neotavern-backup.tmp-1");
+    fs::create_dir_all(&tmp_dir)?;
+
+    // Happy path: the container is removed, list no longer shows it.
+    let deleted = delete_backup(root, &record.id)?;
+    assert!(deleted, "existing container reports deleted: true");
+    assert!(
+        !list_backups(root)?.iter().any(|r| r.id == record.id),
+        "deleted container is gone from the listing"
+    );
+
+    // Idempotent: a missing container reports deleted: false.
+    let again = delete_backup(root, &record.id)?;
+    assert!(!again, "repeat delete converges to deleted: false");
+
+    // A non-uuid id is rejected BEFORE any filesystem path is built —
+    // including traversal shapes that would escape the backups dir.
+    for bad in ["../escape", "notes", "", "00000000-0000-4000-8000-0000000000aa/../../x"] {
+        assert!(
+            delete_backup(root, bad).is_err(),
+            "non-uuid id {bad:?} must be rejected"
+        );
+    }
+
+    assert!(foreign.is_dir(), "foreign dirs are never touched");
+    assert!(tmp_dir.is_dir(), "provisional dirs are never touched");
+    Ok(())
+}
+
 #[test]
 fn list_surfaces_a_container_missing_its_manifest() -> TestResult {
     let dir = tempfile::tempdir()?;

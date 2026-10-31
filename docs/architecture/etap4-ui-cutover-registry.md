@@ -40,11 +40,13 @@ shares the route; the shared route's last consumer owns its deletion.
 - **Registered legacy routes: 165** across 29 route families (25 modules;
   pluginJobs/pluginAuth/pluginData/pluginSecrets mount inside
   `registerPluginRoutes`, not from `app.ts`).
-- **Wire registry: 101 ops, 101/101 with kernel implementations** (98 unary
+- **Wire registry: 102 ops, 102/102 with kernel implementations** (99 unary
   dispatch arms + `generation.start`/`retry` streaming +
-  `backups.restore` staged).
+  `backups.restore` staged; the 2026-10-31 follow-up added
+  `backups.delete` — the backups cluster is now fully covered).
 - **Legacy-route coverage: 72 covered / 8 partial / 85 missing** (no wire op
-  at all).
+  at all; `backups.delete` closes its route into the covered set on the
+  next registry recount).
 - Kernel-mode gating in the UI is consistent: every legacy branch sits
   behind `isKernelMode()` — except the **plugin runtime/kernel host**
   (`plugins/runtime.ts`, `plugins/kernel/{blocks,chat,auth,jobs,models,

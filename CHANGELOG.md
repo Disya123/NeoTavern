@@ -4,6 +4,22 @@
 
 ### Added
 
+- **`backups.delete` wire op delivered (M7 follow-up; first Этап-4 wire-gap
+  slice).** The backups cluster is now fully covered on the kernel plane:
+  new op `backups.delete` (idempotent, request `{ backupId: uuid }`,
+  response `{ deleted: boolean }`) with kernel arm + storage
+  `delete_backup` (the id must parse as a UUID before any filesystem path
+  is built — traversal can never escape the backups dir; provisional and
+  foreign directories are never touched; a missing container converges to
+  `deleted: false`). The React Settings → Data panel gained a Delete
+  action per backup with an explicit confirmation on both planes (legacy
+  DELETE endpoint translated in the typed facade; legacy 404 maps to
+  `deleted: false`). Tests: contracts fixtures + op-count 102,
+  kernel dispatch (round trip, idempotence, non-uuid rejection,
+  stateless rejection), storage (uuid gate, idempotence, scoping),
+  web hooks (kernel wire call, legacy endpoint). Secret-store 21/21 and
+  headless 25/25 unaffected.
+
 - **`secrets.enc` v1→v2 converter delivered (ADR-0040 §3; SEC-01).** New
   `secret_store::migrate`: `read_v1_records` (decrypted legacy records for
   migration reports) and `convert_v1_file` (legacy scrypt v1 file →

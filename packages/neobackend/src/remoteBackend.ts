@@ -22,6 +22,7 @@ import type {
   PromptPlanDto,
   WireGenerationEvent,
   BackupsRestoreResultDto,
+  BackupsDeleteResultDto,
   DataActivationStatusResultDto,
   ListBackupsResultDto,
   ListLorebookEntriesResultDto,
@@ -218,6 +219,12 @@ export class RemoteBackend implements NeoBackend {
     restore: (backupId, opts) =>
       this.sdk.call<BackupsRestoreResultDto>(
         'backups.restore',
+        { backupId },
+        { signal: opts?.signal },
+      ),
+    del: (backupId, opts) =>
+      this.sdk.call<BackupsDeleteResultDto>(
+        'backups.delete',
         { backupId },
         { signal: opts?.signal },
       ),

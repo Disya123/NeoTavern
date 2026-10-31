@@ -133,7 +133,12 @@ fn second_backup_create_ok_and_list_returns_both() {
 fn stateless_kernel_rejects_backup_ops_with_storage_failure() {
     let kernel = open_stateless_kernel();
 
-    for op in ["backups.create", "backups.list", "backups.restore"] {
+    for op in [
+        "backups.create",
+        "backups.list",
+        "backups.restore",
+        "backups.delete",
+    ] {
         let err = dispatch_json(
             &kernel,
             op,
@@ -250,6 +255,54 @@ fn backups_restore_rejects_non_uuid_id_before_work() {
     let kernel = open_kernel_with_root(root.path());
 
     let err = dispatch_json(&kernel, "backups.restore", json!({ "backupId": "nope" }))
+        .expect_err("non-uuid id must fail");
+    assert_eq!(err.code, KernelErrorCode::ContractViolation);
+}
+
+/// M7 follow-up: `backups.delete` round trip over the wire surface — create,
+/// delete (container gone, list empty), delete again (idempotent
+/// `deleted: false`).
+#[test]
+fn backups_delete_round_trip_and_idempotence() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    dispatch_json(&kernel, "characters.create", json!({ "name": "Aria" }))
+        .expect("character create must succeed");
+    let created =
+        dispatch_json(&kernel, "backups.create", json!({})).expect("backups.create must succeed");
+    let backup_id = created["id"].as_str().expect("backup id").to_string();
+
+    // Delete: container removed, `{ deleted: true }`.
+    let deleted =
+        dispatch_json(&kernel, "backups.delete", json!({ "backupId": backup_id }))
+            .expect("backups.delete must succeed");
+    assert_eq!(deleted["deleted"], json!(true));
+
+    let listed =
+        dispatch_json(&kernel, "backups.list", json!({})).expect("backups.list must succeed");
+    assert_eq!(
+        listed["items"].as_array().unwrap().len(),
+        0,
+        "the deleted container is gone from the listing"
+    );
+
+    // Delete again: idempotent convergence — `{ deleted: false }`, still
+    // success.
+    let again =
+        dispatch_json(&kernel, "backups.delete", json!({ "backupId": backup_id }))
+            .expect("repeat delete must succeed");
+    assert_eq!(again["deleted"], json!(false));
+}
+
+/// M7 follow-up: a non-uuid backupId is a contract violation rejected before
+/// any filesystem path is built (mirrors the restore gate).
+#[test]
+fn backups_delete_rejects_non_uuid_id_before_work() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    let err = dispatch_json(&kernel, "backups.delete", json!({ "backupId": "../escape" }))
         .expect_err("non-uuid id must fail");
     assert_eq!(err.code, KernelErrorCode::ContractViolation);
 }

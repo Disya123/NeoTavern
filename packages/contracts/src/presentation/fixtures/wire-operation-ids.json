@@ -5,6 +5,7 @@
   "assets.put",
   "assets.thumb",
   "backups.create",
+  "backups.delete",
   "backups.list",
   "backups.restore",
   "characters.card.get",

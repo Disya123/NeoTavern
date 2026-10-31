@@ -3,15 +3,15 @@
   "capabilities": [
     {
       "id": "backups",
-      "title": "Backup create/list/restore",
-      "wireOps": ["backups.create", "backups.list", "backups.restore"],
+      "title": "Backup create/list/restore/delete",
+      "wireOps": ["backups.create", "backups.list", "backups.restore", "backups.delete"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "Backup containers (manifest, checksums, atomic publish); staged restore + activation journal (M3) now reachable end-to-end over the wire (M5 slice 39): backups.restore runs the offline staged restore + activation protocol inside the kernel writer (database closed + lease released, candidate verified/staged/finalized, pending-marker swap with previous-root retention, database re-opened on the active root) and records the durable journal entry; the same kernel keeps serving, restartRequired only when the swap must finish at next open.",
+      "notes": "Backup containers (manifest, checksums, atomic publish); staged restore + activation journal (M3) now reachable end-to-end over the wire (M5 slice 39): backups.restore runs the offline staged restore + activation protocol inside the kernel writer (database closed + lease released, candidate verified/staged/finalized, pending-marker swap with previous-root retention, database re-opened on the active root) and records the durable journal entry; the same kernel keeps serving, restartRequired only when the swap must finish at next open. backups.delete (2026-10-31 M7 follow-up): idempotent uuid-gated container removal — the id must parse as a UUID before any filesystem path is built, provisional/foreign dirs are never touched, a missing container converges to { deleted: false }; Settings → Data exposes Delete on both planes (legacy DELETE endpoint translated in the facade).",
       "milestone": "M3"
     },
     {

@@ -70,6 +70,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "backups.create" => Some(1024),
         "backups.list" => Some(1024),
         "backups.restore" => Some(1024),
+        "backups.delete" => Some(1024),
         "data.activation.status" => Some(1024),
         "profile.export" => Some(4096),
         "profile.import" => Some(4096),
@@ -179,6 +180,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "backups.create" => Some(262144),
         "backups.list" => Some(262144),
         "backups.restore" => Some(1024),
+        "backups.delete" => Some(1024),
         "data.activation.status" => Some(262144),
         "profile.export" => Some(262144),
         "profile.import" => Some(262144),
@@ -13951,6 +13953,93 @@ pub fn validate_result_backups_restore(value: &Value) -> Result<(), Vec<Issue>> 
 
 pub fn decode_result_backups_restore(bytes: &[u8]) -> Result<ResultBackupsRestore, WireError> {
     crate::decode::<ResultBackupsRestore>(validate_result_backups_restore, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestBackupsDelete {
+    #[serde(rename = "backupId")]
+    pub backup_id: String,
+}
+
+pub(crate) fn check_request_backups_delete(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("backupId").is_none() {
+            issues.push(Issue::new(join_path(path, "backupId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("backupId") {
+            let child_path = join_path(path, "backupId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "backupId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_backups_delete(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_backups_delete(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_backups_delete(bytes: &[u8]) -> Result<RequestBackupsDelete, WireError> {
+    crate::decode::<RequestBackupsDelete>(validate_request_backups_delete, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultBackupsDelete {
+    pub deleted: bool,
+}
+
+pub(crate) fn check_result_backups_delete(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("deleted").is_none() {
+            issues.push(Issue::new(join_path(path, "deleted"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("deleted") {
+            let child_path = join_path(path, "deleted");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "deleted") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_backups_delete(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_backups_delete(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_backups_delete(bytes: &[u8]) -> Result<ResultBackupsDelete, WireError> {
+    crate::decode::<ResultBackupsDelete>(validate_result_backups_delete, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -53,6 +53,7 @@ import type {
   PromptPlanDto,
   WireGenerationEvent,
   BackupsRestoreResultDto,
+  BackupsDeleteResultDto,
   DataActivationStatusResultDto,
   ListBackupsResultDto,
   ListCharactersRequestDto,
@@ -301,6 +302,9 @@ export interface BackupsApi {
    * the activation completed in this call; `{ status: 'activation_pending' }`
    * means the swap must be finished by a restart. */
   restore(backupId: string, opts?: BackendCallOptions): Promise<BackupsRestoreResultDto>;
+  /** Delete a backup container (wire `backups.delete`; idempotent —
+   * `deleted: false` means it was already gone). */
+  del(backupId: string, opts?: BackendCallOptions): Promise<BackupsDeleteResultDto>;
 }
 
 /** Data lifecycle operations (ТЗ §10.2–§10.3, wire `data.*`). */

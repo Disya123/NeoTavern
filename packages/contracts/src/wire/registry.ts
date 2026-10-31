@@ -1043,6 +1043,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'backups.delete',
+    'transactional',
+    'idempotent',
+    'none',
+    'app.write',
+    'wire.request.backups-delete',
+    'wire.result.backups-delete',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    1024,
+    undefined,
+  ),
+  op(
     'data.activation.status',
     'transactional',
     'idempotent',
@@ -2443,6 +2457,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-create-request', 'backups.create', 'request', true, {}),
   fx('backups-list-request', 'backups.list', 'request', true, {}),
   fx('backups-restore-request', 'backups.restore', 'request', true, { backupId: UUID_BACKUP }),
+  fx('backups-delete-request', 'backups.delete', 'request', true, { backupId: UUID_BACKUP }),
   fx('data-activation-status-request', 'data.activation.status', 'request', true, {}),
   fx('lorebooks-list-request', 'lorebooks.list', 'request', true, { characterId: UUID_CHARACTER }),
   fx('presets-list-request', 'presets.list', 'request', true, { kind: 'generation' }),
@@ -2717,6 +2732,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
   fx('backups-restore-response', 'backups.restore', 'response', true, RESTORE_VALUE),
+  fx('backups-delete-response', 'backups.delete', 'response', true, { deleted: true }),
   fx('data-activation-status-response', 'data.activation.status', 'response', true, {
     ...ACTIVATION_STATUS_VALUE,
     pending: undefined,
@@ -3050,6 +3066,12 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-backup-bad-checksum', 'backups.create', 'response', false, {
     ...BACKUP_VALUE,
     checksumSha256: 'xyz',
+  }),
+  fx('neg-backup-delete-bad-result', 'backups.delete', 'response', false, {
+    deleted: 'yes',
+  }),
+  fx('neg-backup-delete-bad-request', 'backups.delete', 'request', false, {
+    backupId: 'not-a-uuid',
   }),
   fx('neg-profile-export-bad-counts', 'profile.export', 'response', false, {
     ...PROFILE_EXPORT_VALUE,

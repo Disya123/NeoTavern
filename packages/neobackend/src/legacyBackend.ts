@@ -21,6 +21,7 @@ import {
   type PresetDto,
   type ProductErrorDto,
   type BackupsRestoreResultDto,
+  type BackupsDeleteResultDto,
   type ListCharactersRequestDto,
   type CharacterDto,
   type UpdateMemoryRequestDto,
@@ -219,6 +220,7 @@ export class LegacyBackend implements NeoBackend {
     create: () => this.unsupported('backups.create'),
     list: () => this.unsupported('backups.list'),
     restore: (backupId) => this.restoreBackup(backupId),
+    del: (backupId) => this.deleteBackup(backupId),
   };
 
   readonly data: DataApi = {
@@ -493,6 +495,48 @@ export class LegacyBackend implements NeoBackend {
     }
     const restartRequired = isRecord(body) && body['restartRequired'] === true;
     return { status: restartRequired ? 'activation_pending' : 'committed' };
+  }
+
+  /**
+   * `backups.delete` on the legacy plane: translates to the legacy sidecar
+   * endpoint (`DELETE /backups/{id}`). The sidecar answers `{ deleted }` on
+   * success and 404 NOT_FOUND for an already-gone container — mapped onto
+   * the same idempotent `{ deleted: boolean }` result as the wire op. This
+   * is a pure boundary translation of an existing user-facing capability —
+   * it adds no authority (ARC-11).
+   */
+  private async deleteBackup(backupId: string): Promise<BackupsDeleteResultDto> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}/backups/${encodeURIComponent(backupId)}`, {
+        method: 'DELETE',
+        headers: { accept: 'application/json' },
+      });
+    } catch (cause) {
+      throw new Error(
+        `Legacy backend request to /backups/${backupId} (delete) failed`,
+        cause instanceof Error ? { cause } : undefined,
+      );
+    }
+    if (response.status === 404) {
+      return { deleted: false };
+    }
+    if (!response.ok) {
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        body = undefined;
+      }
+      throw this.mapError(body, response.status);
+    }
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      body = undefined;
+    }
+    return { deleted: isRecord(body) ? body['deleted'] === true : true };
   }
 
   private mapError(body: unknown, status: number): Error {

@@ -691,6 +691,8 @@ fn handle_unary(
         // Phase 11 portable data (ТЗ §40–§41): backup containers.
         "backups.create" => with_db_opt(db, |db| backup::backups_create(db, req)),
         "backups.list" => with_db_opt(db, |db| backup::backups_list(db, req)),
+        // M7 follow-up: backups.delete (idempotent container removal).
+        "backups.delete" => with_db_opt(db, |db| backup::backups_delete(db, req)),
         // Data lifecycle (ТЗ §10.2–§10.3): durable activation status.
         "data.activation.status" => with_db_opt(db, |db| data::data_activation_status(db, req)),
         // Phase 11 / SEC-02: logical allowlist profile export.

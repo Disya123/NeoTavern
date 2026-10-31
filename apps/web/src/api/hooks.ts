@@ -1191,6 +1191,27 @@ export function useRestoreBackup() {
 }
 
 /**
+ * Deletes a backup container (M7 follow-up, wire `backups.delete`).
+ * Idempotent: `deleted: false` means the container was already gone.
+ * Legacy plane: the sidecar DELETE endpoint, mapped to the same result
+ * shape.
+ */
+export function useDeleteBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (isKernelMode()) {
+        const result = await backend.backups.del(id);
+        return { deleted: result.deleted };
+      }
+      const result = await api.del<{ deleted: boolean }>(`/backups/${encodeURIComponent(id)}`);
+      return { deleted: result.deleted };
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['backups'] }),
+  });
+}
+
+/**
  * Durable data-root activation status (ТЗ §10.2–§10.3, М5 slice 38). Kernel
  * plane: wire `data.activation.status` (read-only). Legacy plane: the
  * sidecar has no activation journal — honest `UnsupportedError` resolves to

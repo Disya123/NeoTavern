@@ -14,6 +14,7 @@ import {
   useClearDiagnosticCache,
   useCreateBackup,
   useDeleteBackground,
+  useDeleteBackup,
   useDeleteCharacter,
   useDeleteCharacterImage,
   useDiagnostics,
@@ -243,6 +244,30 @@ describe('backups hooks (kernel-plane honesty, slice 19)', () => {
     expect(result.current.data).toEqual({ restartRequired: true });
     restoreSpy.mockRestore();
     mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useDeleteBackup deletes via the wire op on the kernel plane without a network call', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const deleteSpy = vi.spyOn(backend.backups, 'del').mockResolvedValue({ deleted: true });
+    const { result } = renderHook(() => useDeleteBackup(), { wrapper: wrapperFor(queryClient) });
+    act(() => result.current.mutate('b1'));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ deleted: true });
+    expect(deleteSpy).toHaveBeenCalledWith('b1');
+    expect(fetchMock).not.toHaveBeenCalled();
+    deleteSpy.mockRestore();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useDeleteBackup uses the legacy DELETE endpoint on the legacy plane', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ deleted: true }));
+    const { result } = renderHook(() => useDeleteBackup(), { wrapper: wrapperFor(queryClient) });
+    act(() => result.current.mutate('b1'));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ deleted: true });
+    const [url, init] = fetchMock.mock.calls[0] as [string, { method?: string }];
+    expect(url).toBe('/api/v2/backups/b1');
+    expect(init.method).toBe('DELETE');
   });
 });
 
