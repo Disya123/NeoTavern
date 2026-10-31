@@ -46,5 +46,12 @@ cargo fmt --manifest-path crates/Cargo.toml -p secret-store -- --check
   metadata only and is the only diagnostics surface.
 - A legacy v1 (scrypt) file is rejected with an explicit
   `SECRET_STORE_CORRUPT` message until the Этап 3 converter lands.
-- OS-vault (Desktop), Keystore (Android) and headless file adapters are
-  separate adapter slices wired into the kernel composition root.
+- The OS-vault backend lives in this crate (`os_vault.rs`, feature
+  `os-vault`) and is wired as the desktop installed-mode default since
+  M5 slice 58 (`NEOTA_SECRET_BACKEND=session|osvault` overrides). Not yet
+  wired anywhere: portable `secrets.enc` host wiring (no host opens the
+  file today — the passphrase create/open is crate-complete only), the
+  Android Keystore→kernel-port bridge (the Kotlin store exists in
+  `apps/android`, unwired), and the headless resolver (the store is wired,
+  `set_secret_resolver` is not). These are pre-Stable engineering tails
+  (ТЗ §SEC-01.1), tracked outside the milestone gates.

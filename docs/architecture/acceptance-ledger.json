@@ -1525,11 +1525,13 @@
       "blockingIssues": [
         "P1 (OPEN): delete Drizzle product schema and the legacy writer",
         "P1 (OPEN): delete temporary migration branches and legacyRaw()",
-        "P1 (OPEN): keep a documented versioned ST Compatibility API if still needed; delete only migration shims",
         "P1 (OPEN): recovery drills and performance tuning",
         "P1 (OPEN): platform signing, SBOM and provenance",
         "P1 (OPEN): at least two real upgrade cycles before Stable",
         "P1 (OPEN): exit — one core, one schema, one UI facade, no expired architecture waivers"
+      ],
+      "resolvedIssues": [
+        "ST Compatibility API decision — RESOLVED 2026-10-31 by owner decision (commit 8d3faa6, ADR-0059 Amendment 1: «SillyTavern-плагины… думать о них не стоит»): the compatibility layer was removed outright — Express compat host, legacy.js loader, window.* globals/DOM islands (packages/legacy-compat), the legacy manifest block and the legacy.trusted permission — with no migration guide and no versioned ST Compatibility API retained (ADR-0039 marked obsolete; its authority-non-expanding rule stays normative). \"if still needed\" → not needed. SillyTavern DATA import (cards/chats/backups) stays for the lifetime of the migration contour; the migration-shim/legacyRaw deletion itself remains the separate open blocker above."
       ],
       "waivers": []
     }

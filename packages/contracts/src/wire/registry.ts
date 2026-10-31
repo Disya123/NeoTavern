@@ -2,7 +2,8 @@
  * Wire operation registry: operation metadata, the fixture corpus and the
  * `compileWireContract` validator that every schema/operation/fixture must
  * pass. `buildProductWireRegistry()` produces the canonical product registry
- * (21 operations) that codegen, the Rust kernel and the facades consume.
+ * (currently 101 operations) that codegen, the Rust kernel and the facades
+ * consume.
  */
 import { type TSchema } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
@@ -275,7 +276,7 @@ export function compileWireContract(
 }
 
 // ---------------------------------------------------------------------------
-// Product wire registry (Phase 0): the canonical 21-operation table.
+// Product wire registry (Phase 0): the canonical product operation table.
 // ---------------------------------------------------------------------------
 
 function op(
@@ -3148,8 +3149,9 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
 const WIRE_SCHEMA_MAP: ReadonlyMap<string, TSchema> = new Map(Object.entries(WIRE_SCHEMAS));
 
 /**
- * Builds the canonical product wire registry: compiles the 21 operations and
- * the fixture corpus against `WIRE_SCHEMAS` (registering the wire formats
+ * Builds the canonical product wire registry: compiles the registered
+ * operations and the fixture corpus against `WIRE_SCHEMAS` (registering the
+ * wire formats
  * first). Throws `ContractCompileError` on any violation — a broken registry
  * is a build-time failure, never a runtime surprise.
  */

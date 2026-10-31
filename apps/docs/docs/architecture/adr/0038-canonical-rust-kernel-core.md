@@ -4,14 +4,16 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/0038-canonical
 
 # ADR-0038: Canonical Rust Kernel Core — Architecture Convergence decision
 
-Date: 2026-08-13. Status: Accepted — **Milestone 1a / Wave 0 (Governance)**
-accepted 2026-08-13; **Milestone 1 / Wave 1 (Immediate security) remains
-open** (SEC-01 kernel-plane slices — OS vault / Keystore adapters and the
-portable passphrase UX — plus the final regression sweep; the legacy-contour
-SecretStore hardening and the kernel SecretStore port with the canonical
-portable format are delivered, see CHANGELOG and ADR-0040 — tracked in
-[release-manifest.json](https://github.com/Disya123/NeoTavern/blob/main/docs/release-manifest.json) and
-`docs/architecture/exceptions.json`).
+Date: 2026-08-13. Status: Accepted — program status per
+[acceptance-ledger.json](https://github.com/Disya123/NeoTavern/blob/main/docs/architecture/acceptance-ledger.json):
+**M0–M6 accepted** (M1-security at commit `e17b58c`, 2026-08-14;
+M6-etap5-headless at `f5c37ea`), **M7-etap6-legacy-removal in progress**.
+The former "M1 remains open" note here was stale prose: of its named tails
+the OS-vault adapter landed with M5 slice 58 (`180036b`, desktop
+installed-mode default); what genuinely remains are non-gate engineering
+tails tracked before Stable (ТЗ §SEC-01.1): portable `secrets.enc` host
+wiring + passphrase UX, the Android Keystore→kernel-port bridge, the
+v1→v2 scrypt converter (ADR-0040 §3) and a named regression sweep.
 Related documents: [Target architecture ТЗ 10/10 rev2](https://github.com/Disya123/NeoTavern/blob/main/NeoTavern_architecture_10_of_10_spec_2026-08-13.md),
 [Architecture](../architecture/README.md), [Wire contracts](../architecture/wire-contracts.md),
 [ADR-0029](0029-wire-contract-toolchain.md), [ADR-0033](0033-desktop-local-kernel-transport.md),
@@ -113,17 +115,16 @@ before any migration work can be declared.
     governance tooling (capability matrix ARC-10, exceptions registry ARC-09,
     legacy-surface gate ARC-02/03), the honest staged Desktop default in code
     and the single docs source tree;
-  - **M1 / Wave 1 — Immediate security** (OPEN — SEC-01 SecretStore
-    hardening delivered: legacy contour in Wave 1 plus the kernel-plane port
-    `crates/secret-store` with the canonical portable v2 format, ADR-0040;
-    OS-vault / Keystore adapters and the portable UX remain): SEC-02
-    legacy allowlist export (replacing the full-DB snapshot — delivered in
-    Wave 1, see CHANGELOG), plugin networking (SSRF policy + bounded streaming
-    hardening delivered in Wave 1) and package verification (publisher
-    signature/digest verification + trust states delivered in Wave 1, see
-    CHANGELOG); M1 is NOT closed until the remaining SEC-01 kernel-plane
-    slices (OS vault / Keystore adapters, portable UX) and the regression
-    sweep land;
+  - **M1 / Wave 1 — Immediate security** (ACCEPTED 2026-08-14 at `e17b58c`,
+    ledger): SEC-02 legacy allowlist export, plugin networking (SSRF policy +
+    bounded streaming) and package verification (publisher signature/digest +
+    trust states) delivered in Wave 1; the kernel-plane SecretStore port
+    `crates/secret-store` with the canonical portable v2 format (ADR-0040)
+    delivered; the OS-vault adapter landed with M5 slice 58 (desktop
+    installed-mode default). Remaining pre-Stable engineering tails, tracked
+    outside the milestone gates (ТЗ §SEC-01.1): portable `secrets.enc` host
+    wiring + passphrase UX, the Android Keystore→kernel-port bridge, the
+    v1→v2 scrypt converter (ADR-0040 §3);
   - **M2 — Kernel Golden Foundation**, **M3 — Data Convergence**,
     **M4 — Product Convergence** (GEN-RUN 10C/10D).
     This ADR is the M1a/Wave-0 governance decision.

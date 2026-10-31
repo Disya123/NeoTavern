@@ -170,7 +170,7 @@
     {
       "source": "adr/0038-canonical-rust-kernel-core.md",
       "target": "adr/0038-canonical-rust-kernel-core.md",
-      "sha256": "098acfc420099f1bdfa70f3cee93e9e9b938691a54297543bdaa106fa2462ba6"
+      "sha256": "f3b7a4220ee54b33c003a09fe008ffab632fb8e7dacbab748e5e76dfb5404ef1"
     },
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
@@ -295,12 +295,17 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "42141ec18da25a45b64d5a6f6b568ea16d0a282e93763d6d82b091ff37fc01bf"
+      "sha256": "c13e54a4c36306caa8886b774fdae33bedd70c703471ff3151dfeff0f4b45d37"
     },
     {
       "source": "architecture/benchmarks.md",
       "target": "architecture/benchmarks.md",
       "sha256": "4b59e547d5ac48948f8f76c97cd24f536ae8f4cdde766d801f232b578026b7d9"
+    },
+    {
+      "source": "architecture/etap4-ui-cutover-registry.md",
+      "target": "architecture/etap4-ui-cutover-registry.md",
+      "sha256": "806a45fbfd1f08268005822727145666d98325d9a55f6d56f92ee3c7422cb402"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -325,7 +330,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "8280943d5a2f196fbe3d1ac13e5e4235172c0441b42975a63089c17afaf7f657"
+      "sha256": "eb35f763c5b169a4a34d27e5e21afa47a9e4de5b7e21e97f0fb7e1dfb002baf4"
     },
     {
       "source": "architecture/portable-data.md",
@@ -400,12 +405,12 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "95b4708928d1f0194bd2afd9870d4bc8254e6b14f10730fbadd91e9c079caba2"
+      "sha256": "c9055bdd36d3c73ae8284e931e798e2dc043d5ee9d8274bd6916064a893b935e"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "c618dd2c1a57a6f34ecbeb0ae8a8312039ddf4667dc18a9195d94a1531987d50"
+      "sha256": "69e82598fe2ade35d7e9ecca26986c693ca37e2cda58e0a0465a80f788c878b4"
     },
     {
       "source": "desktop/README.md",

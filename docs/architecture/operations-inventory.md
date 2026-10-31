@@ -189,6 +189,8 @@ Chats:
 - `POST /api/v2/chats/:id/restore` — restore.
 - `GET /api/v2/chats/:id/branches` — list branches.
 - `GET /api/v2/chats/:id/export` — chat export.
+- `PUT /api/v2/chats/order` — persist the manual chat order
+  (`ChatReorderSchema`; the drag-and-drop order used by `sort=manual`).
 
 Messages:
 
@@ -417,6 +419,17 @@ SillyTavern full-backup transfer (two-phase):
 - `POST /api/v2/plugins/:id/jobs/:jobId/retry` — retry.
 - `POST /api/v2/plugins/:id/jobs/:jobId/cancel` — cancel.
 - `DELETE /api/v2/plugins/:id/jobs/:jobId` — delete.
+
+### pluginSecrets — `apps/server/src/plugins/pluginSecrets.ts`
+
+(Mounted inside `registerPluginRoutes`, like pluginAuth/pluginData/pluginJobs.)
+
+- `PUT /api/v2/plugins/:id/secrets/:key` — store a plugin secret
+  (SecretStore reference, value never persisted in app.db).
+- `GET /api/v2/plugins/:id/secrets` — masked secret list.
+- `DELETE /api/v2/plugins/:id/secrets/:key` — delete a secret.
+- `POST /api/v2/plugins/:id/secrets/:key/reveal` — reveal once
+  (consent-gated; the value is returned in the response body by design).
 
 ### remoteAuth — `apps/server/src/plugins/remoteAuth.ts`
 

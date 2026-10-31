@@ -94,8 +94,11 @@ backends (there is no silent plaintext fallback):
 The canonical kernel-plane port (`crates/secret-store`, ADR-0040) implements
 the same invariants with the **v2** portable format — AES-256-GCM + Argon2id
 (m=64 MiB / t=3 / p=1), authenticated header, staged re-encryption, atomic
-writes — plus session/env/unavailable backends. Full OS-vault / Android
-Keystore adapters and the passphrase UX belong to the kernel-plane M3 slice.
+writes — plus session/env/unavailable backends and the OS-vault adapter
+(desktop installed-mode default, M5 slice 58). Still unwired (pre-Stable
+tails, ТЗ §SEC-01.1): no host opens portable `secrets.enc` (passphrase
+create/open is crate-complete only), the Android Keystore→kernel bridge,
+the v1→v2 scrypt converter (ADR-0040 §3).
 
 ## FTS5
 

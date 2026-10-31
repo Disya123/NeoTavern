@@ -27,8 +27,14 @@
 > regression/security tests and capability rows in
 > [release-manifest.json](../release-manifest.json). The kernel-plane
 > SecretStore port (crates/secret-store, ADR-0040) is delivered with the
-> canonical portable v2 format (Argon2id + AES-256-GCM). Remaining Wave 1
-> work: OS-vault / Keystore adapters and the portable passphrase UX (M3).
+> canonical portable v2 format (Argon2id + AES-256-GCM); the OS-vault
+> adapter (Windows Credential Manager / macOS Keychain / Linux
+> secret-service) is the desktop installed-mode default since M5 slice 58.
+> Remaining pre-Stable engineering tails (ТЗ §SEC-01.1, non-gate): portable
+> `secrets.enc` host wiring + passphrase UX, the Android Keystore→kernel
+> bridge, and the v1→v2 scrypt converter (ADR-0040 §3). Program state:
+> [acceptance-ledger.json](acceptance-ledger.json) — M0–M6 accepted,
+> M7-etap6-legacy-removal in progress.
 
 The section below describes the current (pre-cutover) layout. Product logic
 migrates into the Kernel over the program milestones; new product logic is
@@ -242,6 +248,9 @@ gate passes.
 
 - [Operations inventory](operations-inventory.md) — current `/api/v2` surface
   and the feature → writer ownership/routing table.
+- [Этап-4 UI cutover registry](etap4-ui-cutover-registry.md) — working
+  checklist of the vertical slices that move the React UI off `/api/v2`
+  onto the Product Wire plane (ADR-0038 Этап 4), one slice per commit.
 - [Product Wire Contracts](wire-contracts.md) — canonical TypeBox contracts,
   wire-safe rules, handshake, versioning, deterministic codegen and the
   cross-language corpus.
