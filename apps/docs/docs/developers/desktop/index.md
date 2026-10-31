@@ -65,7 +65,7 @@ exiting does not change your selection.
 ## Plugin Runtime Availability
 
 The plugin runtime (sandboxed backend workers, the capability broker,
-frontend registrars, the legacy frontend gate) is a **server** feature: it
+frontend registrars) is a **server** feature: it
 exists only where a backend process runs.
 
 - **Kernel mode** — unavailable by design: the Runtime Kernel is embedded in
@@ -75,8 +75,7 @@ exists only where a backend process runs.
   sidecar runs the full Fastify backend, including the plugin runtime and
   the server-side safe-mode switch above.
 
-Which extension surfaces the web UI exposes (and the legacy frontend gate)
-is documented in the [Frontend Plugin API](../plugin-sdk/frontend.md)
+Which extension surfaces the web UI exposes is documented in the [Frontend Plugin API](../plugin-sdk/frontend.md)
 availability note.
 
 ## Data Location

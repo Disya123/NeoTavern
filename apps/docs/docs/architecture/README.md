@@ -12,7 +12,8 @@ Index of the internal documentation. Each major topic has its own folder.
 > [ADR-0038](adr/0038-canonical-rust-kernel-core.md) (canonical Rust Kernel;
 > Fastify/Drizzle is the legacy/migration contour) and
 > [ADR-0039](adr/0039-legacy-compatibility-authority-boundary.md) (authority
-> boundary). Capability and host statuses are tracked in the generated
+> boundary; ST plugin compat removed 2026-10-31, see
+> [ADR-0059](adr/0059-react-primary-pivot.md)). Capability and host statuses are tracked in the generated
 > [capability matrix](capability-matrix.md) (ARC-10).
 >
 > **Single source tree.** This `docs/` directory is the canonical

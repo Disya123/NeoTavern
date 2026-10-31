@@ -173,7 +173,9 @@ describe('manifest validation', () => {
     expect(validateManifest({ ...base, i18n: { english: 'en.json' } }).ok).toBe(false);
   });
 
-  it('requires explicit trusted consent for legacy entry points', () => {
+  it('rejects the removed legacy entry-point block', () => {
+    // ST-era compat entries were removed by owner decision (ADR-0059 slice);
+    // a manifest carrying them must fail validation instead of loading.
     const base = {
       id: 'author.legacy',
       name: 'Legacy extension',
@@ -182,18 +184,7 @@ describe('manifest validation', () => {
       legacy: { frontend: 'legacy/index.js', backend: 'legacy/server.mjs' },
     };
     expect(validateManifest(base).ok).toBe(false);
-    const result = validateManifest({ ...base, permissions: ['legacy.trusted'] });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.legacy).toEqual(base.legacy);
-    }
-    expect(
-      validateManifest({
-        ...base,
-        permissions: ['legacy.trusted'],
-        legacy: { frontend: '../outside.js' },
-      }).ok,
-    ).toBe(false);
+    expect(validateManifest({ ...base, permissions: ['chat.read'] }).ok).toBe(false);
   });
 
   it('validates authClients endpoints and entries', () => {

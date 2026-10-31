@@ -14,7 +14,7 @@ NeoTavern 是一个本地优先的应用：一个 Fastify 进程同时服务 API
 
 ```text
 apps/
-  server/          # Fastify 后端：API、提示词管线、SSE、旧版主机
+  server/          # Fastify 后端：API、提示词管线、SSE
   web/             # React SPA
   plugin-runtime/  # 面向后端插件的受限 Node.js 进程
   desktop/         # Tauri 2 外壳；把服务器作为 sidecar 进程运行
@@ -27,7 +27,6 @@ packages/
   plugin-sdk/    # 插件清单、权限和 API 契约
   theme-sdk/     # 主题令牌、层级和继承
   provider-sdk/  # 提供商适配器契约和适配器
-  legacy-compat/ # 窗口全局对象和 DOM 兼容孤岛
   gestures/      # 框架无关的行手势
   plugin-build/  # 插件构建和发布管线
 ```
@@ -35,8 +34,7 @@ packages/
 ## 应用
 
 - `apps/server` —— Fastify 后端。它暴露 `/api/v2/*` API，运行提示词管线，
-  通过 SSE 流式输出生成结果，并托管兼容 Express 的旧版界面。
-  每个模块都是一个隔离的 Fastify 插件。
+  并通过 SSE 流式输出生成结果。每个模块都是一个隔离的 Fastify 插件。
 - `apps/web` —— React SPA。它通过 HTTP 与服务器通信，渲染聊天工作区，
   以及角色、设置、提供商、主题和插件的界面。
 - `apps/plugin-runtime` —— 一个权限受限的 Node.js 进程，不受信任的后端插件

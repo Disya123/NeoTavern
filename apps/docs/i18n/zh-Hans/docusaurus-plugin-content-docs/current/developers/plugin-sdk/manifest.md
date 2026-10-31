@@ -66,19 +66,9 @@ sidebar_position: 2
 
 ## 旧版入口点
 
-```json
-{
-  "legacy": {
-    "frontend": "legacy/main-window.js",
-    "backend": "legacy/server.mjs"
-  }
-}
-```
-
-`legacy` 块指向现有 SillyTavern 扩展的受信任兼容入口。使用任一入口的
-软件包必须请求 `legacy.trusted` 权限，界面会在同意期间显示更强的警告。
-安全模式绝不加载旧版入口点。这与原生插件有何不同，请参阅
-[沙箱化](sandboxing.md)。
+旧版入口点块（SillyTavern 兼容）已根据所有者的决定（2026-10-31）移除 ——
+携带 `legacy` 的清单会在安装时被拒绝。SillyTavern 时代的插件兼容已被移除；
+针对 SillyTavern 环境编写的插件无法运行，新插件请使用插件 SDK。
 
 ## OAuth 客户端
 

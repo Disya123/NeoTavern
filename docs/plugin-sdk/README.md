@@ -28,17 +28,15 @@ React/Zustand/Fastify/SQLite (AGENTS.md §17).
   "engines": { "neotavern": "^0.1.0" },
   "frontend": "dist/frontend.js",
   "backend": "dist/backend.mjs",
-  "permissions": ["chat.read", "ui.messageActions", "network:api.example.com"],
-  "legacy": {
-    "frontend": "legacy/main-window.js",
-    "backend": "legacy/server.mjs"
-  }
+  "permissions": ["chat.read", "ui.messageActions", "network:api.example.com"]
 }
 ```
 
 The `.stplugin` package is a ZIP with a manifest. `validateManifest()` checks
 the id (reverse-DNS), the semver version, `apiVersion <= 2`, and permission
-validity.
+validity. The legacy entry-point block (SillyTavern compatibility) was
+removed by owner decision (2026-10-31) — manifests carrying `legacy` are
+rejected at install.
 
 For OAuth connections (rev4 §K5, `api.auth`) the manifest may declare public
 OAuth clients — `authClients`:
@@ -364,19 +362,14 @@ are automatically removed on disable/crash/shutdown.
 Native modes: Sandboxed UI (iframe + RPC) and Backend worker (separate
 process). `node:vm` is not used as a sandbox.
 
-`legacy.frontend` and `legacy.backend` are a separate trusted compatibility
-mode, not a bypass of the native sandbox. The manifest MUST request
-`legacy.trusted`, the UI shows an enhanced warning, and the user confirms the
-permission explicitly. The legacy frontend runs in the main window; the
-backend receives an Express Router limited to its own `/api/plugins/{id}`
-namespace. Safe mode does not load legacy entry points.
-
-The per-legacy-API authority map — supported contract, native-capability
-mapping, isolation level, limits and support policy for each legacy surface —
-lives in [`packages/legacy-compat/COMPATIBILITY.md`](../../packages/legacy-compat/COMPATIBILITY.md)
-and is enforced by the ARC-11 suite (`apps/server/test/legacyAuthority.spec.ts`):
-legacy compatibility may translate or restrict an operation, but never grants
-more authority than the corresponding native capability.
+SillyTavern-era plugin compatibility (the `legacy` manifest block, the
+`legacy.trusted` permission, the Express compatibility host, and the
+`window.SillyTavern`/jQuery globals) was removed by owner decision
+(2026-10-31): plugins written against the SillyTavern environment do not
+run, and new plugins use the Plugin SDK. The former per-legacy-API authority
+map (`packages/legacy-compat/COMPATIBILITY.md`, ARC-11
+`legacyAuthority.spec.ts`) is retired with that surface; ADR-0039 remains as
+the historical record of the authority boundary.
 
 Detailed rationale: [ADR-0007](../adr/0007-plugin-runtime-isolation.md),
 [ADR-0039](../adr/0039-legacy-compatibility-authority-boundary.md).
@@ -483,7 +476,7 @@ dependencies themselves.
 3. The status `needs-consent` is retained until exact confirmation of all
    requested permissions; a package with npm dependencies additionally shows
    their list.
-4. At activation, backend/legacy registrations start first; an error rolls
+4. At activation, backend registrations start first; an error rolls
    back the partial activation and keeps `PLUGIN_LOAD_FAILED`.
 5. Disable, safe mode, delete, crash, and shutdown perform host-enforced
    cleanup.

@@ -288,7 +288,14 @@ consequences: [ADR-0041](0041-versioned-data-roots-activation.md).
 
 ## ADR-0039: Legacy Compatibility Authority Boundary
 
-Legacy compatibility is an **authority-non-expanding boundary** (ТЗ 10/10
+**OBSOLETE (subject removed, 2026-10-31, ADR-0059 Amendment 1):** the
+SillyTavern-era plugin compatibility layer this ADR governed — window
+globals, the Express compat host, `packages/legacy-compat` — was removed by
+owner decision with no migration guide. The authority-non-expanding RULE
+stays normative for any future translation surface.
+
+Historical record: legacy compatibility was an **authority-non-expanding
+boundary** (ТЗ 10/10
 rev2 §14): compatibility MAY translate or restrict an operation but MUST NOT
 grant more authority than the corresponding native capability. Three
 compatibility tiers (Native compatible / Sandbox compatible / Architecturally

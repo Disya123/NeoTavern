@@ -14,7 +14,7 @@ NeoTavern はローカルファーストのアプリケーションです: 単�
 
 ```text
 apps/
-  server/          # Fastify バックエンド: API、プロンプトパイプライン、SSE、レガシーホスト
+  server/          # Fastify バックエンド: API、プロンプトパイプライン、SSE
   web/             # React SPA
   plugin-runtime/  # バックエンドプラグイン用の制限された Node.js プロセス
   desktop/         # Tauri 2 シェル; サーバーをサイドカープロセスとして実行
@@ -27,14 +27,13 @@ packages/
   plugin-sdk/    # プラグインマニフェスト、権限、API コントラクト
   theme-sdk/     # テーマのトークン、レベル、継承
   provider-sdk/  # プロバイダーアダプターのコントラクトとアダプター
-  legacy-compat/ # ウィンドウグローバルと DOM 互換アイランド
   gestures/      # フレームワーク非依存の行ジェスチャー
   plugin-build/  # プラグインのビルドと公開パイプライン
 ```
 
 ## アプリ
 
-- `apps/server` — Fastify バックエンド。`/api/v2/*` API を公開し、プロンプトパイプラインを実行し、SSE で生成をストリーミングし、Express 互換のレガシーサーフェスをホストします。各モジュールは分離された Fastify プラグインです。
+- `apps/server` — Fastify バックエンド。`/api/v2/*` API を公開し、プロンプトパイプラインを実行し、SSE で生成をストリーミングします。各モジュールは分離された Fastify プラグインです。
 - `apps/web` — React SPA。HTTP でサーバーと通信し、チャットワークスペースと、キャラクター、設定、プロバイダー、テーマ、プラグインのサーフェスをレンダリングします。
 - `apps/plugin-runtime` — 信頼できないバックエンドプラグインが実行される権限制限付き Node.js プロセス。メインのサーバープロセスから分離されています。
 - `apps/desktop` — Tauri 2 シェル。コンパイル済みサーバーを自己完結型 Node.js サイドカーとして起動し、ローカル API の準備ができた後にのみウェブビューを開きます。

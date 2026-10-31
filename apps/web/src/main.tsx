@@ -1,6 +1,6 @@
 /**
  * Frontend entry. Bootstraps i18n, applies the persisted theme/language,
- * installs legacy compatibility globals, then mounts the React tree.
+ * then mounts the React tree.
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -8,7 +8,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nextProvider } from 'react-i18next';
 import { TooltipProvider } from '@neotavern/ui';
 import { createI18n } from '@neotavern/i18n';
-import { installLegacyCompat } from '@neotavern/legacy-compat/globals';
 import '@fontsource-variable/outfit';
 import '@fontsource-variable/jetbrains-mono';
 import '@fontsource/opendyslexic/latin.css';
@@ -21,7 +20,6 @@ import { setInterfacePreferences, setThemeMode } from './theme/apply.js';
 import { setDocumentLanguage } from './lib/lang.js';
 import { registerServiceWorker } from './registerServiceWorker.js';
 import { frontendPluginRuntime } from './plugins/runtime.js';
-import { legacyFrontendRuntime } from './plugins/legacyRuntime.js';
 import { watchAndroidSafeArea } from './lib/androidSafeArea.js';
 
 const queryClient = new QueryClient({
@@ -63,14 +61,10 @@ async function bootstrap(): Promise<void> {
   });
   watchAndroidSafeArea();
 
-  // Documented legacy window globals for existing extensions.
-  installLegacyCompat();
-
   const i18n = await createI18n({ language });
   frontendPluginRuntime.configureI18n(i18n);
-  legacyFrontendRuntime.configureI18n(i18n);
 
-  // Backend-driven changes (other tabs, legacy bridge, plugins) invalidate
+  // Backend-driven changes (other tabs, plugins) invalidate
   // the query caches through the SSE event channel (ТЗ §11.1).
   connectAppEvents(queryClient);
 

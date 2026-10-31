@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-10-18T21:28:42.801Z",
+  "generatedAt": "2026-10-31T16:52:04.064Z",
   "rows": [
     {
       "hosts": {
@@ -116,14 +116,14 @@
     },
     {
       "hosts": {
-        "android": "Designed",
-        "desktop": "Implemented",
-        "headless": "Implemented",
-        "webClient": "Implemented"
+        "android": "Deprecated",
+        "desktop": "Deprecated",
+        "headless": "Deprecated",
+        "webClient": "Deprecated"
       },
       "id": "compat.authority-boundary",
       "milestone": "M1",
-      "notes": "M1 Wave 1 (ТЗ §14.2, ADR-0039): per-legacy-API authority map shipped as packages/legacy-compat/COMPATIBILITY.md and enforced by apps/server/test/legacyAuthority.spec.ts — legacy Express routers are confined to /api/plugins/{id}/... (core /api/v2 routes are never shadowed), extension settings are namespaced per installed plugin with a 1 MiB bound, and the scoped plugin VFS is wired to <data-root>/plugins/{id}/data with ../ and backslash escapes rejected and files.plugin required (PLUGIN_PERMISSION_DENIED without the grant).",
+      "notes": "Deprecated by owner decision (2026-10-31, ADR-0059 slice): SillyTavern-era plugin compatibility — the Express compat host, the legacy.js frontend loader, the window.* globals/DOM islands and packages/legacy-compat — was removed, so the per-legacy-API authority map (ADR-0039, COMPATIBILITY.md, legacyAuthority.spec) has no remaining subject. The authority-non-expanding RULE itself stays normative (ADR-0038/0039) for any future translation surface.",
       "title": "Legacy compatibility authority boundary (ARC-11)",
       "wireOps": []
     },

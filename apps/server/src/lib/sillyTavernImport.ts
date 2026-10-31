@@ -8,7 +8,7 @@
  */
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { copyFile, cp, mkdir, opendir, readFile, stat } from 'node:fs/promises';
+import { copyFile, mkdir, opendir, readFile, stat } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { basename, dirname, extname, join, relative } from 'node:path';
 import type {
@@ -1352,8 +1352,9 @@ async function importApiSettings(context: ImportContext): Promise<void> {
   }
 }
 
-// --- Legacy UI extensions (ТЗ §16): copied as legacy-trusted plugin packages
-// in needs-consent state; the user confirms before any code executes. ---
+// --- Legacy UI extensions (ТЗ §16): SillyTavern-era extensions are NOT
+// supported (ADR-0059 Amendment 1, 2026-10-31) — they are analyzed for the
+// report and skipped with an honest warning, never installed. ---
 
 async function analyzeLegacyExtensions(context: AnalysisContext): Promise<void> {
   const category = context.categories.legacyExtensions;
@@ -1371,43 +1372,24 @@ async function analyzeLegacyExtensions(context: AnalysisContext): Promise<void> 
 async function importLegacyExtensions(context: ImportContext): Promise<void> {
   const directory = await findChild(context.root, 'extensions', 'directory');
   if (!directory) return;
-  if (!context.plugins) {
-    context.warnings.add('LEGACY_EXTENSIONS_REQUIRE_REGISTRY');
-    return;
-  }
   for await (const entryPath of childDirectories(directory)) {
     checkAborted(context.signal);
     const entry = await findChild(entryPath, 'index.js', 'file');
     if (!entry) continue;
-    const folderName = basename(entryPath);
-    const shownPath = displayPath(context, entryPath);
-    try {
-      const id = `legacy.${folderName.toLowerCase().replace(/[^a-z0-9._-]+/giu, '-')}`;
-      const packageRoot = join(context.paths.plugins, id, 'package');
-      await cp(entryPath, packageRoot, { recursive: true, force: true });
-      const result = context.plugins.install({
-        id,
-        name: folderName.slice(0, 200),
-        version: '0.0.0',
-        manifest: {
-          id,
-          name: folderName,
-          version: '0.0.0',
-          apiVersion: 2,
-          legacy: { frontend: 'index.js' },
-        },
-        requestedPermissions: ['legacy.trusted'],
-        // The user explicitly picked this local directory for import: an
-        // explicit local trust decision (ТЗ §SEC-05), not a verified signature.
-        trust: 'locally-trusted',
-      });
-      if (result.replaced) context.counts.legacyExtensions.reused += 1;
-      else context.counts.legacyExtensions.imported += 1;
-    } catch (error) {
-      if (isAbort(error)) throw error;
-      context.counts.legacyExtensions.skipped += 1;
-      context.warnings.add('LEGACY_EXTENSION_IMPORT_FAILED', shownPath, errorParams(error));
-    }
+    context.counts.legacyExtensions.skipped += 1;
+    context.warnings.add(
+      'LEGACY_EXTENSIONS_UNSUPPORTED',
+      displayPath(context, entryPath),
+      errorParams(
+        new AppError({
+          code: ErrorCodes.PLUGIN_INVALID,
+          params: {
+            reason: 'SillyTavern extensions are not supported; plugins must target the Plugin SDK',
+          },
+          message: 'SillyTavern extensions are not supported',
+        }),
+      ),
+    );
   }
 }
 

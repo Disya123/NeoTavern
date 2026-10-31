@@ -6,7 +6,9 @@
 > Kernel is the canonical application core**; the Fastify/Drizzle contour is a
 > feature-frozen legacy/migration adapter) and
 > [ADR-0039](../adr/0039-legacy-compatibility-authority-boundary.md)
-> (legacy compatibility is an authority-non-expanding boundary). The governing
+> (legacy compatibility is an authority-non-expanding boundary; ST plugin
+> compat removed 2026-10-31, see
+> [ADR-0059](../adr/0059-react-primary-pivot.md)). The governing
 > requirements document is the target-architecture
 > [ТЗ 10/10 rev2](../../NeoTavern_architecture_10_of_10_spec_2026-08-13.md),
 > which supersedes the previous ТЗ 7.2 where they conflict. Capability and
@@ -43,13 +45,14 @@ PostgreSQL/Redis/Docker.
 - SQLite via better-sqlite3 + Drizzle ORM, WAL, FTS5.
 - Radix Primitives, CSS Modules + Custom Properties + Cascade Layers.
 - i18next, TanStack Query, Zustand.
-- In-house Plugin SDK and Theme SDK; Legacy Compatibility Layer.
+- In-house Plugin SDK and Theme SDK. (The SillyTavern-era plugin
+  compatibility layer was removed 2026-10-31, ADR-0059 slice.)
 
 ## Monorepo structure
 
 ```text
 apps/
-  server/   # Fastify backend, prompt pipeline, SSE, legacy host
+  server/   # Fastify backend, prompt pipeline, SSE
   web/      # React SPA
   desktop/  # Tauri 2.x shell: server runs as a sidecar process
             # (see docs/desktop), resources — resources/{web,native,runtime}
@@ -63,7 +66,6 @@ packages/
   i18n/          # i18next, en/ru resources, error localization
   ui/            # headless components on Radix + data hooks
   gestures/      # framework-agnostic chat gestures: context menu, drag
-  legacy-compat/ # window globals, DOM islands
 
 crates/
   contracts-generated/ # generated Rust boundary DTOs + validators (do not edit)
@@ -357,9 +359,10 @@ gate passes.
   extensions (ТЗ §10/§47–§54/§70): declarative semantic UI slots
   (the five frozen ids, host-side re-validation, permission gating,
   priority ordering, zero layout change when nothing renders),
-  app-level `extensions.legacyFrontend` gate (default off) so legacy
-  SillyTavern `<script>` injection additionally requires the admin-only
-  `legacy.trusted` consent, theme activation rollback + last-working boot
+  app-level `extensions.legacyFrontend` gate (default off; the legacy
+  SillyTavern `<script>` injection path and the `legacy.trusted` consent
+  it gated were removed outright on 2026-10-31, ADR-0059 slice),
+  theme activation rollback + last-working boot
   fallback + responsive `density`/`motion` semantics, manifest `engines`
   enforcement (incompatible update → auto-disable with the previous
   version intact), namespaced-state kv quotas (413

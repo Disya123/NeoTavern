@@ -24,8 +24,6 @@ export const Permissions = {
   clipboardWrite: 'clipboard.write',
   notifications: 'notifications',
   serverRoutes: 'server.routes',
-  /** Runs documented SillyTavern legacy code in the trusted main app context. */
-  legacyTrusted: 'legacy.trusted',
 } as const;
 
 export type Permission = (typeof Permissions)[keyof typeof Permissions];

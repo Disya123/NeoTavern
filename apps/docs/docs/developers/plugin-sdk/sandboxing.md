@@ -52,16 +52,13 @@ rectangles of active mounts and clips the visible and interactive iframe area
 to their union, so pointer events outside a plugin surface stay with the
 application.
 
-## Trusted Legacy Mode
+## Legacy Entry Points (Removed)
 
-`legacy.frontend` and `legacy.backend` entries are a separate, trusted
-compatibility mode for existing SillyTavern extensions — not a bypass of the
-native sandbox. Using either entry requires the `legacy.trusted` permission,
-which the UI shows with an enhanced warning, and the user must confirm it
-explicitly. Legacy frontend code executes in the main window, and legacy
-backend code gets an Express router scoped to its own
-`/api/plugins/{pluginId}` namespace. Safe mode does not load legacy entry
-points at all.
+The legacy entry points (`legacy.frontend` / `legacy.backend`) and the
+`legacy.trusted` permission were removed by owner decision (2026-10-31);
+there is no compatibility mode for SillyTavern extensions. Only the
+sandboxed SDK path exists: frontend plugin UI runs in the sandboxed iframe,
+and backend plugins run in the restricted process described above.
 
 ## Themes
 

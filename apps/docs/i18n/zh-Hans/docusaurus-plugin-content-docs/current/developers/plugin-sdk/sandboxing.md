@@ -44,14 +44,12 @@ sidebar_position: 7
 并把可见和可交互的 iframe 区域裁剪到它们的并集，
 因此插件界面之外的指针事件仍属于应用。
 
-## 受信任旧版模式
+## 旧版入口点（已移除）
 
-`legacy.frontend` 和 `legacy.backend` 入口是面向现有 SillyTavern 扩展的
-单独受信任兼容模式 —— 不是原生沙箱的绕过。使用任一入口都需要
-`legacy.trusted` 权限，界面会以增强警告显示它，用户必须显式确认。
-旧版前端代码在主窗口中执行，旧版后端代码获得一个限定在自己
-`/api/plugins/{pluginId}` 命名空间内的 Express 路由器。安全模式完全不
-加载旧版入口点。
+旧版入口点（`legacy.frontend` / `legacy.backend`）和 `legacy.trusted` 权限已
+根据所有者的决定（2026-10-31）被移除；不再有面向 SillyTavern 扩展的兼容模式。
+只存在沙箱化的 SDK 路径：前端插件界面在沙箱化 iframe 中运行，后端插件在
+上文所述的受限进程中运行。
 
 ## 主题
 

@@ -14,7 +14,6 @@ import type { Location } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { AuthGate } from './components/AuthGate.js';
 import { AutoConnectSync } from './components/AutoConnectSync.js';
-import { LegacyBridgeSync } from './components/LegacyBridgeSync.js';
 import { PluginSync } from './components/PluginSync.js';
 import { PluginProviderSync } from './components/PluginProviderSync.js';
 import { SystemSurface } from './components/SystemSurface.js';
@@ -43,7 +42,6 @@ export function App() {
           <AuthGate>
             <PluginSync />
             <PluginProviderSync />
-            <LegacyBridgeSync />
             <AutoConnectSync />
             <AppRoutes />
           </AuthGate>

@@ -140,5 +140,3 @@ full teardown contract, and the generated
 
 - [Declarative UI Slots](slots.md) — the declarative `api.ui.slots` surface.
 - [Extension Availability](availability.md) — where plugin surfaces exist at all.
-- [Legacy Frontend Gate](legacy-frontend.md) — the app-level opt-in for
-  legacy main-window scripts.

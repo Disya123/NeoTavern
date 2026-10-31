@@ -489,44 +489,6 @@ test('saves and reloads a provider profile from the API tab', async ({ page }) =
   await expectNoA11yViolations(page);
 });
 
-test('exposes documented legacy globals and unmanaged DOM islands', async ({ page }) => {
-  await page.goto('/home');
-  await expect(page.locator('#legacy-modal')).toBeAttached();
-  const compatibility = await page.evaluate(() => {
-    const legacy = window as typeof window & {
-      SillyTavern?: { getContext(): unknown };
-      eventSource?: unknown;
-      event_types?: unknown;
-      extension_settings?: unknown;
-      jQuery?: unknown;
-      $?: unknown;
-    };
-    return {
-      context: typeof legacy.SillyTavern?.getContext === 'function',
-      eventSource: typeof legacy.eventSource === 'object',
-      eventTypes: typeof legacy.event_types === 'object',
-      extensionSettings: typeof legacy.extension_settings === 'object',
-      jquery: typeof legacy.jQuery === 'function' && legacy.$ === legacy.jQuery,
-      islands: [
-        'legacy-extensions-settings',
-        'legacy-chat-actions',
-        'legacy-character-actions',
-        'legacy-toolbar',
-        'legacy-drawer',
-        'legacy-modal',
-      ].every((id) => document.getElementById(id) !== null),
-    };
-  });
-  expect(compatibility).toEqual({
-    context: true,
-    eventSource: true,
-    eventTypes: true,
-    extensionSettings: true,
-    jquery: true,
-    islands: true,
-  });
-});
-
 for (const route of ['/home', '/characters', '/chats', '/providers', '/themes', '/plugins']) {
   test(`has no automatic WCAG A/AA violations on ${route}`, async ({ page }) => {
     await page.goto(route);
@@ -848,92 +810,6 @@ test('installs, consents to and isolates a frontend plugin package', async ({ pa
   const deletePluginDialog = page.getByRole('dialog', { name: 'Remove plugin' });
   await expect(deletePluginDialog).toBeVisible();
   await deletePluginDialog.getByRole('button', { name: 'Delete' }).click();
-  await expect(card).toHaveCount(0);
-});
-
-test('loads a trusted legacy frontend only after explicit consent and bypasses it in safe mode', async ({
-  page,
-}) => {
-  const suffix = Date.now().toString(36);
-  const pluginId = `e2e.legacy-${suffix}`;
-  const pluginName = `Legacy Plugin ${suffix}`;
-  const legacyMarker = `Trusted legacy loaded ${suffix}`;
-  const archive = zipBuffer({
-    'plugin.json': JSON.stringify({
-      id: pluginId,
-      name: pluginName,
-      version: '1.0.0',
-      apiVersion: 2,
-      legacy: { frontend: 'legacy.js' },
-      permissions: ['legacy.trusted'],
-    }),
-    'legacy.js': `
-      window.__neotavernLegacyE2e = '${pluginId}';
-      const island = document.getElementById('legacy-toolbar');
-      if (island) island.textContent = '${legacyMarker}';
-    `,
-  });
-
-  // App-level legacy frontend opt-in (`extensions.legacyFrontend`, default
-  // off, ТЗ §10/§87): legacy entries inject into the main document, so the
-  // app gate must be on IN ADDITION to the per-plugin `legacy.trusted`
-  // consent. PATCH before the page load so the app fetches the gate fresh.
-  const legacyGate = await page.request.patch('/api/v2/settings', {
-    data: { 'extensions.legacyFrontend': true },
-  });
-  expect(legacyGate.ok()).toBe(true);
-
-  await page.goto('/plugins');
-  await page.getByLabel('Install plugin package').setInputFiles({
-    name: 'legacy-plugin.stplugin',
-    mimeType: 'application/zip',
-    buffer: archive,
-  });
-  const card = page.locator('[data-component="plugin-card"]').filter({ hasText: pluginName });
-  await expect(card.getByText('Trusted legacy compatibility')).toBeVisible();
-  await expect(page.locator('#legacy-toolbar').getByText(legacyMarker)).toHaveCount(0);
-  await card.getByRole('checkbox', { name: /legacy\.trusted/u }).check();
-  await card.getByRole('button', { name: 'Approve and activate' }).click();
-  await expect(page.locator('#legacy-toolbar')).toHaveText(legacyMarker);
-  await expect
-    .poll(() =>
-      page.evaluate(
-        (expected) =>
-          (window as typeof window & { __neotavernLegacyE2e?: string }).__neotavernLegacyE2e ===
-          expected,
-        pluginId,
-      ),
-    )
-    .toBe(true);
-
-  await page.goto('/plugins?safe=1');
-  await expect(page.getByText('Plugin safe mode is active')).toBeVisible();
-  await expect(page.locator('#legacy-toolbar')).toBeEmpty();
-  await expect(
-    page.evaluate(
-      () => (window as typeof window & { __neotavernLegacyE2e?: string }).__neotavernLegacyE2e,
-    ),
-  ).resolves.toBeUndefined();
-
-  const legacySafeModeExit = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: 'Exit plugin safe mode' }).click();
-  await legacySafeModeExit;
-  await expect(page).toHaveURL(/\/plugins$/u);
-  await expect(page.locator(`script[data-plugin-id="${pluginId}"]`)).toHaveCount(1);
-  await expect
-    .poll(() =>
-      page.evaluate(
-        (expected) =>
-          (window as typeof window & { __neotavernLegacyE2e?: string }).__neotavernLegacyE2e ===
-          expected,
-        pluginId,
-      ),
-    )
-    .toBe(true);
-  await card.getByRole('button', { name: `Delete plugin ${pluginName}` }).click();
-  const deleteLegacyPluginDialog = page.getByRole('dialog', { name: 'Remove plugin' });
-  await expect(deleteLegacyPluginDialog).toBeVisible();
-  await deleteLegacyPluginDialog.getByRole('button', { name: 'Delete' }).click();
   await expect(card).toHaveCount(0);
 });
 

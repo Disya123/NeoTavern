@@ -114,3 +114,29 @@ duplicates it at high maintenance cost. The decision, verbatim:
   semantic slots (ADR-0037) and the sandboxed iframe surface (ADR-0007) in
   the React contour; the IR v1 schema remains the versioned contract for
   data-driven plugin UI on any future native surface.
+
+## Amendment 1 (2026-10-31, same day): SillyTavern-era plugin compatibility removed
+
+Owner decision: "SillyTavern-плагины… это даже думать о них не стоит". The
+compatibility layer this repo carried for SillyTavern extensions is removed
+outright — no freeze period, no migration guide (the ADR-0058 clause that
+made the guide mandatory is amended to void):
+
+- removed: the Express compatibility host (`apps/server/src/legacy/`), the
+  trusted `legacy.js` frontend loader and its app gate, the
+  `window.SillyTavern` / `window.eventSource` / `window.event_types` /
+  `window.extension_settings` / jQuery globals and the unmanaged DOM
+  islands (`packages/legacy-compat` deleted), the `legacy` manifest block
+  and the `legacy.trusted` permission (a manifest carrying them is
+  rejected at install), `@fastify/express` from the server, and the
+  ST-plugin E2E/unit specs;
+- kept: SillyTavern DATA import (character cards, chats, ZIP backup
+  migration through Settings → Data) — user data, not plugins; the Plugin
+  SDK runtime (slots, sandboxed iframe, IR v1); the authority-non-expanding
+  rule of ADR-0039 as a standing norm (its subject is gone; the ADR is
+  marked obsolete);
+- consequences: AGENTS §1/§3/§18/§23 amended; capability-matrix row
+  `compat.authority-boundary` → Deprecated; the Этап-6 "preserve the
+  versioned ST Compatibility API if needed" item collapses to nothing —
+  the legacy removal stage now covers only the Fastify/Drizzle sidecar and
+  the `app.db` contour.

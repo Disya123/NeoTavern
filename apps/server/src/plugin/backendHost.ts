@@ -15,7 +15,6 @@ import { DEPENDENCY_MARKER_FILE } from './dependencyInstaller.js';
 import type { ContextShiftResult, PromptMessage } from '../pipeline/contextShift.js';
 import type { AppContext, TypedApp } from '../types.js';
 import { DEFAULT_RESOURCE_CONFIG } from '../config.js';
-import type { LegacyServerPluginHost } from '../legacy/host.js';
 import { IsolatedPluginProviderAdapter as PluginProviderAdapter } from './isolatedProviderAdapter.js';
 import { RESOURCE_LIMITS_VERSION, type ResourceGovernor } from './resourceGovernor.js';
 
@@ -621,7 +620,6 @@ export class BackendPluginHost {
   constructor(
     private readonly app: TypedApp,
     private readonly ctx: AppContext,
-    private readonly legacyHost?: LegacyServerPluginHost,
     /**
      * Resource Governor (ТЗ §8, ADR-0026). When present, every spawned
      * backend process is registered in the tree ledger, gets a V8 heap cap
@@ -639,10 +637,6 @@ export class BackendPluginHost {
       const routePath = `/${params['*']}`;
       const matched = this.findRoute(pluginId, request.method, routePath);
       if (!matched) {
-        const legacy = await this.legacyHost?.dispatch(pluginId, routePath, request, reply);
-        if (legacy?.handled) {
-          return reply.send(legacy.body);
-        }
         throw new AppError({
           code: ErrorCodes.NOT_FOUND,
           params: { pluginId, path: routePath },

@@ -7,10 +7,12 @@ Instructions for AI agents and developers working on NeoTavern.
 When making decisions, follow this order:
 
 1. Preservation of user data.
-2. Compatibility with existing SillyTavern plugins during the legacy
-   transition (ADR-0058): provided by the legacy contour for its remaining
-   lifetime with a migration guide; the target plugin platform is the
-   native Plugin SDK (declarative slots + IR).
+2. Compatibility with existing SillyTavern user data (cards, chats, backups)
+   during the legacy transition (ADR-0058): the data import/migration path
+   lives as long as the migration contour does. SillyTavern-era PLUGINS are
+   not supported — the compatibility layer was removed by owner decision
+   (2026-10-31, ADR-0059 slice); the target plugin platform is the native
+   Plugin SDK (declarative slots + IR).
 3. Local operation without a mandatory cloud.
 4. Simple installation without a terminal, Git, npm, or manual database setup.
 5. Stability of the public Plugin SDK and Theme SDK.
@@ -93,7 +95,6 @@ packages/
 ├── ui/
 ├── plugin-sdk/
 ├── theme-sdk/
-├── legacy-compat/
 ├── provider-sdk/
 ├── i18n/
 └── shared/
@@ -480,29 +481,21 @@ New permissions after an update require the user's consent again.
 
 ## 18. Legacy compatibility
 
-Keep the documented legacy contracts:
+SillyTavern-era PLUGIN compatibility was removed by owner decision
+(2026-10-31, ADR-0059 slice): there is no Express compatibility host, no
+`legacy.js` loader, no `window.SillyTavern` / `window.eventSource` /
+`window.event_types` / `window.extension_settings` / jQuery globals or DOM
+islands, no `legacy` manifest block and no `legacy.trusted` permission, and
+no migration guide is planned. A manifest carrying the removed block is
+rejected at install. New plugins target the native Plugin SDK (declarative
+slots + the sandboxed iframe surface + the IR schema).
 
-```text
-window.SillyTavern
-window.eventSource
-window.event_types
-window.extension_settings
-window.$ / window.jQuery
-```
+What remains legacy is DATA, not plugins: SillyTavern user data (character
+cards, chats, backups) keeps importing through Settings → Data for the
+remaining lifetime of the migration contour (ADR-0058/ADR-0038).
 
-React provides unmanaged DOM islands for old extensions.
-
-These legacy web contracts are properties of the React contour — the product
-UI (ADR-0059) — and end on the ADR-0038 functional-migration timeline with a
-mandatory migration guide (ADR-0058). A migration guide porting SillyTavern
-extensions to the native Plugin SDK (declarative slots + the IR schema) is
-mandatory before that sunset.
-
-Legacy server plugins run through the Express compatibility host and are proxied under `/api/plugins/{id}/...`.
-
-`@fastify/express` is used only inside the compatibility layer, not in the new core.
-
-Do not promise compatibility with plugins that depend on incidental internal CSS classes, monkey patching, or private imports. When changing a legacy API, add a migration guide and a compatibility test.
+Do not promise compatibility with plugins that depend on incidental internal
+CSS classes, monkey patching, or private imports of the product bundle.
 
 ## 19. Plugin and theme security
 
@@ -611,7 +604,6 @@ Expected tools:
 - Accessibility tests.
 - Migration tests.
 - Plugin contract tests.
-- Legacy compatibility suite.
 
 Must be tested:
 
@@ -631,8 +623,7 @@ Must be tested:
 The former ADR-0057 presentation-conformance suite (INV-1..INV-7,
 adapter-parameterized scenarios) was retired with the native contour
 (ADR-0059). UI gates are the React-plane gates: Playwright E2E,
-accessibility, visual regression, plugin contract tests and the legacy
-compatibility suite. The honesty rule survives it: FakeWire-style fixture
+accessibility, visual regression and plugin contract tests. The honesty rule survives it: FakeWire-style fixture
 runs are labeled `fake` and never gate product claims; PASS records commit,
 binary, data seed and scenario.
 

@@ -68,7 +68,6 @@ exported type and function with its exact signature.
 - [Frontend API](frontend.md) — registering UI surfaces and events.
 - [Declarative UI Slots](slots.md) — buttons for stable semantic slots.
 - [Extension Availability](availability.md) — explicit runtime availability.
-- [Legacy Frontend Gate](legacy-frontend.md) — app-level opt-in for legacy main-window scripts.
 - [Backend API](backend.md) — routes, storage, and server abstractions.
 - [Lifecycle](lifecycle.md) — install, enable, disable, and cleanup guarantees.
 - [Sandboxing](sandboxing.md) — the security model for untrusted code.

@@ -58,8 +58,10 @@ permissions, incompatible, or error. From there you can:
   routes, and subscriptions without a restart, and the cleanup is enforced
   by the host.
 - **Uninstall** it, which also clears its registrations.
-- **Review compatibility** for legacy SillyTavern-era extensions, which
-  show their compatibility level and known limitations.
+
+SillyTavern-era extensions are not supported: plugin compatibility was
+removed by owner decision (2026-10-31), and packages carrying the removed
+legacy manifest block are rejected at install.
 
 An error in one plugin is isolated: the app offers to disable just that
 plugin instead of breaking the whole interface.

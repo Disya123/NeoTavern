@@ -35,7 +35,10 @@ The built-in set is a stable, versioned contract:
 | `clipboard.write`    | Write to the clipboard                                        |
 | `notifications`      | Show notifications                                            |
 | `server.routes`      | Mount backend routes                                          |
-| `legacy.trusted`     | Run documented SillyTavern legacy code in the trusted context |
+
+The former `legacy.trusted` permission (running SillyTavern legacy code in a
+trusted context) was removed by owner decision (2026-10-31) together with the
+legacy entry points it gated.
 
 ## Scoped Permissions
 

@@ -57,16 +57,7 @@ sidebar_position: 2
 
 ## レガシーエントリポイント
 
-```json
-{
-  "legacy": {
-    "frontend": "legacy/main-window.js",
-    "backend": "legacy/server.mjs"
-  }
-}
-```
-
-`legacy` ブロックは、既存の SillyTavern 拡張機能向けの信頼された互換エントリを指します。どちらかのエントリを使用するパッケージは `legacy.trusted` 権限を要求する必要があり、UI は同意時に強化された警告を表示します。セーフモードはレガシーエントリポイントを決して読み込みません。ネイティブプラグインとの違いは[サンドボックス化](sandboxing.md) を参照してください。
+レガシーエントリポイントブロック（SillyTavern 互換）はオーナーの決定（2026-10-31）により削除されました — `legacy` を含むマニフェストはインストール時に拒否されます。SillyTavern 時代のプラグイン互換は削除されており、SillyTavern 環境向けに書かれたプラグインは動作せず、新しいプラグインはプラグイン SDK を使用してください。
 
 ## OAuth クライアント
 

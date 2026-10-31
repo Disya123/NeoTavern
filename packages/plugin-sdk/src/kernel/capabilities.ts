@@ -4,8 +4,8 @@
  * Permissions are not a flat string list anymore (rev4 §B1): a plugin requests
  * named capabilities with a scope, the host grants them explicitly, and grants
  * can be revoked at runtime (rev4 §B2). Trust is a matrix of runtimes, not a
- * ladder (rev4 §B3) — `legacy.trusted` is a separate admin-only extension
- * type, never a permission a normal consent dialog can grant.
+ * ladder (rev4 §B3). The SillyTavern-era `legacy.trusted` permission was
+ * removed (2026-10-31, ADR-0059 Amendment 1) and parses to no capability.
  */
 
 /** Scope descriptors a capability grant can carry (rev4 §B1 granularity). */

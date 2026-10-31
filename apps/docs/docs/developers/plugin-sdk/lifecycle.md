@@ -33,7 +33,7 @@ See [Permissions](permissions.md) for the full model.
 
 Activation is a two-phase operation:
 
-1. Backend and legacy registrations start first.
+.. Backend and legacy registrations start first.
 2. The frontend entry loads and receives its API.
 
 If activation fails partway, the host rolls back the partial registrations
@@ -43,7 +43,7 @@ surfaces behind.
 ## Active Runtime
 
 While active, every registration the plugin makes — UI surfaces, routes,
-event subscriptions, i18n resources, notifications, providers, tokenizers,
+event subscriptions, i.8n resources, notifications, providers, tokenizers,
 context strategies, and post-processors — is collected by the runtime. The
 plugin can also manage its own resources in `deactivate()`.
 

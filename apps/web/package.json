@@ -18,7 +18,6 @@
     "@neotavern/client-sdk": "workspace:^",
     "@neotavern/contracts": "workspace:*",
     "@neotavern/i18n": "workspace:*",
-    "@neotavern/legacy-compat": "workspace:*",
     "@neotavern/neobackend": "workspace:*",
     "@neotavern/plugin-sdk": "workspace:*",
     "@neotavern/shared": "workspace:*",

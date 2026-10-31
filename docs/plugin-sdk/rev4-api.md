@@ -109,7 +109,8 @@ request is rejected immediately.
   enforcement on both hosts: web slices see it immediately, the backend process —
   from the plugin's next activation (activate on start/enable).
 - `camera.request` and other catalog names absent from the manifest can be
-  obtained only this way; `legacy.trusted` is never issued at all.
+  obtained only this way; the removed `legacy.trusted` permission is never
+  issued at all (legacy entry points were removed on 2026-10-31).
 - Grant revocation (e.g. on deactivation) reaches the plugin via
   `capability.revoked`; the host removes the grant from the live list immediately.
 
@@ -805,9 +806,12 @@ host.
 
 ## 6. Legacy
 
-`legacy.trusted` is a separate extension type (admin policy, signature/allowlist),
-not a public capability, and is not issued via the ordinary consent dialog. Ordinary
-rev4 plugins neither require nor receive privileges in the application origin.
+SillyTavern-era plugin compatibility (`legacy.trusted`, the legacy entry
+points, the Express compatibility host) was removed by owner decision
+(2026-10-31); manifests carrying the removed `legacy` block are rejected at
+install, and plugins written against the SillyTavern environment do not run.
+Ordinary rev4 plugins neither require nor receive privileges in the
+application origin.
 
 Examples: [rev4-overlay-game](examples/rev4-overlay-game.md), sources —
 `plugins/rev4-storage/`, `plugins/rev4-overlay/`, plus the e2e-verified

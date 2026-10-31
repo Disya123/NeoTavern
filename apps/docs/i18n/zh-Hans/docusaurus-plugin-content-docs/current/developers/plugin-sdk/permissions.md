@@ -15,26 +15,28 @@ sidebar_position: 3
 
 内置集合是一个稳定、版本化的契约：
 
-| 权限                 | 授予的内容                                            |
-| -------------------- | ----------------------------------------------------- |
-| `chat.read`          | 读取聊天消息及其元数据                                |
-| `chat.write`         | 创建或修改聊天消息                                    |
-| `characters.read`    | 读取角色和角色卡                                      |
-| `characters.write`   | 创建或修改角色                                        |
-| `lorebook.read`      | 读取设定集条目                                        |
-| `lorebook.write`     | 创建或修改设定集条目                                  |
-| `prompt.inspect`     | 检查组装好的提示词                                    |
-| `prompt.modify`      | 修改提示词或后处理生成输出                            |
-| `providers.register` | 注册提供商适配器和分词器                              |
-| `ui.toolbar`         | 添加工具栏操作                                        |
-| `ui.sidebar`         | 添加侧边栏面板                                        |
-| `ui.messageActions`  | 添加消息操作                                          |
-| `ui.shell`           | 向外壳槽位添加内容                                    |
-| `clipboard.read`     | 读取剪贴板                                            |
-| `clipboard.write`    | 写入剪贴板                                            |
-| `notifications`      | 显示通知                                              |
-| `server.routes`      | 挂载后端路由                                          |
-| `legacy.trusted`     | 在受信任上下文中运行有文档记录的 SillyTavern 旧版代码 |
+| 权限                 | 授予的内容                 |
+| -------------------- | -------------------------- |
+| `chat.read`          | 读取聊天消息及其元数据     |
+| `chat.write`         | 创建或修改聊天消息         |
+| `characters.read`    | 读取角色和角色卡           |
+| `characters.write`   | 创建或修改角色             |
+| `lorebook.read`      | 读取设定集条目             |
+| `lorebook.write`     | 创建或修改设定集条目       |
+| `prompt.inspect`     | 检查组装好的提示词         |
+| `prompt.modify`      | 修改提示词或后处理生成输出 |
+| `providers.register` | 注册提供商适配器和分词器   |
+| `ui.toolbar`         | 添加工具栏操作             |
+| `ui.sidebar`         | 添加侧边栏面板             |
+| `ui.messageActions`  | 添加消息操作               |
+| `ui.shell`           | 向外壳槽位添加内容         |
+| `clipboard.read`     | 读取剪贴板                 |
+| `clipboard.write`    | 写入剪贴板                 |
+| `notifications`      | 显示通知                   |
+| `server.routes`      | 挂载后端路由               |
+
+原 `legacy.trusted` 权限（在受信任上下文中运行 SillyTavern 旧版代码）已连同
+它所控制的旧版入口点一起，根据所有者的决定（2026-10-31）被移除。
 
 ## 作用域权限
 

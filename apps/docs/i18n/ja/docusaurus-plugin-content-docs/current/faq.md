@@ -32,7 +32,7 @@ sidebar_position: 2
 
 ## SillyTavern 時代のプラグインを移行できますか？
 
-古い SillyTavern 環境向けに書かれたプラグインは、レガシー互換レイヤーを通じて実行できます。このレイヤーはおなじみの `window.SillyTavern`、`window.eventSource`、`window.$` グローバルと Express 互換の HTTP ホストを提供します。これは互換のための経路であり、書き直しの対象ではありません。新しいプラグインは[プラグイン SDK](./developers/plugin-sdk/) を使用してください。[レガシー互換](./developers/legacy-compat) を参照してください。
+いいえ。SillyTavern 時代のプラグイン互換はオーナーの決定（2026-10-31）により削除されました。SillyTavern 環境向けに書かれたプラグインは NeoTavern では動作しません。データには影響しません — キャラクター、チャット、バックアップは「設定 → データ」から移行できます。新しいプラグインは[プラグイン SDK](./developers/plugin-sdk/) を対象にしてください。
 
 ## アップデートはどのように行われますか？
 

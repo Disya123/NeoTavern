@@ -49,12 +49,11 @@ character gallery work out of the box. See [Characters](./user-guide/characters)
 
 ## Can I Migrate My SillyTavern-Era Plugins?
 
-Plugins written against the older SillyTavern environment can run through the
-legacy compatibility layer, which provides the familiar `window.SillyTavern`,
-`window.eventSource`, and `window.$` globals plus an Express-compatible HTTP
-host. It is a compatibility path, not a rewrite target: new plugins should use
-the [Plugin SDK](./developers/plugin-sdk/). See
-[Legacy Compatibility](./developers/legacy-compat).
+No. SillyTavern-era plugin compatibility was removed by owner decision
+(2026-10-31): plugins written against the SillyTavern environment do not run
+in NeoTavern. Your data is not affected — characters, chats, and backups
+migrate via Settings → Data. New plugins target the
+[Plugin SDK](./developers/plugin-sdk/).
 
 ## How Do Updates Work?
 

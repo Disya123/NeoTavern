@@ -21,7 +21,6 @@ import type { GenerationEvent, GenerationStepDto, PromptTriggerId } from '@neota
 import type { NeoBackend } from '@neotavern/neobackend';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { ErrorCodes } from '@neotavern/shared';
-import { runLegacyPromptInterceptors } from '@neotavern/legacy-compat';
 import { ApiError } from './client.js';
 import { backend, isKernelMode, legacyRaw } from './backend.js';
 import { getCsrfToken, setCsrfToken } from './client.js';
@@ -255,20 +254,6 @@ async function streamLegacyGeneration(
           messages: event.messages,
           meta: event.meta,
         });
-        // Legacy prompt interceptors (ТЗ §8.1) run after sandboxed plugin
-        // interceptors, on the same broker round-trip.
-        const legacyMessages = await runLegacyPromptInterceptors(
-          context.messages.map((message) => ({
-            role: message.role,
-            content: message.content,
-            ...(message.name ? { name: message.name } : {}),
-          })),
-        );
-        context.messages = legacyMessages.map((message) => ({
-          role: message.role as (typeof context.messages)[number]['role'],
-          content: message.content,
-          ...(message.name ? { name: message.name } : {}),
-        }));
         const interceptorResponse = await fetch(
           legacyRaw().sseUrl(`/plugin-intercepts/${encodeURIComponent(event.requestId)}`),
           {

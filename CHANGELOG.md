@@ -4,6 +4,26 @@
 
 ### Added
 
+- **SillyTavern-era plugin compatibility removed (ADR-0059 Amendment 1;
+  owner decision 2026-10-31 — "думать о них не стоит").** The whole ST
+  plugin-compat layer is deleted with no migration guide: the Express
+  compatibility host (`apps/server/src/legacy/`), the trusted `legacy.js`
+  frontend loader and its app gate, the `window.SillyTavern` /
+  `window.eventSource` / `window.event_types` / `window.extension_settings`
+  / jQuery globals and unmanaged DOM islands (`packages/legacy-compat`
+  deleted), the `legacy` manifest block and the `legacy.trusted` permission
+  (manifests carrying the block are now rejected at install with
+  PLUGIN_INVALID), `@fastify/express`/`express` dependencies, and the
+  ST-plugin unit/E2E specs. Kept: SillyTavern DATA import (character cards,
+  chats, ZIP backup migration — user data, not plugins), the Plugin SDK
+  runtime (slots, sandboxed iframe, IR v1), and the ADR-0039
+  authority-non-expanding rule as a standing norm (the ADR itself is marked
+  obsolete). AGENTS §1/§3/§18/§23 amended; capability-matrix row
+  `compat.authority-boundary` → Deprecated; the ui-legacy-surface baseline
+  regenerated without the plugin-compat rows. Note honestly: this removes a
+  user-facing capability — ST extensions no longer run, and none shipped
+  with the app.
+
 - **ADR-0059: React-primary pivot — the branch `react-primary`.** The owner
   decided (2026-10-31) that the React contour is THE product UI and the
   native-first takeover is cancelled: the Rust Runtime Kernel,

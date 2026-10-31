@@ -43,11 +43,10 @@ sidebar_position: 2
 
 ## 我可以迁移 SillyTavern 时代的插件吗？
 
-针对旧版 SillyTavern 环境编写的插件可以通过旧版兼容层运行，该层提供熟悉的
-`window.SillyTavern`、`window.eventSource` 和 `window.$` 全局对象，
-以及一个兼容 Express 的 HTTP 主机。这是一条兼容路径，而不是重写目标：
-新插件应使用[插件 SDK](./developers/plugin-sdk/)。请参阅
-[旧版兼容](./developers/legacy-compat)。
+不可以。SillyTavern 时代的插件兼容已根据所有者的决定（2026-10-31）移除：
+针对 SillyTavern 环境编写的插件无法在 NeoTavern 中运行。你的数据不受影响 ——
+角色、聊天记录和备份可通过"设置 → 数据"迁移。新插件请面向
+[插件 SDK](./developers/plugin-sdk/) 开发。
 
 ## 更新是如何工作的？
 

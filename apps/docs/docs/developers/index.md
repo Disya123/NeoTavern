@@ -38,7 +38,7 @@ persists data.
 
 ## Extending NeoTavern
 
-NeoTavern is extended in four ways:
+NeoTavern is extended in three ways:
 
 - [Plugin SDK](developers/plugin-sdk/) — plugins with a manifest, permissions,
   frontend and backend APIs, lifecycle hooks, and sandboxing.
@@ -46,8 +46,10 @@ NeoTavern is extended in four ways:
   skins, and shell layouts.
 - [Providers](developers/providers/) — provider adapters that implement the unified
   adapter contract.
-- [Legacy compatibility](developers/legacy-compat) — the compatibility layer for
-  SillyTavern-era plugins and scripts.
+
+SillyTavern-era plugin compatibility was removed by owner decision
+(2026-10-31); plugins written against the SillyTavern environment do not run,
+and new plugins use the Plugin SDK.
 
 The [API Reference](api/) is generated from the SDK sources by TypeDoc
 during every site build, so its member pages always match the published

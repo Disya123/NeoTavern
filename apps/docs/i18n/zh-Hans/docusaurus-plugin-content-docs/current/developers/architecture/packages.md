@@ -40,8 +40,6 @@ apps (server, web, desktop, plugin-runtime)
 - `@neotavern/theme-sdk` —— 主题 SDK：清单 schema、令牌/组件/外壳层级和继承解析。
 - `@neotavern/provider-sdk` —— 统一提供商适配器契约，加上面向 LLM、TTS、STT 和
   图像提供商的内置适配器，以及适配器注册表。
-- `@neotavern/legacy-compat` —— 旧版兼容层：`window` 全局对象、事件总线，
-  以及面向 SillyTavern 时代脚本的非托管 DOM 孤岛。
 - `@neotavern/gestures` —— 框架无关的行手势：上下文菜单（右键和长按）和拖放
   重排识别。
 - `@neotavern/plugin-build` —— 插件构建和发布管线：分析、签名和构建插件包。

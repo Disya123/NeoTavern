@@ -1,10 +1,17 @@
 # ADR-0039: Legacy Compatibility Authority Boundary
 
-Date: 2026-08-13. Status: Accepted (Architecture Convergence, Milestone 1 / Wave 0).
+Date: 2026-08-13. Status: **OBSOLETE (subject removed) — the SillyTavern-era
+plugin compatibility layer this ADR governed (window globals, Express compat
+host, `packages/legacy-compat`) was removed by owner decision on 2026-10-31
+(ADR-0059 slice); no migration guide was produced, none is planned.** The
+authority-non-expanding RULE below (compatibility MUST NOT grant more
+authority than the corresponding native capability; canonical SQL,
+SecretStore and Product Wire bypass stay forbidden) remains normative for any
+future translation surface (ADR-0038). The rest is kept as history.
 Related documents: [Target architecture ТЗ 10/10 rev2 §14](../../NeoTavern_architecture_10_of_10_spec_2026-08-13.md),
 [ADR-0038](0038-canonical-rust-kernel-core.md), [ADR-0027](0027-plugin-node-universal-runtime.md),
 [ADR-0028](0028-ses-bootstrap-tcb.md), [ADR-0037](0037-extension-hardening.md),
-[Plugin SDK](../plugin-sdk/README.md), [Legacy compatibility](../plugin-sdk/README.md).
+[Plugin SDK](../plugin-sdk/README.md).
 
 ## Context
 

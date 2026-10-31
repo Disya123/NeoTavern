@@ -939,9 +939,10 @@ cleared when the worker terminates.
 Frontend host endpoints `/api/v2/plugins/:id/sandbox`,
 `sandbox.js` and `assets/*` serve only the installed package. A native
 frontend executes in an iframe with `sandbox="allow-scripts"`, a separate CSP
-and no same-origin capability. `/api/v2/plugins/:id/legacy.js` is available
-only to an active package with confirmed `legacy.trusted`; its code executes
-in the main window and is therefore considered trusted. Backend routes are
+and no same-origin capability. `/api/v2/plugins/:id/legacy.js` is **not
+available**: the legacy entry-point route was removed together with
+SillyTavern-era plugin compatibility by owner decision (2026-10-31), and
+only the sandboxed SDK path exists. Backend routes are
 available only as `/api/plugins/{pluginId}/...`.
 
 #### Frontend prompt interceptor rendezvous

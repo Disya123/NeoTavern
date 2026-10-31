@@ -20,7 +20,7 @@
     "desktop:dev": "pnpm --filter @neotavern/desktop dev",
     "desktop:build": "pnpm --filter @neotavern/desktop build",
     "desktop:release": "pnpm desktop:prepare && node scripts/build-desktop-release.mjs && node scripts/smoke-desktop-release.mjs",
-    "typecheck": "tsc -b tsconfig.build.json && pnpm --filter @neotavern/ui typecheck && pnpm --filter @neotavern/i18n typecheck && pnpm --filter @neotavern/legacy-compat typecheck && pnpm --filter @neotavern/web typecheck",
+    "typecheck": "tsc -b tsconfig.build.json && pnpm --filter @neotavern/ui typecheck && pnpm --filter @neotavern/i18n typecheck && pnpm --filter @neotavern/web typecheck",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

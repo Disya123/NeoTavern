@@ -950,7 +950,7 @@ export const ru: Resources = {
     migrationCategory_backgrounds: 'Фоны',
     migrationCategory_extensionSettings: 'Настройки расширений',
     migrationCategory_apiSettings: 'Настройки API (провайдеры)',
-    migrationCategory_legacyExtensions: 'UI-расширения (legacy)',
+    migrationCategory_legacyExtensions: 'UI-расширения (не поддерживаются, будут пропущены)',
     migrationCategory_themes: 'Темы и пользовательский CSS',
     migrationCategoryDetails:
       'Объектов: {{count}} · вложенных записей: {{dependent}} · повреждено: {{invalid}} · конфликтов: {{conflicts}} · {{size}} МБ',

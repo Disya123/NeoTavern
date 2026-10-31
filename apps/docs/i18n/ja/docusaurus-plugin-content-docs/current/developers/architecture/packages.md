@@ -29,7 +29,6 @@ apps (server, web, desktop, plugin-runtime)
 - `@neotavern/plugin-sdk` — バージョン管理された Plugin SDK: マニフェストスキーマ、権限とケイパビリティ付与、プラグインがコンパイル対象とするフロントエンド・バックエンド API コントラクト。
 - `@neotavern/theme-sdk` — Theme SDK: マニフェストスキーマ、トークン/コンポーネント/シェルのレベル、継承解決。
 - `@neotavern/provider-sdk` — 統一プロバイダーアダプターコントラクトに加え、LLM、TTS、STT、画像プロバイダー用の組み込みアダプターとアダプターレジストリ。
-- `@neotavern/legacy-compat` — レガシー互換レイヤー: SillyTavern 時代のスクリプト用の `window` グローバル、イベントバス、管理外 DOM アイランド。
 - `@neotavern/gestures` — フレームワーク非依存の行ジェスチャー: コンテキストメニュー（右クリックと長押し）とドラッグ＆ドロップの並べ替え認識。
 - `@neotavern/plugin-build` — プラグインのビルドと公開パイプライン: 分析、署名、プラグインパッケージのビルド。
 

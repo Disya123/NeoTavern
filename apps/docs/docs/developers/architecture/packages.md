@@ -46,8 +46,6 @@ related goes to `@neotavern/db`.
 - `@neotavern/provider-sdk` — the unified provider adapter contract plus the
   built-in adapters for LLM, TTS, STT, and image providers, and the adapter
   registry.
-- `@neotavern/legacy-compat` — the legacy compatibility layer: `window` globals,
-  the event bus, and unmanaged DOM islands for SillyTavern-era scripts.
 - `@neotavern/gestures` — framework-agnostic row gestures: context menus
   (right-click and long-press) and drag-and-drop reorder recognition.
 - `@neotavern/plugin-build` — the plugin build and publish pipeline: analyze,

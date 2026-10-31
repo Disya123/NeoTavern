@@ -32,13 +32,15 @@ sidebar_position: 1
 
 ## 扩展 NeoTavern
 
-NeoTavern 可以通过四种方式扩展：
+NeoTavern 可以通过三种方式扩展：
 
 - [插件 SDK](developers/plugin-sdk/) —— 带清单、权限、前端和后端 API、生命周期钩子
   和沙箱化的插件。
 - [主题 SDK](developers/theme-sdk/) —— 由设计令牌、组件皮肤和外壳布局构建的主题。
 - [提供商](developers/providers/) —— 实现统一适配器契约的提供商适配器。
-- [旧版兼容](developers/legacy-compat) —— 面向 SillyTavern 时代插件和脚本的兼容层。
+
+SillyTavern 时代的插件兼容已根据所有者的决定（2026-10-31）移除；针对
+SillyTavern 环境编写的插件无法运行，新插件请使用插件 SDK。
 
 [API 参考](api/) 在每次站点构建时由 TypeDoc 从 SDK 源码生成，
 因此其成员页面始终与已发布的包一致。

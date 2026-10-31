@@ -15,8 +15,12 @@ This is the **migration / deprecation guide** for ТЗ §20 Этап 6 (ledger
   tables are gone.
 - One UI facade: `NeoBackend` (`LocalBackend` / `RemoteBackend` only).
   `LegacyBackend`, `legacyRaw()`, and `/api/v2` product routes are deleted.
-- Compatibility, if still needed, is a **versioned SillyTavern Compatibility
-  API** (documented, tested, no product-data ownership) — not a second writer.
+- There is **no SillyTavern Compatibility API to preserve**: SillyTavern-era
+  plugin compatibility was removed outright by owner decision (2026-10-31,
+  ADR-0059 slice) — no Express compatibility host, no `legacy` manifest
+  block, no `legacy.trusted` permission, and no migration guide. Only
+  SillyTavern **user data** (character cards, chats, backups) keeps
+  importing through Settings → Data.
 
 ## What stays until the remaining specs are ported
 
@@ -39,8 +43,11 @@ This is the **migration / deprecation guide** for ТЗ §20 Этап 6 (ledger
    ST import path if cards/chats still arrive as ST1 dumps.
 4. Delete `legacyRaw()` call sites (fail the ui:api check if any remain)
    and the `LegacyBackend` class.
-5. Keep a versioned ST Compatibility API only if a remaining extension
-   surface still needs it; otherwise delete the Express compatibility host.
+5. ~~Keep a versioned ST Compatibility API only if a remaining extension
+   surface still needs it; otherwise delete the Express compatibility host.~~
+   Done differently: the Express compatibility host was deleted outright on
+   2026-10-31 (ADR-0059 slice) — there is no SillyTavern Compatibility API
+   to keep.
 6. Recovery drills, SBOM/provenance, two real upgrade cycles — release-gate
    items, not this branch.
 
@@ -59,9 +66,10 @@ it did not delete `apps/server`.
 | ADR-0048 message swipe/draft/revision routes                                      | Deleted with the Fastify product writer                                   |
 | ADR-0047 waiver 7                                                                 | Legacy Fastify product-data ownership — expires at this stage             |
 
-Do not delete the versioned SillyTavern Compatibility API until a remaining
-extension surface is proven unused; plugin-compat (`apps/web/src/plugins/**`)
-is ADR-0039 and is not this inventory.
+There is no versioned SillyTavern Compatibility API: it was removed outright
+on 2026-10-31 (ADR-0059 slice) together with the Express compatibility host,
+so this stage no longer has a plugin-compat contingency. The Этап 6 cleanup
+now covers only the Fastify/Drizzle sidecar and the `app.db` contour.
 
 ## Rollback
 

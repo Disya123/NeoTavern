@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from '@neotavern/ui';
 import { Sidebar } from './Sidebar.js';
 import { PluginToolbar } from './PluginToolbar.js';
-import { LegacyIslands } from './LegacyIslands.js';
 import { PluginRuntimeUi } from './PluginRuntimeUi.js';
 import { PluginConsentDialog } from './PluginConsentDialog.js';
 import { ConnectivityStatus } from './ConnectivityStatus.js';
@@ -44,7 +43,6 @@ export function AppShell() {
         <ConnectivityStatus />
       </div>
       <div data-component="plugin-runtime-layer" data-slot="modal.layer" />
-      <LegacyIslands />
       <PluginRuntimeUi />
       <PluginConsentDialog />
     </div>

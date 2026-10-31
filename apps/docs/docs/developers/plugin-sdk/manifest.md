@@ -106,20 +106,10 @@ update requires re-consent — see [Permissions](permissions.md).
 
 ## Legacy Entry Points
 
-```json
-{
-  "legacy": {
-    "frontend": "legacy/main-window.js",
-    "backend": "legacy/server.mjs"
-  }
-}
-```
-
-The `legacy` block points at trusted compatibility entries for existing
-SillyTavern extensions. Packages using either entry must request the
-`legacy.trusted` permission, and the UI shows a stronger warning during
-consent. Safe mode never loads legacy entry points. See
-[Sandboxing](sandboxing.md) for how this differs from native plugins.
+The legacy entry-point block (SillyTavern compatibility) was removed by owner
+decision (2026-10-31) — manifests carrying `legacy` are rejected at install.
+SillyTavern-era plugin compatibility was removed; plugins written against the
+SillyTavern environment do not run, and new plugins use the Plugin SDK.
 
 ## OAuth Clients
 

@@ -11,7 +11,6 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
 import { Button, ErrorBoundary, Skeleton } from '@neotavern/ui';
 import type { ChatSnapshotResult, Message } from '@neotavern/contracts';
-import { findLegacySlashCommand, hasLegacyPromptInterceptors } from '@neotavern/legacy-compat';
 import {
   useCharacter,
   useChat,
@@ -238,19 +237,9 @@ export function ChatPage() {
     };
   }, []);
 
-  // Legacy `getContext().generate()` triggers a regeneration cycle (ТЗ §8.1).
-  // The listener is registered once; the current send() is reached through a
-  // ref so streaming re-renders do not re-subscribe ~30 times/second (OTHER-60).
   const sendRef = useRef<(messageOverride?: string, regenerate?: boolean) => Promise<void>>(
     async () => undefined,
   );
-  useEffect(() => {
-    const onLegacyGenerate = (): void => {
-      void sendRef.current(undefined, true);
-    };
-    globalThis.addEventListener('neotavern-legacy-generate', onLegacyGenerate);
-    return () => globalThis.removeEventListener('neotavern-legacy-generate', onLegacyGenerate);
-  }, []);
 
   const scheduleFlush = (): void => {
     if (rafRef.current !== null) return;
@@ -296,19 +285,6 @@ export function ChatPage() {
         }
         return;
       }
-      // Legacy extensions register slash commands through the compat bridge
-      // (ТЗ §8.1); they run trusted in the main window.
-      const legacyCommand = findLegacySlashCommand(commandName);
-      if (legacyCommand) {
-        setSessionDraft(draftScope, '');
-        setError(null);
-        try {
-          await legacyCommand.handler(parsed?.[2] ?? '');
-        } catch (error) {
-          setError(errorText(error));
-        }
-        return;
-      }
       setError(t('plugins:slashNotFound', { command: commandName || text }));
       return;
     }
@@ -344,7 +320,7 @@ export function ChatPage() {
           regenerate,
           ...(regenerateTarget ? { regenerateMessageId: regenerateTarget.id } : {}),
           providerConfigId: settings.data?.activeProviderConfigId ?? undefined,
-          frontendInterceptors: promptInterceptors.length > 0 || hasLegacyPromptInterceptors(),
+          frontendInterceptors: promptInterceptors.length > 0,
         },
         {
           onStart: () => {

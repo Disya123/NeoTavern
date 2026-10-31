@@ -923,7 +923,7 @@ export const en = {
     migrationCategory_backgrounds: 'Backgrounds',
     migrationCategory_extensionSettings: 'Extension settings',
     migrationCategory_apiSettings: 'API settings (providers)',
-    migrationCategory_legacyExtensions: 'UI extensions (legacy)',
+    migrationCategory_legacyExtensions: 'UI extensions (unsupported, skipped)',
     migrationCategory_themes: 'Themes and custom CSS',
     migrationCategoryDetails:
       '{{count}} items · {{dependent}} child records · {{invalid}} invalid · {{conflicts}} conflicts · {{size}} MB',

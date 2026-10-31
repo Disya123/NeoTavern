@@ -27,12 +27,13 @@ sidebar_position: 1
 
 ## NeoTavern の拡張
 
-NeoTavern は 4 つの方法で拡張できます:
+NeoTavern は 3 つの方法で拡張できます:
 
 - [プラグイン SDK](developers/plugin-sdk/) — マニフェスト、権限、フロントエンド・バックエンド API、ライフサイクルフック、サンドボックス化を備えたプラグイン。
 - [テーマ SDK](developers/theme-sdk/) — デザイントークン、コンポーネントスキン、シェルレイアウトから構築されるテーマ。
 - [プロバイダー](developers/providers/) — 統一アダプターコントラクトを実装するプロバイダーアダプター。
-- [レガシー互換](developers/legacy-compat) — SillyTavern 時代のプラグインとスクリプトのための互換レイヤー。
+
+SillyTavern 時代のプラグイン互換はオーナーの決定（2026-10-31）により削除されました。SillyTavern 環境向けに書かれたプラグインは動作せず、新しいプラグインはプラグイン SDK を使用してください。
 
 [API リファレンス](api/) はサイトビルドのたびに TypeDoc によって SDK ソースから生成されるため、メンバーページは常に公開されているパッケージと一致します。
 

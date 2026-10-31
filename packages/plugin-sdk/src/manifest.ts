@@ -34,14 +34,6 @@ export interface PluginManifest {
   /** Locale → relative path of translation JSON. */
   i18n?: Record<string, string>;
   /**
-   * Trusted compatibility entry points for existing SillyTavern extensions.
-   * Packages using either entry must request `legacy.trusted`.
-   */
-  legacy?: {
-    frontend?: string;
-    backend?: string;
-  };
-  /**
    * Legacy flat permission list (SDK v2). Kept for compatibility; new
    * manifests SHOULD declare scoped capabilities instead (rev4 §B1).
    */
@@ -250,35 +242,11 @@ export function validateManifest(input: unknown): Result<PluginManifest> {
     }
   }
 
-  let legacy: PluginManifest['legacy'];
+  // SillyTavern legacy entry points were removed (ADR-0059 slice, owner
+  // decision 2026-10-31): a manifest carrying the block is rejected instead
+  // of being silently ignored.
   if (input['legacy'] !== undefined) {
-    if (!isRecord(input['legacy'])) {
-      issues.push('legacy must be an object');
-    } else {
-      const legacyFrontend = input['legacy']['frontend'];
-      const legacyBackend = input['legacy']['backend'];
-      for (const [field, value] of [
-        ['frontend', legacyFrontend],
-        ['backend', legacyBackend],
-      ] as const) {
-        if (
-          value !== undefined &&
-          (typeof value !== 'string' ||
-            !isSafePackagePath(value) ||
-            !hasExtension(value, ['.js', '.mjs', '.cjs']))
-        ) {
-          issues.push(`legacy.${field} must reference a safe JavaScript module`);
-        }
-      }
-      if (legacyFrontend === undefined && legacyBackend === undefined) {
-        issues.push('legacy must define frontend or backend');
-      } else {
-        legacy = {
-          ...(typeof legacyFrontend === 'string' ? { frontend: legacyFrontend } : {}),
-          ...(typeof legacyBackend === 'string' ? { backend: legacyBackend } : {}),
-        };
-      }
-    }
+    issues.push('legacy entry points are no longer supported');
   }
 
   let permissions: string[] = [];
@@ -309,10 +277,6 @@ export function validateManifest(input: unknown): Result<PluginManifest> {
     authClients = parseAuthClients(input['authClients'], issues) ?? undefined;
   }
 
-  if (legacy && !permissions.includes('legacy.trusted')) {
-    issues.push('legacy entry points require the legacy.trusted permission');
-  }
-
   if (issues.length > 0) {
     return err(
       new AppError({
@@ -334,7 +298,6 @@ export function validateManifest(input: unknown): Result<PluginManifest> {
   if (typeof input['backend'] === 'string') manifest.backend = input['backend'];
   if (typeof input['styles'] === 'string') manifest.styles = input['styles'];
   if (isRecord(input['i18n'])) manifest.i18n = input['i18n'] as Record<string, string>;
-  if (legacy) manifest.legacy = legacy;
   if (permissions.length > 0) manifest.permissions = permissions;
   if (requiredCapabilities && requiredCapabilities.length > 0) {
     manifest.requiredCapabilities = requiredCapabilities;

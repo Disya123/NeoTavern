@@ -43,7 +43,6 @@ import { registerDiagnosticRoutes } from './plugins/diagnostics.js';
 import { registerThemeRoutes } from './plugins/themes.js';
 import { registerPluginRoutes } from './plugins/plugins.js';
 import { MAX_SILLYTAVERN_ARCHIVE_BYTES, registerDataImportRoutes } from './plugins/dataImports.js';
-import { registerLegacyHost } from './legacy/host.js';
 
 export async function buildApp(input: AppContextInput): Promise<TypedApp> {
   const secrets =
@@ -126,9 +125,6 @@ export async function buildApp(input: AppContextInput): Promise<TypedApp> {
 
   registerErrorHandler(app, ctx.logger);
   await registerRemoteAuth(app, ctx.config);
-  // Express compatibility hooks must be installed before any routes they can
-  // observe; actual middleware remains confined to the legacy host module.
-  await registerLegacyHost(app, ctx);
 
   await registerMetaRoutes(app, ctx);
   await registerCharacterRoutes(app, ctx);

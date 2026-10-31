@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "097275c03b9257687d907ab100f2432ef3a2acbc572f789a30897b6bd3c09d9f"
+      "sha256": "43dfb803ae893a875fe6f40c1e78b0f0a63e1fcf612bf5715ae49db23da394db"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -175,7 +175,7 @@
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
       "target": "adr/0039-legacy-compatibility-authority-boundary.md",
-      "sha256": "7ec410a1ef231e09c217c1b2a6a4a1f8363b177aaa663b3857df770b9107b129"
+      "sha256": "8721f86d0d437f67f62e97c80febbf03325c6ab6526f0f6717853e74db628df3"
     },
     {
       "source": "adr/0040-secret-store-port-format.md",
@@ -270,17 +270,17 @@
     {
       "source": "adr/0058-no-web-plugin-ir-platform.md",
       "target": "adr/0058-no-web-plugin-ir-platform.md",
-      "sha256": "a4d09ad1f6c3e28d09d018f3ab8694a9f1dda8b8254cb66388ce49596e17bcc1"
+      "sha256": "a35d2cb37362a0c33b5af754c03cd48ac1a7cb787f2b1c8f66ec99fdd26b632f"
     },
     {
       "source": "adr/0059-react-primary-pivot.md",
       "target": "adr/0059-react-primary-pivot.md",
-      "sha256": "2590b470c49a6d6180310a0baf0c2c498e3a31935219974a70993cbfe525e247"
+      "sha256": "f8e14d29bd1a5646229662a796e2a185c8e5a6169c8c5d9f45b71a3d8033c223"
     },
     {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "e7831a76db333c8881165f1e4534f397b9a57fbd03c118d08cc5558bc163f61f"
+      "sha256": "61a1a83608c37570e974257f7e2f3cec5e550b2ece9f16da4174667186eddb03"
     },
     {
       "source": "android/README.md",
@@ -290,12 +290,12 @@
     {
       "source": "api/README.md",
       "target": "api/README.md",
-      "sha256": "d6e75ffba771af81749ed4eef8d498fda308157dc0173a84c5e08c61d6677bbb"
+      "sha256": "79b3f8b79a62705d7f092514a0f232a7b04be2fa771af92710923da6eebf189d"
     },
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "722313e57b42f9c5d4729324d4f2d0c9543d9afaa9970f0d870e8b45be3f4428"
+      "sha256": "42141ec18da25a45b64d5a6f6b568ea16d0a282e93763d6d82b091ff37fc01bf"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -325,7 +325,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "3042de06d6367a26affce76c23b2fd66f409d2db192691d3f8b21df8f0f563c9"
+      "sha256": "8280943d5a2f196fbe3d1ac13e5e4235172c0441b42975a63089c17afaf7f657"
     },
     {
       "source": "architecture/portable-data.md",
@@ -355,7 +355,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "7b33de4cc13d91140a8a7e12ba5793efbe38749a479fa2c928162ed19377ee63"
+      "sha256": "7eb972564a6526f876f23c5404fdde8a35c3f39bb1b7030b88a89eec4d6801ad"
     },
     {
       "source": "architecture/version-axes.md",
@@ -400,7 +400,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "29b9988ea52b1f4d6846ecdd6a4eb7b3af330d8834eea1c4c17e8a005768f8e6"
+      "sha256": "95b4708928d1f0194bd2afd9870d4bc8254e6b14f10730fbadd91e9c079caba2"
     },
     {
       "source": "data/README.md",
@@ -440,12 +440,12 @@
     {
       "source": "migrations/etap6-legacy-removal.md",
       "target": "migrations/etap6-legacy-removal.md",
-      "sha256": "e28047434f50e9fc810ca6bc21c883222eeca6cc7c06e22d193ce9222fc1fdce"
+      "sha256": "46bae726c8c17b1d70db2324f03079ac18b13229194aebb7ad759e0c07e33ea7"
     },
     {
       "source": "plugin-sdk/README.md",
       "target": "plugin-sdk/README.md",
-      "sha256": "79d8a41f16ccd01ac6dd9361338a81f0359917ef8ac1f5c51e0729138fcec45e"
+      "sha256": "f5fe21542c2a7ec719baadcfbb45e127d8593f4c95d1977165c065546b9b0fda"
     },
     {
       "source": "plugin-sdk/examples/rev4-overlay-game.md",
@@ -455,7 +455,7 @@
     {
       "source": "plugin-sdk/rev4-api.md",
       "target": "plugin-sdk/rev4-api.md",
-      "sha256": "92c21970d89776441c44c674fd1d203576a6c907a2dbc2c1846d38ffdafdba56"
+      "sha256": "ffc3615e0a33a3f41c952825c2c248b1c2076581fb680ceb4cec9841e535eca8"
     },
     {
       "source": "plugin-sdk/visual-surface-ir.md",

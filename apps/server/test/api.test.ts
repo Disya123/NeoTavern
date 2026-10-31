@@ -724,21 +724,6 @@ describe('plugins', () => {
     });
     expect(reactivated.json().plugin.status).toBe('active');
 
-    const savedLegacySettings = await app.inject({
-      method: 'PATCH',
-      url: `/api/v2/legacy/extension-settings/${pluginId}`,
-      payload: { settings: { compactMode: true } },
-    });
-    expect(savedLegacySettings.statusCode).toBe(200);
-    expect(
-      (
-        await app.inject({
-          method: 'GET',
-          url: '/api/v2/legacy/extension-settings',
-        })
-      ).json(),
-    ).toEqual({ items: { [pluginId]: { compactMode: true } } });
-
     const disabled = await app.inject({
       method: 'POST',
       url: `/api/v2/plugins/${pluginId}/disable`,
@@ -1056,7 +1041,9 @@ describe('plugins', () => {
     await app.inject({ method: 'DELETE', url: `/api/v2/plugins/${pluginId}` });
   });
 
-  it('runs trusted legacy frontend and Express entries only after explicit consent', async () => {
+  it('rejects the removed SillyTavern legacy entry-point block', async () => {
+    // ST plugin compatibility was removed by owner decision (ADR-0059 slice):
+    // manifests carrying `legacy` entries fail validation at install.
     const pluginId = 'test.legacy-trusted';
     const archive = await zipArchive({
       'plugin.json': JSON.stringify({
@@ -1068,82 +1055,18 @@ describe('plugins', () => {
           frontend: 'legacy.js',
           backend: 'legacy-server.mjs',
         },
-        permissions: ['legacy.trusted'],
       }),
       'legacy.js': `window.__neotavernLegacyFixture = (window.__neotavernLegacyFixture ?? 0) + 1;`,
-      'legacy-server.mjs': `
-        export default {
-          info: { id: '${pluginId}', name: 'Trusted legacy fixture', version: '1.0.0' },
-          init(router) {
-            router.get('/status', (_request, response) => {
-              response.json({ legacy: true });
-            });
-          }
-        };
-      `,
+      'legacy-server.mjs': 'export default {};',
     });
     const installed = await app.inject({
       method: 'POST',
       url: '/api/v2/plugins/install',
       ...multipartFile(archive, 'legacy-trusted.stplugin', 'application/zip'),
     });
-    expect(installed.statusCode, installed.payload).toBe(200);
-    expect(installed.json().plugin).toMatchObject({
-      compatibilityLevel: 'legacy-trusted',
-      hasLegacyFrontend: true,
-      hasLegacyBackend: true,
-      status: 'needs-consent',
-    });
-    const denied = await app.inject({
-      method: 'POST',
-      url: `/api/v2/plugins/${pluginId}/activate`,
-      payload: { grantedPermissions: [] },
-    });
-    expect(denied.statusCode).toBe(403);
-
-    const activated = await app.inject({
-      method: 'POST',
-      url: `/api/v2/plugins/${pluginId}/activate`,
-      payload: { grantedPermissions: ['legacy.trusted'] },
-    });
-    expect(activated.statusCode, activated.payload).toBe(200);
-    const legacyResponse = await app.inject({
-      method: 'GET',
-      url: `/api/plugins/${pluginId}/status`,
-    });
-    expect(
-      legacyResponse.payload,
-      JSON.stringify({
-        statusCode: legacyResponse.statusCode,
-        headers: legacyResponse.headers,
-      }),
-    ).toBe(JSON.stringify({ legacy: true }));
-    const frontend = await app.inject({
-      method: 'GET',
-      url: `/api/v2/plugins/${pluginId}/legacy.js`,
-    });
-    expect(frontend.statusCode).toBe(200);
-    expect(frontend.headers['content-type']).toContain('text/javascript');
-    expect(frontend.payload).toContain('__neotavernLegacyFixture');
-
-    await app.inject({ method: 'POST', url: `/api/v2/plugins/${pluginId}/disable` });
-    expect(
-      (
-        await app.inject({
-          method: 'GET',
-          url: `/api/plugins/${pluginId}/status`,
-        })
-      ).statusCode,
-    ).toBe(404);
-    expect(
-      (
-        await app.inject({
-          method: 'GET',
-          url: `/api/v2/plugins/${pluginId}/legacy.js`,
-        })
-      ).statusCode,
-    ).toBe(404);
-    await app.inject({ method: 'DELETE', url: `/api/v2/plugins/${pluginId}` });
+    expect(installed.statusCode, installed.payload).toBe(422);
+    expect(installed.json().code).toBe('PLUGIN_INVALID');
+    await app.inject({ method: 'DELETE', url: `/api/v2/plugins/${pluginId}` }).catch(() => {});
   });
 });
 

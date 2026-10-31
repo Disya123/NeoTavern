@@ -51,6 +51,7 @@ The package contains no React/DOM — mount points are typed as `unknown`, the
 concrete types are supplied by the host (`apps/web`). The production frontend
 runs in a sandboxed iframe, the backend in a separate permission-limited
 Node.js process; callback boundaries accept only serializable values.
-`node:vm` is not used as a sandbox. Main-window/Express legacy entry points
-are a separate trusted mode requiring explicit `legacy.trusted` consent.
+`node:vm` is not used as a sandbox. SillyTavern-era main-window/Express
+legacy entry points were removed (2026-10-31, ADR-0059 Amendment 1) — the
+sandboxed SDK path is the only plugin surface.
 See [docs/plugin-sdk](../../docs/plugin-sdk/README.md).

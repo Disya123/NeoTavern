@@ -17,7 +17,7 @@ The workspace is a pnpm monorepo with two top-level groups, `apps/` and
 
 ```text
 apps/
-  server/          # Fastify backend: API, prompt pipeline, SSE, legacy host
+  server/          # Fastify backend: API, prompt pipeline, SSE
   web/             # React SPA
   plugin-runtime/  # Restricted Node.js process for backend plugins
   desktop/         # Tauri 2 shell; runs the server as a sidecar process
@@ -30,7 +30,6 @@ packages/
   plugin-sdk/    # Plugin manifest, permissions, and API contracts
   theme-sdk/     # Theme tokens, levels, and inheritance
   provider-sdk/  # Provider adapter contract and adapters
-  legacy-compat/ # window globals and DOM compatibility islands
   gestures/      # Framework-agnostic row gestures
   plugin-build/  # Plugin build and publish pipeline
 ```
@@ -38,9 +37,8 @@ packages/
 ## Apps
 
 - `apps/server` — the Fastify backend. It exposes the `/api/v2/*` API, runs
-  the prompt pipeline, streams generation over SSE, and hosts the
-  Express-compatible legacy surface. Each module is an isolated Fastify
-  plugin.
+  the prompt pipeline, and streams generation over SSE. Each module is an
+  isolated Fastify plugin.
 - `apps/web` — the React SPA. It talks to the server over HTTP and renders
   the chat workspace, plus the surfaces for characters, settings, providers,
   themes, and plugins.

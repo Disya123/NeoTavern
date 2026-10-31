@@ -78,7 +78,6 @@ import {
   readPluginDependencySpecs,
 } from '../plugin/dependencyInstaller.js';
 import { buildArchiveUrl, downloadRepoArchive, parseGitRepoUrl } from '../plugin/gitSource.js';
-import { LegacyServerPluginHost } from '../legacy/host.js';
 import { APP_VERSION } from './meta.js';
 import { registerPluginSecretRoutes } from './pluginSecrets.js';
 
@@ -196,13 +195,7 @@ function toInstalledPlugin(
     hasFrontend: Boolean(manifest.frontend),
     hasBackend: Boolean(manifest.backend),
     hasStyles: Boolean(manifest.styles),
-    hasLegacyFrontend: Boolean(manifest.legacy?.frontend),
-    hasLegacyBackend: Boolean(manifest.legacy?.backend),
-    compatibilityLevel: manifest.legacy
-      ? 'legacy-trusted'
-      : manifest.apiVersion >= 3
-        ? 'native-v3'
-        : 'native-v2',
+    compatibilityLevel: manifest.apiVersion >= 3 ? 'native-v3' : 'native-v2',
     grantedCapabilities: [...grantedCapabilities],
     trust: entry.trust,
     publisherKeyId: entry.publisherKeyId ?? undefined,
@@ -241,9 +234,6 @@ async function readManifest(packageRoot: string): Promise<PluginManifest> {
 async function validatePackage(packageRoot: string, manifest: PluginManifest): Promise<void> {
   await rejectForbiddenPackageFiles(packageRoot);
   for (const entryPath of [manifest.frontend, manifest.backend]) {
-    if (entryPath) await assertRegularFile(packageRoot, entryPath, MAX_ENTRYPOINT_BYTES);
-  }
-  for (const entryPath of [manifest.legacy?.frontend, manifest.legacy?.backend]) {
     if (entryPath) await assertRegularFile(packageRoot, entryPath, MAX_ENTRYPOINT_BYTES);
   }
   if (manifest.styles) {
@@ -349,7 +339,6 @@ interface PluginInstallEnvironment {
   ctx: AppContext;
   repo: PluginRepository;
   backendHost: BackendPluginHost;
-  legacyHost: LegacyServerPluginHost;
   /** vNext runtime service for v3 backends (Stage A). */
   runtime: VNextRuntimeService;
   /** Runtime safe-mode flag at install time. */
@@ -370,7 +359,7 @@ async function installFromExtractedDir(
   extractedRoot: string,
   env: PluginInstallEnvironment,
 ): Promise<PluginInstallResult> {
-  const { ctx, repo, backendHost, legacyHost, runtime } = env;
+  const { ctx, repo, backendHost, runtime } = env;
   const packageRoot = await findPackageRoot(extractedRoot);
   const manifest = await readManifest(packageRoot);
   await validatePackage(packageRoot, manifest);
@@ -395,7 +384,6 @@ async function installFromExtractedDir(
     if (existing?.enabled) {
       await Promise.all([
         backendHost.deactivate(manifest.id),
-        legacyHost.deactivate(manifest.id),
         manifest.apiVersion >= 3 ? runtime.deactivate(manifest.id) : Promise.resolve(),
       ]);
     }
@@ -415,7 +403,6 @@ async function installFromExtractedDir(
   if (existing?.enabled) {
     await Promise.all([
       backendHost.deactivate(manifest.id),
-      legacyHost.deactivate(manifest.id),
       manifest.apiVersion >= 3 ? runtime.deactivate(manifest.id) : Promise.resolve(),
     ]);
   }
@@ -497,7 +484,7 @@ async function installFromExtractedDir(
       ctx.database.repos.capabilityGrants,
       ctx.events,
     ).grantConsented(manifest.id, manifest, installed.plugin.grantedPermissions);
-    // Safe mode must not load native or legacy entry points — not even
+    // Safe mode must not load native entry points — not even
     // for an update installed over an already-enabled plugin (PLUG-51).
     // The enabled flag stays set so the plugin starts when safe mode is
     // exited.
@@ -508,7 +495,6 @@ async function installFromExtractedDir(
           finalPath,
           installed.plugin.grantedPermissions,
           backendHost,
-          legacyHost,
           env.runtime,
         );
       } catch {
@@ -566,7 +552,6 @@ async function installFromExtractedDir(
           finalPath,
           previous.grantedPermissions,
           backendHost,
-          legacyHost,
           env.runtime,
         ).catch(() => {
           repo.markError(previous.id, ErrorCodes.PLUGIN_LOAD_FAILED);
@@ -617,7 +602,6 @@ async function installPackageDependencies(
 
 export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Promise<void> {
   const repo = ctx.database.repos.plugins;
-  const legacyHost = new LegacyServerPluginHost(app);
   // Resource Governor (ТЗ §8, ADR-0026): single owner of the plugin process
   // tree budgets. The host keeps owning every process; the governor only
   // requests terminations, which are executed through the host's own
@@ -633,7 +617,7 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
       );
     });
   };
-  const backendHost = new BackendPluginHost(app, ctx, legacyHost, governor);
+  const backendHost = new BackendPluginHost(app, ctx, governor);
   const broker = createCapabilityBroker(ctx.database.repos.capabilityGrants, ctx.events);
   const vnextRuntime = createVNextRuntimeService(ctx, {
     nodeExecutable: ctx.config.pluginNodePath ?? undefined,
@@ -684,7 +668,7 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
     unregisterChatRelay();
     governor.stop();
     await vnextRuntime.shutdown();
-    await Promise.all([backendHost.close(), legacyHost.close()]);
+    await backendHost.close();
   });
 
   app.get(
@@ -724,7 +708,6 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
           ctx,
           repo,
           backendHost,
-          legacyHost,
           runtime: vnextRuntime,
           safeMode: runtimeSafeMode,
           source: { type: 'zip' },
@@ -782,7 +765,6 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
           ctx,
           repo,
           backendHost,
-          legacyHost,
           runtime: vnextRuntime,
           safeMode: runtimeSafeMode,
           source,
@@ -835,20 +817,6 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
           params: { reason: 'SAFE_MODE_ACTIVE' },
         });
       }
-      // Legacy entrypoints execute unmanaged (main-window JS / in-process
-      // Express), so a legacy plugin cannot run at all without the separately
-      // consented `legacy.trusted` permission — refuse instead of starting a
-      // degraded mode that would still require trust (ТЗ §7.5, §8).
-      if (manifest.legacy && !request.body.grantedPermissions.includes('legacy.trusted')) {
-        throw new AppError({
-          code: ErrorCodes.PLUGIN_PERMISSION_DENIED,
-          params: {
-            pluginId: existing.id,
-            permission: 'legacy.trusted',
-            reason: 'LEGACY_CONSENT_REQUIRED',
-          },
-        });
-      }
       try {
         // ТЗ §SEC-05: re-verify the installed package against its digest
         // snapshot (creating one from the publisher signature for pre-upgrade
@@ -866,7 +834,6 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
           join(ctx.paths.plugins, existing.id, 'package'),
           request.body.grantedPermissions,
           backendHost,
-          legacyHost,
           vnextRuntime,
         );
       } catch (cause) {
@@ -894,7 +861,6 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
       if (!plugin) {
         await Promise.all([
           backendHost.deactivate(request.params.id),
-          legacyHost.deactivate(request.params.id),
           vnextRuntime.deactivate(request.params.id),
         ]);
         throw new AppError({
@@ -923,7 +889,6 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
     async (request) => {
       await Promise.all([
         backendHost.deactivate(request.params.id),
-        legacyHost.deactivate(request.params.id),
         vnextRuntime.deactivate(request.params.id),
       ]);
       broker.revokeAll(request.params.id);
@@ -971,7 +936,6 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
       }
       await Promise.all([
         backendHost.deactivate(request.params.id),
-        legacyHost.deactivate(request.params.id),
         vnextRuntime.deactivate(request.params.id),
       ]);
       broker.revokeAll(request.params.id);
@@ -999,7 +963,7 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
     { schema: { response: { 200: PluginSafeModeResultSchema } } },
     async () => {
       runtimeSafeMode = true;
-      await Promise.all([backendHost.close(), legacyHost.close(), vnextRuntime.shutdown()]);
+      await Promise.all([backendHost.close(), vnextRuntime.shutdown()]);
       return { safeMode: true };
     },
   );
@@ -1009,7 +973,7 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
     { schema: { response: { 200: PluginSafeModeResultSchema } } },
     async () => {
       runtimeSafeMode = false;
-      await activateEnabledPlugins(repo.list(), backendHost, legacyHost, ctx, broker, vnextRuntime);
+      await activateEnabledPlugins(repo.list(), backendHost, ctx, broker, vnextRuntime);
       return { safeMode: false };
     },
   );
@@ -1118,35 +1082,6 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
       return { grant };
     },
   );
-
-  app.get(
-    '/api/v2/plugins/:id/legacy.js',
-    {
-      schema: {
-        params: Type.Object({ id: PluginIdSchema }),
-      },
-    },
-    async (request, reply) => {
-      const entry = requireEnabledPlugin(repo.getById(request.params.id), runtimeSafeMode);
-      const manifest = validatedStoredManifest(entry);
-      if (!manifest.legacy?.frontend || !entry.grantedPermissions.includes('legacy.trusted')) {
-        throw new AppError({
-          code: ErrorCodes.PLUGIN_NOT_FOUND,
-          params: { pluginId: entry.id },
-        });
-      }
-      const path = await assertRegularFile(
-        join(ctx.paths.plugins, entry.id, 'package'),
-        manifest.legacy.frontend,
-        MAX_ENTRYPOINT_BYTES,
-      );
-      return reply
-        .type('text/javascript; charset=utf-8')
-        .header('Cache-Control', 'no-store')
-        .send(createReadStream(path));
-    },
-  );
-
   app.get(
     '/api/v2/plugins/:id/assets/*',
     {
@@ -1195,7 +1130,7 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
     // from the durable journal — it never deletes both copies of a plugin.
     await recoverInterruptedInstalls(ctx.paths.plugins, ctx.database.repos.plugins, ctx.logger);
     if (!runtimeSafeMode) {
-      await activateEnabledPlugins(repo.list(), backendHost, legacyHost, ctx, broker, vnextRuntime);
+      await activateEnabledPlugins(repo.list(), backendHost, ctx, broker, vnextRuntime);
     }
   });
 }
@@ -1245,7 +1180,6 @@ function encodePackagePath(path: string): string {
 async function activateEnabledPlugins(
   entries: readonly PluginRegistryEntry[],
   backendHost: BackendPluginHost,
-  legacyHost: LegacyServerPluginHost,
   ctx: AppContext,
   broker: CapabilityBroker,
   runtime: VNextRuntimeService,
@@ -1284,7 +1218,6 @@ async function activateEnabledPlugins(
         join(ctx.paths.plugins, entry.id, 'package'),
         entry.grantedPermissions,
         backendHost,
-        legacyHost,
         runtime,
       );
     } catch (cause) {
@@ -1309,7 +1242,6 @@ async function activatePluginBackends(
   packageRoot: string,
   grantedPermissions: readonly string[],
   backendHost: BackendPluginHost,
-  legacyHost: LegacyServerPluginHost,
   runtime: VNextRuntimeService,
 ): Promise<void> {
   // Compat-гейт (ADR-0027 §3): apiVersion 3 routes to the Node Universal
@@ -1335,9 +1267,8 @@ async function activatePluginBackends(
   }
   try {
     await backendHost.activate(manifest, packageRoot, grantedPermissions);
-    await legacyHost.activate(manifest, packageRoot, grantedPermissions);
   } catch (error) {
-    await Promise.all([backendHost.deactivate(manifest.id), legacyHost.deactivate(manifest.id)]);
+    await backendHost.deactivate(manifest.id);
     throw error;
   }
 }
