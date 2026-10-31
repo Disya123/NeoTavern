@@ -4,6 +4,24 @@
 
 ### Added
 
+- **Headless: portable `secrets.enc` backend + full secret-seam wiring
+  (SEC-01/SEC-01.1, M7 follow-up).** `neotavern-headless --secret-backend
+  portable --secrets-enc <path> --secret-passphrase-file <path>` opens the
+  canonical portable v2 store (ADR-0040): the file is created on first
+  launch when absent, a wrong master passphrase fails the startup closed
+  (never a fallback store, the passphrase never crosses the wire — only
+  its file path may come from argv/env). Every headless backend now wires
+  BOTH kernel seams — the writable store AND the execution-time resolver —
+  fixing the asymmetry where the store was wired but `set_secret_resolver`
+  never was (saved keys were unusable at generation time; fail-closed).
+  Tests: 16 lib (portable flag matrix, first-launch create/reopen with
+  surviving records, wrong-passphrase fail-closed, empty passphrase
+  refusal, fail-closed resolver) + 9 integration incl. `secrets.status`
+  reporting kind `portable` over `/rpc` and the wrong-passphrase startup
+  failure. Docs: headless README, docs/desktop README, release-manifest
+  (security.secret-store honest status), ADR-0038 status note, secret-store
+  and data READMEs.
+
 - **SillyTavern-era plugin compatibility removed (ADR-0059 Amendment 1;
   owner decision 2026-10-31 — "думать о них не стоит").** The whole ST
   plugin-compat layer is deleted with no migration guide: the Express

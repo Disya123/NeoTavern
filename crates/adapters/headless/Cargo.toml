@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 contracts-generated = { path = "../../contracts-generated" }
+provider-sdk = { path = "../../provider-sdk" }
 remote-http-adapter = { path = "../remote-http" }
 runtime-kernel = { path = "../../runtime-kernel" }
 secret-store = { path = "../../secret-store" }

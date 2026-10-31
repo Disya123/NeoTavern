@@ -17,8 +17,12 @@
 //! - CORS deny-by-default (`--allowed-origin` / `NEOTA_ALLOWED_ORIGINS`).
 //!
 //! Secret policy (SEC-01, documented at deployment): default `env`
-//! (`NEOTA_SECRET_*`, read-only). `session` and `unavailable` are explicit
-//! alternatives; there is never a plaintext fallback.
+//! (`NEOTA_SECRET_*`, read-only). `session`, `unavailable` and `portable`
+//! (`secrets.enc` v2, ADR-0040 — passphrase supplied via a file) are explicit
+//! alternatives; there is never a plaintext fallback. Every backend wires
+//! BOTH kernel seams: the writable store (so `providers.config.set apiKey`
+//! commits) and the execution-time resolver (so a generation run resolves
+//! the key at the point of use).
 
 use std::io::{self, Read, Write};
 use std::net::SocketAddr;
@@ -28,7 +32,8 @@ use std::sync::{Arc, Mutex};
 use remote_http_adapter::auth::AuthConfig;
 use remote_http_adapter::{AdapterError, RemoteAdapter, RemoteAdapterConfig};
 use runtime_kernel::{Kernel, KernelConfig};
-use secret_store::{EnvSecretStore, MemorySecretStore, SecretStore, UnavailableSecretStore};
+
+mod secrets;
 
 /// Stable exit codes (documented contract, see the crate README).
 pub const EXIT_OK: u8 = 0;
@@ -53,7 +58,14 @@ options:
   --remote-exposure             allow a non-loopback bind (NEOTA_REMOTE_EXPOSURE=1)
   --auth                        pairing gate on /rpc and /rpc/stream (NEOTA_HEADLESS_AUTH=1)
   --allowed-origin <origin>     CORS allowlist entry (repeatable; NEOTA_ALLOWED_ORIGINS)
-  --secret-backend <kind>       env | session | unavailable (default env; NEOTA_SECRET_BACKEND)
+  --secret-backend <kind>       env | session | unavailable | portable
+                                (default env; NEOTA_SECRET_BACKEND)
+  --secrets-enc <path>          portable: secrets.enc path (NEOTA_SECRETS_ENC);
+                                created on first launch when absent
+  --secret-passphrase-file <p>  portable: file with the master passphrase
+                                (NEOTA_SECRET_PASSPHRASE_FILE); the file's
+                                single trailing newline is stripped; a wrong
+                                passphrase fails closed at startup
 
 stdout: one `listening <ip:port>` line, then the process waits for stdin EOF
         and drains the listener (exit 0). Ctrl+C kills the process; durable
@@ -61,7 +73,7 @@ stdout: one `listening <ip:port>` line, then the process waits for stdin EOF
 stderr: diagnostics; with --auth, `credential-id` and `token` (token once).";
 
 /// Explicit Headless secret-backend kinds (SEC-01: no silent plaintext).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SecretBackend {
     /// Read-only `NEOTA_SECRET_*` (VPS / Headless default).
     Env,
@@ -69,6 +81,16 @@ pub enum SecretBackend {
     Session,
     /// Fail-closed: every secret op is unavailable.
     Unavailable,
+    /// Portable `secrets.enc` v2 (ADR-0040): the encrypted file plus the
+    /// master-passphrase file. The file is created on first launch when
+    /// absent; a wrong passphrase fails closed at startup.
+    Portable {
+        /// `secrets.enc` path (created when absent).
+        enc_path: PathBuf,
+        /// File holding the master passphrase (never argv, never an env
+        /// value — the path is the only thing the environment carries).
+        passphrase_path: PathBuf,
+    },
 }
 
 /// Parsed Headless host configuration.
@@ -128,6 +150,8 @@ where
     let mut auth_flag = false;
     let mut allowed_origins: Vec<String> = Vec::new();
     let mut secret_backend: Option<String> = None;
+    let mut secrets_enc: Option<PathBuf> = None;
+    let mut secret_passphrase_file: Option<PathBuf> = None;
 
     let mut rest = argv;
     while let Some(arg) = rest.next() {
@@ -156,10 +180,22 @@ where
             "--secret-backend" => {
                 let value = rest.next().ok_or_else(|| {
                     ParseError::Usage(
-                        "--secret-backend requires env|session|unavailable".to_string(),
+                        "--secret-backend requires env|session|unavailable|portable".to_string(),
                     )
                 })?;
                 secret_backend = Some(value.as_ref().to_string());
+            }
+            "--secrets-enc" => {
+                let value = rest.next().ok_or_else(|| {
+                    ParseError::Usage("--secrets-enc requires a path".to_string())
+                })?;
+                secrets_enc = Some(PathBuf::from(value.as_ref()));
+            }
+            "--secret-passphrase-file" => {
+                let value = rest.next().ok_or_else(|| {
+                    ParseError::Usage("--secret-passphrase-file requires a path".to_string())
+                })?;
+                secret_passphrase_file = Some(PathBuf::from(value.as_ref()));
             }
             other => {
                 return Err(ParseError::Usage(format!("unknown argument {other:?}")));
@@ -205,7 +241,21 @@ where
             secret_backend = Some(from_env);
         }
     }
-    let secret_backend = parse_secret_backend(secret_backend.as_deref().unwrap_or("env"))?;
+    if secrets_enc.is_none() {
+        if let Some(from_env) = env_value(env, "NEOTA_SECRETS_ENC") {
+            secrets_enc = Some(PathBuf::from(from_env));
+        }
+    }
+    if secret_passphrase_file.is_none() {
+        if let Some(from_env) = env_value(env, "NEOTA_SECRET_PASSPHRASE_FILE") {
+            secret_passphrase_file = Some(PathBuf::from(from_env));
+        }
+    }
+    let secret_backend = assemble_secret_backend(
+        secret_backend.as_deref().unwrap_or("env"),
+        secrets_enc,
+        secret_passphrase_file,
+    )?;
 
     Ok(HeadlessConfig {
         data_root,
@@ -217,13 +267,48 @@ where
     })
 }
 
-fn parse_secret_backend(raw: &str) -> Result<SecretBackend, ParseError> {
+/// Combines the `--secret-backend` kind with the portable path flags,
+/// rejecting incomplete or contradictory selections (usage errors — never a
+/// silently ignored flag).
+fn assemble_secret_backend(
+    raw: &str,
+    secrets_enc: Option<PathBuf>,
+    passphrase_file: Option<PathBuf>,
+) -> Result<SecretBackend, ParseError> {
     match raw.to_ascii_lowercase().as_str() {
-        "env" => Ok(SecretBackend::Env),
-        "session" => Ok(SecretBackend::Session),
-        "unavailable" => Ok(SecretBackend::Unavailable),
+        "env" | "session" | "unavailable" => {
+            if secrets_enc.is_some() || passphrase_file.is_some() {
+                return Err(ParseError::Usage(
+                    "--secrets-enc/--secret-passphrase-file are only valid with \
+                     --secret-backend portable"
+                        .to_string(),
+                ));
+            }
+            match raw.to_ascii_lowercase().as_str() {
+                "env" => Ok(SecretBackend::Env),
+                "session" => Ok(SecretBackend::Session),
+                _ => Ok(SecretBackend::Unavailable),
+            }
+        }
+        "portable" => {
+            let enc_path = secrets_enc.ok_or_else(|| {
+                ParseError::Usage(
+                    "--secret-backend portable requires --secrets-enc <path>".to_string(),
+                )
+            })?;
+            let passphrase_path = passphrase_file.ok_or_else(|| {
+                ParseError::Usage(
+                    "--secret-backend portable requires --secret-passphrase-file <path>"
+                        .to_string(),
+                )
+            })?;
+            Ok(SecretBackend::Portable {
+                enc_path,
+                passphrase_path,
+            })
+        }
         other => Err(ParseError::Usage(format!(
-            "unknown --secret-backend {other:?} (env|session|unavailable)"
+            "unknown --secret-backend {other:?} (env|session|unavailable|portable)"
         ))),
     }
 }
@@ -279,7 +364,7 @@ pub fn serve(config: HeadlessConfig) -> Result<(), String> {
         data_root: Some(config.data_root.clone()),
     })
     .map_err(|err| format!("kernel open failed: {err}"))?;
-    kernel.set_secret_store(secret_store_for(config.secret_backend));
+    secrets::wire_secrets(&kernel, &config.secret_backend)?;
     let kernel = Arc::new(Mutex::new(kernel));
 
     let adapter_config = RemoteAdapterConfig {
@@ -324,14 +409,6 @@ pub fn serve(config: HeadlessConfig) -> Result<(), String> {
 
     wait_for_stdin_eof();
     adapter.shutdown().map_err(format_adapter_error)
-}
-
-fn secret_store_for(kind: SecretBackend) -> Arc<dyn SecretStore> {
-    match kind {
-        SecretBackend::Env => Arc::new(EnvSecretStore::from_process("NEOTA_SECRET_")),
-        SecretBackend::Session => Arc::new(MemorySecretStore::new()),
-        SecretBackend::Unavailable => Arc::new(UnavailableSecretStore),
-    }
 }
 
 fn format_adapter_error(err: AdapterError) -> String {
@@ -472,6 +549,104 @@ mod tests {
             parse(&["--bind", "not-an-addr", "--root", "x"]),
             Err(ParseError::Usage(_))
         ));
+    }
+
+    #[test]
+    fn portable_backend_requires_both_paths() {
+        let missing_enc = parse(&[
+            "--root",
+            "x",
+            "--secret-backend",
+            "portable",
+            "--secret-passphrase-file",
+            "p.txt",
+        ]);
+        match missing_enc {
+            Err(ParseError::Usage(message)) => {
+                assert!(message.contains("--secrets-enc"), "{message}")
+            }
+            other => panic!("expected usage, got {other:?}"),
+        }
+        let missing_pass = parse(&[
+            "--root",
+            "x",
+            "--secret-backend",
+            "portable",
+            "--secrets-enc",
+            "secrets.enc",
+        ]);
+        match missing_pass {
+            Err(ParseError::Usage(message)) => {
+                assert!(message.contains("--secret-passphrase-file"), "{message}")
+            }
+            other => panic!("expected usage, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn portable_paths_are_rejected_for_non_portable_backends() {
+        let result = parse(&[
+            "--root",
+            "x",
+            "--secret-backend",
+            "env",
+            "--secrets-enc",
+            "secrets.enc",
+        ]);
+        match result {
+            Err(ParseError::Usage(message)) => {
+                assert!(message.contains("only valid with"), "{message}")
+            }
+            other => panic!("expected usage, got {other:?}"),
+        }
+        let result = parse(&["--root", "x", "--secret-passphrase-file", "p.txt"]);
+        assert!(matches!(result, Err(ParseError::Usage(_))));
+    }
+
+    #[test]
+    fn portable_backend_parses_with_both_paths() {
+        let config = parse(&[
+            "--root",
+            "x",
+            "--secret-backend",
+            "portable",
+            "--secrets-enc",
+            "data/secrets.enc",
+            "--secret-passphrase-file",
+            "data/passphrase.txt",
+        ])
+        .expect("parse");
+        match config.secret_backend {
+            SecretBackend::Portable {
+                enc_path,
+                passphrase_path,
+            } => {
+                assert_eq!(enc_path, PathBuf::from("data/secrets.enc"));
+                assert_eq!(passphrase_path, PathBuf::from("data/passphrase.txt"));
+            }
+            other => panic!("expected portable, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn portable_paths_fill_from_the_environment() {
+        let env = [
+            ("NEOTA_DATA_ROOT", "/from-env"),
+            ("NEOTA_SECRET_BACKEND", "portable"),
+            ("NEOTA_SECRETS_ENC", "/srv/nt/secrets.enc"),
+            ("NEOTA_SECRET_PASSPHRASE_FILE", "/srv/nt/passphrase"),
+        ];
+        let config = parse_args_with(["neotavern-headless"], &env).expect("parse env");
+        match config.secret_backend {
+            SecretBackend::Portable {
+                enc_path,
+                passphrase_path,
+            } => {
+                assert_eq!(enc_path, PathBuf::from("/srv/nt/secrets.enc"));
+                assert_eq!(passphrase_path, PathBuf::from("/srv/nt/passphrase"));
+            }
+            other => panic!("expected portable, got {other:?}"),
+        }
     }
 
     #[test]

@@ -34,9 +34,10 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/READM
 > canonical portable v2 format (Argon2id + AES-256-GCM); the OS-vault
 > adapter (Windows Credential Manager / macOS Keychain / Linux
 > secret-service) is the desktop installed-mode default since M5 slice 58.
-> Remaining pre-Stable engineering tails (ТЗ §SEC-01.1, non-gate): portable
-> `secrets.enc` host wiring + passphrase UX, the Android Keystore→kernel
-> bridge, and the v1→v2 scrypt converter (ADR-0040 §3). Program state:
+> Remaining pre-Stable engineering tails (ТЗ §SEC-01.1, non-gate): the
+> desktop portable passphrase UX, the Android Keystore→kernel bridge, and
+> the v1→v2 scrypt converter (ADR-0040 §3) — the headless host already
+> wires both kernel secret seams and the portable backend. Program state:
 > [acceptance-ledger.json](https://github.com/Disya123/NeoTavern/blob/main/docs/architecture/acceptance-ledger.json) — M0–M6 accepted,
 > M7-etap6-legacy-removal in progress.
 

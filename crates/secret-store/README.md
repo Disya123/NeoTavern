@@ -48,10 +48,12 @@ cargo fmt --manifest-path crates/Cargo.toml -p secret-store -- --check
   `SECRET_STORE_CORRUPT` message until the Этап 3 converter lands.
 - The OS-vault backend lives in this crate (`os_vault.rs`, feature
   `os-vault`) and is wired as the desktop installed-mode default since
-  M5 slice 58 (`NEOTA_SECRET_BACKEND=session|osvault` overrides). Not yet
-  wired anywhere: portable `secrets.enc` host wiring (no host opens the
-  file today — the passphrase create/open is crate-complete only), the
-  Android Keystore→kernel-port bridge (the Kotlin store exists in
-  `apps/android`, unwired), and the headless resolver (the store is wired,
-  `set_secret_resolver` is not). These are pre-Stable engineering tails
-  (ТЗ §SEC-01.1), tracked outside the milestone gates.
+  M5 slice 58 (`NEOTA_SECRET_BACKEND=session|osvault` overrides). The
+  headless host wires both kernel seams (store + execution-time resolver)
+  for every backend and supports the portable file backend
+  (`--secret-backend portable --secrets-enc --secret-passphrase-file`).
+  Still unwired: the DESKTOP portable `secrets.enc` host (the passphrase
+  create/open UX is host-side), and the Android Keystore→kernel-port
+  bridge (the Kotlin store exists in `apps/android`, unwired). These are
+  pre-Stable engineering tails (ТЗ §SEC-01.1), tracked outside the
+  milestone gates.

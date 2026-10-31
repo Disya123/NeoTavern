@@ -200,10 +200,15 @@ neotavern-headless --root <data-root>
   in; a public bind still requires `--auth` (`NEOTA_HEADLESS_AUTH=1`) —
   fail-closed before any listener exists (ТЗ §10 / §11.3.1).
 - **Secret policy is explicit.** Default backend is read-only `env`
-  (`NEOTA_SECRET_*`). `--secret-backend session|unavailable` selects the
-  session-only or fail-closed stores. There is never a plaintext fallback
-  (SEC-01). File/`secrets.enc` passphrase unlock on a daemon is a later
-  slice.
+  (`NEOTA_SECRET_*`). `--secret-backend session|unavailable|portable`
+  selects the session-only, fail-closed or portable `secrets.enc` stores
+  (`--secrets-enc` path — created on first launch — plus
+  `--secret-passphrase-file`; a wrong passphrase fails the startup closed).
+  Every backend wires both kernel seams (writable store + execution-time
+  resolver), so a saved provider key resolves at generation time. There is
+  never a plaintext fallback (SEC-01); the passphrase itself never crosses
+  the wire. The Desktop (Tauri) portable passphrase UX stays a host-side
+  follow-up.
 - **Stdout** is a single `listening <ip:port>` line. The process waits for
   stdin EOF, then drains in-flight HTTP. Ctrl+C kills the process; durable
   generation runs recover on the next open.

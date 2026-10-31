@@ -170,7 +170,7 @@
     {
       "source": "adr/0038-canonical-rust-kernel-core.md",
       "target": "adr/0038-canonical-rust-kernel-core.md",
-      "sha256": "f3b7a4220ee54b33c003a09fe008ffab632fb8e7dacbab748e5e76dfb5404ef1"
+      "sha256": "d5b215989aa97243c19b818dc7ce09d480a7c3349196e8423f0cbf63ca18b8cd"
     },
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
@@ -295,7 +295,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "c13e54a4c36306caa8886b774fdae33bedd70c703471ff3151dfeff0f4b45d37"
+      "sha256": "f14251d58fc7be31344c0ea29e9c655fea00b66a7cc77f8ba529998af7e3ac97"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -405,17 +405,17 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "c9055bdd36d3c73ae8284e931e798e2dc043d5ee9d8274bd6916064a893b935e"
+      "sha256": "42d6685ba6aec6d04de31f4415c777f67e46d6c8a084e60c6bbd5e2def5eee57"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "69e82598fe2ade35d7e9ecca26986c693ca37e2cda58e0a0465a80f788c878b4"
+      "sha256": "8e4bcb803c3f390b84dd3989159b717683bffd4b7161602f0d07f0f23cfecbb4"
     },
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "43a53fd56947ad5bb3f40ea331450cf498bb743132f57f1dd156c434fa66c333"
+      "sha256": "7ea290d4efab91e9038be2cb499eb609114215570425f5940726a18695d06a81"
     },
     {
       "source": "desktop/chat-ui-recipe.md",

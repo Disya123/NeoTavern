@@ -32,6 +32,8 @@ fn bin() -> Command {
         "NEOTA_HEADLESS_AUTH",
         "NEOTA_ALLOWED_ORIGINS",
         "NEOTA_SECRET_BACKEND",
+        "NEOTA_SECRETS_ENC",
+        "NEOTA_SECRET_PASSPHRASE_FILE",
     ] {
         command.env_remove(key);
     }
@@ -425,4 +427,108 @@ fn auth_gate_rejects_rpc_then_accepts_bootstrap_token() {
 
     let output = shutdown(child);
     assert_eq!(exit_code(&output), 0, "{}", stderr_text(&output));
+}
+
+/// A running portable backend reports its honest mode over the wire: the
+/// `secrets.status` DTO carries kind `portable` (never a value).
+#[test]
+fn portable_backend_reports_its_mode_over_the_wire() {
+    let temp = tempfile::tempdir().expect("data-root");
+    let enc = temp.path().join("secrets.enc");
+    let pass = temp.path().join("passphrase.txt");
+    std::fs::write(&pass, "integration-passphrase\n").expect("passphrase file");
+
+    let (mut child, _stderr) = spawn(
+        temp.path(),
+        &[
+            "--secret-backend",
+            "portable",
+            "--secrets-enc",
+            enc.to_str().expect("utf-8 enc path"),
+            "--secret-passphrase-file",
+            pass.to_str().expect("utf-8 passphrase path"),
+        ],
+    );
+    let addr = wait_listening(&mut child);
+    assert!(enc.exists(), "secrets.enc created at first launch");
+
+    let status = http_request(
+        addr,
+        "POST",
+        "/rpc",
+        &[("Content-Type", "application/json")],
+        &envelope_body(
+            "00000000-0000-4000-8000-000000000005",
+            "secrets.status",
+            json!({}),
+        ),
+    );
+    assert_eq!(status.status, 200, "secrets.status HTTP");
+    let result = expect_ok(&status.body);
+    assert_eq!(result["kind"], json!("portable"), "{result:?}");
+    assert_eq!(result["available"], json!(true), "{result:?}");
+    let raw = String::from_utf8_lossy(&status.body).to_string();
+    assert!(
+        !raw.contains("integration-passphrase"),
+        "the passphrase never crosses the wire: {raw}"
+    );
+
+    let output = shutdown(child);
+    assert_eq!(exit_code(&output), 0, "{}", stderr_text(&output));
+}
+
+/// A wrong master passphrase fails the startup with a stable diagnostic —
+/// never a fallback to a different store kind.
+#[test]
+fn portable_wrong_passphrase_fails_startup() {
+    let temp = tempfile::tempdir().expect("data-root");
+    let root_str = temp.path().to_str().expect("utf-8 temp path");
+    let enc = temp.path().join("secrets.enc");
+    let enc_str = enc.to_str().expect("utf-8 enc path");
+    let pass = temp.path().join("passphrase.txt");
+    let pass_str = pass.to_str().expect("utf-8 passphrase path");
+    std::fs::write(&pass, "right-passphrase").expect("passphrase file");
+    let portable_args: Vec<&str> = vec![
+        "--secret-backend",
+        "portable",
+        "--secrets-enc",
+        enc_str,
+        "--secret-passphrase-file",
+        pass_str,
+    ];
+
+    // First launch creates the store with the right passphrase.
+    let (mut child, _stderr) = spawn(temp.path(), &portable_args);
+    let _addr = wait_listening(&mut child);
+    let output = shutdown(child);
+    assert_eq!(exit_code(&output), 0, "{}", stderr_text(&output));
+
+    // Second launch with a wrong passphrase: startup fails closed.
+    let wrong = temp.path().join("wrong.txt");
+    let wrong_str = wrong.to_str().expect("utf-8 wrong path");
+    std::fs::write(&wrong, "wrong-passphrase").expect("wrong passphrase file");
+    let output = run_failing(&[
+        "--root",
+        root_str,
+        "--secret-backend",
+        "portable",
+        "--secrets-enc",
+        enc_str,
+        "--secret-passphrase-file",
+        wrong_str,
+    ]);
+    assert_eq!(exit_code(&output), 1, "stderr={}", stderr_text(&output));
+    assert!(
+        stderr_text(&output).contains("failing closed"),
+        "{}",
+        stderr_text(&output)
+    );
+    // Usage-level validation also fails closed before any kernel open.
+    let incomplete = run_failing(&["--root", root_str, "--secret-backend", "portable"]);
+    assert_eq!(exit_code(&incomplete), 2);
+    assert!(
+        stderr_text(&incomplete).contains("--secrets-enc"),
+        "{}",
+        stderr_text(&incomplete)
+    );
 }

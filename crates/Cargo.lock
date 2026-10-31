@@ -2197,6 +2197,7 @@ name = "neotavern-headless"
 version = "0.1.0"
 dependencies = [
  "contracts-generated",
+ "provider-sdk",
  "remote-http-adapter",
  "runtime-kernel",
  "secret-store",

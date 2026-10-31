@@ -19,8 +19,12 @@ coordinator, ТЗ §22).
   in; a public bind still requires `--auth` (adapter
   `PublicBindRequiresAuth`, ТЗ §10 / §11.3.1).
 - **Documented secret policy.** Default `env` (`NEOTA_SECRET_*`, read-only).
-  `session` (process memory) and `unavailable` (fail-closed) are explicit
+  `session` (process memory), `unavailable` (fail-closed) and `portable`
+  (`secrets.enc` v2 per ADR-0040, master passphrase from a file) are explicit
   `--secret-backend` choices. There is never a plaintext fallback (SEC-01).
+  Every backend wires BOTH kernel seams — the writable store and the
+  execution-time resolver — so a saved provider key is actually usable at
+  generation time.
 
 ## Usage
 
@@ -28,14 +32,16 @@ coordinator, ТЗ §22).
 neotavern-headless --root <data-root> [options]
 ```
 
-| Flag / env                                      | Default                 | Meaning                                                                                                                  |
-| ----------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `--root` / `NEOTA_DATA_ROOT`                    | required                | Canonical data-root (exclusive lease).                                                                                   |
-| `--bind` / `NEOTA_BIND`                         | `127.0.0.1:8080`        | Listen address. Tests use `127.0.0.1:0`.                                                                                 |
-| `--remote-exposure` / `NEOTA_REMOTE_EXPOSURE=1` | off                     | Allow a non-loopback bind (`trusted_proxy`).                                                                             |
-| `--auth` / `NEOTA_HEADLESS_AUTH=1`              | off on loopback         | Pairing gate on `/rpc` and `/rpc/stream`. Required for a public bind. Prints `credential-id` and `token` once on stderr. |
-| `--allowed-origin` / `NEOTA_ALLOWED_ORIGINS`    | empty (deny-by-default) | CORS exact-match allowlist (repeatable flag; comma-separated env).                                                       |
-| `--secret-backend` / `NEOTA_SECRET_BACKEND`     | `env`                   | `env` \| `session` \| `unavailable`.                                                                                     |
+| Flag / env                                                  | Default                 | Meaning                                                                                                                                                  |
+| ----------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--root` / `NEOTA_DATA_ROOT`                                | required                | Canonical data-root (exclusive lease).                                                                                                                   |
+| `--bind` / `NEOTA_BIND`                                     | `127.0.0.1:8080`        | Listen address. Tests use `127.0.0.1:0`.                                                                                                                 |
+| `--remote-exposure` / `NEOTA_REMOTE_EXPOSURE=1`             | off                     | Allow a non-loopback bind (`trusted_proxy`).                                                                                                             |
+| `--auth` / `NEOTA_HEADLESS_AUTH=1`                          | off on loopback         | Pairing gate on `/rpc` and `/rpc/stream`. Required for a public bind. Prints `credential-id` and `token` once on stderr.                                 |
+| `--allowed-origin` / `NEOTA_ALLOWED_ORIGINS`                | empty (deny-by-default) | CORS exact-match allowlist (repeatable flag; comma-separated env).                                                                                       |
+| `--secret-backend` / `NEOTA_SECRET_BACKEND`                 | `env`                   | `env` \| `session` \| `unavailable` \| `portable`.                                                                                                       |
+| `--secrets-enc` / `NEOTA_SECRETS_ENC`                       | —                       | `portable` only: `secrets.enc` path; created on first launch when absent.                                                                                |
+| `--secret-passphrase-file` / `NEOTA_SECRET_PASSPHRASE_FILE` | —                       | `portable` only: file holding the master passphrase (one trailing newline stripped; never argv/env VALUES). A wrong passphrase fails the startup closed. |
 
 CLI flags override env. Stdout is a single `listening <ip:port>` line; the
 process then waits for **stdin EOF** and drains in-flight HTTP (exit 0).
@@ -58,10 +64,17 @@ cargo test --manifest-path crates/Cargo.toml -p neotavern-headless
 ```
 
 Library tests cover argument/env parsing (empty env snapshot so host
-`NEOTA_*` cannot leak in). The integration suite spawns the real binary:
-loopback `/meta`, character create/get over `/rpc`, `InsecureBind` and
-`PublicBindRequiresAuth` before any public listener, the auth gate
-(401 then bootstrap token), `--help` and missing `--root`.
+`NEOTA_*` cannot leak in) including the portable flag matrix (missing /
+stray paths rejected; env fallbacks). Secret-seam tests open a real
+`secrets.enc` in a tempdir: first-launch create, reopen with surviving
+records, wrong-passphrase fail-closed (the kernel stays store-less and a
+provider key write returns the stable unavailable error), empty passphrase
+refusal and the fail-closed resolver. The integration suite spawns the real
+binary: loopback `/meta`, character create/get over `/rpc`,
+`InsecureBind` and `PublicBindRequiresAuth` before any public listener, the
+auth gate (401 then bootstrap token), `secrets.status` reporting kind
+`portable` (passphrase never crosses the wire), the wrong-passphrase
+startup failure, `--help` and missing `--root`.
 
 ## Constraints
 
