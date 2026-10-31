@@ -8,10 +8,11 @@ The former "M1 remains open" note here was stale prose: of its named tails
 the OS-vault adapter landed with M5 slice 58 (`180036b`, desktop
 installed-mode default), and the headless host now wires BOTH kernel
 secret seams (store + resolver) including the portable `secrets.enc`
-backend (passphrase via file, fail-closed at startup). What genuinely
-remains are non-gate engineering tails tracked before Stable
-(ТЗ §SEC-01.1): the desktop portable passphrase UX, the Android
-Keystore→kernel-port bridge, and the v1→v2 scrypt converter (ADR-0040 §3).
+backend (passphrase via file, fail-closed at startup). The v1→v2 scrypt
+converter (ADR-0040 §3) is delivered (`secret_store::migrate`,
+2026-10-31). What genuinely remains are non-gate engineering tails
+tracked before Stable (ТЗ §SEC-01.1): the desktop portable passphrase UX
+and the Android Keystore→kernel-port bridge.
 Related documents: [Target architecture ТЗ 10/10 rev2](../../NeoTavern_architecture_10_of_10_spec_2026-08-13.md),
 [Architecture](../architecture/README.md), [Wire contracts](../architecture/wire-contracts.md),
 [ADR-0029](0029-wire-contract-toolchain.md), [ADR-0033](0033-desktop-local-kernel-transport.md),

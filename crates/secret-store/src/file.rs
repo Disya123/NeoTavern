@@ -29,8 +29,8 @@
 //! key; any read/write afterwards fails with `Locked`.
 //!
 //! A legacy v1 (scrypt) file is rejected with an explicit `Corrupt` error
-//! naming the legacy version: the v1→v2 converter ships with the data
-//! cutover (Этап 3) — the kernel never silently reads the legacy KDF.
+//! naming the delivered converter: [`crate::migrate::convert_v1_file`] —
+//! the kernel never silently reads the legacy KDF.
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
@@ -72,19 +72,19 @@ pub const HEADER_LEN: usize = 8 + 4 + 1 + 4 + 4 + 1 + 1 + 16;
 
 /// JSON payload envelope (forward-compatible, mirrors the legacy contour).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct PayloadFile {
-    format: String,
-    version: u32,
-    records: BTreeMap<String, BTreeMap<String, Record>>,
+pub(crate) struct PayloadFile {
+    pub(crate) format: String,
+    pub(crate) version: u32,
+    pub(crate) records: BTreeMap<String, BTreeMap<String, Record>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct Record {
-    value: String,
+pub(crate) struct Record {
+    pub(crate) value: String,
     #[serde(rename = "createdAt")]
-    created_at: i64,
+    pub(crate) created_at: i64,
     #[serde(rename = "updatedAt")]
-    updated_at: i64,
+    pub(crate) updated_at: i64,
 }
 
 /// Derived-key state of an open (unlocked) portable store.
@@ -146,7 +146,7 @@ fn parse_header(header: &[u8]) -> Result<[u8; SALT_LEN], SecretStoreError> {
         return Err(SecretStoreError::new(
             SecretStoreErrorCode::Corrupt,
             "legacy secrets.enc format v1 (scrypt) is not readable by the kernel — \
-             convert it with the data-cutover converter before use",
+             convert it with secret_store::migrate::convert_v1_file before use",
         ));
     }
     if version != FORMAT_VERSION {
@@ -568,6 +568,37 @@ impl FileEncryptedSecretStore {
         let key = derive_key(passphrase, &salt)?;
         let header = encode_header(&salt);
         let payload = self.payload(&BTreeMap::new())?;
+        let bytes = encrypt_payload(&key, &header, &payload)?;
+        self.write_atomic(&bytes)?;
+        self.open(passphrase)
+    }
+
+    /// Creates the store file seeded with pre-converted records (the
+    /// v1→v2 converter's write path, ADR-0040 §3). Same staged semantics as
+    /// [`create`](Self::create): fails `Corrupt` when the file exists,
+    /// verifies by reopening, opens the store afterwards.
+    pub(crate) fn create_seeded(
+        &self,
+        passphrase: &str,
+        records: &BTreeMap<String, BTreeMap<String, Record>>,
+    ) -> Result<(), SecretStoreError> {
+        if passphrase.is_empty() {
+            return Err(SecretStoreError::new(
+                SecretStoreErrorCode::AuthFailed,
+                "a non-empty master passphrase is required",
+            ));
+        }
+        if self.path.exists() {
+            return Err(SecretStoreError::new(
+                SecretStoreErrorCode::Corrupt,
+                "secrets file already exists — open it instead of creating",
+            ));
+        }
+        let mut salt = [0u8; SALT_LEN];
+        rand::rngs::OsRng.fill_bytes(&mut salt);
+        let key = derive_key(passphrase, &salt)?;
+        let header = encode_header(&salt);
+        let payload = self.payload(records)?;
         let bytes = encrypt_payload(&key, &header, &payload)?;
         self.write_atomic(&bytes)?;
         self.open(passphrase)

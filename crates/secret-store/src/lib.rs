@@ -21,6 +21,7 @@ pub mod env;
 pub mod error;
 pub mod file;
 pub mod memory;
+pub mod migrate;
 pub mod refs;
 pub mod traits;
 

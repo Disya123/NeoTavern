@@ -35,9 +35,10 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/READM
 > adapter (Windows Credential Manager / macOS Keychain / Linux
 > secret-service) is the desktop installed-mode default since M5 slice 58.
 > Remaining pre-Stable engineering tails (ТЗ §SEC-01.1, non-gate): the
-> desktop portable passphrase UX, the Android Keystore→kernel bridge, and
-> the v1→v2 scrypt converter (ADR-0040 §3) — the headless host already
-> wires both kernel secret seams and the portable backend. Program state:
+> desktop portable passphrase UX and the Android Keystore→kernel bridge —
+> the headless host already wires both kernel secret seams and the portable
+> backend, and the v1→v2 scrypt converter is delivered
+> (`secret_store::migrate`). Program state:
 > [acceptance-ledger.json](https://github.com/Disya123/NeoTavern/blob/main/docs/architecture/acceptance-ledger.json) — M0–M6 accepted,
 > M7-etap6-legacy-removal in progress.
 

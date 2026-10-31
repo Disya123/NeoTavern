@@ -112,9 +112,14 @@ The legacy-contour v1 file (`magic NEOTASEC`, formatVer 1, scrypt
 N=32768/r=8/p=1, same payload envelope) is a migration input, not a read
 format for the kernel: opening a v1 file in the kernel store fails with an
 explicit, machine-readable `SECRET_STORE_CORRUPT` whose message names the
-legacy version and directs the user to the data-cutover converter
-(Этап 3). A converter that reads v1 and rewrites v2 under the canonical
-data root is delivered with the kernel SecretStore integration.
+delivered converter. The converter — `secret_store::migrate::convert_v1_file`
+(delivered 2026-10-31) — reads a v1 file with the master passphrase and
+writes a v2 file seeded with the same records (values and timestamps
+preserved): the v1 file is never modified or deleted (it stays the
+pre-conversion backup), an existing v2 target is never overwritten, and a
+wrong passphrase or tampering fails closed with no output file. Host
+wiring of the converter (CLI/data-cutover surface) follows the migration
+contour slices.
 
 ### 4. Port contract (kernel `crates/secret-store`)
 

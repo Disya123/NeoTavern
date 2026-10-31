@@ -45,7 +45,12 @@ cargo fmt --manifest-path crates/Cargo.toml -p secret-store -- --check
 - Never log, serialize or include secret values; `describe()` returns
   metadata only and is the only diagnostics surface.
 - A legacy v1 (scrypt) file is rejected with an explicit
-  `SECRET_STORE_CORRUPT` message until the Этап 3 converter lands.
+  `SECRET_STORE_CORRUPT` message naming the delivered converter —
+  [`migrate::convert_v1_file`](src/migrate.rs) (ADR-0040 §3) reads a v1
+  file with the master passphrase and writes a v2 file seeded with the same
+  records; the v1 file stays untouched as the pre-conversion backup and an
+  existing v2 target is never overwritten. Host wiring (CLI/data-cutover
+  surface) follows the migration-contour slices.
 - The OS-vault backend lives in this crate (`os_vault.rs`, feature
   `os-vault`) and is wired as the desktop installed-mode default since
   M5 slice 58 (`NEOTA_SECRET_BACKEND=session|osvault` overrides). The

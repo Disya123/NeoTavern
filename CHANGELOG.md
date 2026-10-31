@@ -4,6 +4,21 @@
 
 ### Added
 
+- **`secrets.enc` v1→v2 converter delivered (ADR-0040 §3; SEC-01).** New
+  `secret_store::migrate`: `read_v1_records` (decrypted legacy records for
+  migration reports) and `convert_v1_file` (legacy scrypt v1 file →
+  canonical Argon2id v2). Safety properties: the v1 file is never modified
+  or deleted (it stays the pre-conversion backup); an existing v2 target is
+  never overwritten (`Corrupt`, verified untouched by test); a wrong v1
+  passphrase or a tampered header fails closed with no output file
+  (AuthFailed/Corrupt); v1 header KDF parameters are used as authenticated
+  — never downgraded. The v2 reader's rejection message now names the
+  delivered converter. Cargo dep: `scrypt 0.11` (pure Rust, std-only crate
+  rule holds). Tests: 6 converter tests (round trip preserving values and
+  createdAt/updatedAt, wrong passphrase, existing target, tampered header,
+  v2-masquerading-as-v1 refused, report surface) — secret-store 21/21,
+  headless 25/25, tauri-local 14/14, workspace `cargo check` clean.
+
 - **Headless: portable `secrets.enc` backend + full secret-seam wiring
   (SEC-01/SEC-01.1, M7 follow-up).** `neotavern-headless --secret-backend
   portable --secrets-enc <path> --secret-passphrase-file <path>` opens the

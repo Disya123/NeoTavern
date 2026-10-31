@@ -98,10 +98,13 @@ writes — plus session/env/unavailable backends and the OS-vault adapter
 (desktop installed-mode default, M5 slice 58). The headless host wires
 both kernel seams (writable store + execution-time resolver) and serves
 the portable backend with the master passphrase supplied from a file
-(first-launch create, wrong-passphrase fail-closed startup). Still
-unwired (pre-Stable tails, ТЗ §SEC-01.1): the desktop portable passphrase
-UX, the Android Keystore→kernel bridge, the v1→v2 scrypt converter
-(ADR-0040 §3).
+(first-launch create, wrong-passphrase fail-closed startup). The legacy
+v1 (scrypt) `secrets.enc` converts via
+`secret_store::migrate::convert_v1_file` (ADR-0040 §3): values and
+timestamps preserved, the v1 file stays untouched as the backup, an
+existing v2 target is never overwritten. Still unwired (pre-Stable tails,
+ТЗ §SEC-01.1): the desktop portable passphrase UX and the Android
+Keystore→kernel bridge.
 
 ## FTS5
 

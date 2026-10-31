@@ -170,7 +170,7 @@
     {
       "source": "adr/0038-canonical-rust-kernel-core.md",
       "target": "adr/0038-canonical-rust-kernel-core.md",
-      "sha256": "d5b215989aa97243c19b818dc7ce09d480a7c3349196e8423f0cbf63ca18b8cd"
+      "sha256": "297755ff0475bf4075eb96e3060089e77c1662129f886cf0e18c8c2c9bf5dd92"
     },
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
@@ -180,7 +180,7 @@
     {
       "source": "adr/0040-secret-store-port-format.md",
       "target": "adr/0040-secret-store-port-format.md",
-      "sha256": "101f19c6043c8d1ed40a3a3c1909f3ed09c7a30d063aee1e239628dbbfc175d4"
+      "sha256": "bfe8efac544ab633a09c41276b72de36b8377f46a4d2e0c3b4022d04d7f9b3c0"
     },
     {
       "source": "adr/0041-versioned-data-roots-activation.md",
@@ -295,7 +295,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "f14251d58fc7be31344c0ea29e9c655fea00b66a7cc77f8ba529998af7e3ac97"
+      "sha256": "c1a6a5a52903eee57abe05ca8adcc46360fae5e66ddf3da116f562322abe1ad0"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -405,12 +405,12 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "42d6685ba6aec6d04de31f4415c777f67e46d6c8a084e60c6bbd5e2def5eee57"
+      "sha256": "def5247ca8e76612fcb33038946d1da3b2d6281d0ac7339c9b978ca577872c98"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "8e4bcb803c3f390b84dd3989159b717683bffd4b7161602f0d07f0f23cfecbb4"
+      "sha256": "fb137f1b7c3f8160c0210925cbf5803b4db5e869fcb959c3459f0b4b24214c77"
     },
     {
       "source": "desktop/README.md",
