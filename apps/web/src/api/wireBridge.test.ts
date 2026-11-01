@@ -44,6 +44,10 @@ const mocks = vi.hoisted(() => {
     createMessage: vi.fn(),
     updateMessage: vi.fn(),
     delMessage: vi.fn(),
+    listBlocks: vi.fn(),
+    attachBlock: vi.fn(),
+    updateBlock: vi.fn(),
+    deleteBlock: vi.fn(),
     createSnapshot: vi.fn(),
     rollbackSnapshot: vi.fn(),
     listSnapshots: vi.fn(),
@@ -203,6 +207,10 @@ import {
   deletePersona,
   deletePreset,
   discardMessageDraft,
+  attachMessageBlock,
+  deleteMessageBlock,
+  readMessageBlocks,
+  updateMessageBlock,
   readCharacters,
   readCharacter,
   readChats,
@@ -2156,6 +2164,156 @@ describe('search (wire search.*, M7 Etap-4 cluster 16)', () => {
         '/api/v2/search/rebuild',
         expect.objectContaining({ method: 'POST' }),
       );
+    } finally {
+      vi.unstubAllGlobals();
+      mocks.isKernelMode.mockReturnValue(true);
+    }
+  });
+});
+
+describe('message blocks (wire chats.blocks.* + blocks.*, M7 Etap-4 cluster 15)', () => {
+  const BLOCK_ID = 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e';
+  const MESSAGE_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+  const CHAT_ID = '7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c';
+
+  const wireBlock = {
+    id: BLOCK_ID,
+    messageId: MESSAGE_ID,
+    pluginId: 'lorebook-searcher',
+    blockType: 'meter',
+    rendererId: 'blk:meter',
+    descriptor: { title: 'Context meter' },
+    serializedState: { count: 9 },
+    createdAt: '2026-08-12T10:00:00Z',
+    updatedAt: '2026-08-12T10:00:00Z',
+  };
+
+  beforeEach(() => {
+    mocks.isKernelMode.mockReturnValue(true);
+    vi.clearAllMocks();
+  });
+
+  it('reads a page of blocks through chats.blocks.list and maps RFC 3339 stamps to epoch ms', async () => {
+    mocks.chats.listBlocks.mockResolvedValue({ items: [wireBlock] });
+    const blocks = await readMessageBlocks(CHAT_ID, [MESSAGE_ID]);
+    expect(mocks.chats.listBlocks).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageIds: [MESSAGE_ID],
+    });
+    expect(blocks).toEqual([
+      {
+        id: BLOCK_ID,
+        messageId: MESSAGE_ID,
+        pluginId: 'lorebook-searcher',
+        blockType: 'meter',
+        rendererId: 'blk:meter',
+        descriptor: { title: 'Context meter' },
+        serializedState: { count: 9 },
+        createdAt: Date.parse('2026-08-12T10:00:00Z'),
+        updatedAt: Date.parse('2026-08-12T10:00:00Z'),
+      },
+    ]);
+  });
+
+  it('short-circuits an empty batch without a transport call', async () => {
+    await expect(readMessageBlocks(CHAT_ID, [])).resolves.toEqual([]);
+    expect(mocks.chats.listBlocks).not.toHaveBeenCalled();
+  });
+
+  it('attaches through chats.blocks.attach with the descriptor', async () => {
+    mocks.chats.attachBlock.mockResolvedValue(wireBlock);
+    const created = await attachMessageBlock(CHAT_ID, MESSAGE_ID, {
+      blockType: 'meter',
+      rendererId: 'blk:meter',
+      pluginId: 'lorebook-searcher',
+      descriptor: { title: 'Context meter' },
+    });
+    expect(mocks.chats.attachBlock).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+      blockType: 'meter',
+      rendererId: 'blk:meter',
+      pluginId: 'lorebook-searcher',
+      descriptor: { title: 'Context meter' },
+    });
+    expect(created.id).toBe(BLOCK_ID);
+  });
+
+  it('refuses a non-object descriptor instead of coercing it', async () => {
+    await expect(
+      attachMessageBlock(CHAT_ID, MESSAGE_ID, {
+        blockType: 'meter',
+        rendererId: 'blk:meter',
+        pluginId: 'lorebook-searcher',
+        descriptor: 'not-an-object',
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedError);
+    expect(mocks.chats.attachBlock).not.toHaveBeenCalled();
+  });
+
+  it('spells the legacy null state patch as clearSerializedState on the kernel plane', async () => {
+    mocks.chats.updateBlock.mockResolvedValue({ ...wireBlock, serializedState: undefined });
+    await updateMessageBlock(BLOCK_ID, { serializedState: null });
+    expect(mocks.chats.updateBlock).toHaveBeenCalledWith({
+      blockId: BLOCK_ID,
+      clearSerializedState: true,
+    });
+  });
+
+  it('persists a captured renderer state through blocks.update', async () => {
+    mocks.chats.updateBlock.mockResolvedValue(wireBlock);
+    await updateMessageBlock(BLOCK_ID, { serializedState: { count: 9 } });
+    expect(mocks.chats.updateBlock).toHaveBeenCalledWith({
+      blockId: BLOCK_ID,
+      serializedState: { count: 9 },
+    });
+  });
+
+  it('detaches through blocks.delete on the kernel plane', async () => {
+    mocks.chats.deleteBlock.mockResolvedValue({});
+    await expect(deleteMessageBlock(BLOCK_ID)).resolves.toEqual({ ok: true });
+    expect(mocks.chats.deleteBlock).toHaveBeenCalledWith({ blockId: BLOCK_ID });
+  });
+
+  it('keeps the four legacy routes on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const body = init?.body != null ? JSON.parse(String(init.body)) : null;
+      const legacyBlock = {
+        id: BLOCK_ID,
+        messageId: MESSAGE_ID,
+        pluginId: 'lorebook-searcher',
+        blockType: 'meter',
+        rendererId: 'blk:meter',
+        descriptor: { title: 'Context meter' },
+        serializedState: null,
+        createdAt: 1_786_500_000_000,
+        updatedAt: 1_786_500_000_000,
+      };
+      if (init?.method === 'GET' && url.startsWith(`/api/v2/chats/${CHAT_ID}/blocks?`)) {
+        return new Response(JSON.stringify({ items: [legacyBlock] }), { status: 200 });
+      }
+      if (init?.method === 'POST' && url.endsWith('/blocks')) {
+        return new Response(JSON.stringify({ ...legacyBlock, ...(body ?? {}) }), { status: 200 });
+      }
+      if (init?.method === 'PATCH' && url === `/api/v2/blocks/${BLOCK_ID}`) {
+        return new Response(JSON.stringify({ ...legacyBlock, ...(body ?? {}) }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(readMessageBlocks(CHAT_ID, [MESSAGE_ID])).resolves.toHaveLength(1);
+      // The legacy plane keeps the clearing patch spelled as `null`.
+      const patched = await updateMessageBlock(BLOCK_ID, { serializedState: null });
+      expect(patched.id).toBe(BLOCK_ID);
+      await expect(deleteMessageBlock(BLOCK_ID)).resolves.toEqual({ ok: true });
+      const patchCall = fetchMock.mock.calls.find((call) => String(call[0]).includes('/blocks/'));
+      expect(patchCall?.[1]).toMatchObject({ method: 'PATCH' });
+      expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({ serializedState: null });
+      expect(mocks.chats.listBlocks).not.toHaveBeenCalled();
+      expect(mocks.chats.updateBlock).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
       mocks.isKernelMode.mockReturnValue(true);

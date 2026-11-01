@@ -305,7 +305,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "d293757c9d26e9f58df29d46b43d6fc9b22d22b78f931242a5be71b6653d0d1e"
+      "sha256": "c64e1d7f58093ca6a837f71676ee8327e95b4fa3d5f32fe7da37c859d684b508"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -330,7 +330,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "8f7f73c73afec7cb601df861a89ca8111fe2aa9d3bbba1ffa6e2595e99750b24"
+      "sha256": "157ee22328d7f98bc6309a66245a3ac86b10c2cfd5e0d64229f6d3b94f36ce28"
     },
     {
       "source": "architecture/portable-data.md",
@@ -360,7 +360,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "0a5c9f4c496b22a91030f2021f7ca1ad9193aef85f6608eefbabc6c8d3942d65"
+      "sha256": "0b12c198463daedef2168071723b75d144a1e18359d58e3c131a07f381cbec75"
     },
     {
       "source": "architecture/version-axes.md",
@@ -370,7 +370,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "af4446bda1b697a1fd37a1c02e7bb20dd2a1184e9757b79081740ecad4c73590"
+      "sha256": "e07aa601d3cdf7417a2ba7e1b2da20ce117e5d884bd9101ed71c01d28400e9f2"
     },
     {
       "source": "audits/rust-app/INVENTORY.md",
@@ -405,12 +405,12 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "1493bb0037925ea0322ad59047a5c92e38b6383ed9b160f7833160b891cabee1"
+      "sha256": "182509730b220a368cc1ef7ed36e09ef5079cb7f61de92f68e551309d7b1eda1"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "55ebd422ea9c5bb066524aa554917e9003c4f605c4b97f8b696422106a5532b8"
+      "sha256": "871c7809b7a84b629dc30905115db14de51ba6e0c9785c787a293ab0b303db08"
     },
     {
       "source": "desktop/README.md",
@@ -460,7 +460,7 @@
     {
       "source": "plugin-sdk/rev4-api.md",
       "target": "plugin-sdk/rev4-api.md",
-      "sha256": "ffc3615e0a33a3f41c952825c2c248b1c2076581fb680ceb4cec9841e535eca8"
+      "sha256": "d22c852107aa0fa3963f7abe07665abcb6367dabaa260a238c7a737cb6e7bf31"
     },
     {
       "source": "plugin-sdk/visual-surface-ir.md",

@@ -76,8 +76,9 @@ describe('product wire registry', () => {
     // (119); the provider-access slice (M7 cluster 8) adds providers.models +
     // providers.test (121); the diagnostics-cache slice (M7 cluster 23) adds
     // diagnostics.cache.clear (122); the context-audit slice (M7 cluster 17,
-    // part 1) adds chats.context.audit (123).
-    expect(registry.operations).toHaveLength(123);
+    // part 1) adds chats.context.audit (123); the message-blocks slice (M7
+    // cluster 15) adds chats.blocks.{list,attach} + blocks.{update,delete} (127).
+    expect(registry.operations).toHaveLength(127);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -105,6 +106,10 @@ describe('product wire registry', () => {
       'chats.messages.create',
       'chats.messages.update',
       'chats.messages.delete',
+      'chats.blocks.list',
+      'chats.blocks.attach',
+      'blocks.update',
+      'blocks.delete',
       'chats.snapshots.create',
       'chats.snapshots.rollback',
       'chats.snapshots.list',

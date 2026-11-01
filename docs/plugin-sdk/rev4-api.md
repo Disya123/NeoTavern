@@ -385,13 +385,19 @@ cleanup. `attach(messageId, blockType, descriptor)` binds an instance to a
 message and returns `{blockId}`.
 
 Attachments are persistent (rev4 stage 4): they live in the server-side
-`message_block_attachments` table (together with the renderer's serialized state)
-and survive a page reload — the block renders in any client with the
-same state. `attach` creates the attachment on the server (REST) and only then
-updates the host cache; `freeze` (unmount due to overscan or a chat switch)
-saves the state via `PATCH /api/v2/blocks/:id`; on reload the host
-loads the attachments (`ensureBlocksLoaded`) and restores the state via
-`restore`. The renderer remains host state: it lives as long as the plugin's
+`message_blocks` table (the kernel's canonical store since M7 cluster 15; the
+legacy sidecar keeps `message_block_attachments`) together with the renderer's
+serialized state and survive a page reload — the block renders in any client
+with the same state. `attach` creates the attachment on the server (wire
+`chats.blocks.attach`, or the legacy REST route) and only then updates the host
+cache; `freeze` (unmount due to overscan or a chat switch) saves the state
+through `blocks.update` on the kernel plane (`PATCH /api/v2/blocks/:id` on the
+legacy plane); on reload the host loads the attachments
+(`chats.blocks.list` / `ensureBlocksLoaded`) and restores the state via
+`restore`. Persistence goes through the UI wire bridge — the host never talks
+to a transport directly. The descriptor and the serialized state are free-form
+JSON **objects** on the kernel plane; a scalar state is refused instead of
+coerced. The renderer remains host state: it lives as long as the plugin's
 session lives; an attachment without a live renderer (plugin disabled) shows an
 empty slot. Uninstalling the plugin cascades-deletes its attachments (FK).
 

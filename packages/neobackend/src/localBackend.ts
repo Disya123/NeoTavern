@@ -32,6 +32,8 @@ import {
   type ListToolsResultDto,
   type PromptPlanDto,
   type ChatContextAuditResultDto,
+  type ListMessageBlocksResultDto,
+  type MessageBlockDto,
   type WireGenerationEvent,
   type BackupsRestoreResultDto,
   type BackupsDeleteResultDto,
@@ -332,6 +334,11 @@ export class LocalBackend implements NeoBackend {
       createMessage: (req, opts) => this.invoke<MessageDto>('chats.messages.create', req, opts),
       updateMessage: (req, opts) => this.invoke<MessageDto>('chats.messages.update', req, opts),
       delMessage: (req, opts) => this.invoke<EmptyResultDto>('chats.messages.delete', req, opts),
+      listBlocks: (req, opts) =>
+        this.invoke<ListMessageBlocksResultDto>('chats.blocks.list', req, opts),
+      attachBlock: (req, opts) => this.invoke<MessageBlockDto>('chats.blocks.attach', req, opts),
+      updateBlock: (req, opts) => this.invoke<MessageBlockDto>('blocks.update', req, opts),
+      deleteBlock: (req, opts) => this.invoke<EmptyResultDto>('blocks.delete', req, opts),
       createSnapshot: (req, opts) =>
         this.invoke<ChatSnapshotResultDto>('chats.snapshots.create', req, opts),
       rollbackSnapshot: (req, opts) =>

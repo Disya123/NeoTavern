@@ -241,10 +241,36 @@ Swipes / variants / snapshots:
 
 ### messageBlocks — `apps/server/src/plugins/messageBlocks.ts`
 
-- `GET /api/v2/chats/:id/blocks` — batch block read for a page of messages.
-- `POST /api/v2/chats/:id/messages/:messageId/blocks` — attach a block.
-- `PATCH /api/v2/blocks/:blockId` — update.
-- `DELETE /api/v2/blocks/:blockId` — delete.
+**Covered (M7 Этап-4 cluster 15).** The four routes are served by the kernel
+(`chats.blocks.list`, `chats.blocks.attach`, `blocks.update`,
+`blocks.delete`; schema v25 `message_blocks`, attach order = `created_at,
+id`). The attachment is durable DATA — owning plugin, block type, renderer id,
+immutable attach-time descriptor and the renderer state captured by
+`blocks.freeze` — and cascades from both the message and the plugin, so an
+uninstall leaves no orphans. `apps/web/src/plugins/kernel/blocks.ts` reaches
+them through the wire bridge (`readMessageBlocks` / `attachMessageBlock` /
+`updateMessageBlock` / `deleteMessageBlock`); the legacy plane keeps these
+routes.
+
+- `GET /api/v2/chats/:id/blocks` — batch block read for a page of messages
+  (wire `chats.blocks.list`; ≤100 message ids, only attachments of messages
+  that belong to the chat are returned).
+- `POST /api/v2/chats/:id/messages/:messageId/blocks` — attach a block (wire
+  `chats.blocks.attach`; `CHAT_NOT_FOUND` / `MESSAGE_NOT_FOUND` /
+  `PLUGIN_NOT_FOUND`).
+- `PATCH /api/v2/blocks/:blockId` — update the descriptor and/or persist the
+  renderer state (wire `blocks.update`; the legacy `serializedState: null`
+  clearing patch is the wire `clearSerializedState: true`, and supplying both
+  is a `VALIDATION`).
+- `DELETE /api/v2/blocks/:blockId` — delete (wire `blocks.delete`;
+  `BLOCK_NOT_FOUND` when already gone).
+
+Honest boundaries: `descriptor`/`serializedState` are free-form JSON OBJECTS
+on the wire (the legacy plane stored any JSON value; a scalar is refused with
+`VALIDATION`/`UnsupportedError`, never coerced), and the cross-client
+`chat.message.block.changed` event is not pushed on the kernel plane yet — it
+belongs to the kernel event plane (cluster 18), so another client sees a block
+change on its next load.
 
 ### connectionProfiles — `apps/server/src/plugins/connectionProfiles.ts`
 
@@ -581,7 +607,7 @@ browser/sidecar mode (transport branch confined to the API layer, ТЗ §13.1).
 | backgrounds                           | `plugins/backgrounds.ts` + `files/backgrounds/`                                                                                                                                                                                                                                                                                                                                                                                                         | Runtime Kernel                                                                                 | legacy                     | — (beyond Phase 0 wire registry)                                                                                                                                                                                                                        |
 | backups                               | `plugins/backups.ts` + `data/backups/` (SQLite online backup)                                                                                                                                                                                                                                                                                                                                                                                           | Runtime Kernel                                                                                 | legacy                     | `backups.create`, `backups.list`                                                                                                                                                                                                                        |
 | chats                                 | `plugins/chats.ts` + `repositories/chats.ts`, `messages.ts`, `messageDrafts.ts`, `snapshots.ts`                                                                                                                                                                                                                                                                                                                                                         | Runtime Kernel                                                                                 | legacy                     | `chats.list`, `chats.get`, `chats.messages.list`, `chats.messages.variants.*`, `chats.messages.revisions.*`, `chats.messages.drafts.*` (Этап 4 slice 2)                                                                                                 |
-| messageBlocks                         | `plugins/messageBlocks.ts` + `repositories/messageBlocks.ts`                                                                                                                                                                                                                                                                                                                                                                                            | Runtime Kernel                                                                                 | legacy                     | — (beyond Phase 0 wire registry; chats family)                                                                                                                                                                                                          |
+| messageBlocks                         | `plugins/messageBlocks.ts` + `repositories/messageBlocks.ts`                                                                                                                                                                                                                                                                                                                                                                                            | Runtime Kernel                                                                                 | legacy (routes kept)       | `chats.blocks.list`, `chats.blocks.attach`, `blocks.update`, `blocks.delete` (cluster 15; schema v25 `message_blocks`; descriptor/state are wire JSON objects, cross-client change event waits for cluster 18)                                          |
 | connectionProfiles                    | `plugins/connectionProfiles.ts` + `repositories/connectionProfiles.ts`                                                                                                                                                                                                                                                                                                                                                                                  | Runtime Kernel                                                                                 | legacy                     | — (beyond Phase 0 wire registry)                                                                                                                                                                                                                        |
 | dataImports                           | `plugins/dataImports.ts` + `lib/sillyTavernImport.ts`                                                                                                                                                                                                                                                                                                                                                                                                   | Runtime Kernel                                                                                 | legacy                     | — (beyond Phase 0 wire registry)                                                                                                                                                                                                                        |
 | diagnostics                           | `plugins/diagnostics.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                | Runtime Kernel                                                                                 | legacy                     | — (beyond Phase 0 wire registry)                                                                                                                                                                                                                        |

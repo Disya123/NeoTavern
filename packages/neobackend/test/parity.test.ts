@@ -44,6 +44,8 @@ import {
   type ChatsExportResultDto,
   type PromptPlanDto,
   type ChatContextAuditResultDto,
+  type ListMessageBlocksResultDto,
+  type MessageBlockDto,
   type BackupsRestoreResultDto,
   type DataActivationStatusResultDto,
   type PluginDto,
@@ -451,6 +453,21 @@ const PROMPT_PLAN: PromptPlanDto = {
  * latest durable plan wrapped in the audit result. */
 const CHAT_CONTEXT_AUDIT: ChatContextAuditResultDto = { plan: PROMPT_PLAN };
 
+/** One durable plugin→message attachment (M7 Etap-4 cluster 15). */
+const MESSAGE_BLOCK: MessageBlockDto = {
+  id: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
+  messageId: MESSAGE_ID,
+  pluginId: 'lorebook-searcher',
+  blockType: 'meter',
+  rendererId: 'blk:meter',
+  descriptor: { title: 'Context meter' },
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+
+/** `chats.blocks.list` response (M7 Etap-4 cluster 15). */
+const MESSAGE_BLOCK_LIST: ListMessageBlocksResultDto = { items: [MESSAGE_BLOCK] };
+
 /** `data.activation.status` response (М5 slice 38): durable activation state. */
 const ACTIVATION_STATUS: DataActivationStatusResultDto = {
   layoutVersion: 2,
@@ -762,6 +779,14 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: PROMPT_PLAN };
       case 'chats.context.audit':
         return { ok: true, value: CHAT_CONTEXT_AUDIT };
+      case 'chats.blocks.list':
+        return { ok: true, value: MESSAGE_BLOCK_LIST };
+      case 'chats.blocks.attach':
+        return { ok: true, value: MESSAGE_BLOCK };
+      case 'blocks.update':
+        return { ok: true, value: MESSAGE_BLOCK };
+      case 'blocks.delete':
+        return { ok: true, value: EMPTY_RESULT };
       case 'data.activation.status':
         return { ok: true, value: ACTIVATION_STATUS };
       case 'backups.restore':
@@ -939,6 +964,14 @@ function rpcResult(operationId: string | undefined): unknown {
       return PROMPT_PLAN;
     case 'chats.context.audit':
       return CHAT_CONTEXT_AUDIT;
+    case 'chats.blocks.list':
+      return MESSAGE_BLOCK_LIST;
+    case 'chats.blocks.attach':
+      return MESSAGE_BLOCK;
+    case 'blocks.update':
+      return MESSAGE_BLOCK;
+    case 'blocks.delete':
+      return EMPTY_RESULT;
     case 'data.activation.status':
       return ACTIVATION_STATUS;
     case 'backups.restore':
@@ -1760,6 +1793,28 @@ describe('LegacyBackend', () => {
   it('chats.context.audit throws UnsupportedError (the legacy audit is a different contract)', () => {
     const backend = makeLegacyBackend(new Map());
     expect(() => backend.chats.contextAudit(CHAT_ID)).toThrow(UnsupportedError);
+  });
+
+  it('the four block operations throw UnsupportedError on the legacy backend', () => {
+    const backend = makeLegacyBackend(new Map());
+    expect(() => backend.chats.listBlocks({ chatId: CHAT_ID, messageIds: [MESSAGE_ID] })).toThrow(
+      UnsupportedError,
+    );
+    expect(() =>
+      backend.chats.attachBlock({
+        chatId: CHAT_ID,
+        messageId: MESSAGE_ID,
+        blockType: 'meter',
+        rendererId: 'blk:meter',
+        pluginId: 'lorebook-searcher',
+      }),
+    ).toThrow(UnsupportedError);
+    expect(() => backend.chats.updateBlock({ blockId: MESSAGE_BLOCK.id })).toThrow(
+      UnsupportedError,
+    );
+    expect(() => backend.chats.deleteBlock({ blockId: MESSAGE_BLOCK.id })).toThrow(
+      UnsupportedError,
+    );
   });
 
   it('providers.list throws UnsupportedError', () => {
@@ -2698,6 +2753,83 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     const backend = new LocalBackend({ transport: kernel });
 
     await expect(backend.chats.contextAudit('nope')).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
+  });
+
+  it('the four block operations are routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const listRequest = { chatId: CHAT_ID, messageIds: [MESSAGE_ID] };
+    const attachRequest = {
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+      blockType: 'meter',
+      rendererId: 'blk:meter',
+      pluginId: 'lorebook-searcher',
+      descriptor: { title: 'Context meter' },
+    };
+    const updateRequest = { blockId: MESSAGE_BLOCK.id, serializedState: { count: 9 } };
+    const deleteRequest = { blockId: MESSAGE_BLOCK.id };
+
+    const [localList, remoteList] = await Promise.all([
+      local.chats.listBlocks(listRequest),
+      remote.chats.listBlocks(listRequest),
+    ]);
+    expect(localList).toEqual(remoteList);
+    expect(localList).toEqual(MESSAGE_BLOCK_LIST);
+
+    const [localAttach, remoteAttach] = await Promise.all([
+      local.chats.attachBlock(attachRequest),
+      remote.chats.attachBlock(attachRequest),
+    ]);
+    expect(localAttach).toEqual(remoteAttach);
+    expect(localAttach).toEqual(MESSAGE_BLOCK);
+
+    const [localUpdate, remoteUpdate] = await Promise.all([
+      local.chats.updateBlock(updateRequest),
+      remote.chats.updateBlock(updateRequest),
+    ]);
+    expect(localUpdate).toEqual(remoteUpdate);
+    expect(localUpdate).toEqual(MESSAGE_BLOCK);
+
+    const [localDelete, remoteDelete] = await Promise.all([
+      local.chats.deleteBlock(deleteRequest),
+      remote.chats.deleteBlock(deleteRequest),
+    ]);
+    expect(localDelete).toEqual(remoteDelete);
+    expect(localDelete).toEqual(EMPTY_RESULT);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'chats.blocks.list', payload: listRequest },
+      { operationId: 'chats.blocks.attach', payload: attachRequest },
+      { operationId: 'blocks.update', payload: updateRequest },
+      { operationId: 'blocks.delete', payload: deleteRequest },
+    ]);
+  });
+
+  it('block requests are validated at the wire boundary before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    // minItems: one message id is required.
+    await expect(backend.chats.listBlocks({ chatId: CHAT_ID, messageIds: [] })).rejects.toThrow(
+      ValidationError,
+    );
+    // The descriptor is a free-form JSON OBJECT; a scalar is refused.
+    await expect(
+      backend.chats.attachBlock({
+        chatId: CHAT_ID,
+        messageId: MESSAGE_ID,
+        blockType: 'meter',
+        rendererId: 'blk:meter',
+        pluginId: 'lorebook-searcher',
+        descriptor: 'not-an-object',
+      }),
+    ).rejects.toThrow(ValidationError);
+    // Block ids are uuids.
+    await expect(backend.chats.deleteBlock({ blockId: 'nope' })).rejects.toThrow(ValidationError);
     expect(kernel.calls).toBe(0);
   });
 

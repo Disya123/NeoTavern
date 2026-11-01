@@ -61,6 +61,12 @@ import type {
   CreateProfileResultDto,
   DeleteMessageRequestDto,
   DeleteMessageVariantRequestDto,
+  AttachMessageBlockRequestDto,
+  DeleteMessageBlockRequestDto,
+  ListMessageBlocksRequestDto,
+  ListMessageBlocksResultDto,
+  MessageBlockDto,
+  UpdateMessageBlockRequestDto,
   CacheCleanupResultDto,
   DiagnosticsExportResultDto,
   DiscardMessageDraftRequestDto,
@@ -247,6 +253,32 @@ export interface ChatsApi {
   updateMessage(req: UpdateMessageRequestDto, opts?: BackendCallOptions): Promise<MessageDto>;
   /** Delete a message. */
   delMessage(req: DeleteMessageRequestDto, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /**
+   * Batch-read the block attachments of one rendered message page (wire
+   * `chats.blocks.list`, M7 Etap-4 cluster 15): one call per page, no N+1.
+   * Only attachments of messages that belong to `chatId` are returned.
+   */
+  listBlocks(
+    req: ListMessageBlocksRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ListMessageBlocksResultDto>;
+  /** Durably attach one plugin block to a message (wire `chats.blocks.attach`). */
+  attachBlock(
+    req: AttachMessageBlockRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<MessageBlockDto>;
+  /** Replace the descriptor and/or persist (or clear) the renderer state
+   * (wire `blocks.update`). */
+  updateBlock(
+    req: UpdateMessageBlockRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<MessageBlockDto>;
+  /** Detach one block by id; `BLOCK_NOT_FOUND` when it is already gone
+   * (wire `blocks.delete`). */
+  deleteBlock(
+    req: DeleteMessageBlockRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<EmptyResultDto>;
   /** Freeze the chat prefix into a fresh child chat (checkpoint/branch). */
   createSnapshot(
     req: CreateChatSnapshotRequestDto,

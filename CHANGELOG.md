@@ -4,6 +4,34 @@
 
 ### Added
 
+- **Durable plugin message blocks on the kernel plane (M7 Etap-4 slice;
+  cluster 15).** Schema v25 (`025_message_blocks`): the STRICT
+  `message_blocks` table — one plugin→message attachment per row (block type,
+  renderer id, immutable attach-time `descriptor_json`, optional
+  `serialized_state_json` captured by `blocks.freeze`), with CASCADE from both
+  the message and the plugin, so a message delete or an uninstall leaves no
+  orphans. Four new wire ops: `chats.blocks.list` (one batched read per
+  rendered page, ≤100 ids; only attachments of messages that belong to the
+  chat are returned — foreign ids are ignored, never leaked),
+  `chats.blocks.attach` (`CHAT_NOT_FOUND` / `MESSAGE_NOT_FOUND` for a foreign
+  chat / explicit `PLUGIN_NOT_FOUND` instead of a raw FK failure),
+  `blocks.update` (replace the descriptor and/or persist the renderer state;
+  `clearSerializedState: true` is the wire spelling of the legacy
+  `serializedState: null` clear, and supplying both is a `VALIDATION`) and
+  `blocks.delete` (`BLOCK_NOT_FOUND`). `descriptor` and `serializedState` are
+  free-form JSON OBJECTS (`wire.free-object`) — the legacy plane stored any
+  JSON value, and a scalar is now an honest refusal instead of a silent
+  coercion. Facade: `backend.chats.{listBlocks,attachBlock,updateBlock,
+  deleteBlock}` (local/remote implemented; the legacy facade keeps
+  `UnsupportedError`). Web: `readMessageBlocks` / `attachMessageBlock` /
+  `updateMessageBlock` / `deleteMessageBlock` in the wire bridge;
+  `plugins/kernel/blocks.ts` — the rev4 block host — now persists through the
+  bridge instead of `legacyRaw`, so block attachments work on both planes
+  (its `legacyRaw` baseline sites are gone: the UI gate drops 49 → 46). The
+  cross-client `chat.message.block.changed` push stays legacy-only until the
+  kernel event plane (cluster 18): the client that made the change updates
+  locally and every other client refreshes on load. Contract hash
+  `c3ef6a14…`; registry 127 ops.
 - **Live provider access on the kernel plane (M7 Etap-4 slice; cluster 8
   part 1).** Two new wire ops, both addressed by one stored config id:
   `providers.models` (live model discovery over the standard

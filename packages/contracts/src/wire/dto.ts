@@ -2973,6 +2973,118 @@ export const DisablePluginRequestDtoSchema = Type.Object(
 export type DisablePluginRequestDto = Static<typeof DisablePluginRequestDtoSchema>;
 
 /**
+ * Message block attachment DTO (`wire.message-block.item`) — one durable
+ * plugin→message binding (rev4 stage 4, M7 cluster 15): the kernel-plane
+ * replacement for the legacy `message_block_attachments` row. The attachment
+ * is DATA — the owning plugin id, the block type, the renderer id it renders
+ * with, the immutable attach-time descriptor and the renderer state captured
+ * on unmount (persisted so a reload restores the block). It carries NO plugin
+ * code and NO host handles: the renderer lives in the sandboxed plugin
+ * session, and an attachment without a live renderer shows an empty slot
+ * (AGENTS.md §17/§19). Uninstalling the plugin removes its attachments
+ * (FK cascade), exactly like the legacy plane.
+ *
+ * `descriptor` / `serializedState` are free-form JSON OBJECTS
+ * (`wire.free-object`). The legacy plane stored any JSON value (`unknown`);
+ * the wire cannot express a bare `unknown`, so a non-object descriptor or
+ * state is an honest `VALIDATION` refusal instead of a silent coercion.
+ */
+export const MessageBlockDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+    /** Owning plugin (uninstall cascades its attachments away). */
+    pluginId: Type.String({ minLength: 1, maxLength: 200 }),
+    blockType: Type.String({ minLength: 1, maxLength: 100 }),
+    rendererId: Type.String({ minLength: 1, maxLength: 200 }),
+    /** Attach-time descriptor (immutable). */
+    descriptor: WireFreeObjectSchema,
+    /** Renderer state captured on unmount; absent when never captured. */
+    serializedState: Type.Optional(WireFreeObjectSchema),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.message-block.item', additionalProperties: false },
+);
+export type MessageBlockDto = Static<typeof MessageBlockDtoSchema>;
+
+/**
+ * Batch block read request (`wire.request.chats.blocks.list`) — one query for
+ * a rendered page of messages (the legacy `GET /chats/:id/blocks` batch and
+ * its 100-id cap). Only attachments of messages that belong to `chatId` are
+ * returned; ids of other chats are ignored, never leaked.
+ */
+export const ListMessageBlocksRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    messageIds: Type.Array(Type.String({ format: 'uuid' }), { minItems: 1, maxItems: 100 }),
+  },
+  { $id: 'wire.request.chats.blocks.list', additionalProperties: false },
+);
+export type ListMessageBlocksRequestDto = Static<typeof ListMessageBlocksRequestDtoSchema>;
+
+/** Batch block read result (`wire.result.chats.blocks.list`), attach order. */
+export const ListMessageBlocksResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(MessageBlockDtoSchema, { maxItems: 4096 }),
+  },
+  { $id: 'wire.result.chats.blocks.list', additionalProperties: false },
+);
+export type ListMessageBlocksResultDto = Static<typeof ListMessageBlocksResultDtoSchema>;
+
+/**
+ * Attach block request (`wire.request.chats.blocks.attach`). The host calls
+ * this after the plugin's `blocks.attach` RPC, once its capability
+ * (`ui.messageBlock`) was granted host-side; `pluginId`/`rendererId` are
+ * host-provided, never plugin-claimed by a wire caller. The message must
+ * belong to `chatId` (`MESSAGE_NOT_FOUND` otherwise) and the plugin must be
+ * installed in the registry (`PLUGIN_NOT_FOUND`). `descriptor` is the
+ * attach-time record handed to the renderer's `mount`; the legacy plane
+ * defaulted it to `{}`.
+ */
+export const AttachMessageBlockRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+    blockType: Type.String({ minLength: 1, maxLength: 100 }),
+    rendererId: Type.String({ minLength: 1, maxLength: 200 }),
+    pluginId: Type.String({ minLength: 1, maxLength: 200 }),
+    descriptor: Type.Optional(WireFreeObjectSchema),
+  },
+  { $id: 'wire.request.chats.blocks.attach', additionalProperties: false },
+);
+export type AttachMessageBlockRequestDto = Static<typeof AttachMessageBlockRequestDtoSchema>;
+
+/**
+ * Update block request (`wire.request.blocks.update`) — replace the
+ * descriptor and/or persist the renderer state captured by `blocks.freeze`.
+ * Omitted fields keep their stored value. The wire has no nullable field, so
+ * clearing the stored state is an explicit `clearSerializedState: true`
+ * (mirroring `clearCheckpointChatId`); supplying it together with
+ * `serializedState` is a `VALIDATION` refusal, never a silent precedence.
+ */
+export const UpdateMessageBlockRequestDtoSchema = Type.Object(
+  {
+    blockId: Type.String({ format: 'uuid' }),
+    descriptor: Type.Optional(WireFreeObjectSchema),
+    serializedState: Type.Optional(WireFreeObjectSchema),
+    clearSerializedState: Type.Optional(Type.Boolean()),
+  },
+  { $id: 'wire.request.blocks.update', additionalProperties: false },
+);
+export type UpdateMessageBlockRequestDto = Static<typeof UpdateMessageBlockRequestDtoSchema>;
+
+/** Delete block request (`wire.request.blocks.delete`) — detached by block
+ * id (the legacy `DELETE /blocks/:id`); `NOT_FOUND` when it is already gone. */
+export const DeleteMessageBlockRequestDtoSchema = Type.Object(
+  {
+    blockId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.blocks.delete', additionalProperties: false },
+);
+export type DeleteMessageBlockRequestDto = Static<typeof DeleteMessageBlockRequestDtoSchema>;
+
+/**
  * Theme DTO (`wire.themes.item`) — the DURABLE lifecycle state of one
  * installed theme (ТЗ §5.2 theme-sdk, §SEC-05, Этап 4 slice 6 part 2). A
  * theme is DATA, never code: the opaque manifest plus a content-addressed
@@ -3314,6 +3426,12 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.message-draft-save': SaveMessageDraftRequestDtoSchema,
   'wire.request.message-draft-commit': CommitMessageDraftRequestDtoSchema,
   'wire.request.message-draft-discard': DiscardMessageDraftRequestDtoSchema,
+  'wire.message-block.item': MessageBlockDtoSchema,
+  'wire.request.chats.blocks.list': ListMessageBlocksRequestDtoSchema,
+  'wire.result.chats.blocks.list': ListMessageBlocksResultDtoSchema,
+  'wire.request.chats.blocks.attach': AttachMessageBlockRequestDtoSchema,
+  'wire.request.blocks.update': UpdateMessageBlockRequestDtoSchema,
+  'wire.request.blocks.delete': DeleteMessageBlockRequestDtoSchema,
   'wire.result.message-variant-list': ListMessageVariantsResultDtoSchema,
   'wire.result.message-revision-list': ListMessageRevisionsResultDtoSchema,
   'wire.result.message-draft-list': ListMessageDraftsResultDtoSchema,

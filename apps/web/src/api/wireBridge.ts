@@ -85,6 +85,10 @@ import {
   type PresetDto,
   type PromptPlanDto,
   type ChatContextAuditResultDto,
+  type MessageBlock,
+  type MessageBlockDto,
+  type BlockAttach,
+  type BlockUpdate,
   type DataActivationStatusResultDto,
   type VersionResponse,
   type MetaDto,
@@ -366,6 +370,143 @@ export async function updateChatMessage(
     `/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}`,
     body,
   );
+}
+
+/**
+ * Message block attachments (rev4 stage 4, M7 Etap-4 cluster 15).
+ *
+ * A plugin attaches a block instance to a chat message; the attachment is
+ * durable data — including the renderer state captured on unmount — so any
+ * client remounts the block with the same state. Kernel plane: the four wire
+ * operations (`chats.blocks.list` / `chats.blocks.attach` / `blocks.update` /
+ * `blocks.delete`). Legacy plane: the same four `/api/v2` routes. Both planes
+ * answer with the legacy `MessageBlock` shape, so the plugin host cache is
+ * plane-agnostic.
+ *
+ * One honest boundary: the wire carries free-form JSON OBJECTS, while the
+ * legacy routes accepted any JSON value. A scalar/array descriptor or
+ * renderer state is refused with a typed `UnsupportedError` instead of a
+ * silent coercion.
+ */
+
+/** Wire/legacy batch cap for one page of message ids. */
+const MESSAGE_BLOCK_BATCH_LIMIT = 100;
+
+/**
+ * Translate one wire attachment onto the legacy `MessageBlock` shape. The
+ * legacy plane stores epoch-ms integers, the wire RFC 3339 strings; the block
+ * cache only orders by these stamps, so the conversion is honest either way.
+ */
+function translateMessageBlock(dto: MessageBlockDto): MessageBlock {
+  return {
+    id: dto.id,
+    messageId: dto.messageId,
+    pluginId: dto.pluginId,
+    blockType: dto.blockType,
+    rendererId: dto.rendererId,
+    descriptor: dto.descriptor,
+    ...(dto.serializedState !== undefined ? { serializedState: dto.serializedState } : {}),
+    createdAt: Date.parse(dto.createdAt),
+    updatedAt: Date.parse(dto.updatedAt),
+  };
+}
+
+/** Refuses a non-object descriptor/state (the wire free-object is object-only). */
+function blockFreeObject(value: unknown, feature: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new UnsupportedError(feature);
+  }
+  return value as Record<string, unknown>;
+}
+
+/**
+ * Batch-read the block attachments of one rendered message page. An empty id
+ * list short-circuits in both planes: there is nothing to ask for and the
+ * legacy route required at least one id.
+ */
+export async function readMessageBlocks(
+  chatId: string,
+  messageIds: readonly string[],
+): Promise<MessageBlock[]> {
+  if (messageIds.length === 0) return [];
+  const batch = messageIds.slice(0, MESSAGE_BLOCK_BATCH_LIMIT);
+  if (isKernelMode()) {
+    const result = await backend.chats.listBlocks({ chatId, messageIds: [...batch] });
+    return result.items.map(translateMessageBlock);
+  }
+  const page = await api.get<{ items: MessageBlock[] }>(
+    `/chats/${encodeURIComponent(chatId)}/blocks?messageIds=${encodeURIComponent(batch.join(','))}`,
+  );
+  return page.items;
+}
+
+/** Durably attach one plugin block to a message of the current chat. */
+export async function attachMessageBlock(
+  chatId: string,
+  messageId: string,
+  input: BlockAttach,
+): Promise<MessageBlock> {
+  if (isKernelMode()) {
+    const dto = await backend.chats.attachBlock({
+      chatId,
+      messageId,
+      blockType: input.blockType,
+      rendererId: input.rendererId,
+      pluginId: input.pluginId,
+      ...(input.descriptor !== undefined
+        ? { descriptor: blockFreeObject(input.descriptor, 'blocks.attach.descriptor') }
+        : {}),
+    });
+    return translateMessageBlock(dto);
+  }
+  return api.post<MessageBlock>(
+    `/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/blocks`,
+    input,
+  );
+}
+
+/**
+ * Replace the descriptor and/or persist the renderer state of one attachment.
+ * The kernel plane spells the legacy `serializedState: null` clearing patch as
+ * `clearSerializedState: true` (the wire has no nullable field); an omitted
+ * field keeps its stored value on both planes.
+ */
+export async function updateMessageBlock(
+  blockId: string,
+  patch: BlockUpdate,
+): Promise<MessageBlock> {
+  if (isKernelMode()) {
+    const dto = await backend.chats.updateBlock({
+      blockId,
+      ...(patch.descriptor !== undefined
+        ? { descriptor: blockFreeObject(patch.descriptor, 'blocks.update.descriptor') }
+        : {}),
+      ...(patch.serializedState === null
+        ? { clearSerializedState: true }
+        : patch.serializedState !== undefined
+          ? {
+              serializedState: blockFreeObject(
+                patch.serializedState,
+                'blocks.update.serializedState',
+              ),
+            }
+          : {}),
+    });
+    return translateMessageBlock(dto);
+  }
+  const body: Record<string, unknown> = {};
+  if (patch.descriptor !== undefined) body.descriptor = patch.descriptor;
+  if (patch.serializedState !== undefined) body.serializedState = patch.serializedState;
+  return api.patch<MessageBlock>(`/blocks/${encodeURIComponent(blockId)}`, body);
+}
+
+/** Detach one block by id (permanent; the plugin uninstall cascades anyway). */
+export async function deleteMessageBlock(blockId: string): Promise<{ ok: true }> {
+  if (isKernelMode()) {
+    await backend.chats.deleteBlock({ blockId });
+    return { ok: true };
+  }
+  return api.del<{ ok: true }>(`/blocks/${encodeURIComponent(blockId)}`);
 }
 
 /**

@@ -1026,6 +1026,46 @@ pub const MIGRATION_24_SQL: &str = migration_24_sql!();
 pub const MIGRATION_24_CHECKSUM: &str =
     "05deb3a3ff7314cd9d702184a4d6a70c680f859cd8435622eb4ccbe9acc5ba65";
 
+/// Literal body of the message-block attachments (v25) schema migration (M7
+/// Etap-4 cluster 15): the STRICT `message_blocks` table — one durable
+/// plugin→message binding with the renderer's attach-time descriptor and the
+/// state captured on unmount (rev4 stage 4). It is the canonical counterpart
+/// of the legacy `message_block_attachments` table: attachments are DATA, not
+/// code, so a reload in any client renders the same block, and both FKs keep
+/// the table tidy — deleting the message or uninstalling the plugin removes
+/// its attachments (no orphans). Timestamps are RFC 3339 TEXT like every
+/// other kernel table. Additive; rollback is the pre-migration backup restore
+/// (ТЗ §10.4).
+macro_rules! migration_25_sql {
+    () => {
+        r#"CREATE TABLE message_blocks (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
+  block_type TEXT NOT NULL,
+  renderer_id TEXT NOT NULL,
+  descriptor_json TEXT NOT NULL DEFAULT '{}',
+  serialized_state_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX idx_message_blocks_message ON message_blocks(message_id);
+CREATE INDEX idx_message_blocks_plugin ON message_blocks(plugin_id);"#
+    };
+}
+
+/// Name of the message-block attachments (v25) schema migration.
+pub const MIGRATION_25_NAME: &str = "025_message_blocks";
+
+/// Exact SQL of the message-block attachments schema migration (v25) — the
+/// `migration_25_sql!()` literal.
+pub const MIGRATION_25_SQL: &str = migration_25_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_25_SQL` string bytes (same
+/// computation as `MIGRATION_24_CHECKSUM`).
+pub const MIGRATION_25_CHECKSUM: &str =
+    "804246b89411308a9fa754c461167a717f48b704f3c8837f0c0dab217cdc746a";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1080,7 +1120,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_23_sql!(),
     "\n",
-    migration_24_sql!()
+    migration_24_sql!(),
+    "\n",
+    migration_25_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

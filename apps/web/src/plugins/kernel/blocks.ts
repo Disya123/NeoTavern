@@ -8,17 +8,24 @@
  *
  * Attachments are persistent (rev4 stage 4): they live in the server DB and
  * survive page reloads. The host keeps a module-level cache that
- * `MessageBubble` fills via `ensureBlocksLoaded` (one batch GET per message,
+ * `MessageBubble` fills via `ensureBlocksLoaded` (one batch read per message,
  * cached for the session) and reads via `getBlocksForMessage`;
  * `mountBlockContainers` drives the mount lifecycle: the sandbox creates the
  * clipped container (`blocks.mount`), the host tracks its geometry through
  * the v2 overlay machinery (`runtime.mountPage`) and on unmount the
  * serialized renderer state is captured (`blocks.freeze`) and persisted
- * (`PATCH /api/v2/blocks/:id`) so a reload restores it (`blocks.unfreeze`).
+ * (`blocks.update`) so a reload restores it (`blocks.unfreeze`).
+ *
+ * Persistence goes through the wire bridge (`api/wireBridge.ts`): the kernel
+ * plane owns the durable rows (`chats.blocks.*` + `blocks.*`), the legacy
+ * plane keeps its `/api/v2` routes, and this module never talks to either
+ * transport directly.
  */
 import { kernel } from '@neotavern/plugin-sdk';
+import { ProductError } from '@neotavern/client-sdk';
 import type { MessageBlock } from '@neotavern/contracts';
-import { legacyRaw } from '../../api/backend.js';
+import { UnsupportedError } from '@neotavern/neobackend';
+import { attachMessageBlock, readMessageBlocks, updateMessageBlock } from '../../api/wireBridge.js';
 import { ApiError } from '../../api/client.js';
 import type { PluginUiRegistration } from '../runtime.js';
 import type { KernelHostContext } from './types.js';
@@ -26,7 +33,7 @@ import type { KernelHostContext } from './types.js';
 const { KernelError, KernelErrorCode } = kernel;
 type KernelError = InstanceType<typeof KernelError>;
 
-/** Map REST error envelopes onto kernel wire codes. */
+/** Map transport/product errors onto kernel wire codes. */
 function toKernelError(error: unknown): KernelError {
   if (error instanceof KernelError) return error;
   if (error instanceof ApiError) {
@@ -37,6 +44,24 @@ function toKernelError(error: unknown): KernelError {
         ? KernelErrorCode.NOT_FOUND
         : KernelErrorCode.INTERNAL;
     return new KernelError(code, { details: { code: error.code }, cause: error });
+  }
+  // Kernel plane: the wire facade throws product errors (`NOT_FOUND`,
+  // `VALIDATION`, …) and the bridge throws a typed `UnsupportedError` for
+  // inputs the wire cannot carry (non-object descriptor/state).
+  if (error instanceof ProductError) {
+    const code =
+      error.code === 'NOT_FOUND'
+        ? KernelErrorCode.NOT_FOUND
+        : error.code === 'VALIDATION' || error.code === 'CONTRACT_VIOLATION'
+          ? KernelErrorCode.VALIDATION_FAILED
+          : KernelErrorCode.INTERNAL;
+    return new KernelError(code, { details: { code: error.code }, cause: error });
+  }
+  if (error instanceof UnsupportedError) {
+    return new KernelError(KernelErrorCode.VALIDATION_FAILED, {
+      details: { feature: error.feature },
+      cause: error,
+    });
   }
   return new KernelError(KernelErrorCode.INTERNAL, {
     details: { message: String(error) },
@@ -104,11 +129,8 @@ export function ensureBlocksLoaded(chatId: string, messageId: string): Promise<v
   if (existing) return existing;
   const load = (async (): Promise<void> => {
     try {
-      const page = await legacyRaw().request<{ items: MessageBlock[] }>(
-        'GET',
-        `/chats/${encodeURIComponent(chatId)}/blocks?messageIds=${encodeURIComponent(messageId)}`,
-      );
-      const list = page.items.map((block): BlockAttachment => ({
+      const page = await readMessageBlocks(chatId, [messageId]);
+      const list = page.map((block): BlockAttachment => ({
         blockId: block.id,
         messageId: block.messageId,
         chatId,
@@ -358,11 +380,9 @@ function mountOne(attachment: BlockAttachment, rootEl: HTMLElement): () => void 
           attachment.serializedState = result.serializedState;
           // Persist the frozen state: a reload must remount the block with
           // the same renderer state. Best-effort — the cache already has it.
-          void legacyRaw()
-            .request<MessageBlock>('PATCH', `/blocks/${encodeURIComponent(attachment.blockId)}`, {
-              serializedState: result.serializedState,
-            })
-            .catch(() => undefined);
+          void updateMessageBlock(attachment.blockId, {
+            serializedState: result.serializedState,
+          }).catch(() => undefined);
         }
       } catch {
         // Plugin gone or crashed: serialized state is lost, container still torn down.
@@ -490,16 +510,12 @@ export function attachBlocks(ctx: KernelHostContext): void {
     // current chat with MESSAGE_NOT_FOUND.
     let created: MessageBlock;
     try {
-      created = await legacyRaw().request<MessageBlock>(
-        'POST',
-        `/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/blocks`,
-        {
-          blockType,
-          rendererId: entry.rendererId,
-          pluginId: ctx.pluginId,
-          descriptor,
-        },
-      );
+      created = await attachMessageBlock(chatId, messageId, {
+        blockType,
+        rendererId: entry.rendererId,
+        pluginId: ctx.pluginId,
+        ...(descriptor !== undefined ? { descriptor } : {}),
+      });
     } catch (error) {
       throw toKernelError(error);
     }

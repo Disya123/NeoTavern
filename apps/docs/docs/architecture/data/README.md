@@ -59,9 +59,15 @@ adds `provider_secrets` — several labelled named keys per provider config
 with a `secret_ref` and an `active` flag; a partial unique index
 (`config_id WHERE active = 1`) enforces exactly one active key per config at
 the storage layer, `config_id` CASCADEs on the config, and delete-reactivation
-is a plain `ORDER BY created_at DESC` pick in the same transaction. Rollback
+is a plain `ORDER BY created_at DESC` pick in the same transaction. v25
+(`025_message_blocks`, M7 cluster 15) adds `message_blocks` — one durable
+plugin→message block attachment per row (block type, renderer id, immutable
+attach-time `descriptor_json`, optional `serialized_state_json` captured by
+`blocks.freeze`); both FKs CASCADE (message delete and plugin uninstall leave
+no orphans) and the two indexes cover the batch read by message and the
+uninstall sweep by plugin. Rollback
 for any kernel migration is the pre-migration backup restore
-(ТЗ §10.4); v20–v24 are additive.
+(ТЗ §10.4); v20–v25 are additive.
 
 ### Plugin state and grants
 

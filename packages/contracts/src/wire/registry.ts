@@ -678,6 +678,65 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     1024,
     undefined,
   ),
+  // M7 Etap-4 (cluster 15): durable plugin→message block attachments. The
+  // list is a batched read for one rendered page (no N+1); attach creates one
+  // row per call (non-idempotent), while update/delete address a block by id.
+  op(
+    'chats.blocks.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.chats.blocks.list',
+    'wire.result.chats.blocks.list',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    16384,
+    4194304,
+    undefined,
+  ),
+  op(
+    'chats.blocks.attach',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.chats.blocks.attach',
+    'wire.message-block.item',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    524288,
+    1048576,
+    undefined,
+  ),
+  op(
+    'blocks.update',
+    'transactional',
+    'idempotent',
+    'safe-with-idempotency-key',
+    'app.write',
+    'wire.request.blocks.update',
+    'wire.message-block.item',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    524288,
+    1048576,
+    undefined,
+  ),
+  op(
+    'blocks.delete',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.blocks.delete',
+    'wire.result.empty',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
   op(
     'chats.snapshots.create',
     'transactional',
@@ -2117,6 +2176,7 @@ const UUID_LOREBOOK_ENTRY = '7e8f9012-3a4b-4c5d-9e0f-1a2b3c4d5e6f';
 const UUID_MESSAGE_VARIANT = '8f9a0b1c-2d3e-4f6a-9b0c-1d2e3f4a5b6c';
 const UUID_MESSAGE_REVISION = '9a0b1c2d-3e4f-4a7b-8c0d-1e2f3a4b5c6d';
 const UUID_MESSAGE_DRAFT = '0b1c2d3e-4f5a-4b8c-9d0e-1f2a3b4c5d6e';
+const UUID_BLOCK = 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e';
 const UUID_PRESET = '3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f';
 const UUID_MEMORY = '4d5e6f70-8a9b-4c1d-9e2f-3a4b5c6d7e80';
 const UUID_PERSONA = '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f';
@@ -2207,6 +2267,17 @@ const MESSAGE_DRAFT_VALUE = {
   content: 'Streaming partial…',
   sequence: 1,
   revision: 1,
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+
+const MESSAGE_BLOCK_VALUE = {
+  id: UUID_BLOCK,
+  messageId: UUID_MESSAGE,
+  pluginId: 'lorebook-searcher',
+  blockType: 'meter',
+  rendererId: 'blk:meter',
+  descriptor: { title: 'Context meter' },
   createdAt: TIMESTAMP,
   updatedAt: TIMESTAMP,
 };
@@ -2827,6 +2898,28 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     chatId: UUID_CHAT,
     messageId: UUID_MESSAGE,
   }),
+  // --- message block attachments (M7 cluster 15).
+  fx('chats-blocks-list-request', 'chats.blocks.list', 'request', true, {
+    chatId: UUID_CHAT,
+    messageIds: [UUID_MESSAGE],
+  }),
+  fx('chats-blocks-attach-request', 'chats.blocks.attach', 'request', true, {
+    chatId: UUID_CHAT,
+    messageId: UUID_MESSAGE,
+    blockType: 'meter',
+    rendererId: 'blk:meter',
+    pluginId: 'lorebook-searcher',
+    descriptor: { title: 'Context meter' },
+  }),
+  fx('blocks-update-request', 'blocks.update', 'request', true, {
+    blockId: UUID_BLOCK,
+    serializedState: { count: 9 },
+  }),
+  fx('blocks-update-clear-request', 'blocks.update', 'request', true, {
+    blockId: UUID_BLOCK,
+    clearSerializedState: true,
+  }),
+  fx('blocks-delete-request', 'blocks.delete', 'request', true, { blockId: UUID_BLOCK }),
   fx('chats-snapshots-create-request', 'chats.snapshots.create', 'request', true, {
     chatId: UUID_CHAT,
     messageId: UUID_MESSAGE,
@@ -3112,6 +3205,16 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('chats-messages-create-response', 'chats.messages.create', 'response', true, MESSAGE_VALUE),
   fx('chats-messages-update-response', 'chats.messages.update', 'response', true, MESSAGE_VALUE),
   fx('chats-messages-delete-response', 'chats.messages.delete', 'response', true, {}),
+  fx('chats-blocks-list-response', 'chats.blocks.list', 'response', true, {
+    items: [MESSAGE_BLOCK_VALUE],
+  }),
+  fx('chats-blocks-list-empty-response', 'chats.blocks.list', 'response', true, { items: [] }),
+  fx('chats-blocks-attach-response', 'chats.blocks.attach', 'response', true, MESSAGE_BLOCK_VALUE),
+  fx('blocks-update-response', 'blocks.update', 'response', true, {
+    ...MESSAGE_BLOCK_VALUE,
+    serializedState: { count: 9 },
+  }),
+  fx('blocks-delete-response', 'blocks.delete', 'response', true, {}),
   // --- message variants / revisions / drafts (Этап 4, slice 2).
   fx('message-variants-list-request', 'chats.messages.variants.list', 'request', true, {
     chatId: UUID_CHAT,
@@ -3684,6 +3787,25 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-messages-list-bad-order', 'chats.messages.list', 'request', false, {
     chatId: UUID_CHAT,
     order: 'sideways',
+  }),
+  fx('neg-blocks-list-empty-ids', 'chats.blocks.list', 'request', false, {
+    chatId: UUID_CHAT,
+    messageIds: [],
+  }),
+  fx('neg-blocks-attach-bad-descriptor', 'chats.blocks.attach', 'request', false, {
+    chatId: UUID_CHAT,
+    messageId: UUID_MESSAGE,
+    blockType: 'meter',
+    rendererId: 'blk:meter',
+    pluginId: 'lorebook-searcher',
+    descriptor: 'not-an-object',
+  }),
+  fx('neg-blocks-update-bad-clear', 'blocks.update', 'request', false, {
+    blockId: UUID_BLOCK,
+    clearSerializedState: 'yes',
+  }),
+  fx('neg-block-response-bad-timestamp', 'chats.blocks.list', 'response', false, {
+    items: [{ ...MESSAGE_BLOCK_VALUE, createdAt: 1 }],
   }),
   fx('neg-message-bad-role', 'chats.messages.list', 'response', false, {
     items: [

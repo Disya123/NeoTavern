@@ -32,6 +32,7 @@ use std::time::Duration;
 
 pub mod assets;
 pub mod backup;
+pub mod blocks;
 pub mod data;
 pub mod export;
 pub mod exports;
@@ -576,6 +577,11 @@ fn handle_unary(
         "chats.messages.create" => with_db_opt(db, |db| product::messages_create(db, req)),
         "chats.messages.update" => with_db_opt(db, |db| product::messages_update(db, req)),
         "chats.messages.delete" => with_db_opt(db, |db| product::messages_delete(db, req)),
+        // M7 Etap-4 (cluster 15): durable plugin→message block attachments.
+        "chats.blocks.list" => with_db_opt(db, |db| blocks::chats_blocks_list(db, req)),
+        "chats.blocks.attach" => with_db_opt(db, |db| blocks::chats_blocks_attach(db, req)),
+        "blocks.update" => with_db_opt(db, |db| blocks::blocks_update(db, req)),
+        "blocks.delete" => with_db_opt(db, |db| blocks::blocks_delete(db, req)),
         "chats.snapshots.create" => with_db_opt(db, |db| product::chats_snapshots_create(db, req)),
         "chats.snapshots.rollback" => {
             with_db_opt(db, |db| product::chats_snapshots_rollback(db, req))

@@ -46,6 +46,10 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "chats.messages.create" => Some(1048576),
         "chats.messages.update" => Some(1048576),
         "chats.messages.delete" => Some(2048),
+        "chats.blocks.list" => Some(16384),
+        "chats.blocks.attach" => Some(524288),
+        "blocks.update" => Some(524288),
+        "blocks.delete" => Some(2048),
         "chats.snapshots.create" => Some(2048),
         "chats.snapshots.rollback" => Some(2048),
         "chats.snapshots.list" => Some(2048),
@@ -177,6 +181,10 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "chats.messages.create" => Some(262144),
         "chats.messages.update" => Some(262144),
         "chats.messages.delete" => Some(1024),
+        "chats.blocks.list" => Some(4194304),
+        "chats.blocks.attach" => Some(1048576),
+        "blocks.update" => Some(1048576),
+        "blocks.delete" => Some(1024),
         "chats.snapshots.create" => Some(262144),
         "chats.snapshots.rollback" => Some(262144),
         "chats.snapshots.list" => Some(262144),
@@ -14889,6 +14897,546 @@ pub fn validate_request_message_draft_discard(value: &Value) -> Result<(), Vec<I
 
 pub fn decode_request_message_draft_discard(bytes: &[u8]) -> Result<RequestMessageDraftDiscard, WireError> {
     crate::decode::<RequestMessageDraftDiscard>(validate_request_message_draft_discard, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MessageBlockItem {
+    pub id: String,
+    #[serde(rename = "messageId")]
+    pub message_id: String,
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    #[serde(rename = "blockType")]
+    pub block_type: String,
+    #[serde(rename = "rendererId")]
+    pub renderer_id: String,
+    pub descriptor: FreeObject,
+    #[serde(rename = "serializedState", default, skip_serializing_if = "Option::is_none")]
+    pub serialized_state: Option<FreeObject>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+pub(crate) fn check_message_block_item(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_3: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("messageId").is_none() {
+            issues.push(Issue::new(join_path(path, "messageId"), "RequiredProperty"));
+        }
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("blockType").is_none() {
+            issues.push(Issue::new(join_path(path, "blockType"), "RequiredProperty"));
+        }
+        if value.get("rendererId").is_none() {
+            issues.push(Issue::new(join_path(path, "rendererId"), "RequiredProperty"));
+        }
+        if value.get("descriptor").is_none() {
+            issues.push(Issue::new(join_path(path, "descriptor"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("messageId") {
+            let child_path = join_path(path, "messageId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("blockType") {
+            let child_path = join_path(path, "blockType");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 100 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("rendererId") {
+            let child_path = join_path(path, "rendererId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("descriptor") {
+            let child_path = join_path(path, "descriptor");
+            check_free_object(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("serializedState") {
+            let child_path = join_path(path, "serializedState");
+            check_free_object(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_3.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "messageId" | "pluginId" | "blockType" | "rendererId" | "descriptor" | "serializedState" | "createdAt" | "updatedAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_message_block_item(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_message_block_item(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_message_block_item(bytes: &[u8]) -> Result<MessageBlockItem, WireError> {
+    crate::decode::<MessageBlockItem>(validate_message_block_item, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestChatsBlocksList {
+    #[serde(rename = "chatId")]
+    pub chat_id: String,
+    #[serde(rename = "messageIds")]
+    pub message_ids: Vec<String>,
+}
+
+pub(crate) fn check_request_chats_blocks_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("chatId").is_none() {
+            issues.push(Issue::new(join_path(path, "chatId"), "RequiredProperty"));
+        }
+        if value.get("messageIds").is_none() {
+            issues.push(Issue::new(join_path(path, "messageIds"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("chatId") {
+            let child_path = join_path(path, "chatId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("messageIds") {
+            let child_path = join_path(path, "messageIds");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() < 1 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMinItems"));
+                }
+                if arr.len() > 100 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            if !RE_1.is_match(s) {
+                                issues.push(Issue::new(item_path.as_str(), "StringFormat"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "chatId" | "messageIds") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_chats_blocks_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_chats_blocks_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_chats_blocks_list(bytes: &[u8]) -> Result<RequestChatsBlocksList, WireError> {
+    crate::decode::<RequestChatsBlocksList>(validate_request_chats_blocks_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultChatsBlocksList {
+    pub items: Vec<MessageBlockItem>,
+}
+
+pub(crate) fn check_result_chats_blocks_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 4096 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_message_block_item(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_chats_blocks_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_chats_blocks_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_chats_blocks_list(bytes: &[u8]) -> Result<ResultChatsBlocksList, WireError> {
+    crate::decode::<ResultChatsBlocksList>(validate_result_chats_blocks_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestChatsBlocksAttach {
+    #[serde(rename = "chatId")]
+    pub chat_id: String,
+    #[serde(rename = "messageId")]
+    pub message_id: String,
+    #[serde(rename = "blockType")]
+    pub block_type: String,
+    #[serde(rename = "rendererId")]
+    pub renderer_id: String,
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub descriptor: Option<FreeObject>,
+}
+
+pub(crate) fn check_request_chats_blocks_attach(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("chatId").is_none() {
+            issues.push(Issue::new(join_path(path, "chatId"), "RequiredProperty"));
+        }
+        if value.get("messageId").is_none() {
+            issues.push(Issue::new(join_path(path, "messageId"), "RequiredProperty"));
+        }
+        if value.get("blockType").is_none() {
+            issues.push(Issue::new(join_path(path, "blockType"), "RequiredProperty"));
+        }
+        if value.get("rendererId").is_none() {
+            issues.push(Issue::new(join_path(path, "rendererId"), "RequiredProperty"));
+        }
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("chatId") {
+            let child_path = join_path(path, "chatId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("messageId") {
+            let child_path = join_path(path, "messageId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("blockType") {
+            let child_path = join_path(path, "blockType");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 100 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("rendererId") {
+            let child_path = join_path(path, "rendererId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("descriptor") {
+            let child_path = join_path(path, "descriptor");
+            check_free_object(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "chatId" | "messageId" | "blockType" | "rendererId" | "pluginId" | "descriptor") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_chats_blocks_attach(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_chats_blocks_attach(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_chats_blocks_attach(bytes: &[u8]) -> Result<RequestChatsBlocksAttach, WireError> {
+    crate::decode::<RequestChatsBlocksAttach>(validate_request_chats_blocks_attach, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestBlocksUpdate {
+    #[serde(rename = "blockId")]
+    pub block_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub descriptor: Option<FreeObject>,
+    #[serde(rename = "serializedState", default, skip_serializing_if = "Option::is_none")]
+    pub serialized_state: Option<FreeObject>,
+    #[serde(rename = "clearSerializedState", default, skip_serializing_if = "Option::is_none")]
+    pub clear_serialized_state: Option<bool>,
+}
+
+pub(crate) fn check_request_blocks_update(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("blockId").is_none() {
+            issues.push(Issue::new(join_path(path, "blockId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("blockId") {
+            let child_path = join_path(path, "blockId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("descriptor") {
+            let child_path = join_path(path, "descriptor");
+            check_free_object(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("serializedState") {
+            let child_path = join_path(path, "serializedState");
+            check_free_object(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("clearSerializedState") {
+            let child_path = join_path(path, "clearSerializedState");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "blockId" | "descriptor" | "serializedState" | "clearSerializedState") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_blocks_update(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_blocks_update(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_blocks_update(bytes: &[u8]) -> Result<RequestBlocksUpdate, WireError> {
+    crate::decode::<RequestBlocksUpdate>(validate_request_blocks_update, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestBlocksDelete {
+    #[serde(rename = "blockId")]
+    pub block_id: String,
+}
+
+pub(crate) fn check_request_blocks_delete(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("blockId").is_none() {
+            issues.push(Issue::new(join_path(path, "blockId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("blockId") {
+            let child_path = join_path(path, "blockId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "blockId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_blocks_delete(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_blocks_delete(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_blocks_delete(bytes: &[u8]) -> Result<RequestBlocksDelete, WireError> {
+    crate::decode::<RequestBlocksDelete>(validate_request_blocks_delete, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

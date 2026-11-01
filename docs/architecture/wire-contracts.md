@@ -214,11 +214,14 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
 `(kind,name)`). All slice-3 additions are `transactional`, strict
 `additionalProperties: false`, ARC-07. The M7 Этап-4 clusters then grew the
-registry to **123 ops** (the latest additions are the cluster-8 provider-access
+registry to **127 ops** (the latest additions are the cluster-8 provider-access
 pair `providers.models` / `providers.test`, the cluster-23 maintenance op
-`diagnostics.cache.clear` and the cluster-17 audit op `chats.context.audit`
+`diagnostics.cache.clear`, the cluster-17 audit op `chats.context.audit`
 — the chat's latest durable `wire.prompt.plan`, after the provider catalog +
-named-key set described in §5); the authoritative live list with per-op
+named-key set described in §5 — and the cluster-15 block-attachment family
+`chats.blocks.list` / `chats.blocks.attach` / `blocks.update` /
+`blocks.delete`, whose `descriptor`/`serializedState` fields are free-form
+JSON objects via `wire.free-object`); the authoritative live list with per-op
 metadata is the generated `packages/contracts/generated/contract-manifest.json`.
 
 | operationId                        | class         | idempotency    | retry | auth      | reqB    | respB  | eventB |
