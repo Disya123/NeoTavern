@@ -1,0 +1,1 @@
+{"formats":[{"id":"chatml","stopStrings":["<|im_end|>"],"version":1},{"id":"llama3","stopStrings":["<|eot_id|>"],"version":1},{"id":"alpaca","stopStrings":["###"],"version":1},{"id":"mistral","stopStrings":["</s>"],"version":1},{"id":"command-r","stopStrings":["<|END_OF_TURN_TOKEN|>"],"version":1}]}

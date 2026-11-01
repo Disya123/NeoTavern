@@ -74,7 +74,7 @@ export function ChatTemplateEditor() {
           onChange={(event) => void changeSelection(event.target.value)}
         >
           <option value="native">{t('settings:chatSerializationNative')}</option>
-          {(formats.data?.formats ?? []).map((format) => (
+          {(formats.data?.formats ?? []).map((format: { id: string }) => (
             <option key={format.id} value={format.id}>
               {format.id}
             </option>

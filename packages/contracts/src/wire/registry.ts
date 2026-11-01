@@ -1449,6 +1449,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'settings.instructformats.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.instruct-formats',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    16384,
+    undefined,
+  ),
+  op(
     'diagnostics.export',
     'transactional',
     'idempotent',
@@ -2120,6 +2134,16 @@ const SETTINGS_VALUE = {
   ],
 };
 
+const INSTRUCT_FORMATS_VALUE = {
+  formats: [
+    { id: 'chatml', version: 1, stopStrings: ['<|im_end|>'] },
+    { id: 'llama3', version: 1, stopStrings: ['<|eot_id|>'] },
+    { id: 'alpaca', version: 1, stopStrings: ['###'] },
+    { id: 'mistral', version: 1, stopStrings: ['</s>'] },
+    { id: 'command-r', version: 1, stopStrings: ['<|END_OF_TURN_TOKEN|>'] },
+  ],
+};
+
 const DIAGNOSTICS_VALUE = {
   generatedAt: TIMESTAMP,
   traceId: UUID_RUN,
@@ -2619,6 +2643,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
       { key: 'app.language', value: { locale: 'en' } },
     ],
   }),
+  fx('settings-instruct-formats-request', 'settings.instructformats.list', 'request', true, {}),
   fx('diagnostics-export-request', 'diagnostics.export', 'request', true, {}),
   fx('secrets-status-request', 'secrets.status', 'request', true, {}),
 
@@ -2964,6 +2989,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('providers-config-delete-response', 'providers.config.delete', 'response', true, {}),
   fx('settings-get-response', 'settings.get', 'response', true, SETTINGS_VALUE),
   fx('settings-update-response', 'settings.update', 'response', true, SETTINGS_VALUE),
+  fx(
+    'settings-instruct-formats-response',
+    'settings.instructformats.list',
+    'response',
+    true,
+    INSTRUCT_FORMATS_VALUE,
+  ),
   fx('diagnostics-export-response', 'diagnostics.export', 'response', true, DIAGNOSTICS_VALUE),
   fx('secrets-status-response', 'secrets.status', 'response', true, SECRETS_STATUS_VALUE),
   fx('secrets-lock-request', 'secrets.lock', 'request', true, {}),
@@ -3161,6 +3193,9 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('neg-gallery-delete-bad-request', 'characters.gallery.delete', 'request', false, {
     characterId: UUID_CHARACTER,
+  }),
+  fx('neg-instruct-formats-bad-stop', 'settings.instructformats.list', 'response', false, {
+    formats: [{ id: 'chatml', version: 1, stopStrings: [] }],
   }),
   fx('neg-profile-export-bad-counts', 'profile.export', 'response', false, {
     ...PROFILE_EXPORT_VALUE,

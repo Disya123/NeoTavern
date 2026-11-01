@@ -86,8 +86,6 @@ function installedPlugin(
     hasFrontend: true,
     hasBackend: false,
     hasStyles: false,
-    hasLegacyFrontend: false,
-    hasLegacyBackend: false,
     compatibilityLevel: 'native-v2',
     trust: 'unsigned-untrusted',
     lastErrorCode: 'ACTIVATION_FAILED',

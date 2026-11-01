@@ -309,6 +309,7 @@ export class LegacyBackend implements NeoBackend {
   readonly settings: SettingsApi = {
     get: () => this.unsupported('settings.get'),
     update: () => this.unsupported('settings.update'),
+    instructFormats: () => this.unsupported('settings.instructformats.list'),
   };
 
   readonly diagnostics: DiagnosticsApi = {

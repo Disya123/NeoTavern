@@ -365,7 +365,7 @@ describe('character gallery hooks (kernel-plane honesty, slice 21)', () => {
           sizeBytes: 5,
           originalUrl: 'data:image/png;base64,aGVsbG8=',
           thumbnailUrl: 'data:image/png;base64,aGVsbG8=',
-          createdAt: '2026-08-13T00:00:00Z',
+          createdAt: Date.parse('2026-08-13T00:00:00Z'),
         },
       ],
     });
@@ -539,12 +539,28 @@ describe('remaining legacy hooks (kernel-plane honesty, slice 22)', () => {
     expect(url).toBe('/api/v2/settings/instruct-formats');
   });
 
-  it('useInstructFormats resolves an honest empty list on the kernel plane without a network call', async () => {
+  it('useInstructFormats reads the wire catalog on the kernel plane without a network call', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const spy = vi.spyOn(backend.settings, 'instructFormats').mockResolvedValue({
+      formats: [
+        { id: 'chatml', version: 1, stopStrings: ['<|im_end|>'] },
+        { id: 'llama3', version: 1, stopStrings: ['<|eot_id|>'] },
+        { id: 'alpaca', version: 1, stopStrings: ['###'] },
+        { id: 'mistral', version: 1, stopStrings: ['</s>'] },
+        { id: 'command-r', version: 1, stopStrings: ['<|END_OF_TURN_TOKEN|>'] },
+      ],
+    });
     const { result } = renderHook(() => useInstructFormats(), { wrapper: wrapperFor(queryClient) });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ formats: [] });
+    expect(result.current.data?.formats.map((f: { id: string }) => f.id)).toEqual([
+      'chatml',
+      'llama3',
+      'alpaca',
+      'mistral',
+      'command-r',
+    ]);
     expect(fetchMock).not.toHaveBeenCalled();
+    spy.mockRestore();
     mocks.isKernelMode.mockReturnValue(false);
   });
 

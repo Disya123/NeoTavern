@@ -55,6 +55,7 @@ import type {
   ProfileExportResultDto,
   ProfileImportResultDto,
   ProviderConfigDto,
+  InstructFormatsResultDto,
   ResultSettingsDto,
   SecretsStatusResultDto,
   SecretsLockResultDto,
@@ -358,6 +359,14 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<ResultSettingsDto>('settings.get', req ?? {}, { signal: opts?.signal }),
     update: (req, opts) =>
       this.sdk.call<ResultSettingsDto>('settings.update', req, { signal: opts?.signal }),
+    instructFormats: (opts) =>
+      this.sdk.call<InstructFormatsResultDto>(
+        'settings.instructformats.list',
+        {},
+        {
+          signal: opts?.signal,
+        },
+      ),
   };
 
   readonly diagnostics: DiagnosticsApi = {

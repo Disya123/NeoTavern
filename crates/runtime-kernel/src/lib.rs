@@ -661,6 +661,8 @@ fn handle_unary(
         // Этап 4 slice 7: canonical non-secret settings + SEC-07 diagnostics.
         "settings.get" => with_db_opt(db, |db| settings::settings_get(db, req)),
         "settings.update" => with_db_opt(db, |db| settings::settings_update(db, req)),
+        // M7 Etap-4 (cluster 27): static built-in catalog, no database.
+        "settings.instructformats.list" => settings::settings_instruct_formats_list(req),
         "diagnostics.export" => with_db_opt(db, |db| settings::diagnostics_export(db, req)),
         // SEC-01.1: value-free secret-backend mode surface (stateless seam).
         "secrets.status" => secrets::secrets_status(state.secret_store.as_ref(), req),

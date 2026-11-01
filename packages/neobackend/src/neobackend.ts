@@ -107,6 +107,7 @@ import type {
   PutAssetRequestDto,
   PutAssetResultDto,
   RenameProfileRequestDto,
+  InstructFormatsResultDto,
   ResultSettingsDto,
   SaveMessageDraftRequestDto,
   SecretsStatusResultDto,
@@ -504,6 +505,13 @@ export interface SettingsApi {
   get(req?: GetSettingsRequestDto, opts?: BackendCallOptions): Promise<ResultSettingsDto>;
   /** Upsert the provided settings; resolves with the post-update snapshot. */
   update(req: UpdateSettingsRequestDto, opts?: BackendCallOptions): Promise<ResultSettingsDto>;
+  /**
+   * The static built-in instruct-format catalog (wire
+   * `settings.instructformats.list`, M7 Etap-4 cluster 27): ids, versions and
+   * stop strings for the five AGENTS.md §9 formats. Pure metadata — no
+   * database read; custom user formats are not part of the catalog.
+   */
+  instructFormats(opts?: BackendCallOptions): Promise<InstructFormatsResultDto>;
 }
 
 /**

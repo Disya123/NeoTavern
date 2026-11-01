@@ -276,7 +276,9 @@ export function useCharacterGallery(characterId: string | undefined, sort: 'olde
               sizeBytes: dto.sizeBytes,
               originalUrl: dataUrl,
               thumbnailUrl: dataUrl,
-              createdAt: dto.createdAt,
+              // Wire timestamps are ISO strings; the UI schema keeps the
+              // numeric epoch (TimestampSchema) — convert at the boundary.
+              createdAt: Date.parse(dto.createdAt),
             } satisfies CharacterGalleryImage;
           }),
         );
@@ -312,7 +314,8 @@ export function useUploadCharacterImage() {
           sizeBytes: result.item.sizeBytes,
           originalUrl: '',
           thumbnailUrl: '',
-          createdAt: result.item.createdAt,
+          // ISO wire timestamp → numeric epoch (TimestampSchema boundary).
+          createdAt: Date.parse(result.item.createdAt),
         } satisfies CharacterGalleryImage;
       }
       return api.upload<CharacterGalleryImage>(`/characters/${characterId}/gallery`, file);
@@ -928,11 +931,12 @@ export function useInstructFormats() {
   return useQuery({
     queryKey: ['instruct-formats'],
     queryFn: () => {
-      // Kernel plane: the legacy instruct-format catalog is a sidecar
-      // contour; the kernel pipeline owns its own rendering — honest empty
-      // list (ТЗ §13.1), never a silent legacy request (ARC-02).
+      // Kernel plane (M7 Etap-4, cluster 27): the static built-in catalog
+      // comes from the wire op `settings.instructformats.list` — the same
+      // five AGENTS.md §9 formats the legacy contour lists, so format
+      // selection agrees across planes (no honest-empty placeholder anymore).
       if (isKernelMode()) {
-        return Promise.resolve<InstructFormatListResponse>({ formats: [] });
+        return backend.settings.instructFormats();
       }
       return api.get<InstructFormatListResponse>('/settings/instruct-formats');
     },

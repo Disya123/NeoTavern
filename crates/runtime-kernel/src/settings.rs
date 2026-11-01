@@ -15,12 +15,27 @@
 
 use contracts_generated::generated::{
     self, ResultDiagnosticsExport, ResultDiagnosticsExportGenerationRuns,
-    ResultDiagnosticsExportSettings, ResultDiagnosticsExportWireVersion, ResultSettings,
-    SettingsItem,
+    ResultDiagnosticsExportSettings, ResultDiagnosticsExportWireVersion, ResultInstructFormats,
+    ResultSettings, SettingsInstructFormat, SettingsItem,
 };
 use neotavern_storage::open::Database;
 
 use crate::{KernelError, KernelErrorCode};
+
+/// The built-in instruct-format catalog (AGENTS.md §9: ChatML, Llama 3,
+/// Alpaca, Mistral, Command-R). Static metadata — ids/versions/stop strings —
+/// served by `settings.instructformats.list`; rendering templates stay out of
+/// the wire. The list mirrors the legacy contour's catalog verbatim (same
+/// ids, versions, stop strings) so both planes select identical formats;
+/// when the kernel pipeline grows its own renderer this constant becomes the
+/// single source of truth.
+const BUILTIN_INSTRUCT_FORMATS: &[(&str, i64, &[&str])] = &[
+    ("chatml", 1, &["<|im_end|>"]),
+    ("llama3", 1, &["<|eot_id|>"]),
+    ("alpaca", 1, &["###"]),
+    ("mistral", 1, &["</s>"]),
+    ("command-r", 1, &["<|END_OF_TURN_TOKEN|>"]),
+];
 
 /// Maps a SQLite failure to a kernel error.
 fn sqlite(err: rusqlite::Error, context: &str) -> KernelError {
@@ -59,6 +74,38 @@ pub(crate) fn settings_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>,
 ///
 /// Request: `wire.request.settings.update`; response: `wire.result.settings`.
 /// Idempotent by design: re-applying the same key/value yields the same row.
+///
+/// `settings.instructformats.list` — the static built-in instruct-format
+/// catalog (M7 Etap-4 slice, cluster 27).
+///
+/// Strict empty request; the response is pure metadata, so the op needs no
+/// database and is served on stateless kernels too.
+pub(crate) fn settings_instruct_formats_list(request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    generated::decode_request_empty(request)?;
+    let formats = BUILTIN_INSTRUCT_FORMATS
+        .iter()
+        .map(|(id, version, stop_strings)| SettingsInstructFormat {
+            id: (*id).to_string(),
+            version: *version,
+            stop_strings: stop_strings.iter().map(|s| (*s).to_string()).collect(),
+        })
+        .collect();
+    let dto = ResultInstructFormats { formats };
+    let value = serde_json::to_value(&dto).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize instruct-formats response: {err}"),
+        )
+    })?;
+    generated::validate_result_instruct_formats(&value).map_err(|issues| KernelError {
+        code: KernelErrorCode::ContractViolation,
+        message: "kernel instruct-formats response failed validation".to_string(),
+        issues,
+        params: Vec::new(),
+        product: None,
+    })?;
+    crate::product::encode(&value)
+}
 pub(crate) fn settings_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_settings_update(request)?;
 

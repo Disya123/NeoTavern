@@ -98,6 +98,7 @@
   "secrets.lock",
   "secrets.status",
   "settings.get",
+  "settings.instructformats.list",
   "settings.update",
   "themes.activate",
   "themes.deactivate",

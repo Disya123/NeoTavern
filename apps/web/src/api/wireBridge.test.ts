@@ -1380,7 +1380,7 @@ describe('plugins (Этап 4 context 6 part 4, wire plugins.*)', () => {
     expect(on?.trust).toBe('verified-publisher');
     expect(on?.publisherKeyId).toBe('k-abc');
     expect(on?.compatibilityLevel).toBe('native-v3');
-    expect(on?.hasLegacyFrontend).toBe(false);
+    expect(on?.hasFrontend).toBe(false);
     expect(off?.status).toBe('disabled');
     expect(mocks.plugins.list).toHaveBeenCalledWith();
   });

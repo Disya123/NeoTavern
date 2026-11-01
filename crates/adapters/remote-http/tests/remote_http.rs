@@ -1467,6 +1467,25 @@ fn characters_gallery_over_http() {
     assert_eq!(response.status, 200, "asset outlives its gallery link");
 }
 
+/// M7 Etap-4 (cluster 27): `settings.instructformats.list` over the HTTP
+/// host — the static built-in catalog, wire-valid, five formats, identical
+/// on stateless and stateful kernels (no database involved).
+#[test]
+fn settings_instruct_formats_over_http() {
+    let server = TestServer::spawn();
+
+    let request = envelope_body(&rid(1), "settings.instructformats.list", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &request);
+    assert_eq!(response.status, 200, "instruct-formats list answers HTTP 200");
+    let (request_id, result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(1), "requestId is echoed");
+    gen::validate_result_instruct_formats(&result).expect("catalog is wire-valid");
+    let items = result["formats"].as_array().expect("formats array");
+    assert_eq!(items.len(), 5, "the five AGENTS.md §9 formats");
+    let ids: Vec<&str> = items.iter().map(|f| f["id"].as_str().expect("id")).collect();
+    assert_eq!(ids, ["chatml", "llama3", "alpaca", "mistral", "command-r"]);
+}
+
 /// M5 slice 38: the durable activation status over the HTTP host (host
 /// parity with the direct kernel path, ТЗ §10.2–§10.3) — the response is
 /// wire-valid, reports the v1 flat layout on a fresh root and stays

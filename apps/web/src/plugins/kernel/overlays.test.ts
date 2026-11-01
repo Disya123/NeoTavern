@@ -55,8 +55,6 @@ function installedPlugin(grantedCapabilities: string[] = ['ui.overlay']): Instal
     hasFrontend: true,
     hasBackend: false,
     hasStyles: false,
-    hasLegacyFrontend: false,
-    hasLegacyBackend: false,
     compatibilityLevel: 'native-v2',
     trust: 'unsigned-untrusted',
     lastErrorCode: null,

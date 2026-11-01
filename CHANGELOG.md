@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Built-in instruct-format catalog on the wire (M7 Etap-4 slice;
+  cluster 27 fully covered).** New op `settings.instructformats.list`
+  serves the static built-in catalog — chatml, llama3, alpaca, mistral,
+  command-r with their versions and stop strings — as pure metadata from a
+  kernel constant mirrored from the legacy catalog (no database read,
+  stateless-kernel-safe; rendering templates stay out of the wire and
+  custom user formats are not part of the catalog). `useInstructFormats`
+  reads the wire catalog on the kernel plane; the honest-empty placeholder
+  is retired. Tests: kernel (catalog on seeded + stateless kernels),
+  remote-http host parity, contracts op-count 106, web hook test.
+
 - **Character gallery on the kernel plane (M7 Etap-4 slice; cluster 12).**
   New wire ops `characters.gallery.list/add/delete` over a new `character_images`
   schema table (v20) that links characters into the immutable

@@ -44,12 +44,13 @@ shares the route; the shared route's last consumer owns its deletion.
 - **Registered legacy routes: 165** across 29 route families (25 modules;
   pluginJobs/pluginAuth/pluginData/pluginSecrets mount inside
   `registerPluginRoutes`, not from `app.ts`).
-- **Wire registry: 105 ops, 105/105 with kernel implementations** (102 unary
+- **Wire registry: 106 ops, 106/106 with kernel implementations** (102 unary
   dispatch arms + `generation.start`/`retry` streaming +
   `backups.restore` staged; the 2026-10-31 follow-ups added
-  `backups.delete` (the backups cluster is fully covered) and
+  `backups.delete` (the backups cluster is fully covered),
   `characters.gallery.{list,add,delete}` — the gallery cluster is fully
-  covered, avatar-original rides the existing `assets.content`).
+  covered, avatar-original rides the existing `assets.content` — and
+  `settings.instructformats.list` (the settings cluster is fully covered)).
 - **Legacy-route coverage: 72 covered / 8 partial / 85 missing** (no wire op
   at all; `backups.delete` closes its route into the covered set on the
   next registry recount).
@@ -102,7 +103,7 @@ diagnostics/settings.
 | 24  | Backups                                                                          | SettingsPanel                    | 4                                      | 4 covered (`backups.delete` M7)                      | wire done           |
 | 25  | Chats: order/restore/branches                                                    | ChatManagementPanel              | 3                                      | missing×3                                            | todo                |
 | 26  | Characters: restore/version history                                              | CharacterManagementPanel         | 4                                      | missing×4                                            | todo                |
-| 27  | Settings + instruct-formats + context-preview                                    | SettingsPanel, editors           | 3                                      | 2 covered, 1 missing                                 | todo                |
+| 27  | Settings + instruct-formats + context-preview                                    | SettingsPanel, editors           | 3                                      | 3 covered (`settings.instructformats.list` M7)       | wire done           |
 | 28  | Version/health meta                                                              | HomePage                         | 2                                      | covered                                              | todo (UI flag flip) |
 
 (A cluster marked `covered` still ships a slice: flip the UI to the kernel

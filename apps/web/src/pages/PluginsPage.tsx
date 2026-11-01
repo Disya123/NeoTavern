@@ -34,7 +34,6 @@ const MAX_PLUGIN_BYTES = 25 * 1024 * 1024;
 interface PluginDeleteTarget {
   id: string;
   name: string;
-  requiresReload: boolean;
 }
 
 export function PluginsPage() {
@@ -124,19 +123,13 @@ export function PluginsPage() {
     }
   };
 
-  const disablePlugin = async (
-    id: string,
-    name: string,
-    requiresReload: boolean,
-  ): Promise<void> => {
+  const disablePlugin = async (id: string, name: string): Promise<void> => {
     setNotice(null);
     setActionError(null);
     try {
       await disable.mutateAsync(id);
-      if (requiresReload) {
-        window.location.assign('/plugins');
-        return;
-      }
+      // Native-only contour (ADR-0059 Amendment 1): disabling a native
+      // plugin never needs a page reload — the host unmounts it live.
       setNotice(t('plugins:disabledNotice', { name }));
     } catch (error) {
       setActionError(errorText(error));
@@ -149,10 +142,6 @@ export function PluginsPage() {
     setActionError(null);
     try {
       await remove.mutateAsync(pendingDelete.id);
-      if (pendingDelete.requiresReload) {
-        window.location.assign('/plugins');
-        return;
-      }
       setNotice(t('plugins:deletedNotice', { name: pendingDelete.name }));
       setPendingDelete(null);
     } catch (error) {
@@ -368,16 +357,6 @@ export function PluginsPage() {
                       </div>
                     </div>
 
-                    {plugin.compatibilityLevel === 'legacy-trusted' ? (
-                      <div className={styles.legacyWarning} role="note">
-                        <LockKey aria-hidden="true" />
-                        <div>
-                          <strong>{t('plugins:legacyTrustedTitle')}</strong>
-                          <p>{t('plugins:legacyTrustedHint')}</p>
-                        </div>
-                      </div>
-                    ) : null}
-
                     {plugin.dependencies && plugin.dependencies.length > 0 ? (
                       <div className={styles.depsWarning} role="note">
                         <Package aria-hidden="true" />
@@ -447,9 +426,7 @@ export function PluginsPage() {
                           <Button
                             size="sm"
                             disabled={busy}
-                            onClick={() =>
-                              void disablePlugin(plugin.id, plugin.name, plugin.hasLegacyFrontend)
-                            }
+                            onClick={() => void disablePlugin(plugin.id, plugin.name)}
                           >
                             {t('plugins:disable')}
                           </Button>
@@ -491,7 +468,6 @@ export function PluginsPage() {
                             setPendingDelete({
                               id: plugin.id,
                               name: plugin.name,
-                              requiresReload: plugin.hasLegacyFrontend && plugin.enabled,
                             })
                           }
                         >

@@ -2288,6 +2288,40 @@ export const GalleryDeleteResultDtoSchema = Type.Object(
 );
 export type GalleryDeleteResultDto = Static<typeof GalleryDeleteResultDtoSchema>;
 
+/**
+ * One built-in instruct format of the kernel catalog
+ * (`wire.settings.instruct-format`) — the static metadata the editor and the
+ * generation path need to select a format and stop the stream on its
+ * terminators. Rendering templates stay out of the wire: only the stable
+ * identity (`id`, `version`) and the stop strings cross it.
+ */
+export const InstructFormatEntryDtoSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1, maxLength: 64 }),
+    version: Type.Integer({ minimum: 1 }),
+    stopStrings: Type.Array(Type.String({ minLength: 1, maxLength: 128 }), {
+      minItems: 1,
+      maxItems: 16,
+    }),
+  },
+  { $id: 'wire.settings.instruct-format', additionalProperties: false },
+);
+export type InstructFormatEntryDto = Static<typeof InstructFormatEntryDtoSchema>;
+
+/**
+ * Built-in instruct-format catalog (`wire.result.instruct-formats`) — the
+ * static list served by `settings.instructFormats.list` (chatml / llama3 /
+ * alpaca / mistral / command-r, AGENTS.md §9). Custom user formats are NOT
+ * part of this catalog.
+ */
+export const InstructFormatsResultDtoSchema = Type.Object(
+  {
+    formats: Type.Array(InstructFormatEntryDtoSchema, { maxItems: 64 }),
+  },
+  { $id: 'wire.result.instruct-formats', additionalProperties: false },
+);
+export type InstructFormatsResultDto = Static<typeof InstructFormatsResultDtoSchema>;
+
 /** Asset metadata read request (`wire.request.assets.get`). */
 export const GetAssetRequestDtoSchema = Type.Object(
   {
@@ -2700,6 +2734,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.characters-gallery-add': GalleryAddResultDtoSchema,
   'wire.request.characters-gallery-delete': GalleryDeleteRequestDtoSchema,
   'wire.result.characters-gallery-delete': GalleryDeleteResultDtoSchema,
+  'wire.settings.instruct-format': InstructFormatEntryDtoSchema,
+  'wire.result.instruct-formats': InstructFormatsResultDtoSchema,
   'wire.request.imports.character.card': CharacterCardImportRequestDtoSchema,
   'wire.card.export.format': WireCardExportFormat,
   'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,

@@ -59,6 +59,7 @@ import {
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
   type ChatsExportResultDto,
+  type InstructFormatsResultDto,
   type ResultSettingsDto,
   type SecretsStatusResultDto,
   type SecretsLockResultDto,
@@ -441,6 +442,8 @@ export class LocalBackend implements NeoBackend {
     this.settings = {
       get: (req, opts) => this.invoke<ResultSettingsDto>('settings.get', req ?? {}, opts),
       update: (req, opts) => this.invoke<ResultSettingsDto>('settings.update', req, opts),
+      instructFormats: (opts) =>
+        this.invoke<InstructFormatsResultDto>('settings.instructformats.list', {}, opts),
     };
     this.diagnostics = {
       export: (opts) => this.invoke<DiagnosticsExportResultDto>('diagnostics.export', {}, opts),

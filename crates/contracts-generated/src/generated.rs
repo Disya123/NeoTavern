@@ -99,6 +99,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "profiles.delete" => Some(1024),
         "settings.get" => Some(4096),
         "settings.update" => Some(65536),
+        "settings.instructformats.list" => Some(1024),
         "diagnostics.export" => Some(1024),
         "secrets.status" => Some(1024),
         "secrets.lock" => Some(1024),
@@ -212,6 +213,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "profiles.delete" => Some(1024),
         "settings.get" => Some(262144),
         "settings.update" => Some(262144),
+        "settings.instructformats.list" => Some(16384),
         "diagnostics.export" => Some(262144),
         "secrets.status" => Some(262144),
         "secrets.lock" => Some(1024),
@@ -5207,6 +5209,151 @@ pub fn validate_result_characters_gallery_delete(value: &Value) -> Result<(), Ve
 
 pub fn decode_result_characters_gallery_delete(bytes: &[u8]) -> Result<ResultCharactersGalleryDelete, WireError> {
     crate::decode::<ResultCharactersGalleryDelete>(validate_result_characters_gallery_delete, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SettingsInstructFormat {
+    pub id: String,
+    pub version: i64,
+    #[serde(rename = "stopStrings")]
+    pub stop_strings: Vec<String>,
+}
+
+pub(crate) fn check_settings_instruct_format(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("version").is_none() {
+            issues.push(Issue::new(join_path(path, "version"), "RequiredProperty"));
+        }
+        if value.get("stopStrings").is_none() {
+            issues.push(Issue::new(join_path(path, "stopStrings"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("version") {
+            let child_path = join_path(path, "version");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("stopStrings") {
+            let child_path = join_path(path, "stopStrings");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() < 1 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMinItems"));
+                }
+                if arr.len() > 16 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 128 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "version" | "stopStrings") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_settings_instruct_format(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_settings_instruct_format(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_settings_instruct_format(bytes: &[u8]) -> Result<SettingsInstructFormat, WireError> {
+    crate::decode::<SettingsInstructFormat>(validate_settings_instruct_format, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultInstructFormats {
+    pub formats: Vec<SettingsInstructFormat>,
+}
+
+pub(crate) fn check_result_instruct_formats(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("formats").is_none() {
+            issues.push(Issue::new(join_path(path, "formats"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("formats") {
+            let child_path = join_path(path, "formats");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 64 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_settings_instruct_format(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "formats") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_instruct_formats(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_instruct_formats(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_instruct_formats(bytes: &[u8]) -> Result<ResultInstructFormats, WireError> {
+    crate::decode::<ResultInstructFormats>(validate_result_instruct_formats, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -2039,12 +2039,11 @@ export function translatePlugin(dto: PluginDto): InstalledPlugin {
     updatedAt: toEpochMs(dto.updatedAt),
     // Presence of frontend/backend/styles surfaces is not modelled by the
     // wire row; false is the honest "not declared", and the UI then treats
-    // the plugin as native without a legacy island or reload requirement.
+    // the plugin as native (the SillyTavern-era legacy island fields were
+    // removed with the plugin-compat contour, ADR-0059 Amendment 1).
     hasFrontend: false,
     hasBackend: false,
     hasStyles: false,
-    hasLegacyFrontend: false,
-    hasLegacyBackend: false,
     // Kernel plugins are native (no legacy bridge); native-v3 is the current
     // SDK generation the kernel wire represents.
     compatibilityLevel: 'native-v3',

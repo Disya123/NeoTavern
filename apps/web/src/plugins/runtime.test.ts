@@ -63,8 +63,6 @@ function installedPlugin(grantedPermissions: readonly string[] = ['ui.toolbar'])
     hasFrontend: true,
     hasBackend: false,
     hasStyles: false,
-    hasLegacyFrontend: false,
-    hasLegacyBackend: false,
     compatibilityLevel: 'native-v2',
     trust: 'unsigned-untrusted',
     lastErrorCode: null,
