@@ -895,6 +895,7 @@ pub fn characters_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, K
 pub fn chats_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_list_chats(request)?;
     let limit = page_limit(req.limit);
+    let manual = matches!(req.sort.as_deref(), Some("manual"));
     let mut items: Vec<ChatDto> = Vec::new();
     let mut next_cursor: Option<String> = None;
     {
@@ -912,18 +913,39 @@ pub fn chats_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelEr
             where_clauses.push("c.character_id = ?");
             params.push(Value::Text(character_id.clone()));
         }
-        if let Some(cursor) = &req.cursor {
-            let (created_at, id) = decode_cursor(cursor)?;
-            where_clauses.push("(c.created_at < ?) OR (c.created_at = ? AND c.id < ?)");
-            params.push(Value::Text(created_at.clone()));
-            params.push(Value::Text(created_at));
-            params.push(Value::Text(id));
+        match (&req.cursor, manual) {
+            (Some(cursor), false) => {
+                let (created_at, id) = decode_cursor(cursor)?;
+                where_clauses.push("(c.created_at < ?) OR (c.created_at = ? AND c.id < ?)");
+                params.push(Value::Text(created_at.clone()));
+                params.push(Value::Text(created_at));
+                params.push(Value::Text(id));
+            }
+            (Some(cursor), true) => {
+                // Manual order walks `(sort_order ASC, updated_at DESC,
+                // id DESC)`; the cursor mirrors those three components.
+                let (sort_order, updated_at, id) = decode_chat_manual_cursor(cursor)?;
+                where_clauses.push(
+                    "(c.sort_order > ?) OR (c.sort_order = ? AND (c.updated_at < ? \
+                     OR (c.updated_at = ? AND c.id < ?)))",
+                );
+                params.push(Value::Integer(sort_order));
+                params.push(Value::Integer(sort_order));
+                params.push(Value::Text(updated_at.clone()));
+                params.push(Value::Text(updated_at));
+                params.push(Value::Text(id));
+            }
+            (None, _) => {}
         }
         if !where_clauses.is_empty() {
             sql.push_str(" WHERE ");
             sql.push_str(&where_clauses.join(" AND "));
         }
-        sql.push_str(" ORDER BY c.created_at DESC, c.id DESC LIMIT ?");
+        if manual {
+            sql.push_str(" ORDER BY c.sort_order ASC, c.updated_at DESC, c.id DESC LIMIT ?");
+        } else {
+            sql.push_str(" ORDER BY c.created_at DESC, c.id DESC LIMIT ?");
+        }
         // Probe one row past the page so the last exact page carries no cursor.
         params.push(Value::Integer(limit + 1));
         let mut stmt = conn
@@ -938,12 +960,154 @@ pub fn chats_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelEr
     }
     if items.len() > limit as usize {
         let last = &items[limit as usize - 1];
-        next_cursor = Some(encode_cursor(&last.created_at, &last.id));
+        next_cursor = Some(if manual {
+            // The manual cursor needs the stored sort_order; read it for the
+            // last emitted row.
+            let sort_order: i64 = db
+                .conn()
+                .query_row(
+                    "SELECT sort_order FROM chats WHERE id = ?1",
+                    params![last.id],
+                    |row| row.get(0),
+                )
+                .map_err(|e| sqlite(e, "chats_list: sort_order read"))?;
+            encode_chat_manual_cursor(sort_order, &last.updated_at, &last.id)
+        } else {
+            encode_cursor(&last.created_at, &last.id)
+        });
         items.truncate(limit as usize);
     }
     let dto = PagedChats { items, next_cursor };
     validate(&dto, generated::validate_paged_chats)?;
     encode(&dto)
+}
+
+/// Encodes the manual-order chat pagination cursor: base64url (no padding) of
+/// `"{sort_order}|{updated_at}|{id}"`.
+fn encode_chat_manual_cursor(sort_order: i64, updated_at: &str, id: &str) -> String {
+    encode_parts(&[&sort_order.to_string(), updated_at, id])
+}
+
+/// Decodes the manual-order chat cursor. Malformed input is a
+/// [`KernelErrorCode::ContractViolation`] — never a panic.
+fn decode_chat_manual_cursor(cursor: &str) -> Result<(i64, String, String), KernelError> {
+    let text = decode_cursor_text(cursor)?;
+    let mut parts = text.splitn(3, '|');
+    let Some(sort_order) = parts.next().and_then(|s| s.parse::<i64>().ok()) else {
+        return Err(malformed_cursor());
+    };
+    let Some(updated_at) = parts.next().filter(|s| !s.is_empty()) else {
+        return Err(malformed_cursor());
+    };
+    let Some(id) = parts.next().filter(|s| !s.is_empty()) else {
+        return Err(malformed_cursor());
+    };
+    Ok((sort_order, updated_at.to_string(), id.to_string()))
+}
+
+/// `chats.reorder` — persist the manual drag-and-drop order of one
+/// character's chats (M7 Etap-4 cluster 25, parity with the legacy
+/// `PUT /api/v2/chats/order`).
+///
+/// `order` may be a partial list: listed chats take the leading block in the
+/// requested order, chats of the same character not listed keep their
+/// relative order below it. Duplicate ids → `VALIDATION`; an unknown
+/// character → `CHARACTER_NOT_FOUND`; an id that is not a live chat of that
+/// character → `CHAT_NOT_FOUND` (the legacy plugin threw on the first
+/// invalid id — the kernel keeps that single behavior).
+pub fn chats_reorder(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_chats_reorder(request)?;
+    let mut seen = std::collections::HashSet::new();
+    for chat_id in &req.order {
+        if !seen.insert(chat_id.as_str()) {
+            return Err(KernelError::product(
+                "VALIDATION".to_string(),
+                vec![(
+                    "message".to_string(),
+                    "duplicate chat ids in reorder order".to_string(),
+                )],
+            ));
+        }
+    }
+    let character_exists = db
+        .conn()
+        .query_row(
+            "SELECT 1 FROM characters WHERE id = ?1 LIMIT 1",
+            params![req.character_id],
+            |_| Ok(()),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "chats_reorder: character check"))?
+        .is_some();
+    if !character_exists {
+        return Err(not_found("CHARACTER", &req.character_id));
+    }
+
+    // All live chats of the character in their current effective order.
+    let mut current: Vec<(String, i64, String)> = Vec::new(); // (id, sort_order, updated_at)
+    {
+        let conn = db.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, sort_order, updated_at FROM chats \
+                 WHERE character_id = ?1 \
+                 ORDER BY sort_order ASC, updated_at DESC, id DESC",
+            )
+            .map_err(|e| sqlite(e, "chats_reorder: prepare"))?;
+        let mut rows = stmt
+            .query(params![req.character_id])
+            .map_err(|e| sqlite(e, "chats_reorder: query"))?;
+        while let Some(row) = rows
+            .next()
+            .map_err(|e| sqlite(e, "chats_reorder: read row"))?
+        {
+            current.push((
+                row.get::<_, String>(0)
+                    .map_err(|e| sqlite(e, "chats_reorder: id"))?,
+                row.get::<_, i64>(1)
+                    .map_err(|e| sqlite(e, "chats_reorder: sort_order"))?,
+                row.get::<_, String>(2)
+                    .map_err(|e| sqlite(e, "chats_reorder: updated_at"))?,
+            ));
+        }
+    }
+    let owned: std::collections::HashSet<&str> =
+        current.iter().map(|(id, _, _)| id.as_str()).collect();
+    let invalid = req
+        .order
+        .iter()
+        .find(|id| !owned.contains(id.as_str()))
+        .cloned();
+    if let Some(chat_id) = invalid {
+        return Err(not_found("CHAT", &chat_id));
+    }
+    let pending: std::collections::HashSet<&str> = req.order.iter().map(|id| id.as_str()).collect();
+    let mut ordered: Vec<String> = req.order.clone();
+    for (id, _, _) in &current {
+        if !pending.contains(id.as_str()) {
+            ordered.push(id.clone());
+        }
+    }
+    let reordered = req.order.len() as i64;
+    db.transaction(|tx| {
+        for (index, id) in ordered.iter().enumerate() {
+            tx.execute(
+                "UPDATE chats SET sort_order = ?1 WHERE id = ?2",
+                params![(index + 1) as i64, id],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "chats_reorder: update"))?;
+        }
+        Ok(())
+    })?;
+    let dto = generated::ResultChatsReorder { reordered };
+    let value = serde_json::to_value(&dto).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize chats-reorder response: {err}"),
+        )
+    })?;
+    validate(&value, generated::validate_result_chats_reorder)?;
+    encode(&value)
 }
 
 /// `chats.get` — one chat by id with its message count; missing chat →

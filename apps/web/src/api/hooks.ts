@@ -545,12 +545,14 @@ export function useReorderChats() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: ChatReorder) => {
-      // Kernel plane: chat ordering is the legacy `chats.update order`
-      // surface; the wire contract has no reorder op — honest
-      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy request
-      // (ARC-02).
+      // Kernel plane (M7 Etap-4 cluster 25): wire `chats.reorder` — the same
+      // manual-order semantics as the legacy route (listed chats take the
+      // leading block, unlisted chats keep their relative order below it).
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('chats.reorder'));
+        return backend.chats.reorder(input).then((result) => ({
+          reordered: result.reordered,
+          invalidIds: [] as string[],
+        }));
       }
       return api.put<{ reordered: number }>('/chats/order', input);
     },

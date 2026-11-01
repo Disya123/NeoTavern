@@ -4,6 +4,28 @@
 
 ### Added
 
+- **Manual chat order on the kernel plane (M7 Etap-4 slice; cluster 25).**
+  Schema v21 (`021_chat_sort_order`): `chats.sort_order INTEGER NOT NULL
+  DEFAULT 0` + `(character_id, sort_order, updated_at, id)` index. New wire
+  op `chats.reorder` persists the drag-and-drop order of a character's
+  chats (legacy `PUT /api/v2/chats/order` parity): the listed chats take
+  the leading block in the requested order, unlisted chats keep their
+  relative order below it; duplicates → VALIDATION, an unknown character →
+  CHARACTER_NOT_FOUND, an id that is not that character's live chat →
+  CHAT_NOT_FOUND (the legacy plugin's single behavior). `chats.list` gains
+  the additive `sort: 'recent' | 'manual'` — the manual walk is
+  cursor-paginated over `sort_order ASC, updated_at DESC, id DESC` with its
+  own three-component opaque cursor ("manual order + new on top": new
+  chats default to sort_order 0 and surface on top until reordered).
+  `useReorderChats` reorders through the wire op on the kernel plane (the
+  UnsupportedError placeholder is retired). The cluster's restore and
+  branches routes stay kernel-less by design: the kernel keeps one linear
+  sequence per chat and deletes chats permanently — no trash to restore
+  from, no branch model on the wire (documented N/A). Tests: storage
+  migration corpus (v1..v21), kernel (reorder round trip, manual list +
+  cursor pagination, malformed cursor, error paths, idempotent
+  convergence), remote-http parity, web hook test.
+
 - **Lorebook entry position/metadata on the wire (M7 Etap-4 slice; cluster 2
   entries-PATCH tail closed).** `wire.lorebook.entry.patch` gains `position`
   (re-orders the entry inside the book) and `metadata` (replaced wholesale);

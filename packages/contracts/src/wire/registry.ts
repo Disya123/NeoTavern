@@ -497,6 +497,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'chats.reorder',
+    'transactional',
+    'idempotent',
+    'none',
+    'app.write',
+    'wire.request.chats-reorder',
+    'wire.result.chats-reorder',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    262144,
+    2048,
+    undefined,
+  ),
+  op(
     'chats.get',
     'transactional',
     'idempotent',
@@ -2444,6 +2458,15 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     personaId: UUID_PERSONA,
   }),
   fx('chats-list-request', 'chats.list', 'request', true, {}),
+  fx('chats-list-request-manual', 'chats.list', 'request', true, {
+    characterId: UUID_CHARACTER,
+    sort: 'manual',
+    limit: 50,
+  }),
+  fx('chats-reorder-request', 'chats.reorder', 'request', true, {
+    characterId: UUID_CHARACTER,
+    order: [UUID_CHAT, '018f0000-0000-4000-8000-00000000c402'],
+  }),
   fx('chats-get-request', 'chats.get', 'request', true, { chatId: UUID_CHAT }),
   fx('chats-create-request', 'chats.create', 'request', true, {
     characterId: UUID_CHARACTER,
@@ -2686,6 +2709,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     warnings: [],
   }),
   fx('chats-list-response', 'chats.list', 'response', true, { items: [CHAT_VALUE] }),
+  fx('chats-reorder-response', 'chats.reorder', 'response', true, { reordered: 2 }),
   fx('chats-get-response', 'chats.get', 'response', true, CHAT_VALUE),
   fx('chats-create-response', 'chats.create', 'response', true, CHAT_VALUE),
   fx('chats-update-response', 'chats.update', 'response', true, CHAT_VALUE),
@@ -3076,6 +3100,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     },
   ),
   fx('neg-chats-export-missing-field', 'chats.export', 'request', false, {}),
+  fx('neg-chats-reorder-missing-field', 'chats.reorder', 'request', false, {
+    characterId: UUID_CHARACTER,
+  }),
+  fx('neg-chats-list-bad-sort', 'chats.list', 'request', false, { sort: 'newest' }),
   fx('neg-chats-export-response-bad-extension', 'chats.export', 'response', false, {
     filename: 'chat.txt',
     contentType: 'application/json',

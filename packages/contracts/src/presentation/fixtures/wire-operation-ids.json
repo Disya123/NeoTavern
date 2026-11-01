@@ -38,6 +38,7 @@
   "chats.messages.variants.create",
   "chats.messages.variants.delete",
   "chats.messages.variants.list",
+  "chats.reorder",
   "chats.snapshots.create",
   "chats.snapshots.list",
   "chats.snapshots.rollback",

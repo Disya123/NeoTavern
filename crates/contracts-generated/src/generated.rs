@@ -33,6 +33,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "characters.card.get" => Some(2048),
         "characters.card.update" => Some(131072),
         "chats.list" => Some(4096),
+        "chats.reorder" => Some(262144),
         "chats.get" => Some(2048),
         "chats.messages.list" => Some(4096),
         "chats.create" => Some(4096),
@@ -147,6 +148,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "characters.card.get" => Some(131072),
         "characters.card.update" => Some(131072),
         "chats.list" => Some(262144),
+        "chats.reorder" => Some(2048),
         "chats.get" => Some(262144),
         "chats.messages.list" => Some(262144),
         "chats.create" => Some(262144),
@@ -10765,6 +10767,8 @@ pub struct RequestListChats {
     pub cursor: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort: Option<String>,
 }
 
 pub(crate) fn check_request_list_chats(value: &Value, path: &str, issues: &mut Vec<Issue>) {
@@ -10812,9 +10816,20 @@ pub(crate) fn check_request_list_chats(value: &Value, path: &str, issues: &mut V
                 None => issues.push(Issue::new(child_path.as_str(), "Integer")),
             }
         }
+        if let Some(child) = value.get("sort") {
+            let child_path = join_path(path, "sort");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "recent" | "manual") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "characterId" | "cursor" | "limit") {
+                if !matches!(key.as_str(), "characterId" | "cursor" | "limit" | "sort") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -10831,6 +10846,124 @@ pub fn validate_request_list_chats(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_request_list_chats(bytes: &[u8]) -> Result<RequestListChats, WireError> {
     crate::decode::<RequestListChats>(validate_request_list_chats, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestChatsReorder {
+    #[serde(rename = "characterId")]
+    pub character_id: String,
+    pub order: Vec<String>,
+}
+
+pub(crate) fn check_request_chats_reorder(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("characterId").is_none() {
+            issues.push(Issue::new(join_path(path, "characterId"), "RequiredProperty"));
+        }
+        if value.get("order").is_none() {
+            issues.push(Issue::new(join_path(path, "order"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("order") {
+            let child_path = join_path(path, "order");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 5000 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            if !RE_1.is_match(s) {
+                                issues.push(Issue::new(item_path.as_str(), "StringFormat"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "characterId" | "order") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_chats_reorder(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_chats_reorder(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_chats_reorder(bytes: &[u8]) -> Result<RequestChatsReorder, WireError> {
+    crate::decode::<RequestChatsReorder>(validate_request_chats_reorder, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultChatsReorder {
+    pub reordered: i64,
+}
+
+pub(crate) fn check_result_chats_reorder(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("reordered").is_none() {
+            issues.push(Issue::new(join_path(path, "reordered"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("reordered") {
+            let child_path = join_path(path, "reordered");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "reordered") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_chats_reorder(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_chats_reorder(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_chats_reorder(bytes: &[u8]) -> Result<ResultChatsReorder, WireError> {
+    crate::decode::<ResultChatsReorder>(validate_result_chats_reorder, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

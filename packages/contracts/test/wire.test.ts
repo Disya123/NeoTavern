@@ -67,8 +67,9 @@ describe('product wire registry', () => {
     // set is asserted so a registry edit that drops or renames an op fails
     // loudly. The M7 follow-up (2026-10-31) adds backups.delete (102); the
     // Etap-4 gallery slice adds characters.gallery.{list,add,delete} (105);
-    // the instruct-formats slice adds settings.instructformats.list (106).
-    expect(registry.operations).toHaveLength(106);
+    // the instruct-formats slice adds settings.instructformats.list (106);
+    // the chats-order slice adds chats.reorder (107).
+    expect(registry.operations).toHaveLength(107);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -83,6 +84,7 @@ describe('product wire registry', () => {
       'characters.card.get',
       'characters.card.update',
       'chats.list',
+      'chats.reorder',
       'chats.get',
       'chats.messages.list',
       'chats.create',

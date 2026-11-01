@@ -1467,6 +1467,106 @@ fn characters_gallery_over_http() {
     assert_eq!(response.status, 200, "asset outlives its gallery link");
 }
 
+/// M7 Etap-4 (cluster 25): `chats.reorder` + `chats.list sort=manual` over
+/// the HTTP host — the persisted manual order leads the list, unlisted chats
+/// follow in their relative order, and the invalid id surfaces as a
+/// CHAT_NOT_FOUND product error.
+#[test]
+fn chats_order_over_http() {
+    let server = TestServer::spawn();
+
+    let create_character = envelope_body(&rid(1), "characters.create", json!({ "name": "Ora" }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create_character);
+    assert_eq!(response.status, 200, "characters.create answers HTTP 200");
+    let (_, character) = expect_ok(decode_envelope(&response.body));
+    let character_id = character["id"].as_str().expect("character id").to_string();
+
+    let mut chat_ids = Vec::new();
+    for (i, rid_n) in [2, 3, 4].into_iter().enumerate() {
+        let create_chat = envelope_body(
+            &rid(rid_n),
+            "chats.create",
+            json!({ "characterId": character_id, "title": format!("Chat {}", i) }),
+        );
+        let response = http_request(server.addr, "POST", "/rpc", &[], &create_chat);
+        assert_eq!(response.status, 200, "chats.create answers HTTP 200");
+        let (_, chat) = expect_ok(decode_envelope(&response.body));
+        chat_ids.push(chat["id"].as_str().expect("chat id").to_string());
+    }
+
+    // Manual list before any reorder: newest first (all sort_order = 0).
+    let list = envelope_body(
+        &rid(5),
+        "chats.list",
+        json!({ "characterId": character_id, "sort": "manual" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200, "manual list answers HTTP 200");
+    let (_, page) = expect_ok(decode_envelope(&response.body));
+    let titles: Vec<&str> = page["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|chat| chat["title"].as_str().expect("title"))
+        .collect();
+    assert_eq!(titles, vec!["Chat 2", "Chat 1", "Chat 0"]);
+
+    // Reorder a partial leading block [chat1, chat0]; chat2 keeps its place
+    // below the block.
+    let reorder = envelope_body(
+        &rid(6),
+        "chats.reorder",
+        json!({ "characterId": character_id, "order": [chat_ids[1], chat_ids[0]] }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &reorder);
+    assert_eq!(response.status, 200, "chats.reorder answers HTTP 200");
+    let (_, reordered) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_chats_reorder(&reordered).expect("reorder result is wire-valid");
+    assert_eq!(reordered["reordered"], json!(2));
+
+    let list = envelope_body(
+        &rid(7),
+        "chats.list",
+        json!({ "characterId": character_id, "sort": "manual" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200, "manual list after reorder answers 200");
+    let (_, page) = expect_ok(decode_envelope(&response.body));
+    let titles: Vec<&str> = page["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|chat| chat["title"].as_str().expect("title"))
+        .collect();
+    assert_eq!(titles, vec!["Chat 1", "Chat 0", "Chat 2"]);
+
+    // An id that is not that character's chat → CHAT_NOT_FOUND.
+    let foreign = envelope_body(&rid(8), "characters.create", json!({ "name": "Ora II" }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &foreign);
+    assert_eq!(response.status, 200);
+    let (_, foreign_character) = expect_ok(decode_envelope(&response.body));
+    let foreign_chat = envelope_body(
+        &rid(9),
+        "chats.create",
+        json!({ "characterId": foreign_character["id"], "title": "Foreign" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &foreign_chat);
+    assert_eq!(response.status, 200);
+    let (_, foreign_chat_dto) = expect_ok(decode_envelope(&response.body));
+    let bad = envelope_body(
+        &rid(10),
+        "chats.reorder",
+        json!({
+            "characterId": character_id,
+            "order": [foreign_chat_dto["id"]]
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &bad);
+    assert_eq!(response.status, 200, "product errors answer HTTP 200");
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, json!("CHAT_NOT_FOUND"));
+}
+
 /// M7 Etap-4 (cluster 1 avatar-clear tail): `personas.update` with the
 /// explicit `clearAvatar` flag over the HTTP host — the stored avatar is
 /// cleared (the legacy `avatar: null` form), and `avatar` + `clearAvatar`

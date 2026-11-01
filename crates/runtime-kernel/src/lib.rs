@@ -547,6 +547,8 @@ fn handle_unary(
         "characters.update" => with_db_opt(db, |db| product::characters_update(db, req)),
         "characters.delete" => with_db_opt(db, |db| product::characters_delete(db, req)),
         "chats.list" => with_db_opt(db, |db| product::chats_list(db, req)),
+        // M7 Etap-4 (cluster 25): manual drag-and-drop ordering.
+        "chats.reorder" => with_db_opt(db, |db| product::chats_reorder(db, req)),
         "chats.get" => with_db_opt(db, |db| product::chats_get(db, req)),
         "chats.create" => with_db_opt(db, |db| product::chats_create(db, req)),
         "chats.update" => with_db_opt(db, |db| product::chats_update(db, req)),

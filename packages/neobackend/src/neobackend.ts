@@ -23,6 +23,8 @@ import type {
   CharacterDto,
   ChatDto,
   ChatSnapshotResultDto,
+  ChatsReorderRequestDto,
+  ChatsReorderResultDto,
   CommitMessageDraftRequestDto,
   CreateCharacterRequestDto,
   CreateChatRequestDto,
@@ -180,6 +182,13 @@ export interface ChatsApi {
   update(req: UpdateChatRequestDto, opts?: BackendCallOptions): Promise<ChatDto>;
   /** Delete a chat (cascades to its messages). */
   del(chatId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /**
+   * Persist the manual drag-and-drop order of one character's chats (wire
+   * `chats.reorder`, M7 Etap-4 cluster 25): the listed chats take the
+   * leading block in the requested order; unlisted chats of the same
+   * character keep their relative order below it.
+   */
+  reorder(req: ChatsReorderRequestDto, opts?: BackendCallOptions): Promise<ChatsReorderResultDto>;
   /** List messages of a chat (cursor-paginated). */
   listMessages(req: ListMessagesRequestDto, opts?: BackendCallOptions): Promise<PagedMessagesDto>;
   /** Append a message to a chat (sequence allocated atomically). */

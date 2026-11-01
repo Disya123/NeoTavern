@@ -825,6 +825,33 @@ pub const MIGRATION_20_SQL: &str = migration_20_sql!();
 pub const MIGRATION_20_CHECKSUM: &str =
     "baa6f6cb69a820d67ad9ecc72835132546447460d81a1e5087fed7890adfa262";
 
+/// Literal body of the manual chat ordering (v21) schema migration (M7 Etap-4
+/// chats-order slice): `sort_order` on `chats` backs the persisted
+/// drag-and-drop order of a character's chat list (`chats.reorder` +
+/// `chats.list sort=manual`). New chats default to `sort_order = 0` and
+/// surface on top until the user reorders ("manual order + new on top");
+/// the column is maintained only by the kernel reorder op, no triggers.
+/// Additive (`ALTER TABLE ADD COLUMN` + index); rollback is the
+/// pre-migration backup restore (ТЗ §10.4).
+macro_rules! migration_21_sql {
+    () => {
+        r#"ALTER TABLE chats ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX idx_chats_character_sort ON chats(character_id, sort_order, updated_at, id);"#
+    };
+}
+
+/// Name of the manual chat ordering (v21) schema migration.
+pub const MIGRATION_21_NAME: &str = "021_chat_sort_order";
+
+/// Exact SQL of the manual chat ordering schema migration (v21) — the
+/// `migration_21_sql!()` literal.
+pub const MIGRATION_21_SQL: &str = migration_21_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_21_SQL` string bytes (same
+/// computation as `MIGRATION_20_CHECKSUM`).
+pub const MIGRATION_21_CHECKSUM: &str =
+    "0fea2aa7adda556ebba008ef4f3c7b70fd317a702ea811a90d4153b9775fc6f3";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -871,7 +898,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_19_sql!(),
     "\n",
-    migration_20_sql!()
+    migration_20_sql!(),
+    "\n",
+    migration_21_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

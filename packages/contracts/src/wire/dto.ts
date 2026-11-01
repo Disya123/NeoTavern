@@ -927,16 +927,52 @@ export const DeletePersonaRequestDtoSchema = Type.Object(
 );
 export type DeletePersonaRequestDto = Static<typeof DeletePersonaRequestDtoSchema>;
 
-/** List chats request DTO (`wire.request.list-chats`). */
+/**
+ * List chats request DTO (`wire.request.list-chats`). `sort` (M7 Etap-4
+ * cluster 25): `recent` (default, `created_at DESC`) or `manual` — the
+ * persisted drag-and-drop order (`sort_order ASC, updated_at DESC, id DESC`,
+ * new chats default `sort_order = 0` and surface on top until reordered).
+ */
 export const ListChatsRequestDtoSchema = Type.Object(
   {
     characterId: Type.Optional(Type.String({ format: 'uuid' })),
     cursor: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+    sort: Type.Optional(
+      Type.Union([Type.Literal('recent'), Type.Literal('manual')], {
+        'x-wire-unknown-behavior': 'reject',
+      }),
+    ),
   },
   { $id: 'wire.request.list-chats', additionalProperties: false },
 );
 export type ListChatsRequestDto = Static<typeof ListChatsRequestDtoSchema>;
+
+/**
+ * Chats reorder request DTO (`wire.request.chats-reorder`, M7 Etap-4
+ * cluster 25): persist the manual drag-and-drop order of one character's
+ * chats. `order` may be a partial list — chats not listed keep their
+ * relative position below the reordered block; duplicate ids and ids that
+ * do not belong to the character are kernel errors (VALIDATION /
+ * CHAT_NOT_FOUND).
+ */
+export const ChatsReorderRequestDtoSchema = Type.Object(
+  {
+    characterId: Type.String({ format: 'uuid' }),
+    order: Type.Array(Type.String({ format: 'uuid' }), { maxItems: 5000 }),
+  },
+  { $id: 'wire.request.chats-reorder', additionalProperties: false },
+);
+export type ChatsReorderRequestDto = Static<typeof ChatsReorderRequestDtoSchema>;
+
+/** Chats reorder result DTO (`wire.result.chats-reorder`). */
+export const ChatsReorderResultDtoSchema = Type.Object(
+  {
+    reordered: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.result.chats-reorder', additionalProperties: false },
+);
+export type ChatsReorderResultDto = Static<typeof ChatsReorderResultDtoSchema>;
 
 /** Get chat request DTO (`wire.request.get-chat`). */
 export const GetChatRequestDtoSchema = Type.Object(
@@ -2824,6 +2860,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.update-persona': UpdatePersonaRequestDtoSchema,
   'wire.request.delete-persona': DeletePersonaRequestDtoSchema,
   'wire.request.list-chats': ListChatsRequestDtoSchema,
+  'wire.request.chats-reorder': ChatsReorderRequestDtoSchema,
+  'wire.result.chats-reorder': ChatsReorderResultDtoSchema,
   'wire.request.get-chat': GetChatRequestDtoSchema,
   'wire.request.create-chat': CreateChatRequestDtoSchema,
   'wire.request.update-chat': UpdateChatRequestDtoSchema,

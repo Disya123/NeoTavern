@@ -429,12 +429,16 @@ describe('character gallery hooks (kernel-plane honesty, slice 21)', () => {
 });
 
 describe('remaining legacy hooks (kernel-plane honesty, slice 22)', () => {
-  it('useReorderChats rejects with UnsupportedError on the kernel plane', async () => {
+  it('useReorderChats reorders via wire chats.reorder on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const reorderSpy = vi.spyOn(backend.chats, 'reorder').mockResolvedValue({ reordered: 2 });
     const { result } = renderHook(() => useReorderChats(), { wrapper: wrapperFor(queryClient) });
     act(() => result.current.mutate({ characterId: 'char-1', order: ['c1', 'c2'] }));
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ reordered: 2, invalidIds: [] });
+    expect(reorderSpy).toHaveBeenCalledWith({ characterId: 'char-1', order: ['c1', 'c2'] });
     expect(fetchMock).not.toHaveBeenCalled();
+    reorderSpy.mockRestore();
     mocks.isKernelMode.mockReturnValue(false);
   });
 
