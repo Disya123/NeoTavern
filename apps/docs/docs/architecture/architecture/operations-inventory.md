@@ -260,6 +260,14 @@ Canonical equivalents: `providers.config.*` + `providers.secrets.*` +
 
 ### dataImports — `apps/server/src/plugins/dataImports.ts`
 
+**Transport-blocked on the kernel plane (Этап-4 registry cluster 10).** The
+archive is multipart and may reach the legacy 4 GiB cap, while a wire request
+is JSON (`assets.put` admits 1 MiB) and the kernel is a synchronous single
+writer, so the kernel cannot own this flow until a large-file ingestion
+contract exists (host-staged path or chunked upload ops). The React hooks
+refuse honestly in kernel mode (`UnsupportedError`) instead of falling back to
+the sidecar.
+
 SillyTavern full-backup transfer (two-phase):
 
 - `POST /api/v2/imports/sillytavern/analyze` — stream, hash and safely unpack

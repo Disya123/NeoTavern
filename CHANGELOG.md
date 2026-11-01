@@ -475,7 +475,21 @@
   hash `e38584b4…`; registry 122 ops.
 ### Architecture
 
-- **Connection profiles documented N/A on the kernel plane (M7 Etap-4
+- **Large-file ingestion is now a named blocker, not a silent backlog item
+  (M7 Etap-4 clusters 8 tail + 10).** Two clusters cannot be honestly ported
+  before the wire grows a large-file ingestion contract: the speech / images /
+  transcribe tail (binary or multipart payloads, multi-MB base64 results) and
+  the SillyTavern-backup import (a multipart archive up to the legacy 4 GiB
+  cap, with extraction that takes minutes). Wire requests are JSON and
+  `assets.put` admits 1 MiB, while the kernel is a synchronous single writer —
+  so the registry now marks cluster 10 **blocked (ingestion transport)** and
+  records the decision itself: (1) a host-staged path (the host streams into
+  the data root and passes a staged-upload id/relative path) or (2) chunked
+  `assets.upload.*` ops with bounded chunks, a TTL and cancellation. Neither
+  is implemented and no ADR is recorded yet — the choice is the owner's. Until
+  then the React hooks keep refusing in kernel mode with a stable
+  `UnsupportedError`, and the legacy sidecar keeps the feature. Registry row,
+  coverage note, operations inventory and this entry are the honest state.- **Connection profiles documented N/A on the kernel plane (M7 Etap-4
   cluster 9).** The six legacy `/api/v2/connection-profiles` routes are not
   ported: no React consumer exists (the AI Settings API tab manages provider
   configs through `providers.config.*`; the React SPA is the only product UI,

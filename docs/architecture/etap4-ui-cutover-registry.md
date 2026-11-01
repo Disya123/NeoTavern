@@ -120,7 +120,7 @@ diagnostics/settings.
 | 7   | Providers: config + secrets CRUD/reveal/exposure                                 | provider editors, ApiKeysModal   | 16, all missing (config list/set only) | 11 covered (catalog + config CRUD via `providers.config.*`, `providers.secrets.{list,create,update,delete,reveal}`, `secrets.exposure`; schema v24 `provider_secrets`, reveal host-gated); 3 missing = speech/images/transcribe (cluster 8 tail)                                                                                                                                                                                                                                                                                                    | wire done                            |
 | 8   | Providers: models/test/speech/images/transcribe                                  | provider setup, TTS              | 5                                      | 2 covered (`providers.models` live discovery for the addressed config, `providers.test` one-message connectivity check); 3 missing = speech/images/transcribe — binary/multipart payloads need a media transport contract                                                                                                                                                                                                                                                                                                                           | in-progress                          |
 | 9   | Connection profiles + apply                                                      | — (no React consumer)            | 6                                      | N/A×6 — legacy-only surface: the React product never calls these routes (the AI Settings API tab manages provider configs via `providers.config.*`), and the apply semantics depend on the legacy provider model (`chat`/`text` mode, `assistantPrefill` capability, provider `settings.source`) that the kernel deliberately replaced. Canonical equivalents: `providers.config.*` + `providers.secrets.*` + `presets.*`. The rows are not carried by the legacy→kernel conversion because they reference provider configs, which are never copied | N/A (retires with the sidecar)       |
-| 10  | Imports: SillyTavern backup                                                      | DataMigrationPanel               | 4                                      | missing×4 (critical migration path)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | todo                                 |
+| 10  | Imports: SillyTavern backup                                                      | DataMigrationPanel               | 4                                      | missing×4 — **transport-blocked**: the archive may be up to the legacy 4 GiB cap, while a wire request is JSON and `assets.put` admits 1 MiB, so analyze/execute/discard/direct-import all need a large-file ingestion contract (host-staged path or chunked upload ops) before the kernel can own the flow. The React hooks already refuse honestly in kernel mode (`UnsupportedError`), and the staged analyse/execute model keeps extracted bytes outside the database by design                                                                 | blocked (ingestion transport)        |
 | 11  | Imports: character card                                                          | CharactersPage                   | covered (`imports.character.card`)     | covered                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | todo (UI flag flip)                  |
 | 12  | Gallery + avatar-original                                                        | CharacterManagementPanel         | 4                                      | 3 new ops (M7), avatar-original via `assets.content`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | wire done                            |
 | 13  | Backgrounds                                                                      | BackgroundsPanel                 | 4                                      | missing×4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | todo                                 |
@@ -143,7 +143,36 @@ diagnostics/settings.
 (A cluster marked `covered` still ships a slice: flip the UI to the kernel
 branch, delete the legacy branch + route, shrink the ui-legacy baseline.)
 
-## 4. Ground truth and machine gates
+## 4. Blocked on the ingestion transport (decision pending)
+
+Two clusters cannot be honestly ported before the wire grows a large-file
+ingestion contract. Both are blocked by the same fact: wire requests are JSON
+(and `assets.put`, the only byte-carrying op, admits **1 MiB**), while the
+kernel is a synchronous single writer.
+
+| Cluster | Payload                                              | Why the wire cannot carry it today                                      |
+| ------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
+| 8 tail  | TTS audio / generated images / transcription uploads | binary or multipart; multi-MB base64 results would blow DTO budgets     |
+| 10      | SillyTavern backups (`/imports/sillytavern/*`)       | multipart archive up to the legacy **4 GiB** cap; extraction is minutes |
+
+Candidate contracts (owner decision required — no ADR is recorded yet, and
+neither is implemented):
+
+1. **Host-staged path.** The host (desktop Tauri / headless server) streams the
+   file into the data root itself and calls a wire op with a staged-upload id
+   or a relative path. Small wire surface, no kernel streaming; the remote Web
+   Client needs the host's own HTTP upload endpoint (outside Product Wire).
+2. **Chunked upload ops.** `assets.upload.begin/append/finish` with bounded
+   chunks (≤1 MiB each), assembling under the asset plane with a TTL and
+   explicit cancellation. Works for every client uniformly and keeps Product
+   Wire canonical, but adds a mutable staged-upload resource the kernel must
+   own, clean up and bound.
+
+Until then the honest state is what ships today: the React hooks refuse in
+kernel mode with a stable `UnsupportedError`, and the legacy sidecar keeps the
+feature.
+
+## 5. Ground truth and machine gates
 
 - Route inventory: `docs/architecture/operations-inventory.md` (updated per
   slice deletion).
@@ -155,7 +184,7 @@ branch, delete the legacy branch + route, shrink the ui-legacy baseline.)
 - Final scan (ТЗ exit): grep for production `/api/v2` + `legacyRaw(` in
   `apps/web/src` excluding tests must return zero.
 
-## 5. Slice log
+## 6. Slice log
 
 | Slice    | Clusters | Commit                   | Notes                                                                                        |
 | -------- | -------- | ------------------------ | -------------------------------------------------------------------------------------------- |
