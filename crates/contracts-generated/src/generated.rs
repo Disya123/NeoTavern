@@ -10562,6 +10562,8 @@ pub struct RequestUpdatePersona {
     pub description: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar: Option<String>,
+    #[serde(rename = "clearAvatar", default, skip_serializing_if = "Option::is_none")]
+    pub clear_avatar: Option<bool>,
     #[serde(rename = "isDefault", default, skip_serializing_if = "Option::is_none")]
     pub is_default: Option<bool>,
 }
@@ -10624,6 +10626,12 @@ pub(crate) fn check_request_update_persona(value: &Value, path: &str, issues: &m
                 None => issues.push(Issue::new(child_path.as_str(), "String")),
             }
         }
+        if let Some(child) = value.get("clearAvatar") {
+            let child_path = join_path(path, "clearAvatar");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
         if let Some(child) = value.get("isDefault") {
             let child_path = join_path(path, "isDefault");
             if !child.is_boolean() {
@@ -10632,7 +10640,7 @@ pub(crate) fn check_request_update_persona(value: &Value, path: &str, issues: &m
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "personaId" | "name" | "description" | "avatar" | "isDefault") {
+                if !matches!(key.as_str(), "personaId" | "name" | "description" | "avatar" | "clearAvatar" | "isDefault") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }

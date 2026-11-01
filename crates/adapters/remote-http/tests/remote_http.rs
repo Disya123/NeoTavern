@@ -1467,6 +1467,54 @@ fn characters_gallery_over_http() {
     assert_eq!(response.status, 200, "asset outlives its gallery link");
 }
 
+/// M7 Etap-4 (cluster 1 avatar-clear tail): `personas.update` with the
+/// explicit `clearAvatar` flag over the HTTP host — the stored avatar is
+/// cleared (the legacy `avatar: null` form), and `avatar` + `clearAvatar`
+/// together reject with a VALIDATION product error.
+#[test]
+fn personas_avatar_clear_over_http() {
+    let server = TestServer::spawn();
+
+    let create = envelope_body(
+        &rid(1),
+        "personas.create",
+        json!({ "name": "Iris", "avatar": "portraits/iris.png" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create);
+    assert_eq!(response.status, 200, "personas.create answers HTTP 200");
+    let (_, persona) = expect_ok(decode_envelope(&response.body));
+    let persona_id = persona["id"].as_str().expect("persona id").to_string();
+    assert_eq!(persona["avatar"], json!("portraits/iris.png"));
+
+    let clear = envelope_body(
+        &rid(2),
+        "personas.update",
+        json!({ "personaId": persona_id, "clearAvatar": true }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &clear);
+    assert_eq!(response.status, 200, "clear-avatar update answers HTTP 200");
+    let (_, updated) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(
+        updated["avatar"],
+        json!(Value::Null),
+        "the stored avatar is cleared"
+    );
+
+    let contradiction = envelope_body(
+        &rid(3),
+        "personas.update",
+        json!({
+            "personaId": persona_id,
+            "avatar": "portraits/new.png",
+            "clearAvatar": true
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &contradiction);
+    assert_eq!(response.status, 200, "product errors answer HTTP 200");
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, json!("VALIDATION"));
+}
+
 /// M7 Etap-4 (cluster 5 un-scope tail): `memories.update` with
 /// `scope: "global"` over the HTTP host — the owner is cleared (the wire
 /// cannot express `characterId: null`), and the contradictory

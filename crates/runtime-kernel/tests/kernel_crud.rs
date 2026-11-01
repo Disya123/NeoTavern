@@ -1498,6 +1498,57 @@ fn persona_crud_round_trip() {
     assert_eq!(product.params["personaId"], json!(second.id));
 }
 
+/// M7 Etap-4 (cluster 1 avatar-clear tail): the legacy PATCH clears an
+/// avatar with `avatar: null`; the wire `avatar` is a plain string, so the
+/// clear rides the explicit `clearAvatar` flag — and setting both in one
+/// request is a VALIDATION contradiction.
+#[test]
+fn persona_avatar_clear_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    let created = dispatch_decoded::<PersonaDto>(
+        &kernel,
+        "personas.create",
+        json!({ "name": "Dana", "avatar": "portraits/d.png" }),
+    )
+    .expect("personas.create must succeed");
+    assert_eq!(created.avatar.as_deref(), Some("portraits/d.png"));
+
+    // clearAvatar: true clears the stored avatar; other fields stay.
+    let cleared = dispatch_decoded::<PersonaDto>(
+        &kernel,
+        "personas.update",
+        json!({ "personaId": created.id, "clearAvatar": true, "name": "Dana the Stern" }),
+    )
+    .expect("clear-avatar update must succeed");
+    assert!(cleared.avatar.is_none(), "avatar is cleared");
+    assert_eq!(cleared.name, "Dana the Stern");
+
+    // avatar + clearAvatar in one request → VALIDATION product error.
+    let contradiction = dispatch_json(
+        &kernel,
+        "personas.update",
+        json!({
+            "personaId": created.id,
+            "avatar": "portraits/new.png",
+            "clearAvatar": true
+        }),
+    )
+    .expect_err("avatar + clearAvatar must fail");
+    assert_eq!(
+        contradiction.product.expect("product dto").code,
+        "VALIDATION"
+    );
+
+    // The row is untouched by the rejected patch.
+    let untouched =
+        dispatch_decoded::<PersonaDto>(&kernel, "personas.get", json!({ "personaId": created.id }))
+            .expect("get after the rejected patch must succeed");
+    assert!(untouched.avatar.is_none(), "no avatar was written");
+    assert_eq!(untouched.name, "Dana the Stern");
+}
+
 /// M4 slice 1: update/delete on a missing persona and contract violations
 /// answer the stable error codes.
 #[test]

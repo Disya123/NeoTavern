@@ -1639,10 +1639,19 @@ export async function createPersona(input: PersonaCreate): Promise<Persona> {
 /** Update a persona. */
 export async function updatePersona(id: string, update: PersonaUpdate): Promise<Persona> {
   if (isKernelMode()) {
-    // The wire contract has no avatar-clearing signal (`avatar: null`);
-    // absence means "unchanged" — an explicit clear is honest
-    // CAPABILITY_UNAVAILABLE, not a silent no-op.
-    if (update.avatar === null) throw new UnsupportedError('personas.update.avatar.clear');
+    // Avatar clear (M7 Etap-4 cluster 1): the legacy PATCH expresses it as
+    // `avatar: null`; the wire rides the explicit `clearAvatar` flag (the
+    // kernel rejects `avatar` + `clearAvatar` together with VALIDATION).
+    if (update.avatar === null) {
+      const updated = await backend.personas.update({
+        personaId: id,
+        clearAvatar: true,
+        ...(update.name !== undefined ? { name: update.name } : {}),
+        ...(update.description !== undefined ? { description: update.description } : {}),
+        ...(update.isDefault !== undefined ? { isDefault: update.isDefault } : {}),
+      });
+      return translatePersona(updated);
+    }
     const updated = await backend.personas.update({
       personaId: id,
       ...(update.name !== undefined ? { name: update.name } : {}),

@@ -905,6 +905,13 @@ export const UpdatePersonaRequestDtoSchema = Type.Object(
     name: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
     description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
     avatar: Type.Optional(Type.String({ minLength: 0, maxLength: 512 })),
+    /**
+     * Avatar clear (M7 Etap-4 cluster 1): the legacy PATCH can express
+     * `avatar: null`; the wire `avatar` field is a plain string, so the
+     * clear rides this explicit flag. Setting `avatar` and `clearAvatar`
+     * in one request is a contradiction (kernel VALIDATION).
+     */
+    clearAvatar: Type.Optional(Type.Boolean()),
     isDefault: Type.Optional(Type.Boolean()),
   },
   { $id: 'wire.request.update-persona', additionalProperties: false },

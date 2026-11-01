@@ -47,7 +47,7 @@ shares the route; the shared route's last consumer owns its deletion.
   `characters.gallery.{list,add,delete}` — the gallery cluster is fully
   covered, avatar-original rides the existing `assets.content` — and
   `settings.instructformats.list` (the settings cluster is fully covered)).
-- **Legacy-route coverage: 73 covered / 7 partial / 85 missing** (no wire op
+- **Legacy-route coverage: 74 covered / 6 partial / 85 missing** (no wire op
   at all; `backups.delete` closes its route into the covered set on the
   next registry recount).
 - Kernel-mode gating in the UI is consistent: every legacy branch sits
@@ -73,7 +73,7 @@ diagnostics/settings.
 
 | #   | Cluster                                                                          | UI surface                       | Legacy routes                          | Wire verdict                                         | State               |
 | --- | -------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------- | ---------------------------------------------------- | ------------------- |
-| 1   | Personas                                                                         | PersonasPanel, macros            | 5 (PATCH partial: avatar-clear)        | 4 covered, 1 partial                                 | todo                |
+| 1   | Personas                                                                         | PersonasPanel, macros            | 5 (PATCH partial: avatar-clear)        | 5 covered (`clearAvatar` flag M7)                    | wire done           |
 | 2   | Lorebooks + entries                                                              | LorebookPanel                    | 10 (entries-PATCH partial)             | 9 covered, 1 partial, restore missing                | todo                |
 | 3   | Variants/revisions/swipe                                                         | ChatPage                         | covered (swipe maps to variants)       | covered                                              | todo (UI flag flip) |
 | 4   | Drafts                                                                           | plugin draft streaming           | covered (save→upsert)                  | covered                                              | todo (UI flag flip) |

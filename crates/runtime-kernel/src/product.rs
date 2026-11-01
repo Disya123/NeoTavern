@@ -3482,6 +3482,19 @@ pub fn personas_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     let req = generated::decode_request_update_persona(request)?;
     let id = req.persona_id.clone();
     let now = now();
+    // M7 Etap-4 (cluster 1 avatar-clear tail): the legacy PATCH can express
+    // `avatar: null`; the wire `avatar` field is a plain string, so the
+    // clear rides the explicit `clearAvatar` flag. Setting both in one
+    // request is a contradiction → VALIDATION.
+    if req.clear_avatar == Some(true) && req.avatar.is_some() {
+        return Err(KernelError::product(
+            "VALIDATION".to_string(),
+            vec![(
+                "message".to_string(),
+                "avatar and clearAvatar cannot be set together".to_string(),
+            )],
+        ));
+    }
     // The UPDATE runs FIRST: when it touches 0 rows the transaction commits
     // nothing (no `clear_persona_default` side effect) and the caller gets
     // PERSONA_NOT_FOUND — the single-default invariant cannot break on the
@@ -3500,6 +3513,8 @@ pub fn personas_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
         if let Some(avatar) = &req.avatar {
             sets.push("avatar = ?");
             values.push(Value::Text(avatar.clone()));
+        } else if req.clear_avatar == Some(true) {
+            sets.push("avatar = NULL");
         }
         if let Some(is_default) = req.is_default {
             sets.push("is_default = ?");

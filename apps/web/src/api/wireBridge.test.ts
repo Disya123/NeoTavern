@@ -1142,7 +1142,7 @@ describe('persona CRUD (kernel, Этап 4.1)', () => {
     expect(mocks.personas.create).not.toHaveBeenCalled();
   });
 
-  it('updates name/avatar and rejects an explicit avatar clear', async () => {
+  it('updates name/avatar and maps an explicit avatar clear to clearAvatar', async () => {
     mocks.personas.update.mockResolvedValue(WIRE_PERSONA);
     await updatePersona(WIRE_PERSONA.id, { name: 'Aria II', avatar: 'aria.png' });
     expect(mocks.personas.update).toHaveBeenCalledWith({
@@ -1150,9 +1150,14 @@ describe('persona CRUD (kernel, Этап 4.1)', () => {
       name: 'Aria II',
       avatar: 'aria.png',
     });
-    await expect(updatePersona(WIRE_PERSONA.id, { avatar: null })).rejects.toBeInstanceOf(
-      UnsupportedError,
-    );
+    // M7 Etap-4 (cluster 1): the legacy `avatar: null` clear rides the wire
+    // `clearAvatar` flag; other fields carry through on the same patch.
+    await updatePersona(WIRE_PERSONA.id, { avatar: null, name: 'Aria III' });
+    expect(mocks.personas.update).toHaveBeenLastCalledWith({
+      personaId: WIRE_PERSONA.id,
+      clearAvatar: true,
+      name: 'Aria III',
+    });
   });
 
   it('deletes a persona through the facade', async () => {

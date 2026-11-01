@@ -4,6 +4,16 @@
 
 ### Added
 
+- **Persona avatar clear on the wire (M7 Etap-4 slice; cluster 1 fully
+  covered).** `personas.update` gains the explicit `clearAvatar` flag — the
+  wire form of the legacy `avatar: null` PATCH clear (the wire `avatar`
+  field is a plain string and absence means "unchanged"). Setting `avatar`
+  and `clearAvatar` in one request is a contradiction and rejects with a
+  stable VALIDATION product error (the row is untouched). The web
+  transport maps the legacy null clear to the flag. Tests: kernel
+  (clear round trip, contradiction, rejected patch leaves the row intact),
+  remote-http host parity, web wireBridge test.
+
 - **Memory un-scoping on the kernel plane (M7 Etap-4 slice; cluster 5 fully
   covered).** The wire DTO cannot express `characterId: null`, so
   `memories.update` with `scope: "global"` now IS the un-scope: the kernel
