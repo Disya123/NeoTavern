@@ -4,11 +4,15 @@ NeoTavern UX specification
 
 ## Connection profiles
 
-Provider connection profiles are managed on the **API** tab in AI Settings:
-select or create a profile, configure the source, model, and keys, then use
-**Connect** to persist and activate it. The legacy ST1-style Connection
-Profiles manager remains available through the API for compatibility, but it is
-not exposed as a separate UI tab.
+Provider connection settings are managed on the **API** tab in AI Settings:
+choose the source, configure the model and keys (named keys through the
+provider key manager), then use **Connect** to persist the provider config and
+make it the active one — on the kernel plane this is `providers.config.*` plus
+`providers.secrets.*`. The legacy ST1-style Connection Profiles manager
+(`/api/v2/connection-profiles`) is not exposed in the React UI and has no
+kernel counterpart (Этап-4 registry cluster 9: N/A — the bundle semantics
+depend on the legacy provider settings model); it retires with the legacy
+sidecar.
 
 Status: **normative target document** for the first stable version.
 

@@ -290,7 +290,7 @@
     {
       "source": "api/README.md",
       "target": "api/README.md",
-      "sha256": "79b3f8b79a62705d7f092514a0f232a7b04be2fa771af92710923da6eebf189d"
+      "sha256": "626868898ddb200ccb2f2035a170e3bc8aa37a85c71db27cf06df2e0dd281268"
     },
     {
       "source": "architecture/README.md",
@@ -305,7 +305,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "c086cd5d9d7a782be5c0dc0bbc4cb86b93fc283c1fa651d8d05793c51136b1d1"
+      "sha256": "71c605f813016b088829bebeb0987331bbc55c724aca7f71642c940c0bef45cd"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -330,12 +330,12 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "a62b855c4434307635d2bd1aed8d77ee546a52d26de628b437d00bfa3a0a6f21"
+      "sha256": "c0cb8e2f3f517ce644895bb826c3983e013caf2a0574c13309dc960968a1cd3e"
     },
     {
       "source": "architecture/portable-data.md",
       "target": "architecture/portable-data.md",
-      "sha256": "fb226d3f27564e4c725810b4446fd02bd54e30688bcaed722665b85d3789130f"
+      "sha256": "3f48baf2885178231dca50a41e99b489333d0aecd6d516b3462c04e717d1a668"
     },
     {
       "source": "architecture/presentation-boundary.md",
@@ -575,7 +575,7 @@
     {
       "source": "ux/README.md",
       "target": "ux/README.md",
-      "sha256": "42e67e7ae60fe803045240123783d6a76b470ba8507f42b66e827f8a2db1dc0e"
+      "sha256": "22a17e979ab4df0faa8a32321794892ee2c473b8fd8c23f36121fbc6d78d51f1"
     },
     {
       "source": "_category_.json",

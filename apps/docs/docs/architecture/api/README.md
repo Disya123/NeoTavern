@@ -999,6 +999,14 @@ update the connections dialog instantly without polling.
 
 ## Connection profiles
 
+> **Legacy/migration contour, no kernel counterpart (documented N/A).**
+> Этап-4 registry cluster 9 marks these six routes **N/A**: the React product
+> never calls them, and the apply semantics depend on the legacy provider
+> model (`chat`/`text` mode, `assistantPrefill` capability, provider
+> `settings.source`) that the Rust Kernel replaced. On the canonical plane the
+> equivalent is `providers.config.*` + `providers.secrets.*` + `presets.*`.
+> The routes stay functional for the legacy sidecar until it retires.
+
 Connection profiles are versioned `@neotavern/contracts` TypeBox resources used to
 apply a repeatable provider, secret, and generation configuration without
 exposing credentials.

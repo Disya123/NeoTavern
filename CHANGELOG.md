@@ -453,6 +453,20 @@
 
 ### Architecture
 
+- **Connection profiles documented N/A on the kernel plane (M7 Etap-4
+  cluster 9).** The six legacy `/api/v2/connection-profiles` routes are not
+  ported: no React consumer exists (the AI Settings API tab manages provider
+  configs through `providers.config.*`; the React SPA is the only product UI,
+  including when the legacy server serves it), and the apply semantics depend
+  on the legacy provider model — `chat`/`text` mode, the `assistantPrefill`
+  capability and provider `settings.source` — that the kernel deliberately
+  replaced. Their canonical equivalents are `providers.config.*` +
+  `providers.secrets.*` + `presets.*`. The rows are also not carried by the
+  legacy→kernel conversion (they reference provider configs, which are never
+  copied), so the surface retires with the legacy sidecar; the routes stay
+  functional there until then. Registry, operations inventory, API/UX docs and
+  the portable-data converter note are updated; no wire operations, contracts
+  or code change in this slice.
 - **Native-first product UI: own retained-scene platform over mature
   primitives (ADR-0057, owner direction 2026-10-04).** The product UI
   path is native-only: the browser-form emulation layers leave the

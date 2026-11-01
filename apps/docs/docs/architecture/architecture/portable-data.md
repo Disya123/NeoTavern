@@ -104,8 +104,9 @@ Pre-kernel data roots (legacy `characters`/`chats`/`messages`/`lorebooks`/
 `presets` tables, no `__neotavern_meta`) are converted by reading the source
 **strictly read-only** and writing a fresh candidate: epoch-millisecond
 timestamps normalize to RFC 3339, missing optional columns get defaults,
-orphans are skipped and reported, and secrets/provider configs/plugins/
-themes are never copied. The source is never mutated in place; unsupported
+orphans are skipped and reported, and secrets/provider configs/connection
+profiles (they reference provider configs)/plugins/themes are never copied.
+The source is never mutated in place; unsupported
 layouts yield a controlled incompatibility error.
 
 **Schema mapping (Этап 3, work 1)** covers the real Drizzle layout

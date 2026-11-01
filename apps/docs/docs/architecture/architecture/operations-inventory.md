@@ -240,13 +240,23 @@ Swipes / variants / snapshots:
 
 ### connectionProfiles — `apps/server/src/plugins/connectionProfiles.ts`
 
-- `GET /api/v2/connection-profiles` — list.
-- `POST /api/v2/connection-profiles` — create.
-- `GET /api/v2/connection-profiles/:id` — get.
-- `PATCH /api/v2/connection-profiles/:id` — update.
-- `DELETE /api/v2/connection-profiles/:id` — delete.
+Legacy-only surface, documented **N/A** in the Этап-4 registry (cluster 9):
+no React consumer (the AI Settings API tab manages provider configs through
+`providers.config.*`), and the bundle semantics depend on the legacy provider
+model (`chat`/`text` mode, `assistantPrefill`, provider `settings.source`)
+that the kernel replaced. The rows reference provider configs, which the
+legacy→kernel conversion never copies, so the routes retire with the sidecar.
+Canonical equivalents: `providers.config.*` + `providers.secrets.*` +
+`presets.*`.
+
+- `GET /api/v2/connection-profiles` — list (N/A).
+- `POST /api/v2/connection-profiles` — create (N/A).
+- `GET /api/v2/connection-profiles/:id` — get (N/A).
+- `PATCH /api/v2/connection-profiles/:id` — update (N/A).
+- `DELETE /api/v2/connection-profiles/:id` — delete (N/A).
 - `POST /api/v2/connection-profiles/:id/apply` — apply a profile (provider +
-  secret + generation configuration).
+  secret + generation configuration; N/A — writes legacy provider `settings`
+  keys the kernel adapters do not read).
 
 ### dataImports — `apps/server/src/plugins/dataImports.ts`
 
