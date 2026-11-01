@@ -67,6 +67,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "generation.keep" => Some(2048),
         "generation.discard" => Some(2048),
         "generation.prompt.plan" => Some(2048),
+        "chats.context.audit" => Some(2048),
         "generation.tools.list" => Some(2048),
         "generation.tool.result" => Some(2048),
         "providers.list" => Some(1024),
@@ -197,6 +198,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "generation.keep" => Some(65536),
         "generation.discard" => Some(65536),
         "generation.prompt.plan" => Some(262144),
+        "chats.context.audit" => Some(262144),
         "generation.tools.list" => Some(65536),
         "generation.tool.result" => Some(65536),
         "providers.list" => Some(262144),
@@ -15908,6 +15910,42 @@ pub fn validate_prompt_plan(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_prompt_plan(bytes: &[u8]) -> Result<PromptPlan, WireError> {
     crate::decode::<PromptPlan>(validate_prompt_plan, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultChatContextAudit {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<PromptPlan>,
+}
+
+pub(crate) fn check_result_chat_context_audit(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if let Some(child) = value.get("plan") {
+            let child_path = join_path(path, "plan");
+            check_prompt_plan(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "plan") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_chat_context_audit(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_chat_context_audit(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_chat_context_audit(bytes: &[u8]) -> Result<ResultChatContextAudit, WireError> {
+    crate::decode::<ResultChatContextAudit>(validate_result_chat_context_audit, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

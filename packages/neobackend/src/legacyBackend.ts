@@ -188,6 +188,7 @@ export class LegacyBackend implements NeoBackend {
   readonly chats: ChatsApi = {
     list: () => this.unsupported('chats.list'),
     get: () => this.unsupported('chats.get'),
+    contextAudit: () => this.unsupported('chats.context.audit'),
     create: () => this.unsupported('chats.create'),
     update: () => this.unsupported('chats.update'),
     del: () => this.unsupported('chats.delete'),

@@ -84,6 +84,7 @@ import {
   type PersonaDto,
   type PresetDto,
   type PromptPlanDto,
+  type ChatContextAuditResultDto,
   type DataActivationStatusResultDto,
   type VersionResponse,
   type MetaDto,
@@ -1155,6 +1156,20 @@ export async function getPromptPlan(runId: string): Promise<PromptPlanDto> {
     return backend.generation.promptPlan(runId);
   }
   throw new UnsupportedError('generation.prompt.plan');
+}
+
+/**
+ * Latest durable prompt plan of a chat (wire `chats.context.audit`, M7 Etap-4
+ * cluster 17 part 1): what context entered the chat's most recent provider
+ * request, without needing to know the run id; `plan` is omitted when the
+ * chat has no generation yet. Kernel plane only — the legacy audit is a
+ * different, richer contract and stays on `usePromptContextAudit`.
+ */
+export async function getChatContextAudit(chatId: string): Promise<ChatContextAuditResultDto> {
+  if (isKernelMode()) {
+    return backend.chats.contextAudit(chatId);
+  }
+  throw new UnsupportedError('chats.context.audit');
 }
 
 /** One durable generation step rendered in the run transcript (ТЗ §8.3). */

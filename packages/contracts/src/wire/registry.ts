@@ -992,6 +992,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'chats.context.audit',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.get-chat',
+    'wire.result.chat-context-audit',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
     'generation.tools.list',
     'transactional',
     'idempotent',
@@ -3223,6 +3237,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     true,
     PROMPT_PLAN_VALUE,
   ),
+  fx('chats-context-audit-request', 'chats.context.audit', 'request', true, {
+    chatId: UUID_CHAT,
+  }),
+  fx('chats-context-audit-response', 'chats.context.audit', 'response', true, {
+    plan: PROMPT_PLAN_VALUE,
+  }),
+  fx('chats-context-audit-response-empty', 'chats.context.audit', 'response', true, {}),
   fx('generation-tools-list-response', 'generation.tools.list', 'response', true, {
     items: [TOOL_SPEC_VALUE],
   }),
@@ -3636,6 +3657,9 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('neg-lorebook-entries-delete-missing-id', 'lorebooks.entries.delete', 'request', false, {
     lorebookId: UUID_LOREBOOK,
+  }),
+  fx('neg-chats-context-audit-wrong-plan-type', 'chats.context.audit', 'response', false, {
+    plan: 42,
   }),
   fx('neg-persona-get-missing-field', 'personas.get', 'request', false, {}),
   fx('neg-persona-get-wrong-type', 'personas.get', 'request', false, { personaId: 42 }),

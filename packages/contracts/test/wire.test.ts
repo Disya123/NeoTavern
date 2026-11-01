@@ -75,8 +75,9 @@ describe('product wire registry', () => {
     // providers.secrets.{list,create,update,delete,reveal} + secrets.exposure
     // (119); the provider-access slice (M7 cluster 8) adds providers.models +
     // providers.test (121); the diagnostics-cache slice (M7 cluster 23) adds
-    // diagnostics.cache.clear (122).
-    expect(registry.operations).toHaveLength(122);
+    // diagnostics.cache.clear (122); the context-audit slice (M7 cluster 17,
+    // part 1) adds chats.context.audit (123).
+    expect(registry.operations).toHaveLength(123);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -125,6 +126,7 @@ describe('product wire registry', () => {
       'generation.keep',
       'generation.discard',
       'generation.prompt.plan',
+      'chats.context.audit',
       'generation.tools.list',
       'generation.tool.result',
       'providers.list',

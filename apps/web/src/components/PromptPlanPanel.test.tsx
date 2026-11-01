@@ -42,8 +42,10 @@ const PLAN: PromptPlanDto = {
 };
 
 const mockUsePromptPlan = vi.hoisted(() => vi.fn());
+const mockUseChatContextAudit = vi.hoisted(() => vi.fn());
 vi.mock('../api/hooks.js', () => ({
   usePromptPlan: mockUsePromptPlan,
+  useChatContextAudit: mockUseChatContextAudit,
 }));
 
 afterEach(() => {
@@ -59,6 +61,7 @@ describe('PromptPlanPanel', () => {
       isError: false,
       error: null,
     });
+    mockUseChatContextAudit.mockReturnValue({ data: null, isLoading: false, isError: false });
     await renderWithProviders(<PromptPlanPanel open runId={RUN_ID} onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getAllByText('Prompt plan').length).toBeGreaterThan(0));
     expect(screen.getByText(/openai-compatible\/gpt-4o-mini/)).toBeTruthy();
@@ -82,6 +85,7 @@ describe('PromptPlanPanel', () => {
       isError: false,
       error: null,
     });
+    mockUseChatContextAudit.mockReturnValue({ data: null, isLoading: false, isError: false });
     await renderWithProviders(<PromptPlanPanel open runId={RUN_ID} onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(/still exceeds the context window/)).toBeTruthy());
   });
@@ -93,8 +97,43 @@ describe('PromptPlanPanel', () => {
       isError: false,
       error: null,
     });
+    mockUseChatContextAudit.mockReturnValue({ data: null, isLoading: false, isError: false });
     await renderWithProviders(<PromptPlanPanel open runId={RUN_ID} onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(/no recorded prompt plan/)).toBeTruthy());
+  });
+
+  it('falls back to the chat latest plan when the run has none (chats.context.audit)', async () => {
+    mockUsePromptPlan.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    mockUseChatContextAudit.mockReturnValue({
+      data: { plan: { ...PLAN, inputTokens: 777 } },
+      isLoading: false,
+      isError: false,
+    });
+    await renderWithProviders(
+      <PromptPlanPanel open runId={null} chatId="chat-1" onClose={vi.fn()} />,
+    );
+    await waitFor(() => expect(screen.getByText(/Input 777/)).toBeTruthy());
+    expect(mockUseChatContextAudit).toHaveBeenCalledWith('chat-1');
+  });
+
+  it('never queries the chat audit while a run id is served', async () => {
+    mockUsePromptPlan.mockReturnValue({
+      data: PLAN,
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    mockUseChatContextAudit.mockReturnValue({ data: null, isLoading: false, isError: false });
+    await renderWithProviders(
+      <PromptPlanPanel open runId={RUN_ID} chatId="chat-1" onClose={vi.fn()} />,
+    );
+    await waitFor(() => expect(screen.getByText(/Input 1200/)).toBeTruthy());
+    expect(mockUseChatContextAudit).toHaveBeenCalledWith(undefined);
   });
 
   it('closes via the close button', async () => {
@@ -104,6 +143,7 @@ describe('PromptPlanPanel', () => {
       isError: false,
       error: null,
     });
+    mockUseChatContextAudit.mockReturnValue({ data: null, isLoading: false, isError: false });
     const onClose = vi.fn();
     await renderWithProviders(<PromptPlanPanel open runId={RUN_ID} onClose={onClose} />);
     await userEvent.click(screen.getByLabelText('Close'));

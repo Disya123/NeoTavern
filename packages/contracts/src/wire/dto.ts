@@ -1499,6 +1499,21 @@ export const PromptPlanDtoSchema = Type.Object(
 );
 export type PromptPlanDto = Static<typeof PromptPlanDtoSchema>;
 
+/**
+ * Chat context-audit result (`wire.result.chat-context-audit`): the latest
+ * durable prompt plan of one chat. The plan is the same `wire.prompt.plan`
+ * shape — one plan contract everywhere — and is **omitted** when the chat has
+ * no generation plan yet (the wire's absent-means-absent convention, never
+ * an explicit `null`).
+ */
+export const ChatContextAuditResultDtoSchema = Type.Object(
+  {
+    plan: Type.Optional(PromptPlanDtoSchema),
+  },
+  { $id: 'wire.result.chat-context-audit', additionalProperties: false },
+);
+export type ChatContextAuditResultDto = Static<typeof ChatContextAuditResultDtoSchema>;
+
 /** Get prompt plan request DTO (`wire.request.get-prompt-plan`). */
 export const GetPromptPlanRequestDtoSchema = Type.Object(
   {
@@ -3313,6 +3328,7 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.prompt.block': PromptBlockDtoSchema,
   'wire.prompt.excluded': PromptExcludedDtoSchema,
   'wire.prompt.plan': PromptPlanDtoSchema,
+  'wire.result.chat-context-audit': ChatContextAuditResultDtoSchema,
   'wire.request.get-prompt-plan': GetPromptPlanRequestDtoSchema,
   'wire.generation.step': GenerationStepDtoSchema,
   'wire.generation.step.type': WireGenerationStepType,

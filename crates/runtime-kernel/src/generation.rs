@@ -164,6 +164,64 @@ pub(crate) fn generation_prompt_plan(
     encode(&value)
 }
 
+/// `CHAT_NOT_FOUND` product error (`chatId` param).
+fn chat_not_found(chat_id: &str) -> KernelError {
+    KernelError::product(
+        "CHAT_NOT_FOUND",
+        vec![("chatId".to_string(), chat_id.to_string())],
+    )
+}
+
+/// `chats.context.audit` — the latest durable [`PromptPlan`] of a chat
+/// (Этап-4 registry cluster 17, part 1): what context entered the chat's most
+/// recent provider request, without needing to know the run id. A chat
+/// without any generation resolves to an omitted plan — absence is honest
+/// data, not an error. Unknown chats fail with `CHAT_NOT_FOUND`. Read-only,
+/// `app.read`; the plan shape is the same `wire.prompt.plan` one-run contract.
+pub(crate) fn chats_context_audit(
+    db: &mut Database,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_get_chat(request)?;
+    let exists: bool = db
+        .conn()
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM chats WHERE id = ?1)",
+            params![&req.chat_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| internal(format!("context audit: chat lookup: {e}")))?;
+    if !exists {
+        return Err(chat_not_found(&req.chat_id));
+    }
+    let plan_json: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT plan_json FROM prompt_plans WHERE chat_id = ?1
+             ORDER BY created_at DESC, run_id DESC LIMIT 1",
+            params![&req.chat_id],
+            |row| row.get(0),
+        )
+        .map(Some)
+        .or_else(|err| match err {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            other => Err(other),
+        })
+        .map_err(|e| internal(format!("context audit: plan lookup: {e}")))?;
+    let mut result = serde_json::Map::new();
+    if let Some(text) = plan_json {
+        // A corrupted stored plan must surface as an Internal, never
+        // masquerade as "no plan" (same rule as generation.prompt.plan).
+        let plan: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|e| internal(format!("context audit: stored plan: {e}")))?;
+        validate(&plan, generated::validate_prompt_plan)?;
+        result.insert("plan".to_string(), plan);
+    }
+    let value = serde_json::Value::Object(result);
+    validate(&value, generated::validate_result_chat_context_audit)?;
+    encode(&value)
+}
+
 /// `GENERATION_RUN_STATE_CONFLICT` product error (`runId`, `status` params).
 fn state_conflict(run_id: &str, status: &str) -> KernelError {
     KernelError::product(

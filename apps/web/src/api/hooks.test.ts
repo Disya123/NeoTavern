@@ -29,6 +29,7 @@ import {
   usePromptContextAudit,
   usePromptContextPreview,
   usePromptPlan,
+  useChatContextAudit,
   useDataActivationStatus,
   useRebuildSearch,
   useReorderChats,
@@ -56,6 +57,7 @@ vi.mock('./backend.js', async (importOriginal) => {
 // slice) route through the same module for asset data URLs and file reads.
 const promptPlanMock = vi.hoisted(() => ({
   getPromptPlan: vi.fn(),
+  getChatContextAudit: vi.fn(),
   readAssetContentDataUrl: vi.fn(),
   readFileBase64: vi.fn(),
 }));
@@ -65,6 +67,7 @@ vi.mock('./wireBridge.js', async (importOriginal) => {
   return {
     ...actual,
     getPromptPlan: promptPlanMock.getPromptPlan,
+    getChatContextAudit: promptPlanMock.getChatContextAudit,
     getDataActivationStatus: activationStatusMock.getDataActivationStatus,
     readAssetContentDataUrl: promptPlanMock.readAssetContentDataUrl,
     readFileBase64: promptPlanMock.readFileBase64,
@@ -646,6 +649,53 @@ describe('remaining legacy hooks (kernel-plane honesty, slice 22)', () => {
   it('usePromptPlan resolves null when the plane refuses (honest CAPABILITY_UNAVAILABLE)', async () => {
     promptPlanMock.getPromptPlan.mockRejectedValue(new UnsupportedError('generation.prompt.plan'));
     const { result } = renderHook(() => usePromptPlan('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBeNull();
+  });
+
+  it('useChatContextAudit resolves the chat latest plan from chats.context.audit', async () => {
+    const plan = {
+      runId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      chatId: 'chat-1',
+      provider: 'openai-compatible',
+      model: 'gpt-4o-mini',
+      instructFormat: 'chatml',
+      tokenizerProfile: 'heuristic',
+      approximateTokens: true,
+      contextLimit: 8192,
+      responseReserved: 1024,
+      inputTokens: 940,
+      overBudget: false,
+      systemBlocks: [{ source: 'character', text: 'You are Alice.' }],
+      messages: [{ role: 'user', content: 'Hello.' }],
+      excluded: [],
+      createdAt: '2026-06-01T12:00:00.000Z',
+    };
+    promptPlanMock.getChatContextAudit.mockResolvedValue({ plan });
+    const { result } = renderHook(() => useChatContextAudit('chat-1'), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(promptPlanMock.getChatContextAudit).toHaveBeenCalledWith('chat-1');
+    expect(result.current.data?.plan?.inputTokens).toBe(940);
+  });
+
+  it('useChatContextAudit resolves null when the chat has no generation yet', async () => {
+    promptPlanMock.getChatContextAudit.mockResolvedValue({});
+    const { result } = renderHook(() => useChatContextAudit('chat-1'), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.plan).toBeUndefined();
+  });
+
+  it('useChatContextAudit resolves null when the plane refuses (honest CAPABILITY_UNAVAILABLE)', async () => {
+    promptPlanMock.getChatContextAudit.mockRejectedValue(
+      new UnsupportedError('chats.context.audit'),
+    );
+    const { result } = renderHook(() => useChatContextAudit('chat-1'), {
       wrapper: wrapperFor(queryClient),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));

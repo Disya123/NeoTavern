@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => {
   const chats = {
     list: vi.fn(),
     get: vi.fn(),
+    contextAudit: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     del: vi.fn(),
@@ -265,6 +266,7 @@ import {
   exportCharacterCard,
   exportChat,
   getPromptPlan,
+  getChatContextAudit,
   getDataActivationStatus,
   importCharacter,
   warmProviderModels,
@@ -1685,6 +1687,38 @@ describe('imports/exports (kernel plane wire flow)', () => {
     await expect(getPromptPlan('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).rejects.toBeInstanceOf(
       UnsupportedError,
     );
+  });
+
+  it('fetches the chat latest context audit from chats.context.audit on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValueOnce(true);
+    const plan = {
+      runId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      chatId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      provider: 'openai-compatible',
+      model: 'gpt-4o-mini',
+      instructFormat: 'chatml',
+      tokenizerProfile: 'heuristic',
+      approximateTokens: true,
+      contextLimit: 8192,
+      responseReserved: 1024,
+      inputTokens: 940,
+      overBudget: false,
+      systemBlocks: [],
+      messages: [],
+      excluded: [],
+      createdAt: NOW,
+    };
+    mocks.chats.contextAudit.mockResolvedValueOnce({ plan });
+    const audit = await getChatContextAudit('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    expect(mocks.chats.contextAudit).toHaveBeenCalledWith('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    expect(audit.plan?.inputTokens).toBe(940);
+  });
+
+  it('refuses the chat context audit on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValueOnce(false);
+    await expect(
+      getChatContextAudit('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
+    ).rejects.toBeInstanceOf(UnsupportedError);
   });
 
   it('lists the durable run steps from generation.events, keeping only step envelopes', async () => {

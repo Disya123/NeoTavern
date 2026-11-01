@@ -22,6 +22,7 @@
   "characters.update",
   "characters.versions.list",
   "characters.versions.restore",
+  "chats.context.audit",
   "chats.create",
   "chats.delete",
   "chats.export",

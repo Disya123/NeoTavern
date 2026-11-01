@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-11-01T18:04:33.517Z",
+  "generatedAt": "2026-11-01T19:03:23.622Z",
   "rows": [
     {
       "hosts": {
@@ -143,9 +143,9 @@
       },
       "id": "generation.prompt.plan",
       "milestone": "M2",
-      "notes": "Kernel pipeline (ТЗ §9.1–§9.2, Этап 2.6): every generation run builds an immutable PromptPlan (character/persona system blocks from the card incl. ext_json.personality, lorebook keyword activation with constant/selective rules, last 128 non-tool history messages, heuristic-v1 approximate token budget with response-room reservation and oldest-unpinned truncation recording every excluded message id), stores it in prompt_plans (schema migration 5) and passes the instruct-neutral message array to adapters via ProviderRequest.messages — the OpenAI adapter serializes it verbatim. generation.prompt.plan (app.read) serves the stored plan; stable PROMPT_PLAN_FAILED / PROMPT_PLAN_NOT_FOUND. Tests: 5 unit + 2 kernel integration + 1 adapter. Honest boundaries: approximate tokenizer (model-specific registry pending), instruct template rendering deferred, lorebook character-scoping awaits the lorebook cutover. Статус поднят до Integrated (ARC-10, M5 slice 55): the Chat page PromptPlanPanel opens from the message action menu and renders the durable wire PromptPlan (blocks, token budget, excluded context) on the kernel plane; RemoteBackend Web Client uses the same wire path.",
+      "notes": "Kernel pipeline (ТЗ §9.1–§9.2, Этап 2.6): every generation run builds an immutable PromptPlan (character/persona system blocks from the card incl. ext_json.personality, lorebook keyword activation with constant/selective rules, last 128 non-tool history messages, heuristic-v1 approximate token budget with response-room reservation and oldest-unpinned truncation recording every excluded message id), stores it in prompt_plans (schema migration 5) and passes the instruct-neutral message array to adapters via ProviderRequest.messages — the OpenAI adapter serializes it verbatim. generation.prompt.plan (app.read) serves the stored plan; stable PROMPT_PLAN_FAILED / PROMPT_PLAN_NOT_FOUND. M7 Etap-4 cluster 17 part 1 adds chats.context.audit (app.read): the LATEST durable plan of a chat by chat id (omitted plan = no generation yet, unknown chat = CHAT_NOT_FOUND) — the PromptPlanPanel falls back to it when a requested run has no recorded plan, so old runs and discarded plans still open the chat's most recent context audit. Tests: 5 unit + 2 kernel integration + 1 adapter. Honest boundaries: approximate tokenizer (model-specific registry pending), instruct template rendering deferred, lorebook character-scoping awaits the lorebook cutover. Статус поднят до Integrated (ARC-10, M5 slice 55): the Chat page PromptPlanPanel opens from the message action menu and renders the durable wire PromptPlan (blocks, token budget, excluded context) on the kernel plane; RemoteBackend Web Client uses the same wire path.",
       "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
-      "wireOps": ["generation.prompt.plan"]
+      "wireOps": ["chats.context.audit", "generation.prompt.plan"]
     },
     {
       "hosts": {

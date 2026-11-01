@@ -733,6 +733,7 @@ fn handle_unary(
         "generation.prompt.plan" => {
             with_db_opt(db, |db| generation::generation_prompt_plan(db, req))
         }
+        "chats.context.audit" => with_db_opt(db, |db| generation::chats_context_audit(db, req)),
         // Этап 2.7: submit a tool result and resume a waiting-for-tool run.
         "generation.tool.result" => with_db_opt(db, |db| {
             generation::generation_tool_result(

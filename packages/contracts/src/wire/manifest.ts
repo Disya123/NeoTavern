@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Wire contract manifest constants.
  *
  * `WIRE_SCHEMA_HASH` is the sha256 (lowercase hex) of the canonical contract
@@ -6,4 +6,4 @@
  * equal `schemaHash` in `packages/contracts/generated/contract-manifest.json`;
  * `pnpm contracts:check` fails on drift.
  */
-export const WIRE_SCHEMA_HASH = 'e38584b4387de91ca428dfbad0db3fe9bc5aca2898a470d4dbe1e7dd819d8efd';
+export const WIRE_SCHEMA_HASH = '43cce24464619404f5ffb5a616ca06248070863833e190203f24460350a0907a';

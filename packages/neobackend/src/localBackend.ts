@@ -31,6 +31,7 @@ import {
   type ListThemesResultDto,
   type ListToolsResultDto,
   type PromptPlanDto,
+  type ChatContextAuditResultDto,
   type WireGenerationEvent,
   type BackupsRestoreResultDto,
   type BackupsDeleteResultDto,
@@ -321,6 +322,8 @@ export class LocalBackend implements NeoBackend {
     this.chats = {
       list: (req, opts) => this.invoke<PagedChatsDto>('chats.list', req, opts),
       get: (chatId, opts) => this.invoke<ChatDto>('chats.get', { chatId }, opts),
+      contextAudit: (chatId, opts) =>
+        this.invoke<ChatContextAuditResultDto>('chats.context.audit', { chatId }, opts),
       create: (req, opts) => this.invoke<ChatDto>('chats.create', req, opts),
       update: (req, opts) => this.invoke<ChatDto>('chats.update', req, opts),
       del: (chatId, opts) => this.invoke<EmptyResultDto>('chats.delete', { chatId }, opts),

@@ -964,6 +964,7 @@ export function ChatPage() {
       <PromptPlanPanel
         open={promptPlanRunId !== null}
         runId={promptPlanRunId}
+        chatId={chatId ?? null}
         onClose={() => setPromptPlanRunId(null)}
       />
       <RunTranscriptPanel

@@ -475,7 +475,25 @@
   hash `e38584b4…`; registry 122 ops.
 ### Architecture
 
-- **Auth/session documented N/A on the kernel plane (M7 Etap-4 cluster
+- **Chat context audit on the kernel plane (M7 Etap-4 cluster 17, part 1).**
+  New wire op `chats.context.audit` (app.read): the LATEST durable
+  `wire.prompt.plan` of a chat, resolved by chat id — the same plan shape as
+  `generation.prompt.plan`, so what context entered the chat's most recent
+  provider request is inspectable the moment a chat is open, without knowing
+  a run id. A chat without generations resolves to an omitted plan (absence
+  is data, never a fabricated empty audit); unknown chats fail with
+  `CHAT_NOT_FOUND`. The PromptPlanPanel gains an honest fallback: when a
+  requested run has no recorded plan (old runs, discarded runs), it serves
+  the chat's latest plan instead of a dead end. Facade
+  `backend.chats.contextAudit()` (local/remote; the legacy facade keeps
+  `UnsupportedError` — the legacy audit is a different, richer contract).
+  Honest boundary: the kernel plan does not carry the legacy audit's
+  per-template-block entries, so the prompt-template editor keeps its local
+  token estimates in kernel mode; `context-preview` (cluster 17 part 2) and
+  the plugin-intercept callback (blocked on the kernel plugin host) stay
+  missing. Registry 123 ops (97/5/63), schema hash 43cce244…, operation-id
+  snapshot 123. Tests: 3 kernel (latest-plan ordering, honest absence,
+  unknown chat), 3 facade parity, 3 hook, 2 panel fallback, 2 wireBridge.- **Auth/session documented N/A on the kernel plane (M7 Etap-4 cluster
   22).** The three legacy `/api/v2/auth/session` routes are the Fastify HTTP
   transport's browser-session layer (bootstrap token → bounded HttpOnly
   `__Host-` cookie + in-memory CSRF) — cookies and CSRF headers are not

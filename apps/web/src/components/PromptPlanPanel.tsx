@@ -6,25 +6,43 @@
  * renders that plan so the user can see what was included or cut, with an
  * honest empty state when the run has no recorded plan (no generation yet,
  * unknown run, legacy plane).
+ *
+ * With a `chatId` the dialog gains an honest fallback (wire
+ * `chats.context.audit`, M7 Etap-4 cluster 17 part 1): when the requested run
+ * has no recorded plan, the chat's LATEST plan is served instead of a dead
+ * end — old runs and discarded plans still open the chat's most recent
+ * context audit.
  */
 import { X } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent } from '@neotavern/ui';
 import type { PromptPlanDto } from '@neotavern/contracts';
-import { usePromptPlan } from '../api/hooks.js';
+import { useChatContextAudit, usePromptPlan } from '../api/hooks.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import styles from './PromptPlanPanel.module.css';
 
 export interface PromptPlanPanelProps {
   open: boolean;
   runId: string | null;
+  /**
+   * Optional chat id backing the latest-plan fallback: used only when no
+   * specific `runId` plan can be served (M7 Etap-4 cluster 17 part 1).
+   */
+  chatId?: string | null;
   onClose: () => void;
 }
 
-export function PromptPlanPanel({ open, runId, onClose }: PromptPlanPanelProps) {
+export function PromptPlanPanel({ open, runId, chatId, onClose }: PromptPlanPanelProps) {
   const { t } = useTranslation();
   const errorText = useErrorText();
-  const plan = usePromptPlan(runId ?? undefined);
+  const perRun = usePromptPlan(runId ?? undefined);
+  const latest = useChatContextAudit(runId === null ? (chatId ?? undefined) : undefined);
+
+  const loading = runId !== null ? perRun.isLoading : latest.isLoading;
+  const isError = runId !== null ? perRun.isError : latest.isError;
+  const error = runId !== null ? perRun.error : latest.error;
+  const plan: PromptPlanDto | null =
+    runId !== null ? (perRun.data ?? null) : (latest.data?.plan ?? null);
 
   return (
     <Dialog
@@ -47,16 +65,16 @@ export function PromptPlanPanel({ open, runId, onClose }: PromptPlanPanelProps) 
           </button>
         </header>
         <div className={styles.body} data-part="prompt-plan-body">
-          {plan.isError ? (
+          {isError ? (
             <p className={styles.error} role="alert">
-              {errorText(plan.error)}
+              {errorText(error)}
             </p>
-          ) : plan.isLoading ? (
+          ) : loading ? (
             <p className={styles.empty}>{t('chat:promptPlanEmpty')}</p>
-          ) : !plan.data ? (
+          ) : !plan ? (
             <p className={styles.empty}>{t('chat:promptPlanNotFound')}</p>
           ) : (
-            <PromptPlanContent plan={plan.data} />
+            <PromptPlanContent plan={plan} />
           )}
         </div>
       </DialogContent>

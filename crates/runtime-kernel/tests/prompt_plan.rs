@@ -8,7 +8,8 @@
 //! context was included or excluded).
 
 use contracts_generated::generated::{
-    decode_prompt_plan, GenerationRun, GenerationStatus, MessageRole,
+    decode_prompt_plan, decode_result_chat_context_audit, GenerationRun, GenerationStatus,
+    MessageRole,
 };
 use runtime_kernel::{
     CancellationFlag, Kernel, KernelConfig, KernelError, KernelErrorCode, StreamNotice,
@@ -243,4 +244,107 @@ fn prompt_plan_not_found_for_unknown_run() {
         KernelErrorCode::NotFound,
         "product code PROMPT_PLAN_NOT_FOUND maps to NotFound class"
     );
+}
+
+// ---------------------------------------------------------------------------
+// chats.context.audit (Этап-4 cluster 17, part 1)
+// ---------------------------------------------------------------------------
+
+/// Runs one fake-provider generation and returns its run id.
+fn run_generation(kernel: &Kernel, message: &str) -> String {
+    let mut stream = start_stream(
+        kernel,
+        "generation.start",
+        serde_json::json!({
+            "chatId": CHAT_ID,
+            "message": message,
+            "provider": "fake",
+            "model": "steps=2",
+        }),
+    )
+    .expect("generation.start must open a stream");
+    let run_id = stream.stream_id().to_string();
+    let (_committed, terminal) = drain_until_terminal(&mut stream, Duration::from_secs(30));
+    assert!(terminal >= 0, "run must reach a terminal notice");
+    run_id
+}
+
+#[test]
+fn chats_context_audit_serves_the_latest_plan() {
+    let root = tempfile::tempdir().expect("tempdir");
+    seed_chat(root.path());
+    let kernel = open_kernel(root.path());
+
+    let first = run_generation(&kernel, "first question");
+    // Back-date the first plan so the newest-plan ordering is deterministic
+    // even when both runs land inside the same wall-clock tick.
+    drop(kernel);
+    let mut progress = |_p: neotavern_storage::migrations::MigrationProgress| {};
+    let db = neotavern_storage::open::open(
+        root.path(),
+        &neotavern_storage::baseline::ConnectionPolicy::default(),
+        &mut progress,
+    )
+    .expect("reopen root");
+    db.conn()
+        .execute(
+            "UPDATE prompt_plans SET created_at = '2026-08-12T00:00:00Z' WHERE run_id = ?1",
+            rusqlite::params![first],
+        )
+        .expect("backdate first plan");
+    drop(db);
+
+    let kernel = open_kernel(root.path());
+    let second = run_generation(&kernel, "second question");
+    assert_ne!(first, second);
+
+    let audit = decode_result_chat_context_audit(&dispatch_bytes(
+        &kernel,
+        "chats.context.audit",
+        serde_json::json!({ "chatId": CHAT_ID }),
+    ))
+    .expect("schema-valid audit result");
+    let plan = audit
+        .plan
+        .expect("chat has generations, plan must be present");
+    assert_eq!(plan.run_id, second, "audit serves the NEWEST plan");
+    assert_eq!(plan.chat_id, CHAT_ID);
+    assert_eq!(plan.messages.last().unwrap().content, "second question");
+}
+
+#[test]
+fn chats_context_audit_omits_plan_without_generation() {
+    let root = tempfile::tempdir().expect("tempdir");
+    seed_chat(root.path());
+    let kernel = open_kernel(root.path());
+
+    let audit = decode_result_chat_context_audit(&dispatch_bytes(
+        &kernel,
+        "chats.context.audit",
+        serde_json::json!({ "chatId": CHAT_ID }),
+    ))
+    .expect("schema-valid audit result");
+    assert!(
+        audit.plan.is_none(),
+        "a chat without generations has no plan — honest absence"
+    );
+}
+
+#[test]
+fn chats_context_audit_rejects_unknown_chat() {
+    let root = tempfile::tempdir().expect("tempdir");
+    seed_chat(root.path());
+    let kernel = open_kernel(root.path());
+
+    let flag = CancellationFlag::new();
+    let request = serde_json::to_vec(&serde_json::json!({
+        "chatId": "99999999-9999-4999-8999-999999999998"
+    }))
+    .expect("serialize");
+    let err = kernel
+        .dispatch("chats.context.audit", &request, &flag)
+        .expect_err("unknown chat must fail");
+    assert_eq!(err.code, KernelErrorCode::NotFound);
+    let product = err.product.expect("product error carries the code");
+    assert_eq!(product.code, "CHAT_NOT_FOUND");
 }

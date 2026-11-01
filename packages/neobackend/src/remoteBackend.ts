@@ -22,6 +22,7 @@ import type {
   ListThemesResultDto,
   ListToolsResultDto,
   PromptPlanDto,
+  ChatContextAuditResultDto,
   WireGenerationEvent,
   BackupsRestoreResultDto,
   BackupsDeleteResultDto,
@@ -180,6 +181,8 @@ export class RemoteBackend implements NeoBackend {
   readonly chats: ChatsApi = {
     list: (req) => this.sdk.call<PagedChatsDto>('chats.list', req),
     get: (chatId) => this.sdk.call<ChatDto>('chats.get', { chatId }),
+    contextAudit: (chatId) =>
+      this.sdk.call<ChatContextAuditResultDto>('chats.context.audit', { chatId }),
     create: (req) => this.sdk.call<ChatDto>('chats.create', req),
     update: (req) => this.sdk.call<ChatDto>('chats.update', req),
     del: (chatId) => this.sdk.call<EmptyResultDto>('chats.delete', { chatId }),

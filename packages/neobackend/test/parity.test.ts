@@ -43,6 +43,7 @@ import {
   type CharacterCardImportResultDto,
   type ChatsExportResultDto,
   type PromptPlanDto,
+  type ChatContextAuditResultDto,
   type BackupsRestoreResultDto,
   type DataActivationStatusResultDto,
   type PluginDto,
@@ -446,6 +447,10 @@ const PROMPT_PLAN: PromptPlanDto = {
   createdAt: TIMESTAMP,
 };
 
+/** `chats.context.audit` response (M7 Etap-4 cluster 17 part 1): the chat's
+ * latest durable plan wrapped in the audit result. */
+const CHAT_CONTEXT_AUDIT: ChatContextAuditResultDto = { plan: PROMPT_PLAN };
+
 /** `data.activation.status` response (М5 slice 38): durable activation state. */
 const ACTIVATION_STATUS: DataActivationStatusResultDto = {
   layoutVersion: 2,
@@ -755,6 +760,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: CHAT_EXPORT };
       case 'generation.prompt.plan':
         return { ok: true, value: PROMPT_PLAN };
+      case 'chats.context.audit':
+        return { ok: true, value: CHAT_CONTEXT_AUDIT };
       case 'data.activation.status':
         return { ok: true, value: ACTIVATION_STATUS };
       case 'backups.restore':
@@ -930,6 +937,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return CHAT_EXPORT;
     case 'generation.prompt.plan':
       return PROMPT_PLAN;
+    case 'chats.context.audit':
+      return CHAT_CONTEXT_AUDIT;
     case 'data.activation.status':
       return ACTIVATION_STATUS;
     case 'backups.restore':
@@ -1746,6 +1755,11 @@ describe('LegacyBackend', () => {
   it('generation.get throws UnsupportedError', () => {
     const backend = makeLegacyBackend(new Map());
     expect(() => backend.generation.get(RUN_ID)).toThrow(UnsupportedError);
+  });
+
+  it('chats.context.audit throws UnsupportedError (the legacy audit is a different contract)', () => {
+    const backend = makeLegacyBackend(new Map());
+    expect(() => backend.chats.contextAudit(CHAT_ID)).toThrow(UnsupportedError);
   });
 
   it('providers.list throws UnsupportedError', () => {
@@ -2657,6 +2671,33 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     const backend = new LocalBackend({ transport: kernel });
 
     await expect(backend.generation.promptPlan('nope')).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
+  });
+
+  it('chats.context.audit is routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.chats.contextAudit(CHAT_ID),
+      remote.chats.contextAudit(CHAT_ID),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(CHAT_CONTEXT_AUDIT);
+    expect(kernel.requests).toEqual([
+      {
+        operationId: 'chats.context.audit',
+        payload: { chatId: CHAT_ID },
+      },
+    ]);
+  });
+
+  it('chats.context.audit with a non-uuid chat id throws ValidationError before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(backend.chats.contextAudit('nope')).rejects.toThrow(ValidationError);
     expect(kernel.calls).toBe(0);
   });
 

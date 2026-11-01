@@ -111,6 +111,7 @@ import {
   updateSettings,
   importCharacter,
   getPromptPlan,
+  getChatContextAudit,
   listGenerationSteps,
   getDataActivationStatus,
   type ContinueCharacterChatInput,
@@ -507,6 +508,36 @@ export function usePromptPlan(runId: string | undefined) {
       }
     },
     enabled: runId !== undefined,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Latest durable prompt plan of one chat (wire `chats.context.audit`, M7
+ * Etap-4 cluster 17 part 1): what context entered the chat's most recent
+ * provider request — the same `wire.prompt.plan` shape as `usePromptPlan`,
+ * but resolved from the chat without knowing a run id, so the plan is
+ * inspectable the moment a chat is open. A chat without generations resolves
+ * to `null` (honest empty state). Legacy plane: the sidecar's
+ * `/chats/:id/context-audit` is a different, richer contract served by
+ * `usePromptContextAudit` — this hook reports `null` there instead of
+ * erroring (ARC-02).
+ */
+export function useChatContextAudit(chatId: string | undefined) {
+  return useQuery({
+    queryKey: ['chat-context-audit', chatId],
+    queryFn: async () => {
+      if (!chatId) return null;
+      try {
+        return await getChatContextAudit(chatId);
+      } catch (error) {
+        if (error instanceof UnsupportedError) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    enabled: chatId !== undefined,
     staleTime: 30_000,
   });
 }

@@ -305,7 +305,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "0f2e03fbf79a1a73259e1f462ae0e3acfd9582f44b9103dc5eac6023ed02c4a4"
+      "sha256": "49bb6d4a24e7d1b3aac9902b8ff2182ede131d5bd621d626c471848bd0aa1639"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -330,7 +330,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "08d1c11febf5d09072eebfa136d39525db93c59e7bae185acea6b78c896a437a"
+      "sha256": "09673a1e7ef968718e846089bd1a2130673d3f67165dc70c57818bd35dea0b56"
     },
     {
       "source": "architecture/portable-data.md",
@@ -370,7 +370,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "213228bb926759b41117ba77dd22acf3b19f291db99e99cb7b4c15c2d7f2b024"
+      "sha256": "af4446bda1b697a1fd37a1c02e7bb20dd2a1184e9757b79081740ecad4c73590"
     },
     {
       "source": "audits/rust-app/INVENTORY.md",

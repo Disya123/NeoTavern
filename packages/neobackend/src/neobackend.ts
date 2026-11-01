@@ -79,6 +79,7 @@ import type {
   InstallThemeResultDto,
   ListToolsResultDto,
   PromptPlanDto,
+  ChatContextAuditResultDto,
   WireGenerationEvent,
   BackupsRestoreResultDto,
   BackupsDeleteResultDto,
@@ -219,6 +220,12 @@ export interface ChatsApi {
   list(req: ListChatsRequestDto, opts?: BackendCallOptions): Promise<PagedChatsDto>;
   /** Fetch one chat by id. */
   get(chatId: string, opts?: BackendCallOptions): Promise<ChatDto>;
+  /**
+   * Latest durable prompt plan of a chat (wire `chats.context.audit`, M7
+   * Etap-4 cluster 17 part 1): what context entered the chat's most recent
+   * provider request. `plan` is omitted when the chat has no generation yet.
+   */
+  contextAudit(chatId: string, opts?: BackendCallOptions): Promise<ChatContextAuditResultDto>;
   /** Create a chat for an existing character. */
   create(req: CreateChatRequestDto, opts?: BackendCallOptions): Promise<ChatDto>;
   /** Rename a chat. */
