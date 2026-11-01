@@ -1213,6 +1213,55 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'providers.models',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.provider-models',
+    'wire.result.provider-models',
+    undefined,
+    [
+      'INTERNAL',
+      'VALIDATION',
+      'NOT_FOUND',
+      'UNAUTHORIZED',
+      'RATE_LIMITED',
+      'PROVIDER_ERROR',
+      'CAPABILITY_UNAVAILABLE',
+      'CONTRACT_VIOLATION',
+      'OUTCOME_UNKNOWN',
+    ],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'providers.test',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.provider-test',
+    'wire.result.provider-test',
+    undefined,
+    [
+      'INTERNAL',
+      'VALIDATION',
+      'NOT_FOUND',
+      'UNAUTHORIZED',
+      'RATE_LIMITED',
+      'PROVIDER_ERROR',
+      'CAPABILITY_UNAVAILABLE',
+      'CANCELLED',
+      'CONTRACT_VIOLATION',
+      'OUTCOME_UNKNOWN',
+    ],
+    8192,
+    262144,
+    undefined,
+  ),
+  op(
     'backups.create',
     'workflow',
     'non-idempotent',
@@ -2953,6 +3002,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     secretId: UUID_PROVIDER_SECRET,
   }),
   fx('secrets-exposure-request', 'secrets.exposure', 'request', true, {}),
+  fx('providers-models-request', 'providers.models', 'request', true, {
+    providerId: UUID_CONFIG,
+  }),
+  fx('providers-test-request', 'providers.test', 'request', true, {
+    providerId: UUID_CONFIG,
+    message: 'ping',
+  }),
 
   // --- valid response fixtures.
   fx('meta-get-response', 'meta.get', 'response', true, META_VALUE),
@@ -3366,6 +3422,16 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('secrets-exposure-response', 'secrets.exposure', 'response', true, {
     allowSecretsExposure: false,
   }),
+  fx('providers-models-response', 'providers.models', 'response', true, {
+    models: [
+      { id: 'fake-1', name: 'Fake 1', contextLimit: 8192 },
+      { id: 'gpt-4o-mini', name: 'gpt-4o-mini' },
+    ],
+  }),
+  fx('providers-test-response', 'providers.test', 'response', true, {
+    text: 'pong',
+    usage: { steps: 1, outputChars: 4 },
+  }),
 
   // --- valid event fixture (generation.start streams events, no response).
   fx('generation-start-event', 'generation.start', 'event', true, {
@@ -3450,6 +3516,18 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     ],
   }),
   fx('neg-secrets-exposure-missing-flag', 'secrets.exposure', 'response', false, {}),
+  fx('neg-providers-models-unknown-field', 'providers.models', 'request', false, {
+    providerId: UUID_CONFIG,
+    refresh: true,
+  }),
+  fx('neg-providers-test-empty-message', 'providers.test', 'request', false, {
+    providerId: UUID_CONFIG,
+    message: '',
+  }),
+  fx('neg-providers-models-bad-usage', 'providers.test', 'response', false, {
+    text: 'pong',
+    usage: { steps: -1, outputChars: 4 },
+  }),
 
   // --- negative fixtures (one per rule family).
   fx('neg-characters-get-missing-field', 'characters.get', 'request', false, {}),

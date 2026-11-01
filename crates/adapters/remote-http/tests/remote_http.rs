@@ -2104,6 +2104,67 @@ fn provider_secrets_over_http_are_exposure_gated() {
     assert_eq!(revealed["value"], json!(sentinel));
 }
 
+/// 34b. M7 cluster 8: `providers.models` + `providers.test` over the HTTP host.
+/// Both address a stored config by id and are answered by the built-in fake
+/// adapter (no network upstream); an unknown id yields a product error code.
+#[test]
+fn provider_access_over_http_is_addressed_by_config_id() {
+    let server = TestServer::spawn();
+
+    let set = envelope_body(
+        &rid(1),
+        "providers.config.set",
+        json!({ "provider": "fake", "name": "local", "config": { "model": "steps=1" } }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &set);
+    assert_eq!(
+        response.status, 200,
+        "providers.config.set answers HTTP 200"
+    );
+    let (_, config) = expect_ok(decode_envelope(&response.body));
+    let config_id = config["id"].as_str().expect("config id").to_string();
+
+    let models = envelope_body(
+        &rid(2),
+        "providers.models",
+        json!({ "providerId": config_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &models);
+    assert_eq!(response.status, 200, "providers.models answers HTTP 200");
+    let (request_id, listed) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(2), "requestId is echoed");
+    gen::validate_result_provider_models(&listed).expect("models result is wire-valid");
+    assert_eq!(listed["models"][0]["id"], json!("fake-1"));
+
+    let test = envelope_body(
+        &rid(3),
+        "providers.test",
+        json!({ "providerId": config_id, "message": "ping" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &test);
+    assert_eq!(response.status, 200, "providers.test answers HTTP 200");
+    let (_, reply) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_provider_test(&reply).expect("test result is wire-valid");
+    assert!(
+        reply["text"].as_str().is_some_and(|text| !text.is_empty()),
+        "the fake adapter answers with text"
+    );
+    assert!(
+        reply["usage"]["steps"].as_i64().unwrap_or_default() >= 1,
+        "usage reports the attempt"
+    );
+
+    let missing = envelope_body(
+        &rid(4),
+        "providers.models",
+        json!({ "providerId": "00000000-0000-4000-8000-0000000000ff" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &missing);
+    assert_eq!(response.status, 200, "product failures answer HTTP 200");
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, "PROVIDER_CONFIG_NOT_FOUND");
+}
+
 /// 35. М5 slice 42: `profile.import` over the HTTP host — export a container
 ///     on one server, stage it under a second server's data root (the
 ///     host-side staging step), import over HTTP with the reject policy and

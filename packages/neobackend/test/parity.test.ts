@@ -50,7 +50,9 @@ import {
   type ProfileExportResultDto,
   type ProfileImportResultDto,
   type ProviderCatalogResultDto,
+  type ProviderModelsResultDto,
   type ProviderSecretDto,
+  type ProviderTestResultDto,
   type RevealProviderSecretResultDto,
   type PutAssetResultDto,
   type ResultSettingsDto,
@@ -168,6 +170,16 @@ const PROVIDER_SECRET_LIST: ListProviderSecretsResultDto = { items: [PROVIDER_SE
 const PROVIDER_SECRET_CREATED: CreateProviderSecretResultDto = { id: PROVIDER_SECRET_ID };
 const PROVIDER_SECRET_REVEAL: RevealProviderSecretResultDto = { value: 'sk-fixture-revealed' };
 const SECRETS_EXPOSURE: SecretsExposureResultDto = { allowSecretsExposure: false };
+
+// --- Live provider access fixtures (M7 Etap-4 cluster 8; wire shapes
+// `wire.result.provider-models` and `wire.result.provider-test`). ---
+const PROVIDER_MODELS: ProviderModelsResultDto = {
+  models: [{ id: 'fake-1', name: 'Fake 1', contextLimit: 8192 }],
+};
+const PROVIDER_TEST: ProviderTestResultDto = {
+  text: 'pong',
+  usage: { steps: 1, outputChars: 4 },
+};
 
 // --- Canonical generation fixtures (ТЗ §62–64, Phase 6). ---
 const RUN_ID = '6f5e4d3c-2b1a-4f0e-9d8c-7a6b5c4d3e2f';
@@ -616,6 +628,10 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: EMPTY_RESULT };
       case 'providers.secrets.reveal':
         return { ok: true, value: PROVIDER_SECRET_REVEAL };
+      case 'providers.models':
+        return { ok: true, value: PROVIDER_MODELS };
+      case 'providers.test':
+        return { ok: true, value: PROVIDER_TEST };
       case 'secrets.exposure':
         return { ok: true, value: SECRETS_EXPOSURE };
       case 'generation.get':
@@ -785,6 +801,10 @@ function rpcResult(operationId: string | undefined): unknown {
       return EMPTY_RESULT;
     case 'providers.secrets.reveal':
       return PROVIDER_SECRET_REVEAL;
+    case 'providers.models':
+      return PROVIDER_MODELS;
+    case 'providers.test':
+      return PROVIDER_TEST;
     case 'secrets.exposure':
       return SECRETS_EXPOSURE;
     case 'generation.get':
@@ -1215,6 +1235,32 @@ describe('Providers Local vs Remote parity (Phase 7)', () => {
       { operationId: 'providers.secrets.update', payload: updateReq },
       { operationId: 'providers.secrets.delete', payload: deleteReq },
       { operationId: 'providers.secrets.reveal', payload: revealReq },
+    ]);
+  });
+
+  it('providers.models + providers.test route the canonical payloads from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const modelsReq = { providerId: PROVIDER_CONFIG_ID };
+    const testReq = { providerId: PROVIDER_CONFIG_ID, message: 'ping' };
+
+    const [localModels, remoteModels, localTest, remoteTest] = await Promise.all([
+      local.providers.models(modelsReq),
+      remote.providers.models(modelsReq),
+      local.providers.test(testReq),
+      remote.providers.test(testReq),
+    ]);
+
+    expect(localModels).toEqual(remoteModels);
+    expect(localModels).toEqual(PROVIDER_MODELS);
+    expect(localTest).toEqual(remoteTest);
+    expect(localTest).toEqual(PROVIDER_TEST);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'providers.models', payload: modelsReq },
+      { operationId: 'providers.test', payload: testReq },
     ]);
   });
 });
@@ -1723,6 +1769,12 @@ describe('LegacyBackend', () => {
         providerId: PROVIDER_CONFIG_ID,
         secretId: PROVIDER_SECRET_ID,
       }),
+    ).toThrow(UnsupportedError);
+    expect(() => backend.providers.models({ providerId: PROVIDER_CONFIG_ID })).toThrow(
+      UnsupportedError,
+    );
+    expect(() =>
+      backend.providers.test({ providerId: PROVIDER_CONFIG_ID, message: 'ping' }),
     ).toThrow(UnsupportedError);
     expect(() => backend.secrets.exposure()).toThrow(UnsupportedError);
   });

@@ -58,6 +58,8 @@ import type {
   ProfileImportResultDto,
   ProviderConfigDto,
   ProviderCatalogResultDto,
+  ProviderModelsResultDto,
+  ProviderTestResultDto,
   ProviderSecretDto,
   ListProviderSecretsResultDto,
   CreateProviderSecretResultDto,
@@ -351,6 +353,10 @@ export class RemoteBackend implements NeoBackend {
           signal: opts?.signal,
         }),
     },
+    models: (req, opts) =>
+      this.sdk.call<ProviderModelsResultDto>('providers.models', req, { signal: opts?.signal }),
+    test: (req, opts) =>
+      this.sdk.call<ProviderTestResultDto>('providers.test', req, { signal: opts?.signal }),
   };
 
   readonly plugins: PluginsApi = {

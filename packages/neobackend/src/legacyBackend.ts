@@ -291,6 +291,8 @@ export class LegacyBackend implements NeoBackend {
       del: () => this.unsupported('providers.secrets.delete'),
       reveal: () => this.unsupported('providers.secrets.reveal'),
     },
+    models: () => this.unsupported('providers.models'),
+    test: () => this.unsupported('providers.test'),
   };
 
   /**

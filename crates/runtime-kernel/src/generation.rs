@@ -2284,6 +2284,13 @@ fn provider_error_dto(
         }
         // Cancelled is handled by the caller (durable cancelled terminal).
         Code::Cancelled => error_dto("PROVIDER_CANCELLED", &[("runId", run_id.to_string())]),
+        // A generation attempt cannot request an optional capability, so this
+        // reaches a run only if an adapter misdeclares itself; surface it as an
+        // unavailable provider rather than inventing a result.
+        Code::CapabilityUnavailable => error_dto(
+            "PROVIDER_UNAVAILABLE",
+            &[("provider", provider.to_string())],
+        ),
     }
 }
 

@@ -116,6 +116,59 @@ pub(crate) fn has_active_secret(
     .map_err(|e| sqlite(e, "provider_secrets: has_active"))
 }
 
+/// Resolves the execution-time API key for ONE addressed config (cluster 8
+/// provider-access ops): the ACTIVE named key (`provider_secrets`, v24) first,
+/// else the config-level `secret_ref`. Mirrors the generation-side resolution
+/// but keyed by config id instead of "the first config of the provider".
+///
+/// * No reference at all → `Ok(None)` (the adapter decides; a keyless adapter
+///   reports its own typed error).
+/// * A reference but no resolver seam → fail-closed `SECRET_UNAVAILABLE`
+///   (no plaintext fallback; §9.4/§87).
+/// * Resolver failures keep their stable `SECRET_*` product code.
+pub(crate) fn resolve_config_api_key(
+    conn: &rusqlite::Connection,
+    resolver: Option<&dyn provider_sdk::secret::SecretResolver>,
+    config_id: &str,
+    provider: &str,
+) -> Result<Option<String>, KernelError> {
+    let config_ref: Option<String> = conn
+        .query_row(
+            "SELECT secret_ref FROM provider_configs WHERE id = ?1",
+            params![config_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "provider_configs: read secret_ref"))?
+        .flatten();
+    let active_ref: Option<String> = conn
+        .query_row(
+            "SELECT secret_ref FROM provider_secrets WHERE config_id = ?1 AND active = 1 LIMIT 1",
+            params![config_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "provider_secrets: read active secret_ref"))?;
+    let Some(reference) = active_ref.or(config_ref) else {
+        return Ok(None);
+    };
+    let resolver = resolver.ok_or_else(|| {
+        KernelError::product(
+            "SECRET_UNAVAILABLE".to_string(),
+            vec![("provider".to_string(), provider.to_string())],
+        )
+    })?;
+    let value = resolver
+        .resolve(&provider_sdk::secret::SecretRef(reference))
+        .map_err(|err| {
+            KernelError::product(
+                err.code.to_string(),
+                vec![("provider".to_string(), provider.to_string())],
+            )
+        })?;
+    Ok(Some(value.expose().to_string()))
+}
+
 /// Selects one provider config row back out of the database.
 fn query_provider_config(
     conn: &rusqlite::Connection,

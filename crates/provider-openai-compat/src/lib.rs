@@ -48,6 +48,11 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 const DEFAULT_MAX_RESPONSE_BYTES: u64 = 16 * 1024 * 1024;
 /// Default model exposed when the config carries no `models`.
 const DEFAULT_MODEL_ID: &str = "gpt-4o-mini";
+/// Body budget for the model-discovery response (a `/models` listing is small
+/// and never needs the generation budget).
+const MODEL_DISCOVERY_MAX_BYTES: u64 = 1024 * 1024;
+/// Hard cap on discovered models (the wire DTO list is bounded too).
+const MODEL_DISCOVERY_MAX_ITEMS: usize = 256;
 
 /// Parsed endpoint (scheme + host + port + path prefix).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,6 +107,11 @@ impl Endpoint {
     fn chat_completions_path(&self) -> String {
         format!("{}/chat/completions", self.prefix)
     }
+
+    /// The model-listing path: `{prefix}/models`.
+    fn models_path(&self) -> String {
+        format!("{}/models", self.prefix)
+    }
 }
 
 /// One configured model (`wire.provider.model`).
@@ -146,6 +156,24 @@ pub struct ProviderConfig {
 
 fn default_timeout_ms() -> u64 {
     DEFAULT_TIMEOUT.as_millis() as u64
+}
+
+/// One entry of the OpenAI-style `GET /models` listing.
+#[derive(Debug, serde::Deserialize)]
+struct SchemaModelEntry {
+    /// Vendor model id (the only field the discovery contract needs).
+    id: String,
+    /// Optional display name some gateways include.
+    #[serde(default)]
+    name: Option<String>,
+}
+
+/// The `GET /models` response envelope (`{ "object": "list", "data": [...] }`).
+#[derive(Debug, serde::Deserialize)]
+struct SchemaModelsResponse {
+    /// Vendor model entries.
+    #[serde(default)]
+    data: Vec<SchemaModelEntry>,
 }
 
 fn default_max_response_bytes() -> u64 {
@@ -270,6 +298,82 @@ impl ProviderAdapter for OpenAICompatProvider {
         }
     }
 
+    /// Live model discovery over the standard `GET {baseUrl}/models`
+    /// endpoint (M7 Etap-4 cluster 8). The vendor listing carries ids only,
+    /// so `name` mirrors the id and limits stay unset (the config's explicit
+    /// `models[]` still wins for context budgets). The API key is required and
+    /// used only for the outgoing `Authorization` header; the response body is
+    /// bounded by [`MODEL_DISCOVERY_MAX_BYTES`].
+    fn discover_models(
+        &self,
+        api_key: Option<&str>,
+        deadline: Option<provider_sdk::policy::Deadline>,
+    ) -> Result<Vec<ProviderModel>, ProviderError> {
+        let api_key = api_key.ok_or_else(|| {
+            ProviderError::with(
+                ProviderErrorCode::RequestInvalid,
+                "provider requires an API key (configure it via providers.config.set)",
+                vec![("provider".to_string(), self.id.clone())],
+            )
+        })?;
+        let headers = render_headers(api_key, self.organization.as_deref());
+        let path = self.endpoint.models_path();
+        let connect_timeout = deadline
+            .and_then(|d| d.remaining())
+            .unwrap_or(self.timeout)
+            .min(self.timeout);
+        let read_timeout = deadline.and_then(|d| d.remaining()).unwrap_or(self.timeout);
+        let http_request = http::HttpRequest {
+            method: "GET",
+            path: &path,
+            host: &self.endpoint.host,
+            port: self.endpoint.port,
+            tls: self.endpoint.tls,
+            headers,
+            body: b"",
+        };
+        let response = match http::send(&http_request, connect_timeout, Some(read_timeout)) {
+            Ok(response) => response,
+            Err(err) => return Err(map_io_error(err)),
+        };
+        if !(200..300).contains(&response.status) {
+            return Err(map_http_status(response.status));
+        }
+        let mut reader = response.body.with_budget(MODEL_DISCOVERY_MAX_BYTES);
+        let mut body = Vec::new();
+        if let Err(err) = reader.read_to_end(&mut body) {
+            return Err(map_io_error(err));
+        }
+        let parsed: SchemaModelsResponse = serde_json::from_slice(&body).map_err(|err| {
+            ProviderError::with(
+                ProviderErrorCode::RequestInvalid,
+                format!("provider model listing is not valid JSON: {err}"),
+                vec![("provider".to_string(), self.id.clone())],
+            )
+        })?;
+        let models: Vec<ProviderModel> = parsed
+            .data
+            .into_iter()
+            .filter_map(|model| {
+                let id = model.id.trim();
+                if id.is_empty() {
+                    return None;
+                }
+                Some(ProviderModel {
+                    id: id.to_string(),
+                    name: model
+                        .name
+                        .filter(|n| !n.trim().is_empty())
+                        .unwrap_or_else(|| id.to_string()),
+                    context_limit: None,
+                    max_output_tokens: None,
+                })
+            })
+            .take(MODEL_DISCOVERY_MAX_ITEMS)
+            .collect();
+        Ok(models)
+    }
+
     fn generate(
         &self,
         request: &ProviderRequest<'_>,
@@ -304,6 +408,7 @@ impl ProviderAdapter for OpenAICompatProvider {
             .unwrap_or(self.timeout);
 
         let http_request = http::HttpRequest {
+            method: "POST",
             path: &path,
             host: &self.endpoint.host,
             port: self.endpoint.port,

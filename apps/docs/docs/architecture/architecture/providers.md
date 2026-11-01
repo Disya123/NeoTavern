@@ -61,7 +61,36 @@ The kernel maps provider errors to product codes: `step-failed` →
 `PROVIDER_STEP_FAILED`, `timeout` → `PROVIDER_TIMEOUT`, `network-fault` →
 `PROVIDER_NETWORK_FAULT`, `unavailable` → `PROVIDER_UNAVAILABLE`,
 `request-invalid` → `PROVIDER_MODEL_INVALID`; `cancelled` becomes the run's
-`cancelled` terminal state.
+`cancelled` terminal state. A trait-level `capability-unavailable` (an
+optional adapter capability the caller asked for, e.g. model discovery or a
+non-text modality) maps to `CAPABILITY_UNAVAILABLE`.
+
+## Live access: model discovery and the test message
+
+Two kernel operations address **one stored config by id** (M7 Etap-4
+cluster 8) — `providers.models` and `providers.test`:
+
+- The adapter is materialized from that row (`providers::config_adapter`), so
+  its endpoint is the config's `baseUrl` and its key is that config's ACTIVE
+  named key, falling back to the config-level `secret_ref`. The registry's
+  one-adapter-per-provider-kind instance is used only for built-ins (`fake`).
+- `discover_models(api_key, deadline)` is an **optional** trait method: the
+  default returns `CapabilityUnavailable`, so an adapter that cannot
+  enumerate models is reported honestly instead of guessing. The
+  OpenAI-compatible adapter implements `GET {baseUrl}/models`, keeps only
+  `data[].id` (name mirrors the id), bounds the body at 1 MiB and the result
+  at 256 models, and requires a key (RequestInvalid before any network).
+- `providers.test` reuses the ordinary `generate` path with a synthetic
+  one-message request (non-streaming, 120 s deadline, 60k-char capture cap)
+  and returns `{ text, usage: { steps, outputChars } }`. No durable run is
+  created: the test is a connectivity probe, never a chat event.
+- Both run on the kernel writer thread: the kernel is a synchronous single
+  writer, so a provider round-trip blocks it exactly like one generation step
+  does.
+- The three non-text modality routes (speech / images / transcribe) have no
+  kernel counterpart yet: their results are binary (base64 audio/image) or
+  multipart uploads, so they need a media transport contract (asset plane)
+  before a value-free wire DTO can carry them honestly.
 
 ## Built-in adapters
 
@@ -81,7 +110,9 @@ the default when no provider is configured. Model string grammar
 Delta text for step `i` derives from `sha256("{chat_id}|{attempt}|{i}")`
 (first 8 hex chars) — same request ⇒ byte-identical streams across processes
 (Local/Remote equivalence, §78 Фаза 6 exit gate). One model is exposed:
-`fake-1` (context limit 8192).
+`fake-1` (context limit 8192). The fake also implements
+`discover_models` by returning that same local set, so `providers.models`
+works without any network round-trip (`name` = `Fake 1`).
 
 ### RecordedProvider
 

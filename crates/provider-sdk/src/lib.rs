@@ -52,6 +52,10 @@ pub enum ProviderErrorCode {
     StepFailed,
     /// A transient network fault (advisory retryable, §55).
     NetworkFault,
+    /// The adapter does not implement the requested capability (e.g. model
+    /// discovery or a non-text modality): the kernel surfaces
+    /// `CAPABILITY_UNAVAILABLE` instead of guessing a result.
+    CapabilityUnavailable,
 }
 
 impl std::fmt::Display for ProviderErrorCode {
@@ -63,6 +67,7 @@ impl std::fmt::Display for ProviderErrorCode {
             ProviderErrorCode::RequestInvalid => "request-invalid",
             ProviderErrorCode::StepFailed => "step-failed",
             ProviderErrorCode::NetworkFault => "network-fault",
+            ProviderErrorCode::CapabilityUnavailable => "capability-unavailable",
         };
         f.write_str(text)
     }
@@ -337,6 +342,27 @@ pub trait ProviderAdapter: Send + Sync {
     /// fails the run with `CAPABILITY_UNAVAILABLE` before `generate` when a
     /// requested capability is not declared.
     fn capabilities(&self) -> ProviderCapabilities;
+
+    /// Lists the provider's models LIVE (ТЗ §4.3/§9.3; M7 Etap-4 cluster 8).
+    ///
+    /// Optional capability: the default refuses with
+    /// [`ProviderErrorCode::CapabilityUnavailable`], so an adapter that cannot
+    /// enumerate models is reported honestly and the kernel answers
+    /// `CAPABILITY_UNAVAILABLE` instead of synthesizing a list. `api_key` is
+    /// resolved by the kernel for the addressed config and must only be used
+    /// to build the outgoing request (never logged or stored); `deadline`
+    /// bounds the whole discovery call.
+    fn discover_models(
+        &self,
+        _api_key: Option<&str>,
+        _deadline: Option<policy::Deadline>,
+    ) -> Result<Vec<ProviderModel>, ProviderError> {
+        Err(ProviderError::with(
+            ProviderErrorCode::CapabilityUnavailable,
+            "this provider does not support live model discovery",
+            vec![("provider".to_string(), self.id().to_string())],
+        ))
+    }
 
     /// Executes exactly one generation attempt.
     ///

@@ -783,3 +783,86 @@ fn streams_text_then_tool_call() {
         ProviderEvent::ToolCall { id, name, .. } if id == "call-9" && name == "lookup_weather"
     ));
 }
+
+// --- live model discovery (M7 Etap-4 cluster 8) -------------------------
+
+/// A JSON response helper (content-length framed).
+fn json_response(status: u16, body: &str) -> Vec<u8> {
+    format!(
+            "HTTP/1.1 {status} OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+        .into_bytes()
+}
+
+#[test]
+fn discovery_lists_models_over_get_models_with_the_key_header() {
+    let mut server = MockServer::spawn(move |request, mut stream| {
+        assert!(
+            request.starts_with("GET /models HTTP/1.1"),
+            "discovery must use GET /models, got: {}",
+            request.lines().next().unwrap_or_default()
+        );
+        assert!(
+            request.contains("Authorization: Bearer sk-test"),
+            "the key rides only the Authorization header"
+        );
+        stream.write_all(&json_response(
+            200,
+            r#"{"object":"list","data":[{"id":"alpha"},{"id":"beta","name":"Beta"},{"id":"  "}]}"#,
+        ))?;
+        stream.flush()
+    });
+    let provider = test_provider(&server.base_url());
+    let models = provider
+        .discover_models(Some("sk-test"), None)
+        .expect("discovery succeeds");
+    assert_eq!(models.len(), 2, "blank ids are skipped");
+    assert_eq!(models[0].id, "alpha");
+    assert_eq!(models[0].name, "alpha", "name mirrors the id");
+    assert_eq!(models[0].context_limit, None);
+    assert_eq!(models[1].id, "beta");
+    assert_eq!(models[1].name, "Beta");
+    server.close();
+}
+
+#[test]
+fn discovery_without_a_key_is_request_invalid_before_any_network() {
+    let mut server = MockServer::spawn(move |_request, stream| {
+        panic!("no connection may be made without a key (dropped stream: {stream:?})");
+    });
+    let provider = test_provider(&server.base_url());
+    let err = provider
+        .discover_models(None, None)
+        .expect_err("missing key must fail");
+    assert_eq!(err.code, ProviderErrorCode::RequestInvalid);
+    server.close();
+}
+
+#[test]
+fn discovery_http_error_maps_to_a_normalized_code() {
+    let mut server = MockServer::spawn(move |_request, mut stream| {
+        stream.write_all(&json_response(401, r#"{"error":{"message":"nope"}}"#))?;
+        stream.flush()
+    });
+    let provider = test_provider(&server.base_url());
+    let err = provider
+        .discover_models(Some("sk-wrong"), None)
+        .expect_err("401 must fail");
+    assert_eq!(err.code, ProviderErrorCode::Unavailable);
+    server.close();
+}
+
+#[test]
+fn discovery_rejects_a_non_json_listing() {
+    let mut server = MockServer::spawn(move |_request, mut stream| {
+        stream.write_all(&json_response(200, "not-json"))?;
+        stream.flush()
+    });
+    let provider = test_provider(&server.base_url());
+    let err = provider
+        .discover_models(Some("sk-test"), None)
+        .expect_err("invalid listing must fail");
+    assert_eq!(err.code, ProviderErrorCode::RequestInvalid);
+    server.close();
+}

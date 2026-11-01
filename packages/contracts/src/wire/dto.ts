@@ -1887,6 +1887,73 @@ export const SecretsExposureResultDtoSchema = Type.Object(
 );
 export type SecretsExposureResultDto = Static<typeof SecretsExposureResultDtoSchema>;
 
+/**
+ * Provider model-discovery request DTO (`wire.request.provider-models`).
+ * Addresses ONE stored provider config; the kernel resolves that config's
+ * endpoint and key (`provider_secrets` active key, else the config-level
+ * `secret_ref`) and asks the adapter for its live listing.
+ */
+export const ProviderModelsRequestDtoSchema = Type.Object(
+  {
+    providerId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.provider-models', additionalProperties: false },
+);
+export type ProviderModelsRequestDto = Static<typeof ProviderModelsRequestDtoSchema>;
+
+/**
+ * Provider model-discovery result DTO (`wire.result.provider-models`). An
+ * adapter that cannot enumerate models fails the op with
+ * `CAPABILITY_UNAVAILABLE` — an empty list is a truthful "the endpoint
+ * exposes none", never a synthesized fallback.
+ */
+export const ProviderModelsResultDtoSchema = Type.Object(
+  {
+    models: Type.Array(ProviderModelDtoSchema, { maxItems: 256 }),
+  },
+  { $id: 'wire.result.provider-models', additionalProperties: false },
+);
+export type ProviderModelsResultDto = Static<typeof ProviderModelsResultDtoSchema>;
+
+/**
+ * Provider connectivity-test request DTO (`wire.request.provider-test`).
+ * Runs ONE non-streaming message through the addressed config's model
+ * (legacy `/providers/:id/test` parity). `model` overrides the config model.
+ */
+export const ProviderTestRequestDtoSchema = Type.Object(
+  {
+    providerId: Type.String({ format: 'uuid' }),
+    message: Type.String({ minLength: 1, maxLength: 4000 }),
+    model: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  },
+  { $id: 'wire.request.provider-test', additionalProperties: false },
+);
+export type ProviderTestRequestDto = Static<typeof ProviderTestRequestDtoSchema>;
+
+/** Attempt accounting of the test message (`wire.provider-test.usage`). */
+export const ProviderTestUsageDtoSchema = Type.Object(
+  {
+    steps: Type.Integer({ minimum: 0 }),
+    outputChars: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.provider-test.usage', additionalProperties: false },
+);
+export type ProviderTestUsageDto = Static<typeof ProviderTestUsageDtoSchema>;
+
+/**
+ * Provider connectivity-test result DTO (`wire.result.provider-test`): the
+ * model's answer text plus the kernel attempt accounting. The key is never
+ * echoed; provider failures surface as stable product error codes.
+ */
+export const ProviderTestResultDtoSchema = Type.Object(
+  {
+    text: Type.String({ maxLength: 65536 }),
+    usage: ProviderTestUsageDtoSchema,
+  },
+  { $id: 'wire.result.provider-test', additionalProperties: false },
+);
+export type ProviderTestResultDto = Static<typeof ProviderTestResultDtoSchema>;
+
 /** Empty result DTO (`wire.result.empty`). */
 export const EmptyResultDtoSchema = Type.Object(
   {},
@@ -3070,6 +3137,11 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.reveal-provider-secret': RevealProviderSecretRequestDtoSchema,
   'wire.result.provider-secret-reveal': RevealProviderSecretResultDtoSchema,
   'wire.result.secrets-exposure': SecretsExposureResultDtoSchema,
+  'wire.request.provider-models': ProviderModelsRequestDtoSchema,
+  'wire.result.provider-models': ProviderModelsResultDtoSchema,
+  'wire.request.provider-test': ProviderTestRequestDtoSchema,
+  'wire.provider-test.usage': ProviderTestUsageDtoSchema,
+  'wire.result.provider-test': ProviderTestResultDtoSchema,
   'wire.request.profile-export': ProfileExportRequestDtoSchema,
   'wire.result.profile-export': ProfileExportResultDtoSchema,
   'wire.request.profile-import': ProfileImportRequestDtoSchema,

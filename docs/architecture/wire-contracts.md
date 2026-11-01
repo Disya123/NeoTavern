@@ -214,7 +214,8 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
 `(kind,name)`). All slice-3 additions are `transactional`, strict
 `additionalProperties: false`, ARC-07. The M7 Этап-4 clusters then grew the
-registry to **119 ops** (the latest block is the provider catalog +
+registry to **121 ops** (the latest block is the cluster-8 provider-access
+pair `providers.models` / `providers.test`, after the provider catalog +
 named-key set described in §5); the authoritative live list with per-op
 metadata is the generated
 `packages/contracts/generated/contract-manifest.json`.
@@ -309,6 +310,25 @@ single plaintext-carrying operation on the whole wire and is gated by
 `SECRETS_EXPOSURE_DISABLED` before touching the store. Generation prefers
 the active named key and falls back to the config-level `secret_ref`;
 `hasApiKey` is true for either surface.
+
+M7 Этап-4 cluster 8 adds the pair of **live provider-access** operations.
+Both address one stored config by id (`providerId`), so the kernel
+materializes a per-config adapter (endpoint + resolved key from THAT row)
+instead of reusing the registry entry of the provider kind.
+`providers.models` performs `GET {baseUrl}/models` against the addressed
+endpoint (`openai`/`openai-compatible`; the `fake` provider answers from its
+local deterministic set), returns ids only (the DTO `name` mirrors the id,
+context/output limits stay unset) and fails with `CAPABILITY_UNAVAILABLE`
+when the adapter does not implement discovery — never a synthesized list.
+The upstream body is bounded at 1 MiB and the result at 256 models.
+`providers.test` runs ONE non-streaming message (bounded at 120 s and 60k
+chars) through the addressed model and returns the answer text plus the
+kernel attempt accounting (`steps`/`outputChars`); provider failures map to
+the documented product codes (`PROVIDER_TIMEOUT`, `PROVIDER_NETWORK_FAULT`,
+`PROVIDER_UNAVAILABLE`, `PROVIDER_MODEL_INVALID`, `PROVIDER_STEP_FAILED`),
+the adapter message stays in the kernel log and no key material reaches any
+DTO. Speech/images/transcribe have no wire operations: their payloads are
+binary or multipart and require a media transport contract first.
 
 ## 6. Handshake and negotiation (§6.5)
 

@@ -4,6 +4,30 @@
 
 ### Added
 
+- **Live provider access on the kernel plane (M7 Etap-4 slice; cluster 8
+  part 1).** Two new wire ops, both addressed by one stored config id:
+  `providers.models` (live model discovery over the standard
+  `GET {baseUrl}/models`; the kernel materializes a per-config adapter so the
+  endpoint and the resolved key follow THAT row — the ACTIVE named key first,
+  else the config-level `secret_ref`; ids only, `name` mirrors the id, the
+  upstream body is bounded at 1 MiB and the result at 256 models; an adapter
+  without discovery now returns the new trait-level
+  `ProviderErrorCode::CapabilityUnavailable`, surfaced as
+  `CAPABILITY_UNAVAILABLE`, never a synthesized list) and `providers.test`
+  (ONE non-streaming test message through the addressed model — legacy
+  `/providers/:id/test` parity — bounded at 120 s / 60k chars, returning
+  `{ text, usage: { steps, outputChars } }`; provider failures map to the
+  documented `PROVIDER_*` product codes and the key never reaches the wire).
+  The built-in `fake` provider answers `providers.models` from its local
+  deterministic set, so discovery works without a network upstream. Facade:
+  `backend.providers.models()` / `backend.providers.test()` (local/remote
+  implemented; the legacy facade keeps `UnsupportedError`). Web:
+  `useDiscoverProviderModels` and `warmProviderModels` now route through the
+  wire op on the kernel plane (RFC 3339-free shape rebuilt for the editor)
+  instead of rejecting. Cluster-8 tail: `speech`, `images` and `transcribe`
+  stay legacy-only — their binary/multipart payloads need a media transport
+  contract (asset plane) before a value-free wire DTO can carry them
+  honestly. Contract hash `ed2aded3…`; registry 121 ops.
 - **Provider catalog and named API keys on the kernel plane (M7 Etap-4
   slice; cluster 7).** Schema v24 (`024_provider_secrets`): the STRICT
   `provider_secrets` table — one row per named key (`label`, opaque

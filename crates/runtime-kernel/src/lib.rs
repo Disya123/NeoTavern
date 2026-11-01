@@ -44,6 +44,7 @@ pub mod plugins;
 pub mod product;
 pub mod profiles;
 pub mod prompt;
+pub mod provider_access;
 pub mod provider_secrets;
 pub mod providers;
 pub mod providers_config;
@@ -668,6 +669,14 @@ fn handle_unary(
         }),
         "providers.secrets.reveal" => with_db_opt(db, |db| {
             provider_secrets::reveal(db, state.secret_store.as_ref(), state.secrets_exposure, req)
+        }),
+        // M7 Etap-4 (cluster 8): live provider access — model discovery and the
+        // one-message connectivity test, both addressed by config id.
+        "providers.models" => with_db_opt(db, |db| {
+            provider_access::models(db, &state.registry, state.secret_resolver.as_deref(), req)
+        }),
+        "providers.test" => with_db_opt(db, |db| {
+            provider_access::test(db, &state.registry, state.secret_resolver.as_deref(), req)
         }),
         // Этап 4 slice 5 remainder: canonical content-addressed AssetStore.
         "assets.put" => with_db_opt(db, |db| assets::assets_put(db, req)),

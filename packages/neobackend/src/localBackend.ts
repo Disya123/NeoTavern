@@ -57,6 +57,8 @@ import {
   type ProfileImportResultDto,
   type ProviderConfigDto,
   type ProviderCatalogResultDto,
+  type ProviderModelsResultDto,
+  type ProviderTestResultDto,
   type ProviderSecretDto,
   type ListProviderSecretsResultDto,
   type CreateProviderSecretResultDto,
@@ -442,6 +444,8 @@ export class LocalBackend implements NeoBackend {
         reveal: (req, opts) =>
           this.invoke<RevealProviderSecretResultDto>('providers.secrets.reveal', req, opts),
       },
+      models: (req, opts) => this.invoke<ProviderModelsResultDto>('providers.models', req, opts),
+      test: (req, opts) => this.invoke<ProviderTestResultDto>('providers.test', req, opts),
     };
     this.plugins = {
       list: (opts) => this.invoke<ListPluginsResultDto>('plugins.list', {}, opts),

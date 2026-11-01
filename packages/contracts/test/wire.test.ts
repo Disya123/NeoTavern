@@ -73,8 +73,9 @@ describe('product wire registry', () => {
     // (110); the search slice adds search.query + search.rebuild (112); the
     // providers-config/secrets slice (M7 cluster 7) adds providers.catalog +
     // providers.secrets.{list,create,update,delete,reveal} + secrets.exposure
-    // (119).
-    expect(registry.operations).toHaveLength(119);
+    // (119); the provider-access slice (M7 cluster 8) adds providers.models +
+    // providers.test (121).
+    expect(registry.operations).toHaveLength(121);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -137,6 +138,8 @@ describe('product wire registry', () => {
       'providers.secrets.delete',
       'providers.secrets.reveal',
       'secrets.exposure',
+      'providers.models',
+      'providers.test',
       'backups.create',
       'backups.list',
       'backups.restore',

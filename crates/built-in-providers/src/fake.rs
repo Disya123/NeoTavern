@@ -20,6 +20,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use provider_sdk::policy::Deadline;
 use provider_sdk::policy::Usage;
 use provider_sdk::{
     Availability, CancelToken, EmitStatus, ProviderAdapter, ProviderCapabilities, ProviderError,
@@ -213,6 +214,17 @@ impl ProviderAdapter for FakeProvider {
 
     fn availability(&self) -> Availability {
         Availability::Available
+    }
+
+    /// The fake provider enumerates its deterministic model set: discovery is
+    /// a local lookup, so the kernel's `providers.models` works without any
+    /// network round-trip (M7 Etap-4 cluster 8).
+    fn discover_models(
+        &self,
+        _api_key: Option<&str>,
+        _deadline: Option<Deadline>,
+    ) -> Result<Vec<ProviderModel>, ProviderError> {
+        Ok(self.models())
     }
 
     fn capabilities(&self) -> ProviderCapabilities {

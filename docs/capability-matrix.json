@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-11-01T15:15:04.606Z",
+  "generatedAt": "2026-11-01T16:45:33.254Z",
   "rows": [
     {
       "hosts": {
@@ -325,6 +325,19 @@
         "presets.list",
         "presets.update"
       ]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "providers.access",
+      "milestone": "M7",
+      "notes": "M7 Etap-4 cluster 8 (ТЗ §4.3/§9.3): both ops address ONE stored config by id and run on the kernel writer thread (a provider round-trip blocks the writer exactly like one generation step). The adapter is materialized from THAT row (providers::config_adapter) so baseUrl and key follow the addressed config instead of 'the adapter registered for this provider kind'; built-in adapters (fake) fall back to the registry. The key is resolved per config (ACTIVE named key first, else config-level secret_ref) through the host SecretResolver seam and used only to build the outgoing request; an openai config without a key fails before any network round-trip.\n\nproviders.models: live discovery over the standard GET {baseUrl}/models (openai/openai-compatible; the fake provider answers from its deterministic local set). The vendor listing carries ids only, so name mirrors the id and context/output limits stay unset. An adapter without discovery (trait default) fails with CAPABILITY_UNAVAILABLE — never a synthesized list. Response is bounded (256 models, 1 MiB upstream body).\n\nproviders.test: ONE non-streaming test message through the addressed config's model (legacy /providers/:id/test parity), bounded to 120s/60k chars, returning the answer text plus the kernel attempt accounting (steps/outputChars). Provider failures map to the documented product codes (PROVIDER_TIMEOUT / PROVIDER_NETWORK_FAULT / PROVIDER_UNAVAILABLE / PROVIDER_MODEL_INVALID / PROVIDER_STEP_FAILED); the adapter message stays in the kernel log and the key never reaches the wire.\n\nUI: useDiscoverProviderModels and warmProviderModels route through providers.models on the kernel plane (legacy plane keeps /providers/:id/models). Honest tail: speech/images/transcribe stay legacy-only until a media transport contract exists (binary/multipart payloads do not fit the current value-free wire DTOs).",
+      "title": "Live provider access (model discovery + connectivity test)",
+      "wireOps": ["providers.models", "providers.test"]
     },
     {
       "hosts": {

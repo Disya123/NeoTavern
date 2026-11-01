@@ -276,7 +276,23 @@ pub(crate) fn register_config_adapter(
     provider: &str,
     config: &serde_json::Value,
 ) {
-    let adapter: Option<Arc<dyn ProviderAdapter>> = match provider {
+    if let Some(adapter) = config_adapter(provider, config) {
+        registry.register_or_replace(adapter);
+    }
+}
+
+/// Materializes a provider adapter for ONE stored config without registering
+/// it: the provider-access ops (`providers.models` / `providers.test`, cluster
+/// 8) address a config by id, so their endpoint and key must come from THAT
+/// row — the registry holds at most one adapter per provider kind.
+///
+/// Returns `None` for unknown kinds and logs a one-line diagnostic (never the
+/// config contents — SEC-07) when a known kind fails to parse.
+pub(crate) fn config_adapter(
+    provider: &str,
+    config: &serde_json::Value,
+) -> Option<Arc<dyn ProviderAdapter>> {
+    match provider {
         "openai" | "openai-compatible" => {
             let normalized = normalize_openai_config(config);
             match provider_openai_compat::OpenAICompatProvider::from_config(provider, &normalized) {
@@ -288,9 +304,6 @@ pub(crate) fn register_config_adapter(
             }
         }
         _ => None,
-    };
-    if let Some(adapter) = adapter {
-        registry.register_or_replace(adapter);
     }
 }
 

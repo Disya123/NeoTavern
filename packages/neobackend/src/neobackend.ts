@@ -36,7 +36,11 @@ import type {
   ListProviderSecretsRequestDto,
   ListProviderSecretsResultDto,
   ProviderCatalogResultDto,
+  ProviderModelsRequestDto,
+  ProviderModelsResultDto,
   ProviderSecretDto,
+  ProviderTestRequestDto,
+  ProviderTestResultDto,
   RevealProviderSecretRequestDto,
   RevealProviderSecretResultDto,
   SecretsExposureResultDto,
@@ -640,6 +644,22 @@ export interface ProvidersApi {
    * several labelled keys per config with exactly one ACTIVE key.
    */
   secrets: ProviderSecretsApi;
+  /**
+   * Live model discovery for one stored config (wire `providers.models`, M7
+   * Etap-4 cluster 8). Resolves the config's endpoint and key kernel-side; an
+   * adapter that cannot enumerate models fails with `CAPABILITY_UNAVAILABLE`
+   * instead of a synthesized list.
+   */
+  models(
+    req: ProviderModelsRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ProviderModelsResultDto>;
+  /**
+   * ONE non-streaming test message through one stored config (wire
+   * `providers.test`, M7 Etap-4 cluster 8) — the legacy
+   * `/providers/:id/test` parity: the answer text plus attempt accounting.
+   */
+  test(req: ProviderTestRequestDto, opts?: BackendCallOptions): Promise<ProviderTestResultDto>;
 }
 
 /**

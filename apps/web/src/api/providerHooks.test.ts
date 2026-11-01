@@ -240,16 +240,27 @@ describe('provider config mutations', () => {
 });
 
 describe('model discovery and secrets (kernel plane, cluster 7)', () => {
-  it('model discovery is an honest UnsupportedError on the kernel plane', async () => {
+  it('model discovery maps the wire listing onto the legacy ModelInfo shape', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const modelsSpy = vi.spyOn(backend.providers, 'models').mockResolvedValue({
+      models: [
+        { id: 'gpt-4o-mini', name: 'gpt-4o-mini' },
+        { id: 'gpt-4.1', name: 'GPT-4.1', contextLimit: 1000000 },
+      ],
+    });
     const { result } = renderHook(() => useDiscoverProviderModels(), {
       wrapper: wrapperFor(queryClient),
     });
     act(() => result.current.mutate('cfg-1'));
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(result.current.error).toBeInstanceOf(UnsupportedError);
-    expect((result.current.error as UnsupportedError).feature).toBe('providers.models.discovery');
+    expect(modelsSpy).toHaveBeenCalledWith({ providerId: 'cfg-1' });
+    expect(result.current.data).toEqual({
+      models: [
+        { id: 'gpt-4o-mini', name: 'gpt-4o-mini' },
+        { id: 'gpt-4.1', name: 'GPT-4.1', contextLimit: 1000000 },
+      ],
+    });
   });
 
   it('catalog maps the wire sources onto the UI shape and drops unknown ids', async () => {

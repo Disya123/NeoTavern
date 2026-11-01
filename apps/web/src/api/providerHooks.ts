@@ -6,8 +6,8 @@
  * as an opaque value that never crosses a DTO (SEC-01). The legacy plane has
  * an id-based config model with a separate secrets CRUD + model-discovery
  * endpoint. Every hook gates on `isKernelMode()` first: wire-backed reads are
- * translated to the legacy UI shape, wire-absent capabilities throw an honest
- * `UnsupportedError`, and nothing silently falls back to the legacy transport.
+ * translated to the legacy UI shape, and nothing silently falls back to the
+ * legacy transport.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -32,7 +32,6 @@ import {
   type ProviderSourceId,
   type SecretsExposure,
 } from '@neotavern/contracts';
-import { UnsupportedError } from '@neotavern/neobackend';
 import { ApiError, api } from './client.js';
 import { backend, isKernelMode } from './backend.js';
 
@@ -248,9 +247,19 @@ export function useDiscoverProviderModels() {
   return useMutation({
     mutationFn: (id: string) => {
       if (isKernelMode()) {
-        // Model discovery is a kernel-side provider capability with no wire
-        // operation (same honest boundary as `warmProviderModels`).
-        return Promise.reject(new UnsupportedError('providers.models.discovery'));
+        // Live discovery through the addressed kernel config (wire
+        // `providers.models`, M7 cluster 8). Ids only from the vendor listing,
+        // so the legacy `name ?? id` shape is rebuilt here.
+        return backend.providers.models({ providerId: id }).then((result) => ({
+          models: result.models.map((model) => ({
+            id: model.id,
+            name: model.name,
+            ...(model.contextLimit !== undefined ? { contextLimit: model.contextLimit } : {}),
+            ...(model.maxOutputTokens !== undefined
+              ? { maxOutputTokens: model.maxOutputTokens }
+              : {}),
+          })),
+        }));
       }
       return api.get<{ models: ModelInfo[] }>(`/providers/${id}/models`);
     },

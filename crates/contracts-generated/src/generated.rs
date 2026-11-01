@@ -81,6 +81,8 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "providers.secrets.delete" => Some(2048),
         "providers.secrets.reveal" => Some(2048),
         "secrets.exposure" => Some(1024),
+        "providers.models" => Some(2048),
+        "providers.test" => Some(8192),
         "backups.create" => Some(1024),
         "backups.list" => Some(1024),
         "backups.restore" => Some(1024),
@@ -208,6 +210,8 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "providers.secrets.delete" => Some(1024),
         "providers.secrets.reveal" => Some(262144),
         "secrets.exposure" => Some(1024),
+        "providers.models" => Some(262144),
+        "providers.test" => Some(262144),
         "backups.create" => Some(262144),
         "backups.list" => Some(262144),
         "backups.restore" => Some(1024),
@@ -3958,6 +3962,299 @@ pub fn validate_result_secrets_exposure(value: &Value) -> Result<(), Vec<Issue>>
 
 pub fn decode_result_secrets_exposure(bytes: &[u8]) -> Result<ResultSecretsExposure, WireError> {
     crate::decode::<ResultSecretsExposure>(validate_result_secrets_exposure, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestProviderModels {
+    #[serde(rename = "providerId")]
+    pub provider_id: String,
+}
+
+pub(crate) fn check_request_provider_models(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("providerId").is_none() {
+            issues.push(Issue::new(join_path(path, "providerId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("providerId") {
+            let child_path = join_path(path, "providerId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "providerId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_provider_models(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_provider_models(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_provider_models(bytes: &[u8]) -> Result<RequestProviderModels, WireError> {
+    crate::decode::<RequestProviderModels>(validate_request_provider_models, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultProviderModels {
+    pub models: Vec<ProviderModel>,
+}
+
+pub(crate) fn check_result_provider_models(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("models").is_none() {
+            issues.push(Issue::new(join_path(path, "models"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("models") {
+            let child_path = join_path(path, "models");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 256 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_provider_model(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "models") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_provider_models(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_provider_models(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_provider_models(bytes: &[u8]) -> Result<ResultProviderModels, WireError> {
+    crate::decode::<ResultProviderModels>(validate_result_provider_models, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestProviderTest {
+    #[serde(rename = "providerId")]
+    pub provider_id: String,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+}
+
+pub(crate) fn check_request_provider_test(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("providerId").is_none() {
+            issues.push(Issue::new(join_path(path, "providerId"), "RequiredProperty"));
+        }
+        if value.get("message").is_none() {
+            issues.push(Issue::new(join_path(path, "message"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("providerId") {
+            let child_path = join_path(path, "providerId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("message") {
+            let child_path = join_path(path, "message");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 4000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("model") {
+            let child_path = join_path(path, "model");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "providerId" | "message" | "model") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_provider_test(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_provider_test(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_provider_test(bytes: &[u8]) -> Result<RequestProviderTest, WireError> {
+    crate::decode::<RequestProviderTest>(validate_request_provider_test, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProviderTestUsage {
+    pub steps: i64,
+    #[serde(rename = "outputChars")]
+    pub output_chars: i64,
+}
+
+pub(crate) fn check_provider_test_usage(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("steps").is_none() {
+            issues.push(Issue::new(join_path(path, "steps"), "RequiredProperty"));
+        }
+        if value.get("outputChars").is_none() {
+            issues.push(Issue::new(join_path(path, "outputChars"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("steps") {
+            let child_path = join_path(path, "steps");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("outputChars") {
+            let child_path = join_path(path, "outputChars");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "steps" | "outputChars") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_provider_test_usage(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_provider_test_usage(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_provider_test_usage(bytes: &[u8]) -> Result<ProviderTestUsage, WireError> {
+    crate::decode::<ProviderTestUsage>(validate_provider_test_usage, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultProviderTest {
+    pub text: String,
+    pub usage: ProviderTestUsage,
+}
+
+pub(crate) fn check_result_provider_test(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("text").is_none() {
+            issues.push(Issue::new(join_path(path, "text"), "RequiredProperty"));
+        }
+        if value.get("usage").is_none() {
+            issues.push(Issue::new(join_path(path, "usage"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("text") {
+            let child_path = join_path(path, "text");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 65536 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("usage") {
+            let child_path = join_path(path, "usage");
+            check_provider_test_usage(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "text" | "usage") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_provider_test(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_provider_test(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_provider_test(bytes: &[u8]) -> Result<ResultProviderTest, WireError> {
+    crate::decode::<ResultProviderTest>(validate_result_provider_test, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

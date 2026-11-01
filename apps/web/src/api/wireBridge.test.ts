@@ -130,6 +130,10 @@ const mocks = vi.hoisted(() => {
     query: vi.fn(),
     rebuild: vi.fn(),
   };
+  const providers = {
+    models: vi.fn(),
+    test: vi.fn(),
+  };
   return {
     characters,
     chats,
@@ -147,6 +151,7 @@ const mocks = vi.hoisted(() => {
     metaFn,
     settings,
     search,
+    providers,
     isKernelMode,
   };
 });
@@ -168,6 +173,7 @@ vi.mock('./backend.js', () => ({
     meta: mocks.metaFn,
     settings: mocks.settings,
     search: mocks.search,
+    providers: mocks.providers,
   },
   isKernelMode: mocks.isKernelMode,
 }));
@@ -1870,8 +1876,10 @@ describe('imports/exports (kernel plane wire flow)', () => {
     });
   });
 
-  it('refuses provider model discovery on the kernel plane', async () => {
-    await expect(warmProviderModels('p1')).rejects.toBeInstanceOf(UnsupportedError);
+  it('discovers provider models through the addressed kernel config', async () => {
+    mocks.providers.models.mockResolvedValueOnce({ models: [] });
+    await warmProviderModels('p1');
+    expect(mocks.providers.models).toHaveBeenCalledWith({ providerId: 'p1' });
   });
 
   it('routes chat snapshots through chats.snapshots.create on the kernel plane', async () => {

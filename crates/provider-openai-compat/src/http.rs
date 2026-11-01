@@ -57,8 +57,10 @@ impl Write for Connection {
     }
 }
 
-/// One outgoing HTTP request (POST with a body).
+/// One outgoing HTTP request (a method, headers and a body).
 pub(crate) struct HttpRequest<'a> {
+    /// HTTP method (`POST` for generations, `GET` for model discovery).
+    pub method: &'a str,
     /// Request path (e.g. `/v1/chat/completions`).
     pub path: &'a str,
     /// Host header value / TLS SNI.
@@ -156,7 +158,8 @@ fn build_request_head(request: &HttpRequest<'_>) -> Vec<u8> {
         format!("{}:{}", request.host, request.port)
     };
     let mut head = format!(
-        "POST {} HTTP/1.1\r\nHost: {}\r\nContent-Length: {}\r\nConnection: close\r\n",
+        "{} {} HTTP/1.1\r\nHost: {}\r\nContent-Length: {}\r\nConnection: close\r\n",
+        request.method,
         request.path,
         host_header,
         request.body.len()
