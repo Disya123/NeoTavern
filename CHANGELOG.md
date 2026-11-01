@@ -4,6 +4,23 @@
 
 ### Added
 
+- **Character gallery on the kernel plane (M7 Etap-4 slice; cluster 12).**
+  New wire ops `characters.gallery.list/add/delete` over a new `character_images`
+  schema table (v20) that links characters into the immutable
+  content-addressed asset store: `add` publishes the bytes (kind `gallery`,
+  deduplicated exactly like `assets.put`) and links them to the character;
+  `delete` removes only the link — asset bytes are never destroyed;
+  `avatar-original` needs no new op (`characters.avatarAssetId` +
+  `assets.content`). The Settings → Character Management Gallery tab now
+  works on the kernel plane (upload / set-primary / delete with the
+  existing confirm dialog); the legacy plane keeps its routes. Honest v1
+  limits: upload capped by the 1 MiB wire request limit and the list serves
+  full-size data URLs (thumbnail downsizing and a chunked upload op are
+  follow-up tails). Tests: storage (round trip, owner scoping, FK integrity,
+  cascade), kernel dispatch (round trip, dedup second link, owner-scoped
+  idempotent delete, CHARACTER_NOT_FOUND, stateless rejection), remote-http
+  host parity, web hooks (3 kernel-plane tests), contracts op-count 105.
+
 - **`backups.delete` wire op delivered (M7 follow-up; first Этап-4 wire-gap
   slice).** The backups cluster is now fully covered on the kernel plane:
   new op `backups.delete` (idempotent, request `{ backupId: uuid }`,

@@ -174,6 +174,9 @@ export class LegacyBackend implements NeoBackend {
     update: () => this.unsupported('characters.update'),
     del: () => this.unsupported('characters.delete'),
     exportCard: () => this.unsupported('characters.export.card'),
+    galleryList: () => this.unsupported('characters.gallery.list'),
+    galleryAdd: () => this.unsupported('characters.gallery.add'),
+    galleryDelete: () => this.unsupported('characters.gallery.delete'),
   };
 
   readonly chats: ChatsApi = {

@@ -790,6 +790,41 @@ pub const MIGRATION_19_SQL: &str = migration_19_sql!();
 pub const MIGRATION_19_CHECKSUM: &str =
     "fde7b5d813e91b6ceb6f3edf388e185dea25dd43880b181e8e041a99d21d1c6b";
 
+/// Literal body of the character gallery (v20) schema migration (M7 Etap-4
+/// gallery slice): `character_images` links characters to published
+/// content-addressed assets. Links cascade with their owner row; the
+/// underlying assets are immutable and outlive links (orphan collection is a
+/// separate, later concern — deleting a gallery image never destroys bytes
+/// another record may still reference).
+macro_rules! migration_20_sql {
+    () => {
+        r#"CREATE TABLE character_images (
+    id TEXT PRIMARY KEY,
+    character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    asset_id TEXT NOT NULL REFERENCES __neotavern_assets(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX idx_character_images_character ON character_images(character_id, created_at);
+CREATE INDEX idx_character_images_asset ON character_images(asset_id);"#
+    };
+}
+
+/// Name of the character gallery (v20) schema migration.
+pub const MIGRATION_20_NAME: &str = "020_character_gallery";
+
+/// Exact SQL of the character gallery schema migration (v20) — the
+/// `migration_20_sql!()` literal.
+pub const MIGRATION_20_SQL: &str = migration_20_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_20_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_20_CHECKSUM: &str =
+    "baa6f6cb69a820d67ad9ecc72835132546447460d81a1e5087fed7890adfa262";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -834,7 +869,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_18_sql!(),
     "\n",
-    migration_19_sql!()
+    migration_19_sql!(),
+    "\n",
+    migration_20_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

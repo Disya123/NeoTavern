@@ -33,6 +33,9 @@ import {
   type WireGenerationEvent,
   type BackupsRestoreResultDto,
   type BackupsDeleteResultDto,
+  type GalleryListResultDto,
+  type GalleryAddResultDto,
+  type GalleryDeleteResultDto,
   type DataActivationStatusResultDto,
   type ListBackupsResultDto,
   type ListLorebookEntriesResultDto,
@@ -287,6 +290,12 @@ export class LocalBackend implements NeoBackend {
           { characterId, format },
           opts,
         ),
+      galleryList: (req, opts) =>
+        this.invoke<GalleryListResultDto>('characters.gallery.list', req, opts),
+      galleryAdd: (req, opts) =>
+        this.invoke<GalleryAddResultDto>('characters.gallery.add', req, opts),
+      galleryDelete: (req, opts) =>
+        this.invoke<GalleryDeleteResultDto>('characters.gallery.delete', req, opts),
     };
     this.chats = {
       list: (req, opts) => this.invoke<PagedChatsDto>('chats.list', req, opts),

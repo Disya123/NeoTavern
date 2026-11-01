@@ -77,6 +77,8 @@ import {
   readPresets,
   restoreMessageRevision,
   updateCharacter,
+  readAssetContentDataUrl,
+  readFileBase64,
   updateChat,
   updateLorebook,
   updateLorebookEntry,
@@ -251,13 +253,34 @@ export function useDeleteCharacter() {
 export function useCharacterGallery(characterId: string | undefined, sort: 'oldest' | 'newest') {
   return useQuery({
     queryKey: ['character-gallery', characterId, sort],
-    queryFn: () => {
-      // Kernel plane: the gallery is a legacy image contour
-      // (`data/images/characters/<id>/`, sidecar-owned); the kernel models
-      // character images only as content-addressed `assets.put` records —
-      // honest empty list (ТЗ §13.1), never a silent legacy request (ARC-02).
+    queryFn: async () => {
+      // Kernel plane: wire `characters.gallery.list` (M7 Etap-4 slice). The
+      // item bytes are fetched through `assets.content` data URLs in the
+      // same query — the kernel has no asset URL surface (ТЗ §13.1), never a
+      // silent legacy request (ARC-02). Full-size data URLs (not thumbs) are
+      // the honest v1; thumbnail downsizing is a follow-up tail.
       if (isKernelMode()) {
-        return Promise.resolve<CharacterGallery>({ items: [] });
+        const result = await backend.characters.galleryList({
+          characterId: characterId ?? '',
+          sort,
+        });
+        const items = await Promise.all(
+          result.items.map(async (dto) => {
+            const dataUrl = await readAssetContentDataUrl(dto.assetId);
+            return {
+              id: dto.id,
+              characterId: dto.characterId,
+              assetId: dto.assetId,
+              name: dto.filename.length > 0 ? dto.filename : dto.assetId,
+              mime: dataUrl.slice(5, dataUrl.indexOf(';')) || 'image/png',
+              sizeBytes: dto.sizeBytes,
+              originalUrl: dataUrl,
+              thumbnailUrl: dataUrl,
+              createdAt: dto.createdAt,
+            } satisfies CharacterGalleryImage;
+          }),
+        );
+        return { items } satisfies CharacterGallery;
       }
       return api.get<CharacterGallery>(`/characters/${characterId}/gallery?sort=${sort}`);
     },
@@ -268,11 +291,29 @@ export function useCharacterGallery(characterId: string | undefined, sort: 'olde
 export function useUploadCharacterImage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ characterId, file }: { characterId: string; file: File }) => {
-      // Kernel plane: no legacy gallery capability → honest
-      // CAPABILITY_UNAVAILABLE (avatars go through useUploadCharacterAvatar).
+    mutationFn: async ({ characterId, file }: { characterId: string; file: File }) => {
+      // Kernel plane: wire `characters.gallery.add` — the bytes are
+      // published content-addressed (kind `gallery`, deduplicated like
+      // `assets.put`) and linked to the character.
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('characters.gallery.upload'));
+        const contentBase64 = await readFileBase64(file);
+        const result = await backend.characters.galleryAdd({
+          characterId,
+          filename: file.name,
+          contentType: file.type || undefined,
+          contentBase64,
+        });
+        return {
+          id: result.item.id,
+          characterId: result.item.characterId,
+          assetId: result.item.assetId,
+          name: result.item.filename.length > 0 ? result.item.filename : file.name,
+          mime: file.type || 'image/png',
+          sizeBytes: result.item.sizeBytes,
+          originalUrl: '',
+          thumbnailUrl: '',
+          createdAt: result.item.createdAt,
+        } satisfies CharacterGalleryImage;
       }
       return api.upload<CharacterGalleryImage>(`/characters/${characterId}/gallery`, file);
     },
@@ -294,12 +335,15 @@ export function useUploadCharacterAvatar() {
 export function useDeleteCharacterImage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ characterId, imageId }: { characterId: string; imageId: string }) => {
-      // Kernel plane: same honest CAPABILITY_UNAVAILABLE as upload.
+    mutationFn: async ({ characterId, imageId }: { characterId: string; imageId: string }) => {
+      // Kernel plane: wire `characters.gallery.delete` — removes only the
+      // LINK; the content-addressed asset bytes are never destroyed.
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('characters.gallery.delete'));
+        const result = await backend.characters.galleryDelete({ characterId, imageId });
+        return { deleted: result.deleted };
       }
-      return api.del(`/characters/${characterId}/gallery/${imageId}`);
+      await api.del(`/characters/${characterId}/gallery/${imageId}`);
+      return { deleted: true };
     },
     onSuccess: (_result, { characterId }) =>
       void qc.invalidateQueries({ queryKey: ['character-gallery', characterId] }),

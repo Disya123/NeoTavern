@@ -268,7 +268,8 @@ fn delete_backup_is_uuid_gated_idempotent_and_scoped() -> TestResult {
     // Foreign + provisional dirs must survive deletes.
     let foreign = backups_dir(root).join("notes");
     fs::create_dir_all(&foreign)?;
-    let tmp_dir = backups_dir(root).join("00000000-0000-4000-8000-0000000000bb.neotavern-backup.tmp-1");
+    let tmp_dir =
+        backups_dir(root).join("00000000-0000-4000-8000-0000000000bb.neotavern-backup.tmp-1");
     fs::create_dir_all(&tmp_dir)?;
 
     // Happy path: the container is removed, list no longer shows it.
@@ -285,7 +286,12 @@ fn delete_backup_is_uuid_gated_idempotent_and_scoped() -> TestResult {
 
     // A non-uuid id is rejected BEFORE any filesystem path is built —
     // including traversal shapes that would escape the backups dir.
-    for bad in ["../escape", "notes", "", "00000000-0000-4000-8000-0000000000aa/../../x"] {
+    for bad in [
+        "../escape",
+        "notes",
+        "",
+        "00000000-0000-4000-8000-0000000000aa/../../x",
+    ] {
         assert!(
             delete_backup(root, bad).is_err(),
             "non-uuid id {bad:?} must be rejected"

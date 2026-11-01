@@ -35,6 +35,7 @@ pub mod backup;
 pub mod data;
 pub mod export;
 pub mod exports;
+pub mod gallery;
 pub mod generation;
 pub mod headless;
 pub mod imports;
@@ -693,6 +694,15 @@ fn handle_unary(
         "backups.list" => with_db_opt(db, |db| backup::backups_list(db, req)),
         // M7 follow-up: backups.delete (idempotent container removal).
         "backups.delete" => with_db_opt(db, |db| backup::backups_delete(db, req)),
+        // M7 Etap-4 gallery slice: character gallery links over the asset
+        // store (ТЗ §13.1).
+        "characters.gallery.list" => {
+            with_db_opt(db, |db| gallery::characters_gallery_list(db, req))
+        }
+        "characters.gallery.add" => with_db_opt(db, |db| gallery::characters_gallery_add(db, req)),
+        "characters.gallery.delete" => {
+            with_db_opt(db, |db| gallery::characters_gallery_delete(db, req))
+        }
         // Data lifecycle (ТЗ §10.2–§10.3): durable activation status.
         "data.activation.status" => with_db_opt(db, |db| data::data_activation_status(db, req)),
         // Phase 11 / SEC-02: logical allowlist profile export.

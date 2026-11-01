@@ -18,6 +18,7 @@ pub mod backup;
 pub mod baseline;
 pub mod error;
 pub mod export;
+pub mod gallery;
 pub mod lease;
 pub mod legacy;
 pub mod migration;
@@ -38,7 +39,7 @@ use std::time::Duration;
 pub const STORAGE_FORMAT: i64 = 1;
 
 /// Current schema revision (`PRAGMA user_version`).
-pub const CURRENT_SCHEMA: i64 = 19;
+pub const CURRENT_SCHEMA: i64 = 20;
 
 /// Lowest schema revision that can be opened directly; anything older requires
 /// a legacy converter that lives outside this crate.

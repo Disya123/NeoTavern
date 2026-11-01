@@ -48,8 +48,13 @@ vi.mock('./backend.js', async (importOriginal) => {
 });
 
 // `usePromptPlan` routes through wireBridge.getPromptPlan; the plan itself is
-// mocked so the hook tests stay transport-free.
-const promptPlanMock = vi.hoisted(() => ({ getPromptPlan: vi.fn() }));
+// mocked so the hook tests stay transport-free. The gallery hooks (M7 Etap-4
+// slice) route through the same module for asset data URLs and file reads.
+const promptPlanMock = vi.hoisted(() => ({
+  getPromptPlan: vi.fn(),
+  readAssetContentDataUrl: vi.fn(),
+  readFileBase64: vi.fn(),
+}));
 const activationStatusMock = vi.hoisted(() => ({ getDataActivationStatus: vi.fn() }));
 vi.mock('./wireBridge.js', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -57,6 +62,8 @@ vi.mock('./wireBridge.js', async (importOriginal) => {
     ...actual,
     getPromptPlan: promptPlanMock.getPromptPlan,
     getDataActivationStatus: activationStatusMock.getDataActivationStatus,
+    readAssetContentDataUrl: promptPlanMock.readAssetContentDataUrl,
+    readFileBase64: promptPlanMock.readFileBase64,
   };
 });
 
@@ -327,19 +334,62 @@ describe('character gallery hooks (kernel-plane honesty, slice 21)', () => {
     expect(url).toBe('/api/v2/characters/char-1/gallery?sort=newest');
   });
 
-  it('useCharacterGallery resolves an honest empty list on the kernel plane without a network call', async () => {
+  it('useCharacterGallery maps wire items with asset data URLs on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const listSpy = vi.spyOn(backend.characters, 'galleryList').mockResolvedValue({
+      items: [
+        {
+          id: 'img-1',
+          characterId: 'char-1',
+          assetId: 'asset-1',
+          filename: 'sunset.png',
+          createdAt: '2026-08-13T00:00:00Z',
+          sizeBytes: 5,
+          checksumSha256: 'a'.repeat(64),
+        },
+      ],
+    });
+    promptPlanMock.readAssetContentDataUrl.mockResolvedValue('data:image/png;base64,aGVsbG8=');
     const { result } = renderHook(() => useCharacterGallery('char-1', 'newest'), {
       wrapper: wrapperFor(queryClient),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ items: [] });
+    expect(result.current.data).toEqual({
+      items: [
+        {
+          id: 'img-1',
+          characterId: 'char-1',
+          assetId: 'asset-1',
+          name: 'sunset.png',
+          mime: 'image/png',
+          sizeBytes: 5,
+          originalUrl: 'data:image/png;base64,aGVsbG8=',
+          thumbnailUrl: 'data:image/png;base64,aGVsbG8=',
+          createdAt: '2026-08-13T00:00:00Z',
+        },
+      ],
+    });
     expect(fetchMock).not.toHaveBeenCalled();
+    listSpy.mockRestore();
+    promptPlanMock.readAssetContentDataUrl.mockReset();
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useUploadCharacterImage rejects with UnsupportedError on the kernel plane', async () => {
+  it('useUploadCharacterImage adds via the wire op on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const addSpy = vi.spyOn(backend.characters, 'galleryAdd').mockResolvedValue({
+      item: {
+        id: 'img-2',
+        characterId: 'char-1',
+        assetId: 'asset-2',
+        filename: 'a.png',
+        createdAt: '2026-08-13T00:00:00Z',
+        sizeBytes: 1,
+        checksumSha256: 'b'.repeat(64),
+      },
+      deduplicated: false,
+    });
+    promptPlanMock.readFileBase64.mockResolvedValue('eA==');
     const { result } = renderHook(() => useUploadCharacterImage(), {
       wrapper: wrapperFor(queryClient),
     });
@@ -349,19 +399,31 @@ describe('character gallery hooks (kernel-plane honesty, slice 21)', () => {
         file: new File(['x'], 'a.png', { type: 'image/png' }),
       }),
     );
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(addSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ characterId: 'char-1', filename: 'a.png' }),
+    );
+    expect(result.current.data?.assetId).toBe('asset-2');
     expect(fetchMock).not.toHaveBeenCalled();
+    addSpy.mockRestore();
+    promptPlanMock.readFileBase64.mockReset();
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useDeleteCharacterImage rejects with UnsupportedError on the kernel plane', async () => {
+  it('useDeleteCharacterImage deletes via the wire op on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const deleteSpy = vi
+      .spyOn(backend.characters, 'galleryDelete')
+      .mockResolvedValue({ deleted: true });
     const { result } = renderHook(() => useDeleteCharacterImage(), {
       wrapper: wrapperFor(queryClient),
     });
     act(() => result.current.mutate({ characterId: 'char-1', imageId: 'img1' }));
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ deleted: true });
+    expect(deleteSpy).toHaveBeenCalledWith({ characterId: 'char-1', imageId: 'img1' });
     expect(fetchMock).not.toHaveBeenCalled();
+    deleteSpy.mockRestore();
     mocks.isKernelMode.mockReturnValue(false);
   });
 });

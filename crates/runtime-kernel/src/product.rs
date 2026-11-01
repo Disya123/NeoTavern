@@ -207,7 +207,7 @@ impl<W: std::io::Write> std::io::Write for LimitedWriter<W> {
 /// Builds a product-level not-found error: stable wire code
 /// `"{entity}_NOT_FOUND"` with the camelCase id param mirroring the request
 /// DTO field name (`characterId`, `chatId`, `lorebookId`, `presetId`).
-fn not_found(entity: &str, id: &str) -> KernelError {
+pub(crate) fn not_found(entity: &str, id: &str) -> KernelError {
     let param = match entity {
         "CHARACTER" => "characterId",
         "CHAT" => "chatId",
@@ -1050,7 +1050,10 @@ pub(crate) fn chat_exists(conn: &rusqlite::Connection, chat_id: &str) -> Result<
         .map(|row| row.is_some())
 }
 
-fn character_exists(conn: &rusqlite::Connection, character_id: &str) -> Result<bool, KernelError> {
+pub(crate) fn character_exists(
+    conn: &rusqlite::Connection,
+    character_id: &str,
+) -> Result<bool, KernelError> {
     let mut stmt = conn
         .prepare("SELECT 1 FROM characters WHERE id = ?1")
         .map_err(|e| sqlite(e, "character_exists: prepare"))?;

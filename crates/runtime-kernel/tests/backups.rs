@@ -274,9 +274,8 @@ fn backups_delete_round_trip_and_idempotence() {
     let backup_id = created["id"].as_str().expect("backup id").to_string();
 
     // Delete: container removed, `{ deleted: true }`.
-    let deleted =
-        dispatch_json(&kernel, "backups.delete", json!({ "backupId": backup_id }))
-            .expect("backups.delete must succeed");
+    let deleted = dispatch_json(&kernel, "backups.delete", json!({ "backupId": backup_id }))
+        .expect("backups.delete must succeed");
     assert_eq!(deleted["deleted"], json!(true));
 
     let listed =
@@ -289,9 +288,8 @@ fn backups_delete_round_trip_and_idempotence() {
 
     // Delete again: idempotent convergence — `{ deleted: false }`, still
     // success.
-    let again =
-        dispatch_json(&kernel, "backups.delete", json!({ "backupId": backup_id }))
-            .expect("repeat delete must succeed");
+    let again = dispatch_json(&kernel, "backups.delete", json!({ "backupId": backup_id }))
+        .expect("repeat delete must succeed");
     assert_eq!(again["deleted"], json!(false));
 }
 
@@ -302,8 +300,12 @@ fn backups_delete_rejects_non_uuid_id_before_work() {
     let root = tempfile::tempdir().expect("tempdir");
     let kernel = open_kernel_with_root(root.path());
 
-    let err = dispatch_json(&kernel, "backups.delete", json!({ "backupId": "../escape" }))
-        .expect_err("non-uuid id must fail");
+    let err = dispatch_json(
+        &kernel,
+        "backups.delete",
+        json!({ "backupId": "../escape" }),
+    )
+    .expect_err("non-uuid id must fail");
     assert_eq!(err.code, KernelErrorCode::ContractViolation);
 }
 

@@ -1382,6 +1382,91 @@ fn backups_delete_over_http() {
     assert_eq!(result["deleted"], json!(false), "idempotent convergence");
 }
 
+/// M7 Etap-4 gallery slice: `characters.gallery.{add,list,delete}` over the
+/// HTTP host (host parity with the direct kernel path) — a created character
+/// gains a gallery entry whose bytes are servable through `assets.get`
+/// metadata, the link delete is idempotent, and a missing character surfaces
+/// `CHARACTER_NOT_FOUND`.
+#[test]
+fn characters_gallery_over_http() {
+    let server = TestServer::spawn();
+
+    let create = envelope_body(
+        &rid(1),
+        "characters.create",
+        json!({ "name": "Gallery", "tags": ["art"] }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create);
+    assert_eq!(response.status, 200, "characters.create answers HTTP 200");
+    let (_, created) = expect_ok(decode_envelope(&response.body));
+    let character_id = created["id"].as_str().expect("character id").to_string();
+
+    let add = envelope_body(
+        &rid(2),
+        "characters.gallery.add",
+        json!({
+            "characterId": character_id,
+            "filename": "sunset.png",
+            "contentType": "image/png",
+            "contentBase64": "aGVsbG8=",
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &add);
+    assert_eq!(response.status, 200, "gallery add answers HTTP 200");
+    let (request_id, added) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(2), "requestId is echoed");
+    gen::validate_result_characters_gallery_add(&added).expect("add result is wire-valid");
+    assert_eq!(added["deduplicated"], json!(false));
+    assert_eq!(added["item"]["filename"], json!("sunset.png"));
+    assert_eq!(added["item"]["sizeBytes"], json!(5));
+    let asset_id = added["item"]["assetId"].as_str().expect("assetId").to_string();
+    let image_id = added["item"]["id"].as_str().expect("image id").to_string();
+
+    // The published asset is metadata-readable through the assets port.
+    let get = envelope_body(&rid(3), "assets.get", json!({ "assetId": asset_id }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &get);
+    assert_eq!(response.status, 200, "assets.get answers HTTP 200");
+    let (_, got) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(got["asset"]["id"], json!(asset_id));
+
+    let list = envelope_body(
+        &rid(4),
+        "characters.gallery.list",
+        json!({ "characterId": character_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200, "gallery list answers HTTP 200");
+    let (_, listed) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_characters_gallery_list(&listed).expect("list result is wire-valid");
+    assert_eq!(listed["items"].as_array().expect("items").len(), 1);
+
+    let delete = envelope_body(
+        &rid(5),
+        "characters.gallery.delete",
+        json!({ "characterId": character_id, "imageId": image_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &delete);
+    assert_eq!(response.status, 200, "gallery delete answers HTTP 200");
+    let (_, deleted) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_characters_gallery_delete(&deleted).expect("delete result is wire-valid");
+    assert_eq!(deleted["deleted"], json!(true));
+
+    let again = envelope_body(
+        &rid(6),
+        "characters.gallery.delete",
+        json!({ "characterId": character_id, "imageId": image_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &again);
+    assert_eq!(response.status, 200, "repeat delete answers HTTP 200");
+    let (_, deleted) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(deleted["deleted"], json!(false), "idempotent convergence");
+
+    // The asset bytes survive the link delete.
+    let get = envelope_body(&rid(7), "assets.get", json!({ "assetId": asset_id }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &get);
+    assert_eq!(response.status, 200, "asset outlives its gallery link");
+}
+
 /// M5 slice 38: the durable activation status over the HTTP host (host
 /// parity with the direct kernel path, ТЗ §10.2–§10.3) — the response is
 /// wire-valid, reports the v1 flat layout on a fresh root and stays

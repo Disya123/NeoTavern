@@ -62,6 +62,7 @@ import {
 } from '../api/hooks.js';
 import { useAvatarDataUrl } from '../api/avatarHooks.js';
 import { avatarOriginalUrl, exportCharacterCard } from '../api/wireBridge.js';
+import { isKernelMode } from '../api/backend.js';
 import { renderMarkdownDocument } from '../lib/markdown.js';
 import { createCreatorNotesPreviewDocument } from '../lib/creatorNotes.js';
 import { SlotHost } from '../plugins/slots.js';
@@ -1619,10 +1620,25 @@ function GalleryTab({
 
   if (!character) return null;
   const items = gallery.data?.items ?? [];
-  const avatarIsGalleryImage = items.some((item) => item.thumbnailUrl === character.avatar);
+  const avatarIsGalleryImage = isKernelMode()
+    ? // Kernel plane: the avatar is an asset reference, so the primary
+      // marker matches by asset id (the URLs are local data URLs).
+      items.some((item) => item.assetId != null && item.assetId === character.avatarAssetId)
+    : items.some((item) => item.thumbnailUrl === character.avatar);
 
   const setPrimary = async (image: CharacterGalleryImage): Promise<void> => {
     try {
+      if (isKernelMode()) {
+        // Kernel plane: the avatar is the canonical asset reference; the
+        // gallery upload already published it (characters.gallery.add).
+        if (image.assetId == null) return;
+        await updateCharacter.mutateAsync({
+          id: character.id,
+          patch: { avatarAssetId: image.assetId },
+        });
+        onStatus(t('characters:primaryImageSuccess', { name: image.name }));
+        return;
+      }
       await updateCharacter.mutateAsync({
         id: character.id,
         patch: { avatar: image.thumbnailUrl },
@@ -1653,7 +1669,11 @@ function GalleryTab({
   const confirmDeleteImage = async (): Promise<void> => {
     if (!deleteImage) return;
     try {
-      if (character.avatar === deleteImage.thumbnailUrl) {
+      // Legacy plane: the avatar slot is a URL into the gallery store, so
+      // deleting the file breaks it — clear it first. Kernel plane: the
+      // avatar is a content-addressed asset that outlives gallery links
+      // (bytes are never destroyed), so the reference stays valid.
+      if (!isKernelMode() && character.avatar === deleteImage.thumbnailUrl) {
         await updateCharacter.mutateAsync({ id: character.id, patch: { avatar: null } });
         onAvatarChanged('');
       }

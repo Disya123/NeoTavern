@@ -63,6 +63,9 @@ import type {
   GetAssetResultDto,
   PutAssetResultDto,
   CharacterCardExportResultDto,
+  GalleryListResultDto,
+  GalleryAddResultDto,
+  GalleryDeleteResultDto,
   CharacterCardImportResultDto,
   ChatsExportResultDto,
 } from '@neotavern/contracts';
@@ -134,6 +137,18 @@ export class RemoteBackend implements NeoBackend {
         { characterId, format },
         { signal: opts?.signal },
       ),
+    galleryList: (req, opts) =>
+      this.sdk.call<GalleryListResultDto>('characters.gallery.list', req, {
+        signal: opts?.signal,
+      }),
+    galleryAdd: (req, opts) =>
+      this.sdk.call<GalleryAddResultDto>('characters.gallery.add', req, {
+        signal: opts?.signal,
+      }),
+    galleryDelete: (req, opts) =>
+      this.sdk.call<GalleryDeleteResultDto>('characters.gallery.delete', req, {
+        signal: opts?.signal,
+      }),
   };
 
   readonly chats: ChatsApi = {

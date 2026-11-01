@@ -12,6 +12,12 @@ import type {
   BackupDto,
   WireCardExportFormat,
   CharacterCardExportResultDto,
+  GalleryListRequestDto,
+  GalleryListResultDto,
+  GalleryAddRequestDto,
+  GalleryAddResultDto,
+  GalleryDeleteRequestDto,
+  GalleryDeleteResultDto,
   CharacterCardImportResultDto,
   ChatsExportResultDto,
   CharacterDto,
@@ -148,6 +154,17 @@ export interface CharactersApi {
     format: WireCardExportFormat,
     opts?: BackendCallOptions,
   ): Promise<CharacterCardExportResultDto>;
+  /** List a character's gallery (wire `characters.gallery.list`). */
+  galleryList(req: GalleryListRequestDto, opts?: BackendCallOptions): Promise<GalleryListResultDto>;
+  /** Publish image bytes into the asset store and link them to the
+   * character's gallery (wire `characters.gallery.add`). */
+  galleryAdd(req: GalleryAddRequestDto, opts?: BackendCallOptions): Promise<GalleryAddResultDto>;
+  /** Remove a gallery link (idempotent; the asset bytes are never
+   * destroyed — wire `characters.gallery.delete`). */
+  galleryDelete(
+    req: GalleryDeleteRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<GalleryDeleteResultDto>;
 }
 
 /** Chat and message domain operations (wire `chats.*`). */

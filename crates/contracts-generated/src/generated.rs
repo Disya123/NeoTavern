@@ -26,6 +26,9 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "characters.create" => Some(65536),
         "characters.update" => Some(65536),
         "characters.delete" => Some(2048),
+        "characters.gallery.list" => Some(2048),
+        "characters.gallery.add" => Some(1048576),
+        "characters.gallery.delete" => Some(2048),
         "characters.export.card" => Some(2048),
         "characters.card.get" => Some(2048),
         "characters.card.update" => Some(131072),
@@ -136,6 +139,9 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "characters.create" => Some(262144),
         "characters.update" => Some(262144),
         "characters.delete" => Some(1024),
+        "characters.gallery.list" => Some(262144),
+        "characters.gallery.add" => Some(4096),
+        "characters.gallery.delete" => Some(1024),
         "characters.export.card" => Some(262144),
         "characters.card.get" => Some(131072),
         "characters.card.update" => Some(131072),
@@ -4694,6 +4700,513 @@ pub fn validate_result_assets_put(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_result_assets_put(bytes: &[u8]) -> Result<ResultAssetsPut, WireError> {
     crate::decode::<ResultAssetsPut>(validate_result_assets_put, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CharactersGalleryItem {
+    pub id: String,
+    #[serde(rename = "characterId")]
+    pub character_id: String,
+    #[serde(rename = "assetId")]
+    pub asset_id: String,
+    pub filename: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "sizeBytes")]
+    pub size_bytes: i64,
+    #[serde(rename = "checksumSha256")]
+    pub checksum_sha256: String,
+}
+
+pub(crate) fn check_characters_gallery_item(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_3: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_4: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-f0-9]{64}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("characterId").is_none() {
+            issues.push(Issue::new(join_path(path, "characterId"), "RequiredProperty"));
+        }
+        if value.get("assetId").is_none() {
+            issues.push(Issue::new(join_path(path, "assetId"), "RequiredProperty"));
+        }
+        if value.get("filename").is_none() {
+            issues.push(Issue::new(join_path(path, "filename"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if value.get("sizeBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "sizeBytes"), "RequiredProperty"));
+        }
+        if value.get("checksumSha256").is_none() {
+            issues.push(Issue::new(join_path(path, "checksumSha256"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("assetId") {
+            let child_path = join_path(path, "assetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("filename") {
+            let child_path = join_path(path, "filename");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 255 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_3.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("sizeBytes") {
+            let child_path = join_path(path, "sizeBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("checksumSha256") {
+            let child_path = join_path(path, "checksumSha256");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_4.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "characterId" | "assetId" | "filename" | "createdAt" | "sizeBytes" | "checksumSha256") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_characters_gallery_item(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_characters_gallery_item(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_characters_gallery_item(bytes: &[u8]) -> Result<CharactersGalleryItem, WireError> {
+    crate::decode::<CharactersGalleryItem>(validate_characters_gallery_item, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestCharactersGalleryList {
+    #[serde(rename = "characterId")]
+    pub character_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort: Option<String>,
+}
+
+pub(crate) fn check_request_characters_gallery_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("characterId").is_none() {
+            issues.push(Issue::new(join_path(path, "characterId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("sort") {
+            let child_path = join_path(path, "sort");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "oldest" | "newest") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "characterId" | "sort") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_characters_gallery_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_characters_gallery_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_characters_gallery_list(bytes: &[u8]) -> Result<RequestCharactersGalleryList, WireError> {
+    crate::decode::<RequestCharactersGalleryList>(validate_request_characters_gallery_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultCharactersGalleryList {
+    pub items: Vec<CharactersGalleryItem>,
+}
+
+pub(crate) fn check_result_characters_gallery_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_characters_gallery_item(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_characters_gallery_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_characters_gallery_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_characters_gallery_list(bytes: &[u8]) -> Result<ResultCharactersGalleryList, WireError> {
+    crate::decode::<ResultCharactersGalleryList>(validate_result_characters_gallery_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestCharactersGalleryAdd {
+    #[serde(rename = "characterId")]
+    pub character_id: String,
+    pub filename: String,
+    #[serde(rename = "contentType", default, skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
+    #[serde(rename = "contentBase64")]
+    pub content_base64: String,
+}
+
+pub(crate) fn check_request_characters_gallery_add(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[A-Za-z0-9+/]*={0,2}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("characterId").is_none() {
+            issues.push(Issue::new(join_path(path, "characterId"), "RequiredProperty"));
+        }
+        if value.get("filename").is_none() {
+            issues.push(Issue::new(join_path(path, "filename"), "RequiredProperty"));
+        }
+        if value.get("contentBase64").is_none() {
+            issues.push(Issue::new(join_path(path, "contentBase64"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("filename") {
+            let child_path = join_path(path, "filename");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 255 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("contentType") {
+            let child_path = join_path(path, "contentType");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("contentBase64") {
+            let child_path = join_path(path, "contentBase64");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "characterId" | "filename" | "contentType" | "contentBase64") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_characters_gallery_add(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_characters_gallery_add(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_characters_gallery_add(bytes: &[u8]) -> Result<RequestCharactersGalleryAdd, WireError> {
+    crate::decode::<RequestCharactersGalleryAdd>(validate_request_characters_gallery_add, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultCharactersGalleryAdd {
+    pub item: CharactersGalleryItem,
+    pub deduplicated: bool,
+}
+
+pub(crate) fn check_result_characters_gallery_add(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("item").is_none() {
+            issues.push(Issue::new(join_path(path, "item"), "RequiredProperty"));
+        }
+        if value.get("deduplicated").is_none() {
+            issues.push(Issue::new(join_path(path, "deduplicated"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("item") {
+            let child_path = join_path(path, "item");
+            check_characters_gallery_item(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("deduplicated") {
+            let child_path = join_path(path, "deduplicated");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "item" | "deduplicated") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_characters_gallery_add(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_characters_gallery_add(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_characters_gallery_add(bytes: &[u8]) -> Result<ResultCharactersGalleryAdd, WireError> {
+    crate::decode::<ResultCharactersGalleryAdd>(validate_result_characters_gallery_add, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestCharactersGalleryDelete {
+    #[serde(rename = "characterId")]
+    pub character_id: String,
+    #[serde(rename = "imageId")]
+    pub image_id: String,
+}
+
+pub(crate) fn check_request_characters_gallery_delete(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("characterId").is_none() {
+            issues.push(Issue::new(join_path(path, "characterId"), "RequiredProperty"));
+        }
+        if value.get("imageId").is_none() {
+            issues.push(Issue::new(join_path(path, "imageId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("imageId") {
+            let child_path = join_path(path, "imageId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "characterId" | "imageId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_characters_gallery_delete(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_characters_gallery_delete(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_characters_gallery_delete(bytes: &[u8]) -> Result<RequestCharactersGalleryDelete, WireError> {
+    crate::decode::<RequestCharactersGalleryDelete>(validate_request_characters_gallery_delete, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultCharactersGalleryDelete {
+    pub deleted: bool,
+}
+
+pub(crate) fn check_result_characters_gallery_delete(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("deleted").is_none() {
+            issues.push(Issue::new(join_path(path, "deleted"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("deleted") {
+            let child_path = join_path(path, "deleted");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "deleted") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_characters_gallery_delete(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_characters_gallery_delete(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_characters_gallery_delete(bytes: &[u8]) -> Result<ResultCharactersGalleryDelete, WireError> {
+    crate::decode::<ResultCharactersGalleryDelete>(validate_result_characters_gallery_delete, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

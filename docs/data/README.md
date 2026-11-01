@@ -28,6 +28,17 @@ Rules:
   survive export/import;
 - images/audio are not stored as BLOBs in the main database.
 
+### Canonical kernel schema (database.sqlite)
+
+The kernel owns its own migration chain (schema v1–v20, STRICT tables,
+`user_version` ledger in `__neotavern_migrations`): the five product-core
+tables (`characters`, `chats`, `messages`, `lorebooks`, `presets`), the
+content-addressed `__neotavern_assets` registry plus `assets/` files, and —
+since v20 (`020_character_gallery`, M7 Etap-4 slice) — `character_images`,
+a link table joining characters to published assets (CASCADE with both
+owner rows; the asset bytes outlive links). Rollback for any kernel
+migration is the pre-migration backup restore (ТЗ §10.4); v20 is additive.
+
 ### Plugin state and grants
 
 `plugin_state` stores user plugin state separately from `plugin_registry`

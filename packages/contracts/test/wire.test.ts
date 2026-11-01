@@ -65,8 +65,9 @@ describe('product wire registry', () => {
     // canonical card-document pair characters.card.get/update (100 total
     // plus drafts.list = 101). The exact operation
     // set is asserted so a registry edit that drops or renames an op fails
-    // loudly. The M7 follow-up (2026-10-31) adds backups.delete (102).
-    expect(registry.operations).toHaveLength(102);
+    // loudly. The M7 follow-up (2026-10-31) adds backups.delete (102); the
+    // Etap-4 gallery slice adds characters.gallery.{list,add,delete} (105).
+    expect(registry.operations).toHaveLength(105);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -74,6 +75,9 @@ describe('product wire registry', () => {
       'characters.create',
       'characters.update',
       'characters.delete',
+      'characters.gallery.list',
+      'characters.gallery.add',
+      'characters.gallery.delete',
       'characters.export.card',
       'characters.card.get',
       'characters.card.update',

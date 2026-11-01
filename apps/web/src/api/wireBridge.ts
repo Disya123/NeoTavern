@@ -652,7 +652,7 @@ export interface CharacterAvatarUploadResult {
   name: string | null;
 }
 
-function readFileBase64(file: File): Promise<string> {
+export function readFileBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error ?? new Error('avatar: read file failed'));

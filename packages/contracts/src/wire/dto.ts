@@ -2190,6 +2190,104 @@ export const PutAssetResultDtoSchema = Type.Object(
 );
 export type PutAssetResultDto = Static<typeof PutAssetResultDtoSchema>;
 
+/**
+ * Character-gallery item DTO (`wire.characters.gallery.item`) — one entry of
+ * a character's gallery: the link id plus the joined asset metadata needed
+ * to render and serve it. The bytes themselves are never embedded — they are
+ * fetched through `assets.content` by `assetId` (and `assets.thumb` for
+ * previews, AGENTS.md §12).
+ */
+export const GalleryItemDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    characterId: Type.String({ format: 'uuid' }),
+    assetId: Type.String({ format: 'uuid' }),
+    filename: Type.String({ maxLength: 255 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    sizeBytes: Type.Integer({ minimum: 0 }),
+    checksumSha256: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+  },
+  { $id: 'wire.characters.gallery.item', additionalProperties: false },
+);
+export type GalleryItemDto = Static<typeof GalleryItemDtoSchema>;
+
+/** Gallery list request (`wire.request.characters-gallery-list`). */
+export const GalleryListRequestDtoSchema = Type.Object(
+  {
+    characterId: Type.String({ format: 'uuid' }),
+    sort: Type.Optional(
+      Type.Union([Type.Literal('oldest'), Type.Literal('newest')], {
+        'x-wire-unknown-behavior': 'reject',
+      }),
+    ),
+  },
+  { $id: 'wire.request.characters-gallery-list', additionalProperties: false },
+);
+export type GalleryListRequestDto = Static<typeof GalleryListRequestDtoSchema>;
+
+/** Gallery list result (`wire.result.characters-gallery-list`). */
+export const GalleryListResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(GalleryItemDtoSchema),
+  },
+  { $id: 'wire.result.characters-gallery-list', additionalProperties: false },
+);
+export type GalleryListResultDto = Static<typeof GalleryListResultDtoSchema>;
+
+/**
+ * Gallery add request (`wire.request.characters-gallery-add`) — publishes
+ * the image bytes into the content-addressed asset store (kind `gallery`,
+ * same deduplication semantics as `assets.put`) and links the resulting
+ * asset to the character. `contentBase64` is standard base64.
+ */
+export const GalleryAddRequestDtoSchema = Type.Object(
+  {
+    characterId: Type.String({ format: 'uuid' }),
+    filename: Type.String({ minLength: 1, maxLength: 255 }),
+    contentType: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    contentBase64: Type.String({
+      pattern: '^[A-Za-z0-9+/]*={0,2}$',
+      minLength: 1,
+    }),
+  },
+  { $id: 'wire.request.characters-gallery-add', additionalProperties: false },
+);
+export type GalleryAddRequestDto = Static<typeof GalleryAddRequestDtoSchema>;
+
+/** Gallery add result (`wire.result.characters-gallery-add`). */
+export const GalleryAddResultDtoSchema = Type.Object(
+  {
+    item: GalleryItemDtoSchema,
+    deduplicated: Type.Boolean(),
+  },
+  { $id: 'wire.result.characters-gallery-add', additionalProperties: false },
+);
+export type GalleryAddResultDto = Static<typeof GalleryAddResultDtoSchema>;
+
+/** Gallery delete request (`wire.request.characters-gallery-delete`). */
+export const GalleryDeleteRequestDtoSchema = Type.Object(
+  {
+    characterId: Type.String({ format: 'uuid' }),
+    imageId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.characters-gallery-delete', additionalProperties: false },
+);
+export type GalleryDeleteRequestDto = Static<typeof GalleryDeleteRequestDtoSchema>;
+
+/**
+ * Gallery delete result (`wire.result.characters-gallery-delete`) —
+ * idempotent: `deleted: false` means the link was already gone (or belongs
+ * to another character, which is indistinguishable by design so one
+ * character cannot probe another's gallery).
+ */
+export const GalleryDeleteResultDtoSchema = Type.Object(
+  {
+    deleted: Type.Boolean(),
+  },
+  { $id: 'wire.result.characters-gallery-delete', additionalProperties: false },
+);
+export type GalleryDeleteResultDto = Static<typeof GalleryDeleteResultDtoSchema>;
+
 /** Asset metadata read request (`wire.request.assets.get`). */
 export const GetAssetRequestDtoSchema = Type.Object(
   {
@@ -2595,6 +2693,13 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.assets.item': AssetDtoSchema,
   'wire.request.assets.put': PutAssetRequestDtoSchema,
   'wire.result.assets.put': PutAssetResultDtoSchema,
+  'wire.characters.gallery.item': GalleryItemDtoSchema,
+  'wire.request.characters-gallery-list': GalleryListRequestDtoSchema,
+  'wire.result.characters-gallery-list': GalleryListResultDtoSchema,
+  'wire.request.characters-gallery-add': GalleryAddRequestDtoSchema,
+  'wire.result.characters-gallery-add': GalleryAddResultDtoSchema,
+  'wire.request.characters-gallery-delete': GalleryDeleteRequestDtoSchema,
+  'wire.result.characters-gallery-delete': GalleryDeleteResultDtoSchema,
   'wire.request.imports.character.card': CharacterCardImportRequestDtoSchema,
   'wire.card.export.format': WireCardExportFormat,
   'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,

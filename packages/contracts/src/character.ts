@@ -102,6 +102,9 @@ export const CharacterGalleryImageSchema = Type.Object({
   originalUrl: Type.String(),
   thumbnailUrl: Type.String(),
   createdAt: TimestampSchema,
+  /** Canonical content-addressed asset reference (kernel plane; absent on
+   * the legacy file contour). */
+  assetId: Type.Optional(IdSchema),
 });
 export type CharacterGalleryImage = Static<typeof CharacterGalleryImageSchema>;
 

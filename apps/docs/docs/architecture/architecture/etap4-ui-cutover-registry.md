@@ -44,10 +44,12 @@ shares the route; the shared route's last consumer owns its deletion.
 - **Registered legacy routes: 165** across 29 route families (25 modules;
   pluginJobs/pluginAuth/pluginData/pluginSecrets mount inside
   `registerPluginRoutes`, not from `app.ts`).
-- **Wire registry: 102 ops, 102/102 with kernel implementations** (99 unary
+- **Wire registry: 105 ops, 105/105 with kernel implementations** (102 unary
   dispatch arms + `generation.start`/`retry` streaming +
-  `backups.restore` staged; the 2026-10-31 follow-up added
-  `backups.delete` — the backups cluster is now fully covered).
+  `backups.restore` staged; the 2026-10-31 follow-ups added
+  `backups.delete` (the backups cluster is fully covered) and
+  `characters.gallery.{list,add,delete}` — the gallery cluster is fully
+  covered, avatar-original rides the existing `assets.content`).
 - **Legacy-route coverage: 72 covered / 8 partial / 85 missing** (no wire op
   at all; `backups.delete` closes its route into the covered set on the
   next registry recount).
@@ -72,36 +74,36 @@ personas/lorebooks → variants/revisions/drafts → memories/presets →
 remaining providers → imports/exports/assets/thumbnails → plugins/themes →
 diagnostics/settings.
 
-| #   | Cluster                                                                          | UI surface                       | Legacy routes                          | Wire verdict                          | State               |
-| --- | -------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------- | ------------------------------------- | ------------------- |
-| 1   | Personas                                                                         | PersonasPanel, macros            | 5 (PATCH partial: avatar-clear)        | 4 covered, 1 partial                  | todo                |
-| 2   | Lorebooks + entries                                                              | LorebookPanel                    | 10 (entries-PATCH partial)             | 9 covered, 1 partial, restore missing | todo                |
-| 3   | Variants/revisions/swipe                                                         | ChatPage                         | covered (swipe maps to variants)       | covered                               | todo (UI flag flip) |
-| 4   | Drafts                                                                           | plugin draft streaming           | covered (save→upsert)                  | covered                               | todo (UI flag flip) |
-| 5   | Memories                                                                         | MemoryEditor                     | 4 (PATCH partial)                      | 3 covered, 1 partial                  | todo                |
-| 6   | Presets                                                                          | preset editors                   | 5                                      | covered                               | todo (UI flag flip) |
-| 7   | Providers: config + secrets CRUD/reveal/exposure                                 | provider editors, ApiKeysModal   | 16, all missing (config list/set only) | missing×16                            | todo (wire gap)     |
-| 8   | Providers: models/test/speech/images/transcribe                                  | provider setup, TTS              | 5                                      | missing×5                             | todo (wire gap)     |
-| 9   | Connection profiles + apply                                                      | quick-switch                     | 6                                      | missing×6                             | todo                |
-| 10  | Imports: SillyTavern backup                                                      | DataMigrationPanel               | 4                                      | missing×4 (critical migration path)   | todo                |
-| 11  | Imports: character card                                                          | CharactersPage                   | covered (`imports.character.card`)     | covered                               | todo (UI flag flip) |
-| 12  | Gallery + avatar-original                                                        | CharacterManagementPanel         | 4                                      | missing×4                             | todo                |
-| 13  | Backgrounds                                                                      | BackgroundsPanel                 | 4                                      | missing×4                             | todo                |
-| 14  | Themes: extras (boot, per-theme settings, user.css, install)                     | ThemesPage, ThemeSync            | 10 (install partial: host verifier)    | 5 covered, 1 partial, 4 missing       | todo                |
-| 15  | Message blocks                                                                   | message bubbles, sandbox RPC     | 4                                      | missing×4                             | todo                |
-| 16  | Search + FTS rebuild                                                             | global search, diagnostics       | 2                                      | missing×2                             | todo                |
-| 17  | Context preview/audit + plugin-intercepts                                        | composer, interceptor plugins    | 3                                      | missing×3                             | todo                |
-| 18  | Events SSE (app-event relay)                                                     | shell invalidation, plugin relay | 1 (2 subscribers)                      | missing×1                             | todo                |
-| 19  | Plugins: lifecycle                                                               | PluginsPage                      | 5 (install partial: host verifier)     | 4 covered, 1 partial                  | todo                |
-| 20  | Plugins: runtime surface (safe-mode, sandbox, capabilities, assets, git-install) | runtime host                     | 8                                      | missing×8                             | todo                |
-| 21  | Plugins: jobs/auth/data/secrets (21 routes, sandbox RPC)                         | sandbox RPC handlers             | 21                                     | missing×21                            | todo                |
-| 22  | Auth/session                                                                     | AuthGate                         | 3                                      | missing×3                             | todo                |
-| 23  | Diagnostics + cache                                                              | DiagnosticsPanel                 | 2                                      | 1 partial, 1 missing                  | todo                |
-| 24  | Backups                                                                          | SettingsPanel                    | 4 (delete op missing on wire)          | 3 covered, 1 missing                  | todo                |
-| 25  | Chats: order/restore/branches                                                    | ChatManagementPanel              | 3                                      | missing×3                             | todo                |
-| 26  | Characters: restore/version history                                              | CharacterManagementPanel         | 4                                      | missing×4                             | todo                |
-| 27  | Settings + instruct-formats + context-preview                                    | SettingsPanel, editors           | 3                                      | 2 covered, 1 missing                  | todo                |
-| 28  | Version/health meta                                                              | HomePage                         | 2                                      | covered                               | todo (UI flag flip) |
+| #   | Cluster                                                                          | UI surface                       | Legacy routes                          | Wire verdict                                         | State               |
+| --- | -------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------- | ---------------------------------------------------- | ------------------- |
+| 1   | Personas                                                                         | PersonasPanel, macros            | 5 (PATCH partial: avatar-clear)        | 4 covered, 1 partial                                 | todo                |
+| 2   | Lorebooks + entries                                                              | LorebookPanel                    | 10 (entries-PATCH partial)             | 9 covered, 1 partial, restore missing                | todo                |
+| 3   | Variants/revisions/swipe                                                         | ChatPage                         | covered (swipe maps to variants)       | covered                                              | todo (UI flag flip) |
+| 4   | Drafts                                                                           | plugin draft streaming           | covered (save→upsert)                  | covered                                              | todo (UI flag flip) |
+| 5   | Memories                                                                         | MemoryEditor                     | 4 (PATCH partial)                      | 3 covered, 1 partial                                 | todo                |
+| 6   | Presets                                                                          | preset editors                   | 5                                      | covered                                              | todo (UI flag flip) |
+| 7   | Providers: config + secrets CRUD/reveal/exposure                                 | provider editors, ApiKeysModal   | 16, all missing (config list/set only) | missing×16                                           | todo (wire gap)     |
+| 8   | Providers: models/test/speech/images/transcribe                                  | provider setup, TTS              | 5                                      | missing×5                                            | todo (wire gap)     |
+| 9   | Connection profiles + apply                                                      | quick-switch                     | 6                                      | missing×6                                            | todo                |
+| 10  | Imports: SillyTavern backup                                                      | DataMigrationPanel               | 4                                      | missing×4 (critical migration path)                  | todo                |
+| 11  | Imports: character card                                                          | CharactersPage                   | covered (`imports.character.card`)     | covered                                              | todo (UI flag flip) |
+| 12  | Gallery + avatar-original                                                        | CharacterManagementPanel         | 4                                      | 3 new ops (M7), avatar-original via `assets.content` | wire done           |
+| 13  | Backgrounds                                                                      | BackgroundsPanel                 | 4                                      | missing×4                                            | todo                |
+| 14  | Themes: extras (boot, per-theme settings, user.css, install)                     | ThemesPage, ThemeSync            | 10 (install partial: host verifier)    | 5 covered, 1 partial, 4 missing                      | todo                |
+| 15  | Message blocks                                                                   | message bubbles, sandbox RPC     | 4                                      | missing×4                                            | todo                |
+| 16  | Search + FTS rebuild                                                             | global search, diagnostics       | 2                                      | missing×2                                            | todo                |
+| 17  | Context preview/audit + plugin-intercepts                                        | composer, interceptor plugins    | 3                                      | missing×3                                            | todo                |
+| 18  | Events SSE (app-event relay)                                                     | shell invalidation, plugin relay | 1 (2 subscribers)                      | missing×1                                            | todo                |
+| 19  | Plugins: lifecycle                                                               | PluginsPage                      | 5 (install partial: host verifier)     | 4 covered, 1 partial                                 | todo                |
+| 20  | Plugins: runtime surface (safe-mode, sandbox, capabilities, assets, git-install) | runtime host                     | 8                                      | missing×8                                            | todo                |
+| 21  | Plugins: jobs/auth/data/secrets (21 routes, sandbox RPC)                         | sandbox RPC handlers             | 21                                     | missing×21                                           | todo                |
+| 22  | Auth/session                                                                     | AuthGate                         | 3                                      | missing×3                                            | todo                |
+| 23  | Diagnostics + cache                                                              | DiagnosticsPanel                 | 2                                      | 1 partial, 1 missing                                 | todo                |
+| 24  | Backups                                                                          | SettingsPanel                    | 4                                      | 4 covered (`backups.delete` M7)                      | wire done           |
+| 25  | Chats: order/restore/branches                                                    | ChatManagementPanel              | 3                                      | missing×3                                            | todo                |
+| 26  | Characters: restore/version history                                              | CharacterManagementPanel         | 4                                      | missing×4                                            | todo                |
+| 27  | Settings + instruct-formats + context-preview                                    | SettingsPanel, editors           | 3                                      | 2 covered, 1 missing                                 | todo                |
+| 28  | Version/health meta                                                              | HomePage                         | 2                                      | covered                                              | todo (UI flag flip) |
 
 (A cluster marked `covered` still ships a slice: flip the UI to the kernel
 branch, delete the legacy branch + route, shrink the ui-legacy baseline.)

@@ -399,6 +399,48 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'characters.gallery.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.characters-gallery-list',
+    'wire.result.characters-gallery-list',
+    undefined,
+    ['INTERNAL', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'characters.gallery.add',
+    'transactional',
+    'idempotent',
+    'none',
+    'app.write',
+    'wire.request.characters-gallery-add',
+    'wire.result.characters-gallery-add',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1_048_576,
+    4096,
+    undefined,
+  ),
+  op(
+    'characters.gallery.delete',
+    'transactional',
+    'idempotent',
+    'none',
+    'app.write',
+    'wire.request.characters-gallery-delete',
+    'wire.result.characters-gallery-delete',
+    undefined,
+    ['INTERNAL', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
+  op(
     'characters.export.card',
     'transactional',
     'idempotent',
@@ -1792,6 +1834,8 @@ const UUID_PERSONA = '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f';
 const UUID_WORKFLOW = '9c8b7a6e-5d4c-4b3a-9f8e-7d6c5b4a3f2e';
 const UUID_CONFIG = '4d5e6f70-8a9b-4c2d-9e3f-4a5b6c7d8e9f';
 const UUID_AVATAR = '5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f';
+const UUID_GALLERY_ITEM = '5e7f8091-ab2c-4d3e-8f4a-5b6c7d8e9f02';
+const UUID_ASSET = '6f8091a2-bc3d-4e4f-9a5b-6c7d8e9f0314';
 const UUID_RUN = '6e7f8091-ab2c-4d3e-9f4a-5b6c7d8e9f01';
 const UUID_STEP = 'a1a2a3a4-b5c6-4d7e-8f90-1a2b3c4d5e6f';
 const UUID_TOOL_CALL = 'b1b2b3b4-c5d6-4e7f-8a90-2b3c4d5e6f70';
@@ -1817,6 +1861,16 @@ const CHARACTER_VALUE = {
   profileId: UUID_PRESET,
   createdAt: TIMESTAMP,
   updatedAt: TIMESTAMP,
+};
+
+const GALLERY_ITEM_VALUE = {
+  id: UUID_GALLERY_ITEM,
+  characterId: UUID_CHARACTER,
+  assetId: UUID_ASSET,
+  filename: 'sunset.png',
+  createdAt: TIMESTAMP,
+  sizeBytes: 5,
+  checksumSha256: IMPORT_SHA256,
 };
 
 const CHAT_VALUE = {
@@ -2237,6 +2291,20 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('characters-delete-request', 'characters.delete', 'request', true, {
     characterId: UUID_CHARACTER,
   }),
+  fx('characters-gallery-list-request', 'characters.gallery.list', 'request', true, {
+    characterId: UUID_CHARACTER,
+    sort: 'oldest',
+  }),
+  fx('characters-gallery-add-request', 'characters.gallery.add', 'request', true, {
+    characterId: UUID_CHARACTER,
+    filename: 'sunset.png',
+    contentType: 'image/png',
+    contentBase64: 'aGVsbG8=',
+  }),
+  fx('characters-gallery-delete-request', 'characters.gallery.delete', 'request', true, {
+    characterId: UUID_CHARACTER,
+    imageId: UUID_GALLERY_ITEM,
+  }),
   fx('characters-export-card-request', 'characters.export.card', 'request', true, {
     characterId: UUID_CHARACTER,
     format: 'json',
@@ -2564,6 +2632,16 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('characters-create-response', 'characters.create', 'response', true, CHARACTER_VALUE),
   fx('characters-update-response', 'characters.update', 'response', true, CHARACTER_VALUE),
   fx('characters-delete-response', 'characters.delete', 'response', true, {}),
+  fx('characters-gallery-list-response', 'characters.gallery.list', 'response', true, {
+    items: [GALLERY_ITEM_VALUE],
+  }),
+  fx('characters-gallery-add-response', 'characters.gallery.add', 'response', true, {
+    item: GALLERY_ITEM_VALUE,
+    deduplicated: false,
+  }),
+  fx('characters-gallery-delete-response', 'characters.gallery.delete', 'response', true, {
+    deleted: true,
+  }),
   fx('characters-export-card-response', 'characters.export.card', 'response', true, {
     filename: 'ada-lovelace.json',
     contentType: 'application/json',
@@ -3072,6 +3150,17 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('neg-backup-delete-bad-request', 'backups.delete', 'request', false, {
     backupId: 'not-a-uuid',
+  }),
+  fx('neg-gallery-item-bad-checksum', 'characters.gallery.list', 'response', false, {
+    items: [{ ...GALLERY_ITEM_VALUE, checksumSha256: 'xyz' }],
+  }),
+  fx('neg-gallery-add-bad-base64', 'characters.gallery.add', 'request', false, {
+    characterId: UUID_CHARACTER,
+    filename: 'img.png',
+    contentBase64: 'not base64!!',
+  }),
+  fx('neg-gallery-delete-bad-request', 'characters.gallery.delete', 'request', false, {
+    characterId: UUID_CHARACTER,
   }),
   fx('neg-profile-export-bad-counts', 'profile.export', 'response', false, {
     ...PROFILE_EXPORT_VALUE,
