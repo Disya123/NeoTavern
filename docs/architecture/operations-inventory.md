@@ -163,6 +163,14 @@ Constants live here: `APP_VERSION = '0.1.0'`, `API_VERSION = 2`.
 
 ### backgrounds — `apps/server/src/plugins/backgrounds.ts`
 
+**Transport-blocked on the kernel plane (Этап-4 registry cluster 13).** The
+upload is multipart up to the legacy 25 MiB cap (a wire request is JSON and
+`assets.put` admits 1 MiB), and serving originals above the 4 MiB
+`assets.content` cap would fail for real wallpapers — the same large-file
+ingestion contract gap as clusters 8-tail/10. `list`/`delete` alone would ship
+a wallpaper manager that cannot add wallpapers, so the four routes stay
+legacy-side until that contract exists.
+
 - `GET /api/v2/backgrounds` — catalog (directory scan of `files/backgrounds/`).
 - `POST /api/v2/backgrounds` — upload (multipart).
 - `DELETE /api/v2/backgrounds/:id` — delete.

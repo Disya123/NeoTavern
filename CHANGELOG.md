@@ -475,7 +475,15 @@
   hash `e38584b4…`; registry 122 ops.
 ### Architecture
 
-- **Chat context audit on the kernel plane (M7 Etap-4 cluster 17, part 1).**
+- **Background import named transport-blocked (M7 Etap-4 cluster 13).** The
+  four `/api/v2/backgrounds` routes stay legacy-side: the upload is multipart
+  up to the legacy 25 MiB cap (a wire request is JSON and `assets.put` admits
+  1 MiB) and original wallpapers above the 4 MiB `assets.content` cap cannot
+  ride the wire either — the same large-file ingestion contract gap already
+  blocking clusters 8-tail and 10. Shipping kernel-side `list`/`delete` alone
+  would mean a wallpaper manager that cannot add wallpapers, so all four wait
+  for the ingestion decision. Registry row, blocked-work table and the
+  operations inventory are updated; no wire, kernel or UI code change.- **Chat context audit on the kernel plane (M7 Etap-4 cluster 17, part 1).**
   New wire op `chats.context.audit` (app.read): the LATEST durable
   `wire.prompt.plan` of a chat, resolved by chat id — the same plan shape as
   `generation.prompt.plan`, so what context entered the chat's most recent
