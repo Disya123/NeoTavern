@@ -273,13 +273,30 @@ describe('diagnostics hooks (kernel-plane honesty, slice 17)', () => {
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useRebuildSearch rejects with UnsupportedError on the kernel plane', async () => {
+  it('useRebuildSearch rebuilds through the wire op on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const rebuildSpy = vi
+      .spyOn(backend.search, 'rebuild')
+      .mockResolvedValue({ query: '', items: [] } as never);
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
     const { result } = renderHook(() => useRebuildSearch(), { wrapper: wrapperFor(queryClient) });
     act(() => result.current.mutate());
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(rebuildSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['diagnostics'] });
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useRebuildSearch posts the legacy rebuild route on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    fetchMock.mockResolvedValueOnce(jsonResponse({ query: '', results: [] }));
+    const { result } = renderHook(() => useRebuildSearch(), { wrapper: wrapperFor(queryClient) });
+    act(() => result.current.mutate());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/v2/search/rebuild');
+    expect(init.method).toBe('POST');
   });
 
   it('useClearDiagnosticCache rejects with UnsupportedError on the kernel plane', async () => {

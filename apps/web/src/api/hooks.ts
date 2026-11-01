@@ -66,6 +66,7 @@ import {
   readCharacterVersions,
   restoreCharacter,
   restoreCharacterVersion,
+  rebuildSearchIndex,
   readChats,
   readRecentChats,
   readChat,
@@ -1353,16 +1354,9 @@ export function useKernelDiagnostics() {
 export function useRebuildSearch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => {
-      // Kernel plane: the kernel owns the search index; the legacy rebuild
-      // route does not exist there — honest CAPABILITY_UNAVAILABLE (ТЗ
-      // §13.1), never a silent legacy request (ARC-02). The DiagnosticsPanel
-      // also disables the action in kernel mode.
-      if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('search.rebuild'));
-      }
-      return api.post('/search/rebuild');
-    },
+    // M7 Etap-4 (cluster 16): both planes rebuild the index — the kernel
+    // through `search.rebuild`, the sidecar through the legacy route.
+    mutationFn: () => rebuildSearchIndex(),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['diagnostics'] }),
   });
 }

@@ -30,7 +30,7 @@ Rules:
 
 ### Canonical kernel schema (database.sqlite)
 
-The kernel owns its own migration chain (schema v1–v22, STRICT tables,
+The kernel owns its own migration chain (schema v1–v23, STRICT tables,
 `user_version` ledger in `__neotavern_migrations`): the five product-core
 tables (`characters`, `chats`, `messages`, `lorebooks`, `presets`), the
 content-addressed `__neotavern_assets` registry plus `assets/` files, and —
@@ -44,8 +44,15 @@ adds `characters.deleted_at` (+ index) for the legacy-default soft delete
 and the `character_versions` snapshot table (`UNIQUE (character_id,
 version)`, CASCADE on the character; every character/card edit stores the
 state it replaced, and a version restore stores its own pre-image first).
-Rollback for any kernel migration is the pre-migration backup restore
-(ТЗ §10.4); v20–v22 are additive.
+v23 (`023_kernel_fts_search`, M7 cluster 16) adds the four FTS5 indexes
+(`characters_fts`, `chats_fts`, `messages_fts`, `lorebooks_fts`;
+`unicode61 remove_diacritics 2`) with legacy-style AFTER
+INSERT/DELETE/UPDATE sync triggers and a transactional backfill — the
+`search.query`/`search.rebuild` pair serves them, and the trash filter stays
+a query-time concern (`characters.deleted_at IS NULL`); card fields inside
+`ext_json._card` are not indexed. Rollback for any kernel
+migration is the pre-migration backup restore
+(ТЗ §10.4); v20–v23 are additive.
 
 ### Plugin state and grants
 

@@ -27,6 +27,8 @@ import {
   type UpdateMemoryRequestDto,
   type UpdateMessageRequestDto,
   type UpdatePresetRequestDto,
+  type SearchRequestDto,
+  type SearchResultDto,
 } from '@neotavern/contracts';
 import { ProductError } from '@neotavern/client-sdk';
 import type {
@@ -46,6 +48,7 @@ import type {
   PresetsApi,
   ProfilesApi,
   ProvidersApi,
+  SearchApi,
   SecretsApi,
   SettingsApi,
   ThemesApi,
@@ -335,6 +338,74 @@ export class LegacyBackend implements NeoBackend {
   readonly imports: ImportsApi = {
     characterCard: () => this.unsupported('imports.character.card'),
   };
+
+  readonly search: SearchApi = {
+    query: (req) => this.searchQuery(req),
+    rebuild: () => this.rebuildSearch(),
+  };
+
+  /**
+   * `search.query` on the legacy plane: the FTS5 `/api/v2/search` route with
+   * its querystring mapping (`q`/`scope`/`tag`/`sort`/`limit`); the legacy
+   * `results` array maps verbatim onto the wire `items`.
+   */
+  private async searchQuery(req: SearchRequestDto): Promise<SearchResultDto> {
+    const params = new URLSearchParams({ q: req.q });
+    if (req.scope !== undefined) params.set('scope', req.scope);
+    if (req.tag !== undefined) params.set('tag', req.tag);
+    if (req.sort !== undefined) params.set('sort', req.sort);
+    if (req.limit !== undefined) params.set('limit', String(req.limit));
+    const body = await this.getJson(`/api/v2/search?${params.toString()}`);
+    if (!isRecord(body)) {
+      return { query: req.q, items: [] };
+    }
+    const rawItems = Array.isArray(body['results']) ? body['results'] : [];
+    const items: SearchResultDto['items'] = [];
+    for (const entry of rawItems) {
+      if (!isRecord(entry)) continue;
+      const scope = entry['scope'];
+      const id = entry['id'];
+      if (typeof scope !== 'string' || typeof id !== 'string') continue;
+      items.push({
+        scope: scope as SearchResultDto['items'][number]['scope'],
+        id,
+        title: typeof entry['title'] === 'string' ? entry['title'] : '',
+        snippet: typeof entry['snippet'] === 'string' ? entry['snippet'] : '',
+        score: typeof entry['score'] === 'number' ? entry['score'] : 0,
+        timestamp: typeof entry['timestamp'] === 'number' ? entry['timestamp'] : 0,
+      });
+    }
+    return { query: req.q, items };
+  }
+
+  /**
+   * `search.rebuild` on the legacy plane: `POST /api/v2/search/rebuild`
+   * (ТЗ §12); the route answers the legacy empty search result.
+   */
+  private async rebuildSearch(): Promise<SearchResultDto> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}/api/v2/search/rebuild`, {
+        method: 'POST',
+        headers: { accept: 'application/json' },
+      });
+    } catch (cause) {
+      throw new Error(
+        'Legacy backend request to /api/v2/search/rebuild failed',
+        cause instanceof Error ? { cause } : undefined,
+      );
+    }
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      body = undefined;
+    }
+    if (!response.ok) {
+      throw this.mapError(body, response.status);
+    }
+    return { query: '', items: [] };
+  }
 
   private async listCharacters(req: ListCharactersRequestDto): Promise<PagedCharactersDto> {
     const query = new URLSearchParams();

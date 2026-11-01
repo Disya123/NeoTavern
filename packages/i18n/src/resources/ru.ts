@@ -1082,7 +1082,7 @@ export const ru: Resources = {
     diagnosticsKernelRunsValue:
       '{{total}} всего · {{completed}} выполнено · {{failed}} сбоев · {{waiting}} ожидает',
     diagnosticsKernelMaintenanceUnavailable:
-      'Индекс поиска и кэш — обслуживающие действия legacy-сайдкара; ядро владеет собственным хранилищем, и аналога этой поверхности пока нет.',
+      'Обслуживание кэша миниатюр доступно только в legacy-сайдкаре; у ядра аналога этой поверхности пока нет (для индекса поиска аналог есть: search.rebuild).',
     diagnosticsUnknown: 'Неизвестно',
     diagnosticsPrivacy:
       'Отчёт не содержит секреты, логи, абсолютные пути и пользовательский текст.',

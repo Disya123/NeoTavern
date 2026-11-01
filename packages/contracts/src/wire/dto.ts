@@ -2214,6 +2214,78 @@ export const DiagnosticsExportResultDtoSchema = Type.Object(
 export type DiagnosticsExportResultDto = Static<typeof DiagnosticsExportResultDtoSchema>;
 
 /**
+ * Search scope (`wire.search.scope`): the four entity families the full-text
+ * index covers — the same union the legacy `/api/v2/search` route exposes.
+ */
+export const WireSearchScope = Type.Union(
+  [
+    Type.Literal('characters'),
+    Type.Literal('chats'),
+    Type.Literal('messages'),
+    Type.Literal('lorebooks'),
+  ],
+  { $id: 'wire.search.scope', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WireSearchScope = Static<typeof WireSearchScope>;
+
+/** Search result ordering (`wire.search.sort`). */
+export const WireSearchSort = Type.Union(
+  [Type.Literal('relevance'), Type.Literal('date'), Type.Literal('name')],
+  { $id: 'wire.search.sort', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WireSearchSort = Static<typeof WireSearchSort>;
+
+/**
+ * Search query request (`wire.request.search.query`): free text (whitespace
+ * split into at most 10 prefix terms kernel-side), optional scope/tag filter
+ * and ordering. `tag` applies to the characters scope only, mirroring the
+ * legacy route.
+ */
+export const SearchRequestDtoSchema = Type.Object(
+  {
+    q: Type.String({ minLength: 1, maxLength: 500 }),
+    scope: Type.Optional(WireSearchScope),
+    tag: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    sort: Type.Optional(WireSearchSort),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+  },
+  { $id: 'wire.request.search.query', additionalProperties: false },
+);
+export type SearchRequestDto = Static<typeof SearchRequestDtoSchema>;
+
+/**
+ * One search hit (`wire.search.item`): the matched entity, a plain-text
+ * snippet around the match (FTS5 `snippet()`, ellipsis-trimmed) and the
+ * relevance `score` (negated FTS5 rank — bigger is better). `timestamp` is
+ * the entity's last-modification epoch ms for date sorting.
+ */
+export const SearchItemDtoSchema = Type.Object(
+  {
+    scope: WireSearchScope,
+    id: Type.String({ minLength: 1, maxLength: 128 }),
+    title: Type.String({ maxLength: 512 }),
+    snippet: Type.String({ maxLength: 1024 }),
+    score: Type.Number(),
+    timestamp: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.search.item', additionalProperties: false },
+);
+export type SearchItemDto = Static<typeof SearchItemDtoSchema>;
+
+/**
+ * Search result (`wire.result.search`): the echo of the raw query plus the
+ * merged, ordered hits (per-scope FTS rank order, globally re-sorted).
+ */
+export const SearchResultDtoSchema = Type.Object(
+  {
+    query: Type.String({ maxLength: 500 }),
+    items: Type.Array(SearchItemDtoSchema, { maxItems: 200 }),
+  },
+  { $id: 'wire.result.search', additionalProperties: false },
+);
+export type SearchResultDto = Static<typeof SearchResultDtoSchema>;
+
+/**
  * Secrets status result DTO (`wire.result.secrets-status`) — SEC-01.1: the
  * canonical, VALUE-FREE surface for the secret backend. It reports which
  * explicit mode is active (portable encrypted / machine-bound / session-only
@@ -2837,6 +2909,11 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.settings.get': GetSettingsRequestDtoSchema,
   'wire.request.settings.update': UpdateSettingsRequestDtoSchema,
   'wire.result.diagnostics-export': DiagnosticsExportResultDtoSchema,
+  'wire.search.scope': WireSearchScope,
+  'wire.search.sort': WireSearchSort,
+  'wire.request.search.query': SearchRequestDtoSchema,
+  'wire.search.item': SearchItemDtoSchema,
+  'wire.result.search': SearchResultDtoSchema,
   'wire.result.secrets-status': SecretsStatusResultDtoSchema,
   'wire.result.secrets-lock': SecretsLockResultDtoSchema,
   'wire.assets.item': AssetDtoSchema,

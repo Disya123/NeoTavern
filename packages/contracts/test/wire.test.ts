@@ -71,7 +71,7 @@ describe('product wire registry', () => {
     // the chats-order slice adds chats.reorder (107); the characters-restore
     // slice adds characters.restore + characters.versions.{list,restore}
     // (110).
-    expect(registry.operations).toHaveLength(110);
+    expect(registry.operations).toHaveLength(112);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -158,6 +158,8 @@ describe('product wire registry', () => {
       'settings.update',
       'settings.instructformats.list',
       'diagnostics.export',
+      'search.query',
+      'search.rebuild',
       'secrets.status',
       'secrets.lock',
       'lorebooks.list',

@@ -2879,3 +2879,50 @@ fn chat_export_over_http() {
         json!("00000000-0000-4000-8000-000000000000")
     );
 }
+
+/// M7 Etap-4 cluster 16 host parity: `search.query` finds seeded entities
+/// over HTTP (FTS5 indexes from schema v23), `search.rebuild` converges, and
+/// a contract-violating query answers the stable contract product error.
+#[test]
+fn search_over_http() {
+    let server = TestServer::spawn();
+
+    let create = envelope_body(
+        &rid(1),
+        "characters.create",
+        json!({ "name": "Searchable", "description": "A very distinctive zephyr" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create);
+    assert_eq!(response.status, 200);
+    expect_ok(decode_envelope(&response.body));
+
+    let query = envelope_body(&rid(2), "search.query", json!({ "q": "zephyr" }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &query);
+    assert_eq!(response.status, 200, "search.query answers HTTP 200");
+    let (_, result) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_search(&result).expect("search result is wire-valid");
+    assert_eq!(result["query"], json!("zephyr"));
+    let items = result["items"].as_array().expect("items array");
+    assert_eq!(items.len(), 1, "the seeded character answers the query");
+    assert_eq!(items[0]["scope"], json!("characters"));
+    assert_eq!(items[0]["title"], json!("Searchable"));
+
+    // Rebuild: the legacy-shaped empty result, and the entity is still found.
+    let rebuild = envelope_body(&rid(3), "search.rebuild", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &rebuild);
+    assert_eq!(response.status, 200);
+    let (_, rebuilt) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_search(&rebuilt).expect("rebuild result is wire-valid");
+    assert_eq!(rebuilt["query"], json!(""));
+    assert_eq!(rebuilt["items"].as_array().map(Vec::len), Some(0));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &query);
+    let (_, result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(result["items"].as_array().map(Vec::len), Some(1));
+
+    // An empty q is a contract violation (stable error envelope).
+    let invalid = envelope_body(&rid(4), "search.query", json!({ "q": "" }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &invalid);
+    assert_eq!(response.status, 200, "contract errors answer HTTP 200");
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, "CONTRACT_VIOLATION");
+}

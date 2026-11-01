@@ -40,9 +40,9 @@ shares the route; the shared route's last consumer owns its deletion.
 - **Registered legacy routes: 165** across 29 route families (25 modules;
   pluginJobs/pluginAuth/pluginData/pluginSecrets mount inside
   `registerPluginRoutes`, not from `app.ts`).
-- **Wire registry: 110 ops, 110/110 with kernel implementations** (105 unary
-  dispatch arms + `generation.start`/`retry` streaming +
-  `backups.restore` staged; the 2026-10-31 follow-ups added
+- **Wire registry: 112 ops, 112/112 with kernel implementations** (110 unary
+  dispatch arms + `generation.start`/`retry` streaming;
+  the 2026-10-31 follow-ups added
   `backups.delete` (the backups cluster is fully covered),
   `characters.gallery.{list,add,delete}` — the gallery cluster is fully
   covered, avatar-original rides the existing `assets.content` —
@@ -50,16 +50,20 @@ shares the route; the shared route's last consumer owns its deletion.
   `chats.reorder` (manual chat order; the chats cluster's restore and
   branches routes are documented N/A — the kernel keeps one linear sequence
   per chat and deletes permanently, so there is no trash to restore and no
-  branch model on the wire) and `characters.restore` +
+  branch model on the wire), `characters.restore` +
   `characters.versions.{list,restore}` (the characters cluster:
   `characters.delete` is now the legacy-default soft delete with
   `purge: true` keeping the hard mode, schema v22 adds
   `characters.deleted_at` and `character_versions` — every edit snapshots
-  the state it replaced)).
-- **Legacy-route coverage: 80 covered / 5 partial / 80 missing** (missing =
-  no wire op at all; the characters-restore slice moved its four routes —
-  soft delete, restore, version list, version restore — from the missing set
-  into the covered set).
+  the state it replaced) and `search.query` + `search.rebuild` (the search
+  cluster: schema v23 adds the four FTS5 indexes with legacy-style sync
+  triggers and a transactional backfill; the trash filter stays a query-time
+  concern, and card fields inside `ext_json._card` are not indexed —
+  follow-up tail)).
+- **Legacy-route coverage: 82 covered / 5 partial / 78 missing** (missing =
+  no wire op at all; the characters-restore slice moved its four routes and
+  the search slice its two routes — global search, FTS rebuild — from the
+  missing set into the covered set).
 - Kernel-mode gating in the UI is consistent: every legacy branch sits
   behind `isKernelMode()` — except the **plugin runtime/kernel host**
   (`plugins/runtime.ts`, `plugins/kernel/{blocks,chat,auth,jobs,models,
@@ -98,7 +102,7 @@ diagnostics/settings.
 | 13  | Backgrounds                                                                      | BackgroundsPanel                 | 4                                      | missing×4                                                                                                                                                                                                      | todo                |
 | 14  | Themes: extras (boot, per-theme settings, user.css, install)                     | ThemesPage, ThemeSync            | 10 (install partial: host verifier)    | 5 covered, 1 partial, 4 missing                                                                                                                                                                                | todo                |
 | 15  | Message blocks                                                                   | message bubbles, sandbox RPC     | 4                                      | missing×4                                                                                                                                                                                                      | todo                |
-| 16  | Search + FTS rebuild                                                             | global search, diagnostics       | 2                                      | missing×2                                                                                                                                                                                                      | todo                |
+| 16  | Search + FTS rebuild                                                             | global search, diagnostics       | 2                                      | 2 covered (`search.query`, `search.rebuild`; schema v23 FTS5 indexes + sync triggers + transactional rebuild M7)                                                                                               | wire done           |
 | 17  | Context preview/audit + plugin-intercepts                                        | composer, interceptor plugins    | 3                                      | missing×3                                                                                                                                                                                                      | todo                |
 | 18  | Events SSE (app-event relay)                                                     | shell invalidation, plugin relay | 1 (2 subscribers)                      | missing×1                                                                                                                                                                                                      | todo                |
 | 19  | Plugins: lifecycle                                                               | PluginsPage                      | 5 (install partial: host verifier)     | 4 covered, 1 partial                                                                                                                                                                                           | todo                |

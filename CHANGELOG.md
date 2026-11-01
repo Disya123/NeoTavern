@@ -4,6 +4,29 @@
 
 ### Added
 
+- **Full-text search on the kernel plane (M7 Etap-4 slice; cluster 16).**
+  Schema v23 (`023_kernel_fts_search`): four FTS5 indexes
+  (`characters_fts` over name/description/tags, `chats_fts` over titles,
+  `messages_fts` over content, `lorebooks_fts` over name/description plus
+  the embedded `entries_json` text; `unicode61 remove_diacritics 2`) kept in
+  sync by AFTER INSERT/DELETE/UPDATE triggers like the legacy contour, with
+  a transactional backfill of the existing rows. New wire ops `search.query`
+  (safe prefix-MATCH terms — at most ten, quotes stripped — per-scope FTS
+  rank, merged and re-sorted by `relevance`/`date`/`name`, characters-only
+  `tag` filter, trashed characters excluded at query time, FTS5 `snippet()`
+  texts) and `search.rebuild` (the whole index wiped and repopulated in one
+  transaction — readers never observe a partial index; the legacy
+  `GET /api/v2/search` + `POST /api/v2/search/rebuild` pair is now fully
+  covered). The facade gains `backend.search.{query,rebuild}`;
+  `useRebuildSearch` routes through the wire op on the kernel plane (the
+  honest UnsupportedError placeholder is retired) and the DiagnosticsPanel
+  re-enables the rebuild action in kernel mode (the thumbnail-cache action
+  stays legacy-only). Card fields inside `ext_json._card` are not indexed
+  (follow-up tail). Tests: storage migration corpus (v1..v23), kernel
+  (every-scope hits, scope/tag/sort/limit, trash filter, trigger freshness,
+  rebuild convergence, contract violations), remote-http parity, web
+  hook + wireBridge tests. Registry: 112 ops, 112/112 kernel-dispatched.
+
 - **Character trash and version history on the kernel plane (M7 Etap-4
   slice; cluster 26).** Schema v22 (`022_character_trash_versions`):
   `characters.deleted_at` (+ index) and the `character_versions` table

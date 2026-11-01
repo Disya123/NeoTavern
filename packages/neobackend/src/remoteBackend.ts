@@ -12,6 +12,8 @@ import type {
   CreateProfileResultDto,
   DiagnosticsExportResultDto,
   EmptyResultDto,
+  SearchRequestDto,
+  SearchResultDto,
   GenerationRunDto,
   InstallPluginResultDto,
   InstallThemeResultDto,
@@ -90,6 +92,7 @@ import type {
   PresetsApi,
   ProfilesApi,
   ProvidersApi,
+  SearchApi,
   SecretsApi,
   SettingsApi,
   ThemesApi,
@@ -418,6 +421,13 @@ export class RemoteBackend implements NeoBackend {
         { assetId },
         { signal: opts?.signal },
       ),
+  };
+
+  readonly search: SearchApi = {
+    query: (req, opts) =>
+      this.sdk.call<SearchResultDto>('search.query', req, { signal: opts?.signal }),
+    rebuild: (opts) =>
+      this.sdk.call<SearchResultDto>('search.rebuild', {}, { signal: opts?.signal }),
   };
 
   private async *streamOperation(

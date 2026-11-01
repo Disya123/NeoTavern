@@ -49,6 +49,8 @@ import type {
   DiagnosticsExportResultDto,
   DiscardMessageDraftRequestDto,
   EmptyResultDto,
+  SearchRequestDto,
+  SearchResultDto,
   GenerationRunDto,
   GenerationToolResultRequestDto,
   GetAssetContentResultDto,
@@ -633,6 +635,19 @@ export interface ProviderConfigsApi {
 }
 
 /**
+ * Full-text search operations (wire `search.*`, M7 Etap-4 cluster 16, ТЗ
+ * §12). `query` runs the FTS5 index over characters/chats/messages/lorebooks;
+ * `rebuild` repopulates every index transactionally (the legacy rebuild
+ * route's parity).
+ */
+export interface SearchApi {
+  /** Global full-text search (wire `search.query`). */
+  query(req: SearchRequestDto, opts?: BackendCallOptions): Promise<SearchResultDto>;
+  /** Rebuild every FTS index from the base tables (wire `search.rebuild`). */
+  rebuild(opts?: BackendCallOptions): Promise<SearchResultDto>;
+}
+
+/**
  * The UI-facing backend surface (ТЗ §15).
  *
  * Implementations: `LocalBackend` (in-process kernel transport),
@@ -660,4 +675,5 @@ export interface NeoBackend {
   secrets: SecretsApi;
   assets: AssetsApi;
   imports: ImportsApi;
+  search: SearchApi;
 }

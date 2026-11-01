@@ -365,9 +365,11 @@ export function DiagnosticsPanel() {
           <Button
             variant="ghost"
             startIcon={<MagnifyingGlass />}
-            disabled={activeAction !== null || kernelActive}
+            disabled={activeAction !== null}
             onClick={() => void rebuildSearch()}
-            title={kernelActive ? t('settings:diagnosticsKernelMaintenanceUnavailable') : undefined}
+            data-ui-node="diagnostics-rebuild-search"
+            data-ui-component="DiagnosticsPanel"
+            data-ui-action="search.rebuild"
           >
             {activeAction === 'search'
               ? t('settings:diagnosticsRebuildingSearch')

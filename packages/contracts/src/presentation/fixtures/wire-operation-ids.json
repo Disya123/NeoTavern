@@ -99,6 +99,8 @@
   "providers.config.list",
   "providers.config.set",
   "providers.list",
+  "search.query",
+  "search.rebuild",
   "secrets.lock",
   "secrets.status",
   "settings.get",

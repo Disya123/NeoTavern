@@ -105,6 +105,8 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "settings.update" => Some(65536),
         "settings.instructformats.list" => Some(1024),
         "diagnostics.export" => Some(1024),
+        "search.query" => Some(4096),
+        "search.rebuild" => Some(1024),
         "secrets.status" => Some(1024),
         "secrets.lock" => Some(1024),
         "lorebooks.list" => Some(1024),
@@ -223,6 +225,8 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "settings.update" => Some(262144),
         "settings.instructformats.list" => Some(16384),
         "diagnostics.export" => Some(262144),
+        "search.query" => Some(262144),
+        "search.rebuild" => Some(2048),
         "secrets.status" => Some(262144),
         "secrets.lock" => Some(1024),
         "lorebooks.list" => Some(262144),
@@ -4949,6 +4953,366 @@ pub fn decode_result_diagnostics_export(
     bytes: &[u8],
 ) -> Result<ResultDiagnosticsExport, WireError> {
     crate::decode::<ResultDiagnosticsExport>(validate_result_diagnostics_export, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SearchScope {
+    #[serde(rename = "characters")]
+    Characters,
+    #[serde(rename = "chats")]
+    Chats,
+    #[serde(rename = "messages")]
+    Messages,
+    #[serde(rename = "lorebooks")]
+    Lorebooks,
+}
+
+pub(crate) fn check_search_scope(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "characters" | "chats" | "messages" | "lorebooks") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_search_scope(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_search_scope(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_search_scope(bytes: &[u8]) -> Result<SearchScope, WireError> {
+    crate::decode::<SearchScope>(validate_search_scope, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SearchSort {
+    #[serde(rename = "relevance")]
+    Relevance,
+    #[serde(rename = "date")]
+    Date,
+    #[serde(rename = "name")]
+    Name,
+}
+
+pub(crate) fn check_search_sort(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "relevance" | "date" | "name") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_search_sort(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_search_sort(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_search_sort(bytes: &[u8]) -> Result<SearchSort, WireError> {
+    crate::decode::<SearchSort>(validate_search_sort, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestSearchQuery {
+    pub q: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<SearchScope>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort: Option<SearchSort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+}
+
+pub(crate) fn check_request_search_query(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("q").is_none() {
+            issues.push(Issue::new(join_path(path, "q"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("q") {
+            let child_path = join_path(path, "q");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 500 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_search_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("tag") {
+            let child_path = join_path(path, "tag");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("sort") {
+            let child_path = join_path(path, "sort");
+            check_search_sort(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("limit") {
+            let child_path = join_path(path, "limit");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "q" | "scope" | "tag" | "sort" | "limit") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_search_query(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_search_query(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_request_search_query(bytes: &[u8]) -> Result<RequestSearchQuery, WireError> {
+    crate::decode::<RequestSearchQuery>(validate_request_search_query, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SearchItem {
+    pub scope: SearchScope,
+    pub id: String,
+    pub title: String,
+    pub snippet: String,
+    pub score: f64,
+    pub timestamp: i64,
+}
+
+pub(crate) fn check_search_item(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("scope").is_none() {
+            issues.push(Issue::new(join_path(path, "scope"), "RequiredProperty"));
+        }
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("title").is_none() {
+            issues.push(Issue::new(join_path(path, "title"), "RequiredProperty"));
+        }
+        if value.get("snippet").is_none() {
+            issues.push(Issue::new(join_path(path, "snippet"), "RequiredProperty"));
+        }
+        if value.get("score").is_none() {
+            issues.push(Issue::new(join_path(path, "score"), "RequiredProperty"));
+        }
+        if value.get("timestamp").is_none() {
+            issues.push(Issue::new(join_path(path, "timestamp"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_search_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("title") {
+            let child_path = join_path(path, "title");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 512 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("snippet") {
+            let child_path = join_path(path, "snippet");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 1024 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("score") {
+            let child_path = join_path(path, "score");
+            match child.as_f64() {
+                Some(_n) => {}
+                None => issues.push(Issue::new(child_path.as_str(), "Number")),
+            }
+        }
+        if let Some(child) = value.get("timestamp") {
+            let child_path = join_path(path, "timestamp");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(
+                    key.as_str(),
+                    "scope" | "id" | "title" | "snippet" | "score" | "timestamp"
+                ) {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_search_item(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_search_item(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_search_item(bytes: &[u8]) -> Result<SearchItem, WireError> {
+    crate::decode::<SearchItem>(validate_search_item, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultSearch {
+    pub query: String,
+    pub items: Vec<SearchItem>,
+}
+
+pub(crate) fn check_result_search(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("query").is_none() {
+            issues.push(Issue::new(join_path(path, "query"), "RequiredProperty"));
+        }
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("query") {
+            let child_path = join_path(path, "query");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 500 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 200 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_search_item(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "query" | "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_search(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_search(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_result_search(bytes: &[u8]) -> Result<ResultSearch, WireError> {
+    crate::decode::<ResultSearch>(validate_result_search, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

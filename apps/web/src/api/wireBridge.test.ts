@@ -126,6 +126,10 @@ const mocks = vi.hoisted(() => {
     get: vi.fn(),
     update: vi.fn(),
   };
+  const search = {
+    query: vi.fn(),
+    rebuild: vi.fn(),
+  };
   return {
     characters,
     chats,
@@ -142,6 +146,7 @@ const mocks = vi.hoisted(() => {
     meta,
     metaFn,
     settings,
+    search,
     isKernelMode,
   };
 });
@@ -162,6 +167,7 @@ vi.mock('./backend.js', () => ({
     plugins: mocks.plugins,
     meta: mocks.metaFn,
     settings: mocks.settings,
+    search: mocks.search,
   },
   isKernelMode: mocks.isKernelMode,
 }));
@@ -248,6 +254,8 @@ import {
   readAppVersion,
   readSettings,
   updateSettings,
+  searchAll,
+  rebuildSearchIndex,
   exportCharacterCard,
   exportChat,
   getPromptPlan,
@@ -2026,5 +2034,89 @@ describe('legacy bridge message creation', () => {
     });
     expect(message.id).toBe(MESSAGE_ID);
     expect(message.content).toBe('Hello');
+  });
+});
+
+describe('search (wire search.*, M7 Etap-4 cluster 16)', () => {
+  it('routes searchAll through search.query on the kernel plane', async () => {
+    mocks.search.query.mockResolvedValue({
+      query: 'brave',
+      items: [
+        {
+          scope: 'characters',
+          id: CHAR_ID,
+          title: 'Alice',
+          snippet: 'A brave knight…',
+          score: 1.5,
+          timestamp: NOW_MS,
+        },
+      ],
+    });
+    const response = await searchAll({ q: 'brave', scope: 'characters', limit: 10 });
+    expect(mocks.search.query).toHaveBeenCalledWith({ q: 'brave', scope: 'characters', limit: 10 });
+    // The wire hit shape maps verbatim onto the legacy response.
+    expect(response).toEqual({
+      query: 'brave',
+      results: [
+        {
+          scope: 'characters',
+          id: CHAR_ID,
+          title: 'Alice',
+          snippet: 'A brave knight…',
+          score: 1.5,
+          timestamp: NOW_MS,
+        },
+      ],
+    });
+  });
+
+  it('routes searchAll through the legacy route on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ query: 'brave', results: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(
+        searchAll({ q: 'brave', tag: 'fantasy', sort: 'date', limit: 20 }),
+      ).resolves.toEqual({ query: 'brave', results: [] });
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/v2/search?q=brave&tag=fantasy&sort=date&limit=20',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      mocks.isKernelMode.mockReturnValue(true);
+    }
+  });
+
+  it('routes rebuildSearchIndex through search.rebuild on the kernel plane', async () => {
+    mocks.search.rebuild.mockResolvedValue({ query: '', items: [] });
+    await expect(rebuildSearchIndex()).resolves.toBeUndefined();
+    expect(mocks.search.rebuild).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes rebuildSearchIndex through the legacy route on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ query: '', results: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(rebuildSearchIndex()).resolves.toBeUndefined();
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/v2/search/rebuild',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      mocks.isKernelMode.mockReturnValue(true);
+    }
   });
 });

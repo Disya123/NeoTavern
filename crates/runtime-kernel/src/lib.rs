@@ -673,6 +673,9 @@ fn handle_unary(
         // M7 Etap-4 (cluster 27): static built-in catalog, no database.
         "settings.instructformats.list" => settings::settings_instruct_formats_list(req),
         "diagnostics.export" => with_db_opt(db, |db| settings::diagnostics_export(db, req)),
+        // M7 Etap-4 (cluster 16): FTS5 full-text search + index rebuild.
+        "search.query" => with_db_opt(db, |db| product::search_query(db, req)),
+        "search.rebuild" => with_db_opt(db, |db| product::search_rebuild(db, req)),
         // SEC-01.1: value-free secret-backend mode surface (stateless seam).
         "secrets.status" => secrets::secrets_status(state.secret_store.as_ref(), req),
         "secrets.lock" => secrets::secrets_lock(state.secret_store.as_ref(), req),

@@ -888,6 +888,107 @@ pub const MIGRATION_22_SQL: &str = migration_22_sql!();
 pub const MIGRATION_22_CHECKSUM: &str =
     "2f4e79308baccbc44cdd3941b0b8ff02139b6da121c6c21788b638abb8df0a1d";
 
+/// Literal body of the full-text search (v23) schema migration (M7 Etap-4
+/// search slice): four FTS5 indexes over the searchable product text —
+/// `characters` (name/description/tags), `chats` (title), `messages`
+/// (content) and `lorebooks` (name/description plus the embedded
+/// `entries_json` text) — kept in sync by AFTER INSERT/DELETE/UPDATE
+/// triggers like the legacy contour (ТЗ §12), with a transactional backfill
+/// of the existing rows. The indexes contain ALL rows; the trash filter
+/// (`characters.deleted_at IS NULL`) is applied at query time. Card fields
+/// that live inside `ext_json._card` are not indexed (follow-up tail).
+/// Additive; rollback is the pre-migration backup restore (ТЗ §10.4).
+macro_rules! migration_23_sql {
+    () => {
+        r#"CREATE VIRTUAL TABLE characters_fts USING fts5(
+  character_id UNINDEXED,
+  name,
+  description,
+  tags,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+CREATE VIRTUAL TABLE chats_fts USING fts5(
+  chat_id UNINDEXED,
+  title,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+CREATE VIRTUAL TABLE messages_fts USING fts5(
+  message_id UNINDEXED,
+  content,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+CREATE VIRTUAL TABLE lorebooks_fts USING fts5(
+  lorebook_id UNINDEXED,
+  name,
+  description,
+  entries,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER characters_fts_ai AFTER INSERT ON characters BEGIN
+  INSERT INTO characters_fts(character_id, name, description, tags)
+  VALUES (new.id, new.name, new.description, new.tags_json);
+END;
+CREATE TRIGGER characters_fts_ad AFTER DELETE ON characters BEGIN
+  DELETE FROM characters_fts WHERE character_id = old.id;
+END;
+CREATE TRIGGER characters_fts_au AFTER UPDATE OF name, description, tags_json ON characters BEGIN
+  DELETE FROM characters_fts WHERE character_id = old.id;
+  INSERT INTO characters_fts(character_id, name, description, tags)
+  VALUES (new.id, new.name, new.description, new.tags_json);
+END;
+CREATE TRIGGER chats_fts_ai AFTER INSERT ON chats BEGIN
+  INSERT INTO chats_fts(chat_id, title) VALUES (new.id, new.title);
+END;
+CREATE TRIGGER chats_fts_ad AFTER DELETE ON chats BEGIN
+  DELETE FROM chats_fts WHERE chat_id = old.id;
+END;
+CREATE TRIGGER chats_fts_au AFTER UPDATE OF title ON chats BEGIN
+  DELETE FROM chats_fts WHERE chat_id = old.id;
+  INSERT INTO chats_fts(chat_id, title) VALUES (new.id, new.title);
+END;
+CREATE TRIGGER messages_fts_ai AFTER INSERT ON messages BEGIN
+  INSERT INTO messages_fts(message_id, content) VALUES (new.id, new.content);
+END;
+CREATE TRIGGER messages_fts_ad AFTER DELETE ON messages BEGIN
+  DELETE FROM messages_fts WHERE message_id = old.id;
+END;
+CREATE TRIGGER messages_fts_au AFTER UPDATE OF content ON messages BEGIN
+  DELETE FROM messages_fts WHERE message_id = old.id;
+  INSERT INTO messages_fts(message_id, content) VALUES (new.id, new.content);
+END;
+CREATE TRIGGER lorebooks_fts_ai AFTER INSERT ON lorebooks BEGIN
+  INSERT INTO lorebooks_fts(lorebook_id, name, description, entries)
+  VALUES (new.id, new.name, new.description, new.entries_json);
+END;
+CREATE TRIGGER lorebooks_fts_ad AFTER DELETE ON lorebooks BEGIN
+  DELETE FROM lorebooks_fts WHERE lorebook_id = old.id;
+END;
+CREATE TRIGGER lorebooks_fts_au AFTER UPDATE OF name, description, entries_json ON lorebooks BEGIN
+  DELETE FROM lorebooks_fts WHERE lorebook_id = old.id;
+  INSERT INTO lorebooks_fts(lorebook_id, name, description, entries)
+  VALUES (new.id, new.name, new.description, new.entries_json);
+END;
+INSERT INTO characters_fts(character_id, name, description, tags)
+  SELECT id, name, description, tags_json FROM characters;
+INSERT INTO chats_fts(chat_id, title) SELECT id, title FROM chats;
+INSERT INTO messages_fts(message_id, content) SELECT id, content FROM messages;
+INSERT INTO lorebooks_fts(lorebook_id, name, description, entries)
+  SELECT id, name, description, entries_json FROM lorebooks;"#
+    };
+}
+
+/// Name of the full-text search (v23) schema migration.
+pub const MIGRATION_23_NAME: &str = "023_kernel_fts_search";
+
+/// Exact SQL of the full-text search schema migration (v23) — the
+/// `migration_23_sql!()` literal.
+pub const MIGRATION_23_SQL: &str = migration_23_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_23_SQL` string bytes (same
+/// computation as `MIGRATION_22_CHECKSUM`).
+pub const MIGRATION_23_CHECKSUM: &str =
+    "e107e2083d8fe6f822f44715d61e82c6d929c3484ff83d950ec36f1364b2d58f";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -938,7 +1039,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_21_sql!(),
     "\n",
-    migration_22_sql!()
+    migration_22_sql!(),
+    "\n",
+    migration_23_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

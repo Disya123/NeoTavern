@@ -16,6 +16,7 @@ import {
   type InstallPluginResultDto,
   type InstallThemeResultDto,
   type ListLorebooksResultDto,
+  type SearchResultDto,
   type ListMemoriesResultDto,
   type LorebookDto,
   type ListPluginsResultDto,
@@ -289,6 +290,24 @@ const SECRETS_STATUS: SecretsStatusResultDto = {
   recordCount: 2,
   formatVersion: 1,
 };
+
+/** `search.query` response (M7 Etap-4 cluster 16): one merged hit. */
+const SEARCH_RESULT: SearchResultDto = {
+  query: 'brave',
+  items: [
+    {
+      scope: 'characters',
+      id: CHARACTER.id,
+      title: 'Ada Lovelace',
+      snippet: 'First programmer; canonical fixture…',
+      score: 1.5,
+      timestamp: 1_786_000_000_000,
+    },
+  ],
+};
+
+/** `search.rebuild` response: the legacy-shaped empty result. */
+const SEARCH_REBUILT: SearchResultDto = { query: '', items: [] };
 
 const ASSET_ID = '5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f';
 const ASSET: AssetDto = {
@@ -623,6 +642,10 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: SETTINGS };
       case 'diagnostics.export':
         return { ok: true, value: DIAGNOSTICS };
+      case 'search.query':
+        return { ok: true, value: SEARCH_RESULT };
+      case 'search.rebuild':
+        return { ok: true, value: SEARCH_REBUILT };
       case 'secrets.status':
         return { ok: true, value: SECRETS_STATUS };
       case 'secrets.lock':
@@ -774,6 +797,10 @@ function rpcResult(operationId: string | undefined): unknown {
       return SETTINGS;
     case 'diagnostics.export':
       return DIAGNOSTICS;
+    case 'search.query':
+      return SEARCH_RESULT;
+    case 'search.rebuild':
+      return SEARCH_REBUILT;
     case 'secrets.status':
       return SECRETS_STATUS;
     case 'secrets.lock':
@@ -2278,6 +2305,34 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
         operationId: 'characters.versions.restore',
         payload: { characterId: CHARACTER.id, versionId },
       },
+    ]);
+  });
+
+  it('search.query and search.rebuild are routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localHits, remoteHits] = await Promise.all([
+      local.search.query({ q: 'brave', scope: 'characters', limit: 10 }),
+      remote.search.query({ q: 'brave', scope: 'characters', limit: 10 }),
+    ]);
+    expect(localHits).toEqual(remoteHits);
+    expect(localHits).toEqual(SEARCH_RESULT);
+
+    const [localRebuilt, remoteRebuilt] = await Promise.all([
+      local.search.rebuild(),
+      remote.search.rebuild(),
+    ]);
+    expect(localRebuilt).toEqual(remoteRebuilt);
+    expect(localRebuilt).toEqual(SEARCH_REBUILT);
+
+    expect(kernel.requests).toEqual([
+      {
+        operationId: 'search.query',
+        payload: { q: 'brave', scope: 'characters', limit: 10 },
+      },
+      { operationId: 'search.rebuild', payload: {} },
     ]);
   });
 

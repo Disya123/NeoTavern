@@ -1533,6 +1533,34 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'search.query',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.search.query',
+    'wire.result.search',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    4096,
+    262144,
+    undefined,
+  ),
+  op(
+    'search.rebuild',
+    'transactional',
+    'idempotent',
+    'none',
+    'app.write',
+    'wire.request.empty',
+    'wire.result.search',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    2048,
+    undefined,
+  ),
+  op(
     'secrets.status',
     'transactional',
     'idempotent',
@@ -2741,6 +2769,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('settings-instruct-formats-request', 'settings.instructformats.list', 'request', true, {}),
   fx('diagnostics-export-request', 'diagnostics.export', 'request', true, {}),
+  fx('search-query-request', 'search.query', 'request', true, {
+    q: 'forest guardian',
+    scope: 'characters',
+    sort: 'relevance',
+    limit: 50,
+  }),
+  fx('search-rebuild-request', 'search.rebuild', 'request', true, {}),
   fx('secrets-status-request', 'secrets.status', 'request', true, {}),
 
   // --- valid response fixtures.
@@ -3117,6 +3152,20 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     INSTRUCT_FORMATS_VALUE,
   ),
   fx('diagnostics-export-response', 'diagnostics.export', 'response', true, DIAGNOSTICS_VALUE),
+  fx('search-query-response', 'search.query', 'response', true, {
+    query: 'forest guardian',
+    items: [
+      {
+        scope: 'characters',
+        id: UUID_CHARACTER,
+        title: 'Seraphina',
+        snippet: 'Forest guardian of the woodland cottage…',
+        score: 1.25,
+        timestamp: 1780315200000,
+      },
+    ],
+  }),
+  fx('search-rebuild-response', 'search.rebuild', 'response', true, { query: '', items: [] }),
   fx('secrets-status-response', 'secrets.status', 'response', true, SECRETS_STATUS_VALUE),
   fx('secrets-lock-request', 'secrets.lock', 'request', true, {}),
   fx('secrets-lock-response', 'secrets.lock', 'response', true, { locked: true }),
@@ -3172,6 +3221,21 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-secrets-status-empty-kind', 'secrets.status', 'response', false, {
     ...SECRETS_STATUS_VALUE,
     kind: '',
+  }),
+  fx('neg-search-query-empty-q', 'search.query', 'request', false, { q: '' }),
+  fx('neg-search-query-bad-sort', 'search.query', 'request', false, { q: 'x', sort: 'random' }),
+  fx('neg-search-response-bad-scope', 'search.query', 'response', false, {
+    query: 'x',
+    items: [
+      {
+        scope: 'plugins',
+        id: 'hit-1',
+        title: 't',
+        snippet: 's',
+        score: 1,
+        timestamp: 1,
+      },
+    ],
   }),
 
   // --- negative fixtures (one per rule family).

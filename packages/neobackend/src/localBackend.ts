@@ -59,6 +59,8 @@ import {
   type PutAssetResultDto,
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
+  type SearchRequestDto,
+  type SearchResultDto,
   type ChatsExportResultDto,
   type InstructFormatsResultDto,
   type ResultSettingsDto,
@@ -91,6 +93,7 @@ import type {
   DiagnosticsApi,
   GenerationApi,
   ImportsApi,
+  SearchApi,
   LorebooksApi,
   MemoriesApi,
   NeoBackend,
@@ -259,6 +262,7 @@ export class LocalBackend implements NeoBackend {
   readonly secrets: SecretsApi;
   readonly assets: AssetsApi;
   readonly imports: ImportsApi;
+  readonly search: SearchApi;
 
   private readonly transport: LocalTransport;
   private readonly operations: ReadonlyMap<string, CompiledOperation>;
@@ -471,6 +475,10 @@ export class LocalBackend implements NeoBackend {
     this.imports = {
       characterCard: (assetId, opts) =>
         this.invoke<CharacterCardImportResultDto>('imports.character.card', { assetId }, opts),
+    };
+    this.search = {
+      query: (req, opts) => this.invoke<SearchResultDto>('search.query', req, opts),
+      rebuild: (opts) => this.invoke<SearchResultDto>('search.rebuild', {}, opts),
     };
   }
 

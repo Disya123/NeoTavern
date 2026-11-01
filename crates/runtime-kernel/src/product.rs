@@ -4043,6 +4043,267 @@ pub fn personas_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     encode(&dto)
 }
 
+// --- Full-text search (M7 Etap-4 cluster 16; ТЗ §12) ------------------------
+
+/// One raw hit before the wire DTO is built: the matched entity plus the
+/// values the merged result carries.
+struct SearchHit {
+    id: String,
+    rank: f64,
+    title: String,
+    snippet: String,
+    stamp: String,
+    /// Raw `tags_json` of the matched character (characters scope only) for
+    /// the legacy tag filter.
+    tags_json: Option<String>,
+}
+
+/// Builds the safe FTS5 MATCH expression from free text: at most ten
+/// whitespace tokens, quotes stripped, each term prefix-enabled — the same
+/// expression the legacy `buildFtsQuery` produces, so punctuation can never
+/// inject FTS syntax. Empty input (no tokens) means "nothing to search".
+fn build_fts_query(q: &str) -> String {
+    let tokens: Vec<&str> = q
+        .split_whitespace()
+        .map(|token| token.trim_matches(|c| c == '"' || c == '\''))
+        .filter(|token| !token.is_empty())
+        .take(10)
+        .collect();
+    if tokens.is_empty() {
+        return String::new();
+    }
+    tokens
+        .iter()
+        .map(|token| format!("\"{token}\"*"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Clamps a text column to the wire string limit at a char boundary (the
+/// snippet comes out of SQLite already token-bounded; this is the belt to its
+/// braces so a pathological stored value can never fail wire validation).
+fn clamp_text(value: String, max_bytes: usize) -> String {
+    if value.len() <= max_bytes {
+        return value;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    value[..end].to_string()
+}
+
+/// Parses an RFC 3339 wire stamp into epoch milliseconds (date sort). A
+/// stamp the kernel did not write (impossible today) degrades to 0 instead
+/// of failing the whole query.
+fn stamp_epoch_ms(stamp: &str) -> i64 {
+    time::OffsetDateTime::parse(stamp, &time::format_description::well_known::Rfc3339)
+        .map(|dt| dt.unix_timestamp() * 1000 + i64::from(dt.millisecond()))
+        .unwrap_or(0)
+}
+
+/// Runs one scope's FTS query and maps the rows to raw hits. `extra` selects
+/// the scope's second projection column (characters carry their `tags_json`
+/// for the tag filter, messages their `content` fallback text).
+fn search_scope(
+    conn: &rusqlite::Connection,
+    sql: &str,
+    fts_query: &str,
+    limit: i64,
+) -> Result<Vec<SearchHit>, StorageError> {
+    let mut statement = conn
+        .prepare(sql)
+        .map_err(|e| StorageError::from_sqlite(e, "search.query: prepare"))?;
+    let rows = statement
+        .query_map(params![fts_query, limit], |row| {
+            Ok(SearchHit {
+                id: row.get(0)?,
+                rank: row.get(1)?,
+                title: row.get(2)?,
+                snippet: row.get(3)?,
+                stamp: row.get(4)?,
+                tags_json: row.get(5)?,
+            })
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "search.query: query"))?;
+    let mut hits = Vec::new();
+    for row in rows {
+        hits.push(row.map_err(|e| StorageError::from_sqlite(e, "search.query: row"))?);
+    }
+    Ok(hits)
+}
+
+/// `search.query` — FTS5 full-text search over characters, chats, messages
+/// and lorebooks (legacy `GET /api/v2/search` parity; the two routes of the
+/// M7 Etap-4 search cluster). The indexes hold every row — the trash filter
+/// (`characters.deleted_at IS NULL`) applies at query time, mirroring the
+/// legacy repository. Per-scope hits merge and re-sort (`relevance` score,
+/// `date`, `name`), then cut to `limit`; the `tag` filter applies to the
+/// characters scope only, as on the legacy plane.
+pub fn search_query(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_search_query(request)?;
+    let limit = page_limit(req.limit);
+    let fts_query = build_fts_query(&req.q);
+    let mut items: Vec<generated::SearchItem> = Vec::new();
+    if !fts_query.is_empty() {
+        let scopes: &[generated::SearchScope] = match &req.scope {
+            Some(scope) => std::slice::from_ref(scope),
+            None => &[
+                generated::SearchScope::Characters,
+                generated::SearchScope::Chats,
+                generated::SearchScope::Messages,
+                generated::SearchScope::Lorebooks,
+            ],
+        };
+        let conn = db.conn();
+        for scope in scopes {
+            let hits = match scope {
+                generated::SearchScope::Characters => search_scope(
+                    conn,
+                    "SELECT characters_fts.character_id, characters_fts.rank, \
+                            characters.name, \
+                            snippet(characters_fts, -1, '', '', '…', 12), characters.updated_at, \
+                            characters.tags_json \
+                     FROM characters_fts JOIN characters ON characters.id = characters_fts.character_id \
+                     WHERE characters_fts MATCH ?1 AND characters.deleted_at IS NULL \
+                     ORDER BY characters_fts.rank LIMIT ?2",
+                    &fts_query,
+                    limit,
+                )?,
+                generated::SearchScope::Chats => search_scope(
+                    conn,
+                    "SELECT chats_fts.chat_id, chats_fts.rank, chats.title, \
+                            snippet(chats_fts, -1, '', '', '…', 12), chats.updated_at, NULL \
+                     FROM chats_fts JOIN chats ON chats.id = chats_fts.chat_id \
+                     WHERE chats_fts MATCH ?1 \
+                     ORDER BY chats_fts.rank LIMIT ?2",
+                    &fts_query,
+                    limit,
+                )?,
+                generated::SearchScope::Messages => search_scope(
+                    conn,
+                    "SELECT messages_fts.message_id, messages_fts.rank, messages.role, \
+                            snippet(messages_fts, -1, '', '', '…', 12), messages.created_at, NULL \
+                     FROM messages_fts JOIN messages ON messages.id = messages_fts.message_id \
+                     WHERE messages_fts MATCH ?1 \
+                     ORDER BY messages_fts.rank LIMIT ?2",
+                    &fts_query,
+                    limit,
+                )?,
+                generated::SearchScope::Lorebooks => search_scope(
+                    conn,
+                    "SELECT lorebooks_fts.lorebook_id, lorebooks_fts.rank, lorebooks.name, \
+                            snippet(lorebooks_fts, -1, '', '', '…', 12), lorebooks.updated_at, NULL \
+                     FROM lorebooks_fts JOIN lorebooks ON lorebooks.id = lorebooks_fts.lorebook_id \
+                     WHERE lorebooks_fts MATCH ?1 \
+                     ORDER BY lorebooks_fts.rank LIMIT ?2",
+                    &fts_query,
+                    limit,
+                )?,
+            };
+            for hit in hits {
+                if let Some(tag) = &req.tag {
+                    if scope == &generated::SearchScope::Characters {
+                        // Legacy parity: the tag filter keeps only characters
+                        // carrying the tag. A malformed tags_json degrades to
+                        // "no match" instead of failing the query.
+                        let tags = hit
+                            .tags_json
+                            .as_deref()
+                            .and_then(|raw| serde_json::from_str::<Vec<String>>(raw).ok())
+                            .unwrap_or_default();
+                        if !tags.iter().any(|candidate| candidate == tag) {
+                            continue;
+                        }
+                    }
+                }
+                items.push(generated::SearchItem {
+                    scope: scope.clone(),
+                    id: hit.id,
+                    title: clamp_text(hit.title, 512),
+                    snippet: clamp_text(hit.snippet, 1024),
+                    score: -hit.rank,
+                    timestamp: stamp_epoch_ms(&hit.stamp),
+                });
+            }
+        }
+        match req.sort {
+            Some(generated::SearchSort::Date) => {
+                items.sort_by_key(|item| std::cmp::Reverse(item.timestamp));
+            }
+            Some(generated::SearchSort::Name) => {
+                items.sort_by(|a, b| {
+                    a.title
+                        .to_lowercase()
+                        .cmp(&b.title.to_lowercase())
+                        .then_with(|| a.title.cmp(&b.title))
+                });
+            }
+            // Relevance (the legacy default): best score first.
+            _ => items.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }),
+        }
+        items.truncate(limit as usize);
+    }
+    let dto = generated::ResultSearch {
+        query: clamp_text(req.q, 500),
+        items,
+    };
+    validate(&dto, generated::validate_result_search)?;
+    encode(&dto)
+}
+
+/// `search.rebuild` — transactionally rebuilds every FTS index from the base
+/// tables (ТЗ §12 "rebuild from UI"; legacy `POST /api/v2/search/rebuild`).
+/// Readers never observe an emptied or partial index: the wipe and the
+/// repopulation share one transaction, and the sync triggers take over again
+/// afterwards. The response mirrors the legacy empty result.
+pub fn search_rebuild(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    generated::decode_request_empty(request)?;
+    db.transaction(|tx| {
+        tx.execute("DELETE FROM characters_fts", [])
+            .map_err(|e| StorageError::from_sqlite(e, "search.rebuild: clear characters"))?;
+        tx.execute(
+            "INSERT INTO characters_fts(character_id, name, description, tags) \
+             SELECT id, name, description, tags_json FROM characters",
+            [],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "search.rebuild: fill characters"))?;
+        tx.execute("DELETE FROM chats_fts", [])
+            .map_err(|e| StorageError::from_sqlite(e, "search.rebuild: clear chats"))?;
+        tx.execute(
+            "INSERT INTO chats_fts(chat_id, title) SELECT id, title FROM chats",
+            [],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "search.rebuild: fill chats"))?;
+        tx.execute("DELETE FROM messages_fts", [])
+            .map_err(|e| StorageError::from_sqlite(e, "search.rebuild: clear messages"))?;
+        tx.execute(
+            "INSERT INTO messages_fts(message_id, content) SELECT id, content FROM messages",
+            [],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "search.rebuild: fill messages"))?;
+        tx.execute("DELETE FROM lorebooks_fts", [])
+            .map_err(|e| StorageError::from_sqlite(e, "search.rebuild: clear lorebooks"))?;
+        tx.execute(
+            "INSERT INTO lorebooks_fts(lorebook_id, name, description, entries) \
+             SELECT id, name, description, entries_json FROM lorebooks",
+            [],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "search.rebuild: fill lorebooks"))?;
+        Ok(())
+    })?;
+    let dto = generated::ResultSearch {
+        query: String::new(),
+        items: Vec::new(),
+    };
+    validate(&dto, generated::validate_result_search)?;
+    encode(&dto)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

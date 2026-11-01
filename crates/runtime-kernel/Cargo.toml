@@ -31,8 +31,9 @@ base64 = "0.22"
 # AGENTS.md §11 — re-importing the same card must not create a duplicate).
 sha2 = "0.10"
 # Lease expiry timestamps (`now + 30s` formatted RFC 3339, same crate the
-# storage layer uses for its wire timestamps).
-time = { version = "0.3", features = ["formatting"] }
+# storage layer uses for its wire timestamps) plus RFC 3339 parsing for the
+# search date sort (`search.query` maps stored stamps to epoch ms).
+time = { version = "0.3", features = ["formatting", "parsing"] }
 # `assets.thumb`: kernel-side thumbnail generation (image audit stage C).
 # Same pin/features as the presentation layer so one codec set compiles.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

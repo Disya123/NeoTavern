@@ -50,6 +50,8 @@ import {
   type Preset,
   type PresetCreate,
   type PresetUpdate,
+  type SearchQuery,
+  type SearchResponse,
   type InstalledTheme,
   type ThemeActivationResult,
   type ThemeDeleteResult,
@@ -1028,6 +1030,33 @@ export async function restoreCharacterVersion(
     return translateCharacter(await backend.characters.versionsRestore({ characterId, versionId }));
   }
   return api.post<Character>(`/characters/${characterId}/versions/${versionId}/restore`, {});
+}
+
+/**
+ * Global full-text search (M7 Etap-4 cluster 16; legacy `GET /api/v2/search`).
+ * The wire hit shape equals the legacy `SearchResult`, so the kernel items
+ * map verbatim onto the legacy response the UI contract declares.
+ */
+export async function searchAll(query: SearchQuery): Promise<SearchResponse> {
+  if (isKernelMode()) {
+    const result = await backend.search.query(query);
+    return { query: result.query, results: result.items };
+  }
+  const params = new URLSearchParams({ q: query.q });
+  if (query.scope !== undefined) params.set('scope', query.scope);
+  if (query.tag !== undefined) params.set('tag', query.tag);
+  if (query.sort !== undefined) params.set('sort', query.sort);
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  return api.get<SearchResponse>(`/search?${params.toString()}`);
+}
+
+/** Rebuild every FTS index from the base tables (wire `search.rebuild`). */
+export async function rebuildSearchIndex(): Promise<void> {
+  if (isKernelMode()) {
+    await backend.search.rebuild();
+    return;
+  }
+  await api.post('/search/rebuild', {});
 }
 
 /** List chats of one character (catalog). */
