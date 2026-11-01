@@ -1250,7 +1250,7 @@ describe('memory CRUD (kernel, Этап 4 slice 3)', () => {
     expect(mocks.memories.create).toHaveBeenCalledWith({ content: 'Global note.' });
   });
 
-  it('updates fields and rejects a null characterId clear honestly', async () => {
+  it('updates fields, un-scopes via scope=global and rejects the contradictory clear', async () => {
     mocks.memories.update.mockResolvedValue(WIRE_MEMORY);
     await updateMemory(WIRE_MEMORY.id, { content: 'Updated.', enabled: false });
     expect(mocks.memories.update).toHaveBeenCalledWith({
@@ -1258,9 +1258,17 @@ describe('memory CRUD (kernel, Этап 4 slice 3)', () => {
       content: 'Updated.',
       enabled: false,
     });
-    await expect(updateMemory(WIRE_MEMORY.id, { characterId: null })).rejects.toBeInstanceOf(
-      UnsupportedError,
-    );
+    // M7 Etap-4 (cluster 5): a legacy `characterId: null` clear maps to the
+    // kernel un-scope (`scope: "global"` clears the stored owner), while the
+    // contradictory `scope: "character"` + null stays an honest error.
+    await updateMemory(WIRE_MEMORY.id, { characterId: null });
+    expect(mocks.memories.update).toHaveBeenLastCalledWith({
+      memoryId: WIRE_MEMORY.id,
+      scope: 'global',
+    });
+    await expect(
+      updateMemory(WIRE_MEMORY.id, { characterId: null, scope: 'character' }),
+    ).rejects.toBeInstanceOf(UnsupportedError);
   });
 
   it('deletes a memory through the facade', async () => {

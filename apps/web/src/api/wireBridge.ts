@@ -1838,11 +1838,26 @@ export async function createMemory(input: MemoryCreate): Promise<Memory> {
 /** Update the provided fields of one memory. */
 export async function updateMemory(id: string, update: MemoryUpdate): Promise<Memory> {
   if (isKernelMode()) {
-    // The wire DTO has no way to express `characterId: null` (un-scoping);
-    // legacy could, so this is an honest CAPABILITY_UNAVAILABLE, not a
-    // silent no-op.
+    // The wire DTO cannot express `characterId: null` (un-scoping); the
+    // kernel treats `scope: "global"` as the un-scope (it clears the stored
+    // owner, M7 Etap-4 cluster 5). Map the legacy null away: a null
+    // characterId together with `scope: "character"` is contradictory and
+    // stays an honest UnsupportedError, anything else becomes the scope
+    // switch (with `scope` carried through verbatim when it is present).
     if (update.characterId === null) {
-      throw new UnsupportedError('memories.update.characterId.null');
+      if (update.scope === 'character') {
+        throw new UnsupportedError('memories.update.characterId.null');
+      }
+      const unscope: Parameters<typeof backend.memories.update>[0] = {
+        memoryId: id,
+        scope: 'global',
+      };
+      if (update.keys !== undefined) unscope.keys = update.keys;
+      if (update.content !== undefined) unscope.content = update.content;
+      if (update.enabled !== undefined) unscope.enabled = update.enabled;
+      if (update.position !== undefined) unscope.position = update.position;
+      if (update.metadata !== undefined) unscope.metadata = update.metadata;
+      return translateMemory(await backend.memories.update(unscope));
     }
     const patch: Parameters<typeof backend.memories.update>[0] = { memoryId: id };
     if (update.scope !== undefined) patch.scope = update.scope;

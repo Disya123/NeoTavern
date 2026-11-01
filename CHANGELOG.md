@@ -4,6 +4,20 @@
 
 ### Added
 
+- **Memory un-scoping on the kernel plane (M7 Etap-4 slice; cluster 5 fully
+  covered).** The wire DTO cannot express `characterId: null`, so
+  `memories.update` with `scope: "global"` now IS the un-scope: the kernel
+  clears the stored owner (previously a silent no-op risk). Contradictory
+  patches reject with stable VALIDATION product errors — `global` scope
+  together with a `characterId`, and a `characterId` without a scope switch
+  on a stored global row (which would build a global row with a non-NULL
+  owner). Character → character re-binding without an explicit scope keeps
+  working. The web transport maps the legacy `characterId: null` clear to
+  the scope switch (and keeps the honest error for the contradictory
+  `scope: "character"` + null form). Tests: kernel (un-scope round trip,
+  both VALIDATION paths, re-binding), remote-http host parity (owner
+  cleared over HTTP, VALIDATION product error), web wireBridge test.
+
 - **Built-in instruct-format catalog on the wire (M7 Etap-4 slice;
   cluster 27 fully covered).** New op `settings.instructformats.list`
   serves the static built-in catalog — chatml, llama3, alpaca, mistral,

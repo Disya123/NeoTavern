@@ -1467,6 +1467,63 @@ fn characters_gallery_over_http() {
     assert_eq!(response.status, 200, "asset outlives its gallery link");
 }
 
+/// M7 Etap-4 (cluster 5 un-scope tail): `memories.update` with
+/// `scope: "global"` over the HTTP host — the owner is cleared (the wire
+/// cannot express `characterId: null`), and the contradictory
+/// `global` + `characterId` patch rejects with a VALIDATION product error.
+#[test]
+fn memories_unscope_over_http() {
+    let server = TestServer::spawn();
+
+    let create_character = envelope_body(&rid(1), "characters.create", json!({ "name": "Iris" }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create_character);
+    assert_eq!(response.status, 200, "characters.create answers HTTP 200");
+    let (_, created) = expect_ok(decode_envelope(&response.body));
+    let character_id = created["id"].as_str().expect("character id").to_string();
+
+    let create_memory = envelope_body(
+        &rid(2),
+        "memories.create",
+        json!({
+            "scope": "character",
+            "characterId": character_id,
+            "keys": ["iris"],
+            "content": "Iris reads the tide tables."
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create_memory);
+    assert_eq!(response.status, 200, "memories.create answers HTTP 200");
+    let (_, memory) = expect_ok(decode_envelope(&response.body));
+    let memory_id = memory["id"].as_str().expect("memory id").to_string();
+    assert_eq!(
+        memory["characterId"], json!(character_id),
+        "created with the owner"
+    );
+
+    // scope: global clears the owner.
+    let unscope = envelope_body(
+        &rid(3),
+        "memories.update",
+        json!({ "memoryId": memory_id, "scope": "global" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &unscope);
+    assert_eq!(response.status, 200, "un-scoping update answers HTTP 200");
+    let (_, updated) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(updated["scope"], json!("global"));
+    assert_eq!(updated["characterId"], json!(Value::Null), "owner cleared");
+
+    // global + characterId → VALIDATION product error.
+    let contradiction = envelope_body(
+        &rid(4),
+        "memories.update",
+        json!({ "memoryId": memory_id, "scope": "global", "characterId": character_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &contradiction);
+    assert_eq!(response.status, 200, "product errors answer HTTP 200");
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, json!("VALIDATION"));
+}
+
 /// M7 Etap-4 (cluster 27): `settings.instructformats.list` over the HTTP
 /// host — the static built-in catalog, wire-valid, five formats, identical
 /// on stateless and stateful kernels (no database involved).

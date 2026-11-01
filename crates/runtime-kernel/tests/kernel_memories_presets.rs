@@ -371,3 +371,101 @@ fn memory_error_paths() {
         .expect_err("non-string content must be a contract violation");
     assert_eq!(violation.code, KernelErrorCode::ContractViolation);
 }
+
+/// M7 Etap-4 (cluster 5 un-scope tail): the wire DTO cannot express
+/// `characterId: null`, so `scope: "global"` on `memories.update` IS the
+/// un-scope — it clears the stored owner. Contradictory patches reject with
+/// stable VALIDATION product errors instead of building broken rows.
+#[test]
+fn memory_unscope_via_global_scope() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    let character =
+        dispatch_decoded::<CharacterDto>(&kernel, "characters.create", json!({ "name": "Nyx" }))
+            .expect("characters.create must succeed");
+
+    let scoped = dispatch_decoded::<MemoryDto>(
+        &kernel,
+        "memories.create",
+        json!({
+            "scope": "character",
+            "characterId": character.id,
+            "keys": ["nyx"],
+            "content": "Nyx keeps the lanterns lit."
+        }),
+    )
+    .expect("memories.create (character scope) must succeed");
+
+    // Switching the scope back to global clears the owner and keeps the
+    // rest of the row (partial update semantics still hold).
+    let unscoped = dispatch_decoded::<MemoryDto>(
+        &kernel,
+        "memories.update",
+        json!({ "memoryId": scoped.id, "scope": "global", "content": "The lanterns lit themselves." }),
+    )
+    .expect("un-scoping update must succeed");
+    assert_eq!(
+        unscoped.scope,
+        contracts_generated::generated::MemoryScope::Global
+    );
+    assert!(unscoped.character_id.is_none(), "owner is cleared");
+    assert_eq!(unscoped.content, "The lanterns lit themselves.");
+    assert_eq!(unscoped.keys, vec!["nyx".to_string()]);
+
+    // global scope + explicit characterId → VALIDATION product error.
+    let contradiction = dispatch_json(
+        &kernel,
+        "memories.update",
+        json!({ "memoryId": scoped.id, "scope": "global", "characterId": character.id }),
+    )
+    .expect_err("global scope with a characterId must fail");
+    assert_eq!(
+        contradiction.product.expect("product dto").code,
+        "VALIDATION"
+    );
+
+    // Absent scope + characterId on a stored global row → VALIDATION (the
+    // row would end up global with a non-NULL owner otherwise).
+    let silent_rescope = dispatch_json(
+        &kernel,
+        "memories.update",
+        json!({ "memoryId": scoped.id, "characterId": character.id }),
+    )
+    .expect_err("characterId without a scope switch on a global row must fail");
+    assert_eq!(
+        silent_rescope.product.expect("product dto").code,
+        "VALIDATION"
+    );
+
+    // Character → character re-binding without an explicit scope is still
+    // allowed (the stored scope is kept, the owner is swapped).
+    let other =
+        dispatch_decoded::<CharacterDto>(&kernel, "characters.create", json!({ "name": "Vex" }))
+            .expect("second characters.create must succeed");
+    let rebound =
+        dispatch_decoded::<CharacterDto>(&kernel, "characters.create", json!({ "name": "Zephyr" }))
+            .expect("third characters.create must succeed");
+    let char_scoped = dispatch_decoded::<MemoryDto>(
+        &kernel,
+        "memories.create",
+        json!({
+            "scope": "character",
+            "characterId": other.id,
+            "keys": ["vex"],
+            "content": "Vex trades in rumors."
+        }),
+    )
+    .expect("memories.create (other) must succeed");
+    let moved = dispatch_decoded::<MemoryDto>(
+        &kernel,
+        "memories.update",
+        json!({ "memoryId": char_scoped.id, "characterId": rebound.id }),
+    )
+    .expect("re-binding update must succeed");
+    assert_eq!(
+        moved.scope,
+        contracts_generated::generated::MemoryScope::Character
+    );
+    assert_eq!(moved.character_id.as_deref(), Some(rebound.id.as_str()));
+}

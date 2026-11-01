@@ -51,7 +51,7 @@ shares the route; the shared route's last consumer owns its deletion.
   `characters.gallery.{list,add,delete}` — the gallery cluster is fully
   covered, avatar-original rides the existing `assets.content` — and
   `settings.instructformats.list` (the settings cluster is fully covered)).
-- **Legacy-route coverage: 72 covered / 8 partial / 85 missing** (no wire op
+- **Legacy-route coverage: 73 covered / 7 partial / 85 missing** (no wire op
   at all; `backups.delete` closes its route into the covered set on the
   next registry recount).
 - Kernel-mode gating in the UI is consistent: every legacy branch sits
@@ -81,7 +81,7 @@ diagnostics/settings.
 | 2   | Lorebooks + entries                                                              | LorebookPanel                    | 10 (entries-PATCH partial)             | 9 covered, 1 partial, restore missing                | todo                |
 | 3   | Variants/revisions/swipe                                                         | ChatPage                         | covered (swipe maps to variants)       | covered                                              | todo (UI flag flip) |
 | 4   | Drafts                                                                           | plugin draft streaming           | covered (save→upsert)                  | covered                                              | todo (UI flag flip) |
-| 5   | Memories                                                                         | MemoryEditor                     | 4 (PATCH partial)                      | 3 covered, 1 partial                                 | todo                |
+| 5   | Memories                                                                         | MemoryEditor                     | 4 (PATCH partial)                      | 4 covered (`scope=global` un-scope M7)               | wire done           |
 | 6   | Presets                                                                          | preset editors                   | 5                                      | covered                                              | todo (UI flag flip) |
 | 7   | Providers: config + secrets CRUD/reveal/exposure                                 | provider editors, ApiKeysModal   | 16, all missing (config list/set only) | missing×16                                           | todo (wire gap)     |
 | 8   | Providers: models/test/speech/images/transcribe                                  | provider setup, TTS              | 5                                      | missing×5                                            | todo (wire gap)     |

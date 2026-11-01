@@ -3246,31 +3246,73 @@ pub fn memories_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     // Parity with `memories_create`: setting scope to `character` REQUIRES a
     // characterId (a character memory with a NULL owner is invisible to
     // retrieval — `character_id = ch.character_id` never matches NULL).
-    // An absent scope with an explicit characterId keeps the stored scope.
+    //
+    // M7 Etap-4 (cluster 5 un-scope tail): `scope: "global"` on the update
+    // CLEARS the stored characterId — the wire DTO keeps `Option<String>` and
+    // cannot express `characterId: null`, so switching the scope back to
+    // global IS the un-scope. A `global` scope together with an explicit
+    // characterId is a contradiction and rejects with VALIDATION.
     if let Some(scope) = &req.scope {
-        if *scope == MemoryScope::Character {
-            let Some(character_id) = &req.character_id else {
-                return Err(KernelError::product(
-                    "VALIDATION".to_string(),
-                    vec![(
-                        "message".to_string(),
-                        "character-scoped memory requires characterId".to_string(),
-                    )],
-                ));
-            };
-            let exists = db
-                .conn()
-                .query_row(
-                    "SELECT 1 FROM characters WHERE id = ?1 LIMIT 1",
-                    params![character_id],
-                    |_| Ok(()),
-                )
-                .optional()
-                .map_err(|e| sqlite(e, "memories_update: character check"))?
-                .is_some();
-            if !exists {
-                return Err(not_found("CHARACTER", character_id));
+        match scope {
+            MemoryScope::Character => {
+                let Some(character_id) = &req.character_id else {
+                    return Err(KernelError::product(
+                        "VALIDATION".to_string(),
+                        vec![(
+                            "message".to_string(),
+                            "character-scoped memory requires characterId".to_string(),
+                        )],
+                    ));
+                };
+                let exists = db
+                    .conn()
+                    .query_row(
+                        "SELECT 1 FROM characters WHERE id = ?1 LIMIT 1",
+                        params![character_id],
+                        |_| Ok(()),
+                    )
+                    .optional()
+                    .map_err(|e| sqlite(e, "memories_update: character check"))?
+                    .is_some();
+                if !exists {
+                    return Err(not_found("CHARACTER", character_id));
+                }
             }
+            MemoryScope::Global => {
+                if req.character_id.is_some() {
+                    return Err(KernelError::product(
+                        "VALIDATION".to_string(),
+                        vec![(
+                            "message".to_string(),
+                            "global memory cannot carry a characterId (omit characterId to un-scope)"
+                                .to_string(),
+                        )],
+                    ));
+                }
+            }
+        }
+    } else if req.character_id.is_some() {
+        // Absent scope + explicit characterId keeps the stored scope; that is
+        // only meaningful for an already character-scoped row. A stored
+        // global row would end up global with a non-NULL owner (broken
+        // invariant), so require the explicit scope switch instead.
+        let stored_global = db
+            .conn()
+            .query_row(
+                "SELECT scope FROM memories WHERE id = ?1 LIMIT 1",
+                params![id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|e| sqlite(e, "memories_update: stored scope check"))?;
+        if stored_global.as_deref() == Some("global") {
+            return Err(KernelError::product(
+                "VALIDATION".to_string(),
+                vec![(
+                    "message".to_string(),
+                    "setting characterId on a global memory requires scope=character".to_string(),
+                )],
+            ));
         }
     }
     let keys = match &req.keys {
@@ -3301,6 +3343,10 @@ pub fn memories_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
         if let Some(character_id) = &req.character_id {
             sets.push("character_id = ?");
             values.push(Value::Text(character_id.clone()));
+        } else if matches!(&req.scope, Some(MemoryScope::Global)) {
+            // Un-scope (cluster 5): switching back to global clears the owner
+            // (validated above; the wire cannot express `characterId: null`).
+            sets.push("character_id = NULL");
         }
         if let Some(keys) = &keys {
             sets.push("keys_json = ?");

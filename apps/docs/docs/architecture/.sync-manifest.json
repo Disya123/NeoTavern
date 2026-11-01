@@ -305,7 +305,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "5005cb4e2a7c70ca1b0819d29e3a8efbb76c2d75bc29f84ce612747b723d9a3b"
+      "sha256": "359c46c415adb01ddbdaaf86d1f396a31fec7978252de4b68e2efae514cf9131"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -330,7 +330,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "ac5e41d30d0c973336e8e9b6b6c5f54f1d3bf4a828e5f19eb0821972e2650087"
+      "sha256": "b4bae620bf8c288d76392a6ffba0a7b4d92b4a1d79e252c6aa3b960bf1f63ec0"
     },
     {
       "source": "architecture/portable-data.md",
@@ -405,7 +405,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "3f82db39fa3093b1004c7d3dc04ffe28659bb5a7eeadfe5a4cf3e65d8d413e2a"
+      "sha256": "53670018cb2428d236a67de687b17361e3847a0ee2ede74f49915c9b6d91ff88"
     },
     {
       "source": "data/README.md",
