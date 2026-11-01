@@ -17,6 +17,15 @@ Codes: `VALIDATION`, `NOT_FOUND`, `CHARACTER_NOT_FOUND`, `CHAT_NOT_FOUND`,
 
 ## Remote mode authorization
 
+> **Legacy HTTP transport layer; no kernel counterpart (documented N/A).**
+> Этап-4 registry cluster 22 marks these three routes **N/A**: the session
+> cookie + CSRF machinery belongs to the Fastify transport and is not
+> expressible in transport-neutral Product Wire DTOs. The kernel plane
+> authenticates remote clients through the `remote-http` adapter's pairing
+> credentials (random revocable bearer token, capped store, constant-time
+> verification, audit) carried by the Web Client HostConnect flow; loopback
+> and local planes need no auth.
+
 In loopback mode, authorization is not required. Non-loopback startup is allowed only
 with an explicit `NEOTA_REMOTE_ACCESS=true`, a token and a trusted public origin.
 

@@ -475,7 +475,21 @@
   hash `e38584b4…`; registry 122 ops.
 ### Architecture
 
-- **Large-file ingestion is now a named blocker, not a silent backlog item
+- **Auth/session documented N/A on the kernel plane (M7 Etap-4 cluster
+  22).** The three legacy `/api/v2/auth/session` routes are the Fastify HTTP
+  transport's browser-session layer (bootstrap token → bounded HttpOnly
+  `__Host-` cookie + in-memory CSRF) — cookies and CSRF headers are not
+  expressible in transport-neutral Product Wire DTOs, and the kernel plane
+  already authenticates at the layer where this belongs: the `remote-http`
+  adapter's pairing credentials (random bearer token returned exactly once,
+  revocable, capped, constant-time verification, audit events) carried by the
+  Web Client's HostConnect flow as `Authorization: Bearer` (sessionStorage at
+  most, never localStorage — M6). Local planes (Tauri IPC, loopback) need no
+  auth; the session hook already reports the honest
+  `{ required: false, authenticated: true }` in kernel mode and the AuthGate
+  works on both planes today. The routes stay functional in the sidecar and
+  retire with it. Registry row, coverage note, operations inventory and the
+  API doc are updated; no wire operations, contracts or code change.- **Large-file ingestion is now a named blocker, not a silent backlog item
   (M7 Etap-4 clusters 8 tail + 10).** Two clusters cannot be honestly ported
   before the wire grows a large-file ingestion contract: the speech / images /
   transcribe tail (binary or multipart payloads, multi-MB base64 results) and

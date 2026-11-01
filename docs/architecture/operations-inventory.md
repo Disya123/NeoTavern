@@ -483,9 +483,21 @@ SillyTavern full-backup transfer (two-phase):
 
 ### remoteAuth — `apps/server/src/plugins/remoteAuth.ts`
 
-- `GET /api/v2/auth/session` — current session.
-- `POST /api/v2/auth/session` — create session (login).
-- `DELETE /api/v2/auth/session` — destroy session.
+**N/A on the kernel plane (Этап-4 registry cluster 22):** the three routes are
+the legacy HTTP transport's browser-session layer (bootstrap token → bounded
+HttpOnly cookie + in-memory CSRF). Cookies and CSRF headers are not
+expressible in transport-neutral Product Wire DTOs, and the kernel plane
+already authenticates at the layer where this belongs: the `remote-http`
+adapter's pairing credentials (random bearer token returned exactly once,
+revocable, capped, constant-time verification, audit events) carried by the
+Web Client's HostConnect flow as `Authorization: Bearer`; local planes (Tauri
+IPC, loopback) need no auth, and the session hook reports the honest
+`{ required: false, authenticated: true }` there. The routes retire with the
+sidecar.
+
+- `GET /api/v2/auth/session` — current session (N/A).
+- `POST /api/v2/auth/session` — create session (login; N/A).
+- `DELETE /api/v2/auth/session` — destroy session (N/A).
 
 Loopback mode needs no auth; non-loopback startup requires
 `NEOTA_REMOTE_ACCESS=true`, a token and a trusted public origin
