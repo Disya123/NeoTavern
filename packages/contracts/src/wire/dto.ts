@@ -1784,10 +1784,11 @@ export type ListLorebooksResultDto = Static<typeof ListLorebooksResultDtoSchema>
 
 /**
  * Lorebook entry DTO (`wire.lorebook.entry.dto`). One entry of a book, as the
- * wire exposes it: the stable `id` plus the product-owned fields
- * (keys/secondaryKeys/content/enabled/constant/selective). Position and
- * metadata stay inside the stored `entries_json` and are not wire fields yet
- * (Этап 4 follow-up), so the UI receives only what the contract owns.
+ * wire exposes it: the stable `id`, the product-owned fields
+ * (keys/secondaryKeys/content/enabled/constant/selective) and — since the M7
+ * Etap-4 slice — the entry `position` and free-form `metadata` (they live in
+ * the stored `entries_json`; the kernel owns them on create and they are
+ * patchable through `wire.lorebook.entry.patch`).
  */
 export const LorebookEntryDtoSchema = Type.Object(
   {
@@ -1802,6 +1803,8 @@ export const LorebookEntryDtoSchema = Type.Object(
     enabled: Type.Boolean(),
     constant: Type.Boolean(),
     selective: Type.Boolean(),
+    position: Type.Optional(Type.Integer({ minimum: 0, maximum: 1_000_000 })),
+    metadata: Type.Optional(Type.Object({}, { additionalProperties: true })),
   },
   { $id: 'wire.lorebook.entry.dto', additionalProperties: false },
 );
@@ -1810,7 +1813,8 @@ export type LorebookEntryDto = Static<typeof LorebookEntryDtoSchema>;
 /**
  * Lorebook entry partial-update payload (`wire.lorebook.entry.patch`). Every
  * field is optional; only the provided ones are replaced. The entry `id` is
- * in the request path, not here.
+ * in the request path, not here. `position` re-orders the entry inside the
+ * book and `metadata` is replaced wholesale (M7 Etap-4 slice).
  */
 export const LorebookEntryPatchSchema = Type.Object(
   {
@@ -1824,6 +1828,8 @@ export const LorebookEntryPatchSchema = Type.Object(
     enabled: Type.Optional(Type.Boolean()),
     constant: Type.Optional(Type.Boolean()),
     selective: Type.Optional(Type.Boolean()),
+    position: Type.Optional(Type.Integer({ minimum: 0, maximum: 1_000_000 })),
+    metadata: Type.Optional(Type.Object({}, { additionalProperties: true })),
   },
   { $id: 'wire.lorebook.entry.patch', additionalProperties: false },
 );

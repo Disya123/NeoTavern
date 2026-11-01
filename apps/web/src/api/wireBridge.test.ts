@@ -1101,10 +1101,23 @@ describe('lorebook CRUD (kernel, Этап 4.1)', () => {
     );
   });
 
-  it('keeps position/metadata patching honest in kernel mode', async () => {
-    await expect(
-      updateLorebookEntry(WIRE_LOREBOOK.id, 'e1', { position: 3 }),
-    ).rejects.toBeInstanceOf(UnsupportedError);
+  it('patches position/metadata through the wire in kernel mode', async () => {
+    mocks.lorebooks.updateEntry.mockResolvedValue({
+      ...WIRE_LOREBOOK_ENTRY,
+      position: 3,
+      metadata: { source: 'ui' },
+    });
+    const moved = await updateLorebookEntry(WIRE_LOREBOOK.id, WIRE_LOREBOOK_ENTRY.id, {
+      position: 3,
+      metadata: { source: 'ui' },
+    });
+    expect(mocks.lorebooks.updateEntry).toHaveBeenCalledWith({
+      lorebookId: WIRE_LOREBOOK.id,
+      entryId: WIRE_LOREBOOK_ENTRY.id,
+      patch: { position: 3, metadata: { source: 'ui' } },
+    });
+    expect(moved.position).toBe(3);
+    expect(moved.metadata).toEqual({ source: 'ui' });
   });
 });
 

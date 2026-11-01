@@ -4,6 +4,18 @@
 
 ### Added
 
+- **Lorebook entry position/metadata on the wire (M7 Etap-4 slice; cluster 2
+  entries-PATCH tail closed).** `wire.lorebook.entry.patch` gains `position`
+  (re-orders the entry inside the book) and `metadata` (replaced wholesale);
+  `wire.lorebook.entry.dto` surfaces both on read (optional — entries stored
+  before the slice project without them). The web transport carries the
+  fields through and surfaces them in the legacy UI shape (the honest
+  UnsupportedError placeholder is retired). The legacy restore route stays
+  kernel-less by design: kernel `lorebooks.delete` is permanent, so no
+  soft-deleted trash exists to restore from (documented N/A). Tests: kernel
+  (position/metadata patch + list reflection), remote-http parity, web
+  wireBridge test; WIRE_SCHEMA_HASH bumped, op count unchanged (106).
+
 - **Persona avatar clear on the wire (M7 Etap-4 slice; cluster 1 fully
   covered).** `personas.update` gains the explicit `clearAvatar` flag — the
   wire form of the legacy `avatar: null` PATCH clear (the wire `avatar`

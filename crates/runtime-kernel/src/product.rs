@@ -2661,6 +2661,13 @@ fn entry_to_dto(entry: &serde_json::Value) -> Option<generated::LorebookEntryDto
         enabled: flag("enabled", true),
         constant: flag("constant", false),
         selective: flag("selective", false),
+        // M7 Etap-4 (cluster 2): position/metadata now surface on the wire;
+        // older stored entries without them project to None (optional).
+        position: obj
+            .get("position")
+            .and_then(|v| v.as_i64())
+            .filter(|p| *p >= 0),
+        metadata: obj.get("metadata").filter(|v| v.is_object()).cloned(),
     })
 }
 
@@ -2852,6 +2859,15 @@ pub fn lorebooks_entries_update(db: &mut Database, request: &[u8]) -> Result<Vec
     }
     if let Some(selective) = patch.selective {
         entry["selective"] = serde_json::Value::Bool(selective);
+    }
+    // M7 Etap-4 (cluster 2 entries-PATCH tail): position re-orders the entry
+    // inside the book and metadata is replaced wholesale (the legacy PATCH
+    // could always do both).
+    if let Some(position) = patch.position {
+        entry["position"] = serde_json::Value::Number(position.into());
+    }
+    if let Some(metadata) = &patch.metadata {
+        entry["metadata"] = metadata.clone();
     }
     entry["updatedAt"] = serde_json::Value::String(now());
     stored[index] = entry.clone();

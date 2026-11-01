@@ -1574,10 +1574,8 @@ export async function updateLorebookEntry(
   update: LorebookEntryUpdate,
 ): Promise<LorebookEntry> {
   if (isKernelMode()) {
-    // position/metadata cannot be patched over the wire (kernel-owned).
-    if (update.position !== undefined || update.metadata !== undefined) {
-      throw new UnsupportedError('lorebooks.entries.update.position-metadata');
-    }
+    // M7 Etap-4 (cluster 2): position/metadata are wire fields now — the
+    // patch carries them through (position re-orders, metadata replaces).
     const updated = await backend.lorebooks.updateEntry({
       lorebookId: bookId,
       entryId,
@@ -1712,12 +1710,15 @@ function entryPatchInput(update: LorebookEntryUpdate): Record<string, unknown> {
   if (update.enabled !== undefined) patch.enabled = update.enabled;
   if (update.constant !== undefined) patch.constant = update.constant;
   if (update.selective !== undefined) patch.selective = update.selective;
+  // M7 Etap-4 (cluster 2): position/metadata are wire fields now.
+  if (update.position !== undefined) patch.position = update.position;
+  if (update.metadata !== undefined) patch.metadata = update.metadata;
   return patch;
 }
 
-/** Wire `wire.lorebook.entry.dto` → legacy UI entry (honest subset: the wire
- * entry carries no position/metadata/lorebookId — those are filled from the
- * call context and neutral defaults; the UI must not display them as truth). */
+/** Wire `wire.lorebook.entry.dto` → legacy UI entry. Position/metadata now
+ * ride the wire DTO (M7 Etap-4 cluster 2) and are surfaced when present;
+ * legacy-only timestamps stay neutral (the wire does not carry them). */
 function translateLorebookEntry(bookId: string, entry: LorebookEntryDto): LorebookEntry {
   return {
     id: entry.id,
@@ -1726,10 +1727,10 @@ function translateLorebookEntry(bookId: string, entry: LorebookEntryDto): Lorebo
     secondaryKeys: entry.secondaryKeys ?? [],
     content: entry.content,
     enabled: entry.enabled,
-    position: 0,
+    position: entry.position ?? 0,
     constant: entry.constant,
     selective: entry.selective,
-    metadata: {},
+    metadata: entry.metadata ?? {},
     createdAt: 0,
     updatedAt: 0,
   };

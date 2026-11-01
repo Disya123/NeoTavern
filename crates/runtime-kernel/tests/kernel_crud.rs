@@ -1278,6 +1278,51 @@ fn lorebook_entries_crud_round_trip() {
     assert_eq!(updated.keys, vec!["harbor".to_string()], "patch is partial");
     assert!(updated.constant, "unchanged fields survive the patch");
 
+    // M7 Etap-4 (cluster 2 entries-PATCH tail): position re-orders the entry
+    // and metadata is replaced wholesale — both now live on the wire.
+    let moved = dispatch_decoded::<LorebookEntryDto>(
+        &kernel,
+        "lorebooks.entries.update",
+        json!({
+            "lorebookId": book_id,
+            "entryId": created.id,
+            "patch": { "position": 0, "metadata": { "source": "import", "weight": 2 } }
+        }),
+    )
+    .expect("position/metadata patch must succeed");
+    assert_eq!(moved.position, Some(0), "position is patched");
+    assert_eq!(
+        moved.metadata.as_ref().expect("metadata").get("source"),
+        Some(&json!("import")),
+        "metadata is replaced"
+    );
+    assert_eq!(
+        moved.content, "The harbor freezes in winter.",
+        "still partial"
+    );
+
+    // entries.list reflects the patched position/metadata.
+    let relisted = dispatch_decoded::<ResultListLorebookEntries>(
+        &kernel,
+        "lorebooks.entries.list",
+        json!({ "lorebookId": book_id }),
+    )
+    .expect("lorebooks.entries.list must succeed");
+    let moved_listed = relisted
+        .items
+        .iter()
+        .find(|entry| entry.id == created.id)
+        .expect("the moved entry is listed");
+    assert_eq!(moved_listed.position, Some(0));
+    assert_eq!(
+        moved_listed
+            .metadata
+            .as_ref()
+            .expect("metadata")
+            .get("weight"),
+        Some(&json!(2))
+    );
+
     // entries.delete removes exactly that entry.
     dispatch_decoded::<ResultEmpty>(
         &kernel,

@@ -9194,6 +9194,10 @@ pub struct LorebookEntryDto {
     pub enabled: bool,
     pub constant: bool,
     pub selective: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
 }
 
 pub(crate) fn check_lorebook_entry_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
@@ -9313,9 +9317,30 @@ pub(crate) fn check_lorebook_entry_dto(value: &Value, path: &str, issues: &mut V
                 issues.push(Issue::new(child_path.as_str(), "Boolean"));
             }
         }
+        if let Some(child) = value.get("position") {
+            let child_path = join_path(path, "position");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 1000000 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("metadata") {
+            let child_path = join_path(path, "metadata");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "id" | "keys" | "secondaryKeys" | "content" | "enabled" | "constant" | "selective") {
+                if !matches!(key.as_str(), "id" | "keys" | "secondaryKeys" | "content" | "enabled" | "constant" | "selective" | "position" | "metadata") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -9349,6 +9374,10 @@ pub struct LorebookEntryPatch {
     pub constant: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selective: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
 }
 
 pub(crate) fn check_lorebook_entry_patch(value: &Value, path: &str, issues: &mut Vec<Issue>) {
@@ -9438,9 +9467,30 @@ pub(crate) fn check_lorebook_entry_patch(value: &Value, path: &str, issues: &mut
                 issues.push(Issue::new(child_path.as_str(), "Boolean"));
             }
         }
+        if let Some(child) = value.get("position") {
+            let child_path = join_path(path, "position");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 1000000 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("metadata") {
+            let child_path = join_path(path, "metadata");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "keys" | "secondaryKeys" | "content" | "enabled" | "constant" | "selective") {
+                if !matches!(key.as_str(), "keys" | "secondaryKeys" | "content" | "enabled" | "constant" | "selective" | "position" | "metadata") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }

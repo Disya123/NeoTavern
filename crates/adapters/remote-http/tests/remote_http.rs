@@ -2231,7 +2231,11 @@ fn lorebook_crud_over_http() {
         json!({
             "lorebookId": lorebook_id,
             "entryId": entry_id,
-            "patch": { "content": "The harbor freezes in winter." }
+            "patch": {
+                "content": "The harbor freezes in winter.",
+                "position": 0,
+                "metadata": { "source": "http-test" }
+            }
         }),
     );
     let response = http_request(server.addr, "POST", "/rpc", &[], &update_entry);
@@ -2242,6 +2246,9 @@ fn lorebook_crud_over_http() {
         updated_entry["content"],
         json!("The harbor freezes in winter.")
     );
+    // M7 Etap-4 (cluster 2): position/metadata are wire fields now.
+    assert_eq!(updated_entry["position"], json!(0));
+    assert_eq!(updated_entry["metadata"], json!({ "source": "http-test" }));
 
     let delete_entry = envelope_body(
         &rid(6),
