@@ -381,3 +381,68 @@ fn diagnostics_export_waiting_clears_after_expired_lease_recovery() {
         "interrupted recovery must clear the derived waiting counter"
     );
 }
+
+#[test]
+fn diagnostics_cache_clear_removes_only_derived_cache() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+
+    // Derived artifacts: two nested cache files plus one file directly in the
+    // cache root. Originals live under `files/` and must survive.
+    let cache = root.path().join("cache");
+    let thumbnails = cache.join("thumbnails");
+    std::fs::create_dir_all(&thumbnails).expect("thumbnails dir");
+    std::fs::write(thumbnails.join("a.jpg"), vec![7_u8; 1024]).expect("write a");
+    std::fs::write(thumbnails.join("b.jpg"), vec![7_u8; 2048]).expect("write b");
+    std::fs::write(cache.join("scratch.bin"), vec![7_u8; 512]).expect("write scratch");
+    let originals = root.path().join("files").join("avatar.png");
+    std::fs::create_dir_all(originals.parent().expect("originals parent")).expect("files dir");
+    std::fs::write(&originals, b"original-bytes").expect("write original");
+
+    let result = dispatch_ok(&kernel, "diagnostics.cache.clear", json!({}));
+    assert_eq!(result["removedFiles"].as_i64().expect("files"), 3);
+    assert_eq!(
+        result["removedBytes"].as_i64().expect("bytes"),
+        1024 + 2048 + 512
+    );
+    assert_eq!(
+        result["metadataRowsRemoved"].as_i64().expect("rows"),
+        0,
+        "the kernel keeps no cache-metadata rows; the count is honest"
+    );
+    assert!(cache.is_dir(), "the cache root is recreated empty");
+    assert_eq!(
+        std::fs::read_dir(&cache).expect("cache readable").count(),
+        0
+    );
+    assert_eq!(
+        std::fs::read(&originals).expect("original still readable"),
+        b"original-bytes",
+        "cache cleanup must never delete originals (AGENTS.md §12)"
+    );
+
+    // Idempotent: a second clear on the empty cache removes nothing.
+    let again = dispatch_ok(&kernel, "diagnostics.cache.clear", json!({}));
+    assert_eq!(again["removedFiles"].as_i64().expect("files"), 0);
+    assert_eq!(again["removedBytes"].as_i64().expect("bytes"), 0);
+}
+
+#[test]
+fn diagnostics_cache_clear_rejects_unknown_request_fields() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+    let error = dispatch_json(
+        &kernel,
+        "diagnostics.cache.clear",
+        json!({ "cache": "all" }),
+    )
+    .expect_err("the empty request admits no fields");
+    assert!(
+        matches!(
+            error.code,
+            runtime_kernel::KernelErrorCode::ContractViolation
+        ),
+        "unexpected code: {:?}",
+        error.code
+    );
+}

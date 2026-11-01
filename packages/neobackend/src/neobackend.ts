@@ -61,6 +61,7 @@ import type {
   CreateProfileResultDto,
   DeleteMessageRequestDto,
   DeleteMessageVariantRequestDto,
+  CacheCleanupResultDto,
   DiagnosticsExportResultDto,
   DiscardMessageDraftRequestDto,
   EmptyResultDto,
@@ -575,6 +576,13 @@ export interface SettingsApi {
 export interface DiagnosticsApi {
   /** Export the redacted allowlist diagnostics bundle. */
   export(opts?: BackendCallOptions): Promise<DiagnosticsExportResultDto>;
+  /**
+   * Delete the kernel's REGENERABLE cache (diagnostics.cache.clear, M7
+   * Этап-4 cluster 23). Scope is the derived-artifact tree only — original
+   * user files are never touched; the counts report what was removed, and a
+   * second call on an empty cache is a no-op.
+   */
+  cacheClear(opts?: BackendCallOptions): Promise<CacheCleanupResultDto>;
 }
 
 /**

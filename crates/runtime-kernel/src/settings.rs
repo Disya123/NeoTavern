@@ -12,9 +12,17 @@
 //! references, setting values or message content — redaction is fail-closed
 //! by omission. The wire contract pins `redaction: 'allowlist'`, and the
 //! kernel tests prove a sentinel secret never reaches the bundle.
+//!
+//! `diagnostics.cache.clear` (Этап-4 cluster 23) removes the kernel's
+//! REGENERABLE cache (`<data-root>/cache/` — today only derived thumbnails).
+//! Original user files live under `files/` and are never touched; the cache
+//! directory is recreated empty so later reads rebuild lazily (AGENTS.md §12:
+//! the disk cache must be fully deletable and automatically recoverable).
+//! Symlinks are not followed, and the kernel keeps no cache-metadata rows, so
+//! `metadataRowsRemoved` is honestly `0` rather than a fabricated count.
 
 use contracts_generated::generated::{
-    self, ResultDiagnosticsExport, ResultDiagnosticsExportGenerationRuns,
+    self, ResultCacheCleanup, ResultDiagnosticsExport, ResultDiagnosticsExportGenerationRuns,
     ResultDiagnosticsExportSettings, ResultDiagnosticsExportWireVersion, ResultInstructFormats,
     ResultSettings, SettingsInstructFormat, SettingsItem,
 };
@@ -365,6 +373,112 @@ pub(crate) fn diagnostics_export(
     generated::validate_result_diagnostics_export(&value).map_err(|issues| KernelError {
         code: KernelErrorCode::ContractViolation,
         message: "kernel diagnostics dto failed validation".to_string(),
+        issues,
+        params: Vec::new(),
+        product: None,
+    })?;
+    crate::product::encode(&value)
+}
+
+/// `diagnostics.cache.clear` — deletes the kernel's REGENERABLE cache.
+///
+/// Request: `wire.request.empty`; response: `wire.result.cache-cleanup`.
+///
+/// Scope is `<data-root>/cache/` only: original user files live under
+/// `files/` and are never read, moved or deleted here (AGENTS.md §12 — cache
+/// clearing must never delete originals). The directory is recreated empty so
+/// derived artifacts rebuild lazily. Symlinks inside the cache are counted as
+/// zero and removed as links (never followed), so a planted link cannot make
+/// the cleanup reach outside the cache root. The kernel keeps no
+/// cache-metadata rows; `metadataRowsRemoved` is reported as `0` honestly
+/// instead of inventing a legacy-sidecar counter.
+pub(crate) fn diagnostics_cache_clear(
+    db: &mut Database,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
+    generated::decode_empty_request_dto(request)?;
+    let cache_dir = db.data_root().join("cache");
+    let mut removed_files: i64 = 0;
+    let mut removed_bytes: i64 = 0;
+    let mut pending = vec![cache_dir.clone()];
+    while let Some(dir) = pending.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            // An absent cache is a legitimate state (nothing was derived yet).
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(err) => {
+                return Err(KernelError::new(
+                    KernelErrorCode::StorageFailure,
+                    format!(
+                        "diagnostics.cache.clear: cannot read {}: {err}",
+                        dir.display()
+                    ),
+                ));
+            }
+        };
+        for entry in entries {
+            let entry = entry.map_err(|err| {
+                KernelError::new(
+                    KernelErrorCode::StorageFailure,
+                    format!("diagnostics.cache.clear: cannot read a cache entry: {err}"),
+                )
+            })?;
+            let file_type = entry.file_type().map_err(|err| {
+                KernelError::new(
+                    KernelErrorCode::StorageFailure,
+                    format!("diagnostics.cache.clear: cannot stat a cache entry: {err}"),
+                )
+            })?;
+            if file_type.is_symlink() {
+                continue;
+            }
+            if file_type.is_dir() {
+                pending.push(entry.path());
+            } else {
+                let bytes = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
+                std::fs::remove_file(entry.path()).map_err(|err| {
+                    KernelError::new(
+                        KernelErrorCode::StorageFailure,
+                        format!(
+                            "diagnostics.cache.clear: cannot remove {}: {err}",
+                            entry.path().display()
+                        ),
+                    )
+                })?;
+                removed_files += 1;
+                removed_bytes += i64::try_from(bytes).unwrap_or(i64::MAX);
+            }
+        }
+    }
+    if cache_dir.exists() {
+        std::fs::remove_dir_all(&cache_dir).map_err(|err| {
+            KernelError::new(
+                KernelErrorCode::StorageFailure,
+                format!("diagnostics.cache.clear: cannot remove the cache tree: {err}"),
+            )
+        })?;
+    }
+    std::fs::create_dir_all(&cache_dir).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::StorageFailure,
+            format!("diagnostics.cache.clear: cannot recreate the cache dir: {err}"),
+        )
+    })?;
+
+    let dto = ResultCacheCleanup {
+        removed_files,
+        removed_bytes,
+        metadata_rows_removed: 0,
+    };
+    let value = serde_json::to_value(&dto).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize cache-cleanup response: {err}"),
+        )
+    })?;
+    generated::validate_result_cache_cleanup(&value).map_err(|issues| KernelError {
+        code: KernelErrorCode::ContractViolation,
+        message: "kernel cache-cleanup dto failed validation".to_string(),
         issues,
         params: Vec::new(),
         product: None,

@@ -10,6 +10,7 @@ import {
   type CharacterDto,
   type CreateProfileResultDto,
   type CreateProviderSecretResultDto,
+  type CacheCleanupResultDto,
   type DiagnosticsExportResultDto,
   type GenerationRunDto,
   type GetAssetContentResultDto,
@@ -338,6 +339,12 @@ const DIAGNOSTICS: DiagnosticsExportResultDto = {
   sections: ['meta', 'storage', 'settings', 'generation'],
   settings: { count: 2 },
   generationRuns: { total: 1, completed: 1, failed: 0, waiting: 0 },
+};
+
+const CACHE_CLEANUP: CacheCleanupResultDto = {
+  removedFiles: 12,
+  removedBytes: 524288,
+  metadataRowsRemoved: 0,
 };
 
 const SECRETS_STATUS: SecretsStatusResultDto = {
@@ -718,6 +725,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: SETTINGS };
       case 'diagnostics.export':
         return { ok: true, value: DIAGNOSTICS };
+      case 'diagnostics.cache.clear':
+        return { ok: true, value: CACHE_CLEANUP };
       case 'search.query':
         return { ok: true, value: SEARCH_RESULT };
       case 'search.rebuild':
@@ -891,6 +900,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return SETTINGS;
     case 'diagnostics.export':
       return DIAGNOSTICS;
+    case 'diagnostics.cache.clear':
+      return CACHE_CLEANUP;
     case 'search.query':
       return SEARCH_RESULT;
     case 'search.rebuild':
@@ -2373,6 +2384,20 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(localResult.redaction).toBe('allowlist');
   });
 
+  it('diagnostics.cache.clear reports removed derived artifacts from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.diagnostics.cacheClear(),
+      remote.diagnostics.cacheClear(),
+    ]);
+    expect(kernel.requests).toEqual([{ operationId: 'diagnostics.cache.clear', payload: {} }]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(CACHE_CLEANUP);
+  });
+
   it('secrets.status reports the value-free store mode from both backends', async () => {
     const kernel = new FakeKernelTransport();
     const local = new LocalBackend({ transport: kernel });
@@ -2746,6 +2771,7 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     ).toThrow(UnsupportedError);
     expect(() => backend.settings.get()).toThrow(UnsupportedError);
     expect(() => backend.diagnostics.export()).toThrow(UnsupportedError);
+    expect(() => backend.diagnostics.cacheClear()).toThrow(UnsupportedError);
     expect(() => backend.secrets.status()).toThrow(UnsupportedError);
     expect(() => backend.secrets.lock()).toThrow(UnsupportedError);
     expect(() => backend.assets.get(ASSET_ID)).toThrow(UnsupportedError);

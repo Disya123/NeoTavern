@@ -114,6 +114,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "settings.update" => Some(65536),
         "settings.instructformats.list" => Some(1024),
         "diagnostics.export" => Some(1024),
+        "diagnostics.cache.clear" => Some(1024),
         "search.query" => Some(4096),
         "search.rebuild" => Some(1024),
         "secrets.status" => Some(1024),
@@ -243,6 +244,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "settings.update" => Some(262144),
         "settings.instructformats.list" => Some(16384),
         "diagnostics.export" => Some(262144),
+        "diagnostics.cache.clear" => Some(4096),
         "search.query" => Some(262144),
         "search.rebuild" => Some(2048),
         "secrets.status" => Some(262144),
@@ -5408,6 +5410,84 @@ pub fn validate_result_diagnostics_export(value: &Value) -> Result<(), Vec<Issue
 
 pub fn decode_result_diagnostics_export(bytes: &[u8]) -> Result<ResultDiagnosticsExport, WireError> {
     crate::decode::<ResultDiagnosticsExport>(validate_result_diagnostics_export, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultCacheCleanup {
+    #[serde(rename = "removedFiles")]
+    pub removed_files: i64,
+    #[serde(rename = "removedBytes")]
+    pub removed_bytes: i64,
+    #[serde(rename = "metadataRowsRemoved")]
+    pub metadata_rows_removed: i64,
+}
+
+pub(crate) fn check_result_cache_cleanup(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("removedFiles").is_none() {
+            issues.push(Issue::new(join_path(path, "removedFiles"), "RequiredProperty"));
+        }
+        if value.get("removedBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "removedBytes"), "RequiredProperty"));
+        }
+        if value.get("metadataRowsRemoved").is_none() {
+            issues.push(Issue::new(join_path(path, "metadataRowsRemoved"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("removedFiles") {
+            let child_path = join_path(path, "removedFiles");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("removedBytes") {
+            let child_path = join_path(path, "removedBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("metadataRowsRemoved") {
+            let child_path = join_path(path, "metadataRowsRemoved");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "removedFiles" | "removedBytes" | "metadataRowsRemoved") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_cache_cleanup(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_cache_cleanup(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_cache_cleanup(bytes: &[u8]) -> Result<ResultCacheCleanup, WireError> {
+    crate::decode::<ResultCacheCleanup>(validate_result_cache_cleanup, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

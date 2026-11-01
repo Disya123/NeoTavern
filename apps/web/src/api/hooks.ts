@@ -1365,12 +1365,12 @@ export function useClearDiagnosticCache() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => {
-      // Kernel plane: no legacy diagnostic cache to clear — honest
-      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy request
-      // (ARC-02). The DiagnosticsPanel also disables the action in kernel
-      // mode.
+      // M7 Etap-4 (cluster 23): both planes clear a regenerable cache — the
+      // kernel through diagnostics.cache.clear (derived thumbnails only,
+      // originals untouched), the sidecar through the legacy route. The
+      // result maps onto the same shape, so the panel renders both honestly.
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('diagnostics.cache'));
+        return backend.diagnostics.cacheClear();
       }
       return api.del<CacheCleanupResult>('/diagnostics/cache');
     },

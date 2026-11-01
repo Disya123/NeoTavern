@@ -18,6 +18,7 @@ import {
   type CharacterDto,
   type ChatDto,
   type CreateProfileResultDto,
+  type CacheCleanupResultDto,
   type DiagnosticsExportResultDto,
   type EmptyResultDto,
   type GenerationRunDto,
@@ -481,6 +482,7 @@ export class LocalBackend implements NeoBackend {
     };
     this.diagnostics = {
       export: (opts) => this.invoke<DiagnosticsExportResultDto>('diagnostics.export', {}, opts),
+      cacheClear: (opts) => this.invoke<CacheCleanupResultDto>('diagnostics.cache.clear', {}, opts),
     };
     this.secrets = {
       status: (opts) => this.invoke<SecretsStatusResultDto>('secrets.status', {}, opts),

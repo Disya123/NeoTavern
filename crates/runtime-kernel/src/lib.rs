@@ -710,6 +710,10 @@ fn handle_unary(
         // M7 Etap-4 (cluster 27): static built-in catalog, no database.
         "settings.instructformats.list" => settings::settings_instruct_formats_list(req),
         "diagnostics.export" => with_db_opt(db, |db| settings::diagnostics_export(db, req)),
+        // M7 Etap-4 (cluster 23): regenerable-cache cleanup (thumbnails).
+        "diagnostics.cache.clear" => {
+            with_db_opt(db, |db| settings::diagnostics_cache_clear(db, req))
+        }
         // M7 Etap-4 (cluster 16): FTS5 full-text search + index rebuild.
         "search.query" => with_db_opt(db, |db| product::search_query(db, req)),
         "search.rebuild" => with_db_opt(db, |db| product::search_rebuild(db, req)),

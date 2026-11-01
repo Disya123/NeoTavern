@@ -451,6 +451,28 @@
   claim). React contour unaffected (its composer draft stays
   session-local, AGENTS §13).
 
+### Added
+
+- **Regenerable-cache cleanup on the kernel plane (M7 Etap-4 slice; cluster
+  23).** New wire op `diagnostics.cache.clear` (`DELETE
+  /api/v2/diagnostics/cache` parity): deletes the kernel cache tree
+  (`<data-root>/cache/`, today derived thumbnails only) and recreates it empty
+  so artifacts rebuild lazily — original user files under `files/` are never
+  read or deleted (AGENTS.md §12), the walk skips symlinks so a planted link
+  cannot reach outside the cache root, an absent cache is a no-op, and a second
+  call on an empty cache returns zeros (idempotent). The result is the legacy
+  `CacheCleanupResult` shape (`removedFiles` / `removedBytes` /
+  `metadataRowsRemoved`); the kernel keeps no cache-metadata rows, so that
+  counter is honestly `0` instead of a fabricated legacy number. Facade:
+  `backend.diagnostics.cacheClear()` (local/remote implemented; the legacy
+  facade keeps `UnsupportedError`). Web: `useClearDiagnosticCache` routes
+  through the wire op on the kernel plane and the DiagnosticsPanel enables the
+  maintenance action there (the "maintenance unavailable in Kernel Preview"
+  hint is gone — both maintenance actions, search rebuild and cache cleanup,
+  now work on both planes). The diagnostics SNAPSHOT route remains a documented
+  partial: `diagnostics.export` is the SEC-07 allowlist bundle, not the legacy
+  rich snapshot, and the panel keeps mapping the two planes honestly. Contract
+  hash `e38584b4…`; registry 122 ops.
 ### Architecture
 
 - **Connection profiles documented N/A on the kernel plane (M7 Etap-4

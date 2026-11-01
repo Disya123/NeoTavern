@@ -334,6 +334,7 @@ export class LegacyBackend implements NeoBackend {
 
   readonly diagnostics: DiagnosticsApi = {
     export: () => this.unsupported('diagnostics.export'),
+    cacheClear: () => this.unsupported('diagnostics.cache.clear'),
   };
 
   readonly secrets: SecretsApi = {

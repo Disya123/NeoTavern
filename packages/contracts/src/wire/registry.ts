@@ -1696,6 +1696,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'diagnostics.cache.clear',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.empty',
+    'wire.result.cache-cleanup',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    4096,
+    undefined,
+  ),
+  op(
     'search.query',
     'transactional',
     'idempotent',
@@ -2970,6 +2984,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('settings-instruct-formats-request', 'settings.instructformats.list', 'request', true, {}),
   fx('diagnostics-export-request', 'diagnostics.export', 'request', true, {}),
+  fx('diagnostics-cache-clear-request', 'diagnostics.cache.clear', 'request', true, {}),
   fx('search-query-request', 'search.query', 'request', true, {
     q: 'forest guardian',
     scope: 'characters',
@@ -3384,6 +3399,11 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     INSTRUCT_FORMATS_VALUE,
   ),
   fx('diagnostics-export-response', 'diagnostics.export', 'response', true, DIAGNOSTICS_VALUE),
+  fx('diagnostics-cache-clear-response', 'diagnostics.cache.clear', 'response', true, {
+    removedFiles: 12,
+    removedBytes: 524288,
+    metadataRowsRemoved: 0,
+  }),
   fx('search-query-response', 'search.query', 'response', true, {
     query: 'forest guardian',
     items: [
@@ -3476,6 +3496,11 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('neg-settings-update-bad-key', 'settings.update', 'request', false, {
     settings: [{ key: 'no spaces', value: {} }],
+  }),
+  fx('neg-diagnostics-cache-clear-negative-bytes', 'diagnostics.cache.clear', 'response', false, {
+    removedFiles: 1,
+    removedBytes: -1,
+    metadataRowsRemoved: 0,
   }),
   fx('neg-diagnostics-export-bad-redaction', 'diagnostics.export', 'response', false, {
     ...DIAGNOSTICS_VALUE,

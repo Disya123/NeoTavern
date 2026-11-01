@@ -97,7 +97,7 @@ All errors cross the HTTP boundary as a stable machine-readable envelope
 | messageBlocks      | `plugins/messageBlocks.ts`        | block list/create/patch/delete                                                                   |
 | connectionProfiles | `plugins/connectionProfiles.ts`   | CRUD + apply                                                                                     |
 | dataImports        | `plugins/dataImports.ts`          | SillyTavern analyze/execute/delete/direct import                                                 |
-| diagnostics        | `plugins/diagnostics.ts`          | snapshot, cache cleanup                                                                          |
+| diagnostics        | `plugins/diagnostics.ts`          | snapshot, cache cleanup (diagnostics.export partial + diagnostics.cache.clear M7)                |
 | events             | `plugins/events.ts`               | SSE event stream                                                                                 |
 | generate           | `plugins/generate.ts`             | generation SSE, context-audit, context-preview, plugin-intercepts                                |
 | lorebooks          | `plugins/lorebooks.ts`            | CRUD + restore, entries CRUD                                                                     |
@@ -276,8 +276,15 @@ SillyTavern full-backup transfer (two-phase):
 
 - `GET /api/v2/diagnostics` — read-only `DiagnosticsSnapshot` (runtime/API
   version, `PRAGMA quick_check`, migration `schemaVersion`/`migrationCount`,
-  entity counts, directory usage, disk).
-- `DELETE /api/v2/diagnostics/cache` — cache cleanup (thumbnails).
+  entity counts, directory usage, disk). Kernel plane: `diagnostics.export`
+  returns the SEC-07 allowlist bundle instead of the legacy rich snapshot, so
+  this route stays a documented **partial** — the panel maps both planes
+  honestly rather than fabricating legacy fields.
+- `DELETE /api/v2/diagnostics/cache` — cache cleanup (thumbnails; kernel
+  plane: `diagnostics.cache.clear`, M7 Этап-4 cluster 23 — deletes the
+  regenerable `<data-root>/cache/` tree only, recreates it empty, never
+  touches `files/`, and reports `metadataRowsRemoved: 0` because the kernel
+  keeps no cache-metadata rows).
 
 ### events — `apps/server/src/plugins/events.ts`
 
@@ -679,6 +686,7 @@ uses the canonical wire ops:
 | `settings.instructformats.list`    | transactional         | `GET /api/v2/settings/instruct-formats` (static built-in catalog: chatml/llama3/alpaca/mistral/command-r — ids, versions, stop strings; no database)                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `search.query`                     | transactional         | `GET /api/v2/search` (M7 Etap-4 slice 16: FTS5 over the v23 indexes — characters/chats/messages/lorebooks; per-scope rank merge, `relevance`/`date`/`name` sort, characters-only `tag` filter, trash excluded at query time)                                                                                                                                                                                                                                                                                                                                   |
 | `search.rebuild`                   | transactional         | `POST /api/v2/search/rebuild` (M7 Etap-4 slice 16: transactional wipe + repopulation of every index from the base tables; sync triggers resume afterwards)                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `diagnostics.cache.clear`          | transactional         | `DELETE /api/v2/diagnostics/cache` (M7 Etap-4 cluster 23: removes the regenerable `<data-root>/cache/` tree only and recreates it empty; originals under `files/` are never touched; no cache-metadata rows → `metadataRowsRemoved: 0`; idempotent on an empty cache)                                                                                                                                                                                                                                                                                          |
 | `lorebooks.list`                   | transactional         | `GET /api/v2/lorebooks`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `lorebooks.get`                    | transactional         | `GET /api/v2/lorebooks/:id`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `lorebooks.create`                 | transactional         | `POST /api/v2/lorebooks` (kernel mode: entries as `wire.lorebook.entry.input` array; character link unsupported)                                                                                                                                                                                                                                                                                                                                                                                                                                               |

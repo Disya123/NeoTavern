@@ -2441,6 +2441,24 @@ export const DiagnosticsExportResultDtoSchema = Type.Object(
 export type DiagnosticsExportResultDto = Static<typeof DiagnosticsExportResultDtoSchema>;
 
 /**
+ * Cache-cleanup result DTO (`wire.result.cache-cleanup`) — the kernel-side
+ * regenerable-cache maintenance (M7 Этап-4 cluster 23). `removedFiles` /
+ * `removedBytes` count the deleted DERIVED artifacts only (the kernel cache
+ * holds no originals); `metadataRowsRemoved` reports cache-metadata rows
+ * (the kernel keeps none today, so it is `0` unless a future cache registry
+ * adds them).
+ */
+export const CacheCleanupResultDtoSchema = Type.Object(
+  {
+    removedFiles: Type.Integer({ minimum: 0 }),
+    removedBytes: Type.Integer({ minimum: 0 }),
+    metadataRowsRemoved: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.result.cache-cleanup', additionalProperties: false },
+);
+export type CacheCleanupResultDto = Static<typeof CacheCleanupResultDtoSchema>;
+
+/**
  * Search scope (`wire.search.scope`): the four entity families the full-text
  * index covers — the same union the legacy `/api/v2/search` route exposes.
  */
@@ -3153,6 +3171,7 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.settings.get': GetSettingsRequestDtoSchema,
   'wire.request.settings.update': UpdateSettingsRequestDtoSchema,
   'wire.result.diagnostics-export': DiagnosticsExportResultDtoSchema,
+  'wire.result.cache-cleanup': CacheCleanupResultDtoSchema,
   'wire.search.scope': WireSearchScope,
   'wire.search.sort': WireSearchSort,
   'wire.request.search.query': SearchRequestDtoSchema,

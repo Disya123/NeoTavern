@@ -1081,8 +1081,7 @@ export const ru: Resources = {
     diagnosticsKernelRuns: 'Запуски генерации',
     diagnosticsKernelRunsValue:
       '{{total}} всего · {{completed}} выполнено · {{failed}} сбоев · {{waiting}} ожидает',
-    diagnosticsKernelMaintenanceUnavailable:
-      'Обслуживание кэша миниатюр доступно только в legacy-сайдкаре; у ядра аналога этой поверхности пока нет (для индекса поиска аналог есть: search.rebuild).',
+
     diagnosticsUnknown: 'Неизвестно',
     diagnosticsPrivacy:
       'Отчёт не содержит секреты, логи, абсолютные пути и пользовательский текст.',

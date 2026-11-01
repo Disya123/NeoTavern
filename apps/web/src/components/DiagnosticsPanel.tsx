@@ -49,7 +49,6 @@ export function DiagnosticsPanel() {
   // Kernel as an explicit Preview (ADR-0038) only when the shell reports the
   // Kernel is the ACTIVE backend — never when the sidecar is running.
   const [backendMode, setBackendMode] = useState<'kernel' | 'sidecar' | null>(null);
-  const kernelActive = backendMode === 'kernel';
   useEffect(() => {
     if (!desktop) return;
     void getDesktopBackendMode().then(setBackendMode);
@@ -378,9 +377,8 @@ export function DiagnosticsPanel() {
           <Button
             variant="ghost"
             startIcon={<Broom />}
-            disabled={activeAction !== null || kernelActive}
+            disabled={activeAction !== null}
             onClick={() => setCacheConfirmOpen(true)}
-            title={kernelActive ? t('settings:diagnosticsKernelMaintenanceUnavailable') : undefined}
           >
             {activeAction === 'cache'
               ? t('settings:diagnosticsClearingCache')
@@ -396,11 +394,7 @@ export function DiagnosticsPanel() {
           </Button>
         </ActionBarGroup>
       </ActionBar>
-      {kernelActive ? (
-        <p className={styles.safeHint} data-part="kernel-maintenance-note">
-          {t('settings:diagnosticsKernelMaintenanceUnavailable')}
-        </p>
-      ) : null}
+
       <p className={styles.safeHint}>{t('settings:safeModeHint')}</p>
 
       {desktop ? (

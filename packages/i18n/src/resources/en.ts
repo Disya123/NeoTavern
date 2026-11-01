@@ -1055,8 +1055,7 @@ export const en = {
     diagnosticsKernelRuns: 'Generation runs',
     diagnosticsKernelRunsValue:
       '{{total}} total · {{completed}} completed · {{failed}} failed · {{waiting}} waiting',
-    diagnosticsKernelMaintenanceUnavailable:
-      'The thumbnail-cache maintenance action is legacy-sidecar only; the Kernel owns its own storage and has no equivalent surface yet (the search index has one: search.rebuild).',
+
     diagnosticsUnknown: 'Unknown',
     diagnosticsPrivacy:
       'The report excludes secrets, logs, absolute paths and user-authored content.',

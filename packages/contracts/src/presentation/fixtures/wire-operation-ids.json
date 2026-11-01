@@ -47,6 +47,7 @@
   "chats.snapshots.rollback",
   "chats.update",
   "data.activation.status",
+  "diagnostics.cache.clear",
   "diagnostics.export",
   "generation.cancel",
   "generation.discard",

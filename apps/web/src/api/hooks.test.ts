@@ -299,13 +299,24 @@ describe('diagnostics hooks (kernel-plane honesty, slice 17)', () => {
     expect(init.method).toBe('POST');
   });
 
-  it('useClearDiagnosticCache rejects with UnsupportedError on the kernel plane', async () => {
+  it('useClearDiagnosticCache clears through the wire op on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const clearSpy = vi
+      .spyOn(backend.diagnostics, 'cacheClear')
+      .mockResolvedValue({ removedFiles: 3, removedBytes: 1024, metadataRowsRemoved: 0 });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
     const { result } = renderHook(() => useClearDiagnosticCache(), {
       wrapper: wrapperFor(queryClient),
     });
     act(() => result.current.mutate());
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(clearSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.data).toEqual({
+      removedFiles: 3,
+      removedBytes: 1024,
+      metadataRowsRemoved: 0,
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['diagnostics'] });
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
   });

@@ -10,6 +10,7 @@ import type {
   CharacterDto,
   ChatDto,
   CreateProfileResultDto,
+  CacheCleanupResultDto,
   DiagnosticsExportResultDto,
   EmptyResultDto,
   SearchResultDto,
@@ -423,6 +424,8 @@ export class RemoteBackend implements NeoBackend {
   readonly diagnostics: DiagnosticsApi = {
     export: (opts) =>
       this.sdk.call<DiagnosticsExportResultDto>('diagnostics.export', {}, { signal: opts?.signal }),
+    cacheClear: (opts) =>
+      this.sdk.call<CacheCleanupResultDto>('diagnostics.cache.clear', {}, { signal: opts?.signal }),
   };
 
   readonly secrets: SecretsApi = {
