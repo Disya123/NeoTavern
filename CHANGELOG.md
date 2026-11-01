@@ -4,6 +4,48 @@
 
 ### Added
 
+- **Provider catalog and named API keys on the kernel plane (M7 Etap-4
+  slice; cluster 7).** Schema v24 (`024_provider_secrets`): the STRICT
+  `provider_secrets` table — one row per named key (`label`, opaque
+  `secret_ref`, `active`, `created_at`) with a partial unique index
+  (`config_id WHERE active = 1`) enforcing exactly one active key per
+  provider config at the storage layer, plus `config_id` CASCADE. New wire
+  ops: `providers.catalog` (the canonical source catalog — only the sources
+  the kernel materializes: `openai`, `openai-compatible`, `fake`;
+  `samplerSupport` is empty because the kernel `ProviderRequest` carries no
+  sampler knobs yet; the 20-source legacy registry is not mirrored),
+  `providers.secrets.{list,create,update,delete,reveal}` (list/update are
+  value-free — the mask is derived from the OPAQUE stored reference, never
+  the key; create/activate deactivate siblings inside one transaction;
+  deleting the active key reactivates the most recent remaining one;
+  deleting a provider config revokes every named store value before the rows
+  cascade) and `secrets.exposure` (the host plaintext-exposure policy).
+  `providers.secrets.reveal` is the ONLY value-carrying wire operation and
+  is host-gated (`Kernel::set_secrets_exposure`, legacy
+  `NEOTA_ALLOW_SECRETS_EXPOSURE` parity, OFF by default): with the policy off
+  it fails closed with the stable `SECRETS_EXPOSURE_DISABLED` product error
+  before touching the store, and the UI hides copy/reveal affordances.
+  `hasApiKey` now reports either an active named key or the config-level
+  `secret_ref`; generation resolves the active named key first and falls
+  back to the config-level reference. `register_config_adapter` also
+  materializes `openai-compatible` (previously only `openai`, so a
+  custom-endpoint profile was never hydratable). Facade:
+  `backend.providers.catalog()`, `backend.providers.secrets.*`,
+  `backend.secrets.exposure()` (local/remote implemented; the legacy facade
+  stays honest `UnsupportedError` — the provider domain is kernel-only
+  there). Web: `useProviderCatalog` now maps the wire catalog onto the
+  editor shape instead of rejecting, and the secrets hooks
+  (`useProviderSecrets`/`useCreateSecret`/`useUpdateSecret`/`useDeleteSecret`/
+  `useRevealSecret`/`useSecretsExposure`) drive ApiKeysModal on the kernel
+  plane. Hosts map the exposure flag: headless
+  `--allow-secrets-exposure`/`NEOTA_ALLOW_SECRETS_EXPOSURE`, desktop shell
+  `NEOTA_ALLOW_SECRETS_EXPOSURE=1`. Tests: storage migration corpus
+  (v1..v24), kernel provider-secrets suite (CRUD, one-active invariant,
+  reveal gating on/off, exposure, catalog statelessness, cascade revocation,
+  generation preferring the active key), headless/tauri-local policy wiring,
+  remote-http secrets over the wire, neobackend parity, web hook + component
+  tests. Registry: 119 ops, 119/119 kernel-dispatched.
+
 - **Full-text search on the kernel plane (M7 Etap-4 slice; cluster 16).**
   Schema v23 (`023_kernel_fts_search`): four FTS5 indexes
   (`characters_fts` over name/description/tags, `chats_fts` over titles,

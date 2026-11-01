@@ -2304,13 +2304,16 @@ fn snapshot_message(snapshot_json: &str) -> String {
 
 /// Resolves the run's provider API key at execution time (ТЗ §9.4).
 ///
-/// The first `provider_configs` row for the run's provider (alphabetically
-/// by name) contributes its `secret_ref`; the host's SecretResolver seam
-/// turns it into the value used only to build the outgoing provider request.
+/// The first `provider_configs` row for the run's provider (alphabetically by
+/// name) contributes its key: the ACTIVE named secret (`provider_secrets`,
+/// v24 — the key the UI's key manager shows as active) when present, else the
+/// config-level `secret_ref` (single-key path). The host's SecretResolver seam
+/// turns the reference into the value used only to build the outgoing provider
+/// request.
 ///
-/// - No config / no `secret_ref` → `Ok(None)` (adapter decides; a keyless
+/// - No config / no reference → `Ok(None)` (adapter decides; a keyless
 ///   adapter errors itself).
-/// - A config with a `secret_ref` but no resolver seam → fail-closed
+/// - A reference but no resolver seam → fail-closed
 ///   `ProviderError::Unavailable` (no plaintext fallback, §87).
 /// - Resolver failures propagate as typed provider errors (terminal run).
 fn resolve_provider_api_key(
@@ -2318,13 +2321,13 @@ fn resolve_provider_api_key(
     provider: &str,
     resolver: Option<&dyn SecretResolver>,
 ) -> Result<Option<String>, provider_sdk::ProviderError> {
-    let secret_ref: Option<String> = db
+    let row: Option<(String, Option<String>)> = db
         .conn()
         .query_row(
-            "SELECT secret_ref FROM provider_configs WHERE provider = ?1 \
+            "SELECT id, secret_ref FROM provider_configs WHERE provider = ?1 \
              ORDER BY name ASC LIMIT 1",
             params![provider],
-            |row| row.get::<_, Option<String>>(0),
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
         )
         .optional()
         .map_err(|_| {
@@ -2333,9 +2336,27 @@ fn resolve_provider_api_key(
                 "failed to read provider secret reference",
                 vec![("provider".to_string(), provider.to_string())],
             )
-        })?
-        .flatten();
-    let Some(reference) = secret_ref else {
+        })?;
+    let Some((config_id, config_ref)) = row else {
+        return Ok(None);
+    };
+    let active_ref: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT secret_ref FROM provider_secrets \
+             WHERE config_id = ?1 AND active = 1 LIMIT 1",
+            params![config_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|_| {
+            provider_sdk::ProviderError::with(
+                provider_sdk::ProviderErrorCode::StepFailed,
+                "failed to read the active provider key reference",
+                vec![("provider".to_string(), provider.to_string())],
+            )
+        })?;
+    let Some(reference) = active_ref.or(config_ref) else {
         return Ok(None);
     };
     let resolver = resolver.ok_or_else(|| {

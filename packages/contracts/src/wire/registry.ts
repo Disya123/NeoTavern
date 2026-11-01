@@ -1099,6 +1099,120 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'providers.catalog',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.provider-catalog',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
+    'providers.secrets.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.list-provider-secrets',
+    'wire.result.provider-secrets',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'providers.secrets.create',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.create-provider-secret',
+    'wire.result.provider-secret-created',
+    undefined,
+    [
+      'INTERNAL',
+      'VALIDATION',
+      'NOT_FOUND',
+      'CONFLICT',
+      'CAPABILITY_UNAVAILABLE',
+      'CONTRACT_VIOLATION',
+      'OUTCOME_UNKNOWN',
+    ],
+    131072,
+    2048,
+    undefined,
+  ),
+  op(
+    'providers.secrets.update',
+    'transactional',
+    'idempotent',
+    'none',
+    'app.write',
+    'wire.request.update-provider-secret',
+    'wire.provider.secret.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'providers.secrets.delete',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.delete-provider-secret',
+    'wire.result.empty',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
+  op(
+    'providers.secrets.reveal',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.reveal-provider-secret',
+    'wire.result.provider-secret-reveal',
+    undefined,
+    [
+      'INTERNAL',
+      'VALIDATION',
+      'NOT_FOUND',
+      'CONFLICT',
+      'CAPABILITY_UNAVAILABLE',
+      'CONTRACT_VIOLATION',
+      'OUTCOME_UNKNOWN',
+    ],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'secrets.exposure',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.secrets-exposure',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    1024,
+    undefined,
+  ),
+  op(
     'backups.create',
     'workflow',
     'non-idempotent',
@@ -2212,6 +2326,44 @@ const PROVIDER_CONFIG_VALUE = {
   updatedAt: TIMESTAMP,
 };
 
+const UUID_PROVIDER_SECRET = '2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b';
+
+const PROVIDER_SECRET_VALUE = {
+  id: UUID_PROVIDER_SECRET,
+  providerId: UUID_CONFIG,
+  label: 'primary',
+  active: true,
+  masked: '••••••aB9z',
+  createdAt: TIMESTAMP,
+};
+
+const PROVIDER_CATALOG_VALUE = {
+  items: [
+    {
+      id: 'openai',
+      adapterKind: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      apiKeyRequired: true,
+      baseUrlEditable: true,
+      samplerSupport: [],
+    },
+    {
+      id: 'openai-compatible',
+      adapterKind: 'openai-compatible',
+      apiKeyRequired: false,
+      baseUrlEditable: true,
+      samplerSupport: [],
+    },
+    {
+      id: 'fake',
+      adapterKind: 'fake',
+      apiKeyRequired: false,
+      baseUrlEditable: false,
+      samplerSupport: [],
+    },
+  ],
+};
+
 const SETTINGS_VALUE = {
   items: [
     { key: 'ui.theme', value: { theme: 'dark' }, updatedAt: TIMESTAMP },
@@ -2777,6 +2929,30 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('search-rebuild-request', 'search.rebuild', 'request', true, {}),
   fx('secrets-status-request', 'secrets.status', 'request', true, {}),
+  fx('providers-catalog-request', 'providers.catalog', 'request', true, {}),
+  fx('providers-secrets-list-request', 'providers.secrets.list', 'request', true, {
+    providerId: UUID_CONFIG,
+  }),
+  fx('providers-secrets-create-request', 'providers.secrets.create', 'request', true, {
+    providerId: UUID_CONFIG,
+    value: 'sk-fixture-second-key',
+    label: 'backup',
+  }),
+  fx('providers-secrets-update-request', 'providers.secrets.update', 'request', true, {
+    providerId: UUID_CONFIG,
+    secretId: UUID_PROVIDER_SECRET,
+    label: 'renamed',
+    active: true,
+  }),
+  fx('providers-secrets-delete-request', 'providers.secrets.delete', 'request', true, {
+    providerId: UUID_CONFIG,
+    secretId: UUID_PROVIDER_SECRET,
+  }),
+  fx('providers-secrets-reveal-request', 'providers.secrets.reveal', 'request', true, {
+    providerId: UUID_CONFIG,
+    secretId: UUID_PROVIDER_SECRET,
+  }),
+  fx('secrets-exposure-request', 'secrets.exposure', 'request', true, {}),
 
   // --- valid response fixtures.
   fx('meta-get-response', 'meta.get', 'response', true, META_VALUE),
@@ -3169,6 +3345,27 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('secrets-status-response', 'secrets.status', 'response', true, SECRETS_STATUS_VALUE),
   fx('secrets-lock-request', 'secrets.lock', 'request', true, {}),
   fx('secrets-lock-response', 'secrets.lock', 'response', true, { locked: true }),
+  fx('providers-catalog-response', 'providers.catalog', 'response', true, PROVIDER_CATALOG_VALUE),
+  fx('providers-secrets-list-response', 'providers.secrets.list', 'response', true, {
+    items: [PROVIDER_SECRET_VALUE],
+  }),
+  fx('providers-secrets-created-response', 'providers.secrets.create', 'response', true, {
+    id: UUID_PROVIDER_SECRET,
+  }),
+  fx(
+    'providers-secrets-update-response',
+    'providers.secrets.update',
+    'response',
+    true,
+    PROVIDER_SECRET_VALUE,
+  ),
+  fx('providers-secrets-delete-response', 'providers.secrets.delete', 'response', true, {}),
+  fx('providers-secrets-reveal-response', 'providers.secrets.reveal', 'response', true, {
+    value: 'sk-fixture-revealed',
+  }),
+  fx('secrets-exposure-response', 'secrets.exposure', 'response', true, {
+    allowSecretsExposure: false,
+  }),
 
   // --- valid event fixture (generation.start streams events, no response).
   fx('generation-start-event', 'generation.start', 'event', true, {
@@ -3237,6 +3434,22 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
       },
     ],
   }),
+  fx('neg-providers-secrets-create-empty-value', 'providers.secrets.create', 'request', false, {
+    providerId: UUID_CONFIG,
+    value: '',
+  }),
+  fx('neg-providers-catalog-bad-entry', 'providers.catalog', 'response', false, {
+    items: [
+      {
+        id: 'openai',
+        adapterKind: 'openai',
+        apiKeyRequired: 'yes',
+        baseUrlEditable: true,
+        samplerSupport: [],
+      },
+    ],
+  }),
+  fx('neg-secrets-exposure-missing-flag', 'secrets.exposure', 'response', false, {}),
 
   // --- negative fixtures (one per rule family).
   fx('neg-characters-get-missing-field', 'characters.get', 'request', false, {}),

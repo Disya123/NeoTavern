@@ -274,11 +274,22 @@ export class LegacyBackend implements NeoBackend {
 
   readonly providers: ProvidersApi = {
     list: () => this.unsupported('providers.list'),
+    // The provider domain is kernel-only on the legacy plane (the legacy UI
+    // path talks to `/api/v2/providers` directly); the catalog and the named
+    // key manager exist only in the canonical kernel surface.
+    catalog: () => this.unsupported('providers.catalog'),
     config: {
       set: () => this.unsupported('providers.config.set'),
       get: () => this.unsupported('providers.config.get'),
       list: () => this.unsupported('providers.config.list'),
       del: () => this.unsupported('providers.config.delete'),
+    },
+    secrets: {
+      list: () => this.unsupported('providers.secrets.list'),
+      create: () => this.unsupported('providers.secrets.create'),
+      update: () => this.unsupported('providers.secrets.update'),
+      del: () => this.unsupported('providers.secrets.delete'),
+      reveal: () => this.unsupported('providers.secrets.reveal'),
     },
   };
 
@@ -326,6 +337,7 @@ export class LegacyBackend implements NeoBackend {
   readonly secrets: SecretsApi = {
     status: () => this.unsupported('secrets.status'),
     lock: () => this.unsupported('secrets.lock'),
+    exposure: () => this.unsupported('secrets.exposure'),
   };
 
   readonly assets: AssetsApi = {

@@ -5,7 +5,7 @@
  * the honest 'Saved' state instead of a localized UNSUPPORTED error.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   DEFAULT_PROMPT_TEMPLATE,
@@ -15,6 +15,7 @@ import {
   type ProviderConfigDto,
 } from '@neotavern/contracts';
 import { createI18n } from '@neotavern/i18n';
+import { UnsupportedError } from '@neotavern/neobackend';
 import type { ReactElement } from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -140,24 +141,26 @@ describe('ProviderProfileEditor (kernel plane, slice 27)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('reports the catalog-unavailable error honestly and still connects manually', async () => {
+  it('reports a genuine catalog refusal honestly and still connects manually', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    // A real facade refusal (e.g. an older host without the catalog op) must
+    // surface as an inline alert instead of silently hiding the selects.
+    const catalog = vi
+      .spyOn(backend.providers, 'catalog')
+      .mockRejectedValue(new UnsupportedError('providers.catalog'));
     const configList = vi
       .spyOn(backend.providers.config, 'list')
       .mockResolvedValue({ items: [PROVIDER_DTO] });
     const configSet = vi.spyOn(backend.providers.config, 'set').mockResolvedValue(PROVIDER_DTO);
     const settingsUpdate = vi.spyOn(backend.settings, 'update').mockResolvedValue({ items: [] });
 
-    // No catalog data is seeded: the provider catalog has no honest wire
-    // equivalent (ProviderDto carries no adapterKind/defaultBaseUrl), so the
-    // query rejects with a typed UnsupportedError on the kernel plane.
+    // No catalog data is seeded, so the query runs through the facade.
     await renderEditor(<ProviderProfileEditor />, false);
 
-    // The panel says so instead of silently hiding the API-mode/source
-    // selects — a legacy network failure is reported the same way.
     const catalogError = await screen.findByRole('alert');
     expect(catalogError).toHaveTextContent('providers.catalog');
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(catalog).toHaveBeenCalled();
 
     // Manual connection still works without the catalog.
     await userEvent.type(screen.getByLabelText('Name'), 'Local model');
@@ -167,5 +170,39 @@ describe('ProviderProfileEditor (kernel plane, slice 27)', () => {
     expect(configSet).toHaveBeenCalled();
     expect(settingsUpdate).toHaveBeenCalled();
     expect(configList).toHaveBeenCalled();
+  });
+
+  it('drives the source select from the wire catalog and saves a materializable kind', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const catalog = vi.spyOn(backend.providers, 'catalog').mockResolvedValue({
+      items: [
+        {
+          id: 'openai-compatible',
+          adapterKind: 'openai-compatible',
+          apiKeyRequired: false,
+          baseUrlEditable: true,
+          samplerSupport: [],
+        },
+      ],
+    });
+    vi.spyOn(backend.providers.config, 'list').mockResolvedValue({ items: [PROVIDER_DTO] });
+    const configSet = vi.spyOn(backend.providers.config, 'set').mockResolvedValue(PROVIDER_DTO);
+    vi.spyOn(backend.settings, 'update').mockResolvedValue({ items: [] });
+
+    await renderEditor(<ProviderProfileEditor />, false);
+    await waitFor(() => expect(catalog).toHaveBeenCalled());
+
+    // The catalog entry populates the source select (previously the kernel
+    // plane had no catalog at all and the editor fell back to a blind draft).
+    const sourceSelect = await screen.findByLabelText('Provider source');
+    expect(within(sourceSelect).getByText('Custom OpenAI-compatible')).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('Base URL'), 'http://127.0.0.1:1234/v1');
+    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    await waitFor(() => expect(configSet).toHaveBeenCalled());
+    // The saved kind is one the kernel materializes into an adapter
+    // (`register_config_adapter` now builds `openai-compatible` too).
+    expect(configSet.mock.calls[0]?.[0]).toMatchObject({ provider: 'openai-compatible' });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

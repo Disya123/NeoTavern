@@ -12,7 +12,6 @@ import type {
   CreateProfileResultDto,
   DiagnosticsExportResultDto,
   EmptyResultDto,
-  SearchRequestDto,
   SearchResultDto,
   GenerationRunDto,
   InstallPluginResultDto,
@@ -58,6 +57,12 @@ import type {
   ProfileExportResultDto,
   ProfileImportResultDto,
   ProviderConfigDto,
+  ProviderCatalogResultDto,
+  ProviderSecretDto,
+  ListProviderSecretsResultDto,
+  CreateProviderSecretResultDto,
+  RevealProviderSecretResultDto,
+  SecretsExposureResultDto,
   InstructFormatsResultDto,
   ResultSettingsDto,
   SecretsStatusResultDto,
@@ -316,6 +321,8 @@ export class RemoteBackend implements NeoBackend {
 
   readonly providers: ProvidersApi = {
     list: () => this.sdk.call<ListProvidersResultDto>('providers.list', {}),
+    catalog: (opts) =>
+      this.sdk.call<ProviderCatalogResultDto>('providers.catalog', {}, { signal: opts?.signal }),
     config: {
       set: (req) => this.sdk.call<ProviderConfigDto>('providers.config.set', req),
       get: (provider, name) =>
@@ -323,6 +330,26 @@ export class RemoteBackend implements NeoBackend {
       list: (req) => this.sdk.call<ListProviderConfigsResultDto>('providers.config.list', req),
       del: (provider, name) =>
         this.sdk.call<EmptyResultDto>('providers.config.delete', { provider, name }),
+    },
+    secrets: {
+      list: (req, opts) =>
+        this.sdk.call<ListProviderSecretsResultDto>('providers.secrets.list', req, {
+          signal: opts?.signal,
+        }),
+      create: (req, opts) =>
+        this.sdk.call<CreateProviderSecretResultDto>('providers.secrets.create', req, {
+          signal: opts?.signal,
+        }),
+      update: (req, opts) =>
+        this.sdk.call<ProviderSecretDto>('providers.secrets.update', req, {
+          signal: opts?.signal,
+        }),
+      del: (req, opts) =>
+        this.sdk.call<EmptyResultDto>('providers.secrets.delete', req, { signal: opts?.signal }),
+      reveal: (req, opts) =>
+        this.sdk.call<RevealProviderSecretResultDto>('providers.secrets.reveal', req, {
+          signal: opts?.signal,
+        }),
     },
   };
 
@@ -397,6 +424,8 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<SecretsStatusResultDto>('secrets.status', {}, { signal: opts?.signal }),
     lock: (opts) =>
       this.sdk.call<SecretsLockResultDto>('secrets.lock', {}, { signal: opts?.signal }),
+    exposure: (opts) =>
+      this.sdk.call<SecretsExposureResultDto>('secrets.exposure', {}, { signal: opts?.signal }),
   };
 
   readonly assets: AssetsApi = {

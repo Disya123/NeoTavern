@@ -8,13 +8,27 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, renderWithProviders } from '../../test/helpers.js';
 import { ApiKeysModal } from './ApiKeysModal.js';
 
-// Kernel-mode honesty (slice 28): the secrets hooks consult `isKernelMode`;
-// the default here is the legacy plane so the existing tests stay as they are.
-const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => false) }));
-vi.mock('../api/backend.js', async (importOriginal) => {
-  const actual = (await importOriginal()) as { backend: unknown };
-  return { ...actual, isKernelMode: mocks.isKernelMode };
-});
+// Kernel-mode (cluster 7): the secrets hooks consult `isKernelMode` and route
+// through the NeoBackend facade; the default here is the legacy plane so the
+// fetch-driven tests stay as they are.
+const mocks = vi.hoisted(() => ({
+  isKernelMode: vi.fn(() => false),
+  secrets: {
+    list: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    del: vi.fn(),
+    reveal: vi.fn(),
+  },
+  exposure: vi.fn(),
+}));
+vi.mock('../api/backend.js', () => ({
+  isKernelMode: mocks.isKernelMode,
+  backend: {
+    providers: { secrets: mocks.secrets },
+    secrets: { exposure: mocks.exposure },
+  },
+}));
 
 const PROVIDER_ID = '018f0000-0000-7000-8000-000000000aaa';
 
@@ -110,12 +124,25 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.clearAllMocks();
   mocks.isKernelMode.mockReturnValue(false);
 });
 
-describe('ApiKeysModal (kernel plane, slice 28)', () => {
-  it('shows the honest secrets-unavailable error instead of an empty list', async () => {
+/** Wire-shaped key DTO as `providers.secrets.list` returns it in kernel mode. */
+const KERNEL_SECRET = {
+  id: '2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b',
+  providerId: PROVIDER_ID,
+  label: 'production',
+  active: true,
+  masked: '••••••••2222',
+  createdAt: '2026-06-01T12:00:00.000Z',
+};
+
+describe('ApiKeysModal (kernel plane, cluster 7)', () => {
+  it('lists wire keys through the facade and keeps reveal gated by the host policy', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    mocks.exposure.mockResolvedValue({ allowSecretsExposure: false });
+    mocks.secrets.list.mockResolvedValue({ items: [KERNEL_SECRET] });
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
@@ -128,15 +155,46 @@ describe('ApiKeysModal (kernel plane, slice 28)', () => {
       />,
     );
 
-    // The wire plane has no secrets CRUD (SEC-01): the list query rejects
-    // with a typed UnsupportedError, and the panel reports it honestly —
-    // neither the legacy empty-state ('No keys yet') nor a legacy fetch.
-    expect(mocks.isKernelMode).toHaveBeenCalled();
-    const error = await screen.findByRole('alert');
-    expect(error).toHaveTextContent('providers.secrets.list');
-    expect(screen.queryByText(/No keys yet/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    // The masked key comes from the wire DTO — no legacy fetch involved.
+    expect(await screen.findByText('••••••••2222')).toBeVisible();
+    expect(screen.getByText('production')).toBeVisible();
+    expect(mocks.secrets.list).toHaveBeenCalledWith({ providerId: PROVIDER_ID });
+    expect(mocks.exposure).toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
+
+    // Policy off: the hint explains it and copy is disabled, never a broken
+    // action that would call the fail-closed reveal.
+    expect(screen.getByText(/Copying and viewing keys is disabled/)).toBeVisible();
+    expect(screen.getByLabelText('Copy key')).toBeDisabled();
+    expect(mocks.secrets.reveal).not.toHaveBeenCalled();
+  });
+
+  it('copies the wire-revealed value when the host enabled exposure', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    mocks.exposure.mockResolvedValue({ allowSecretsExposure: true });
+    mocks.secrets.list.mockResolvedValue({ items: [KERNEL_SECRET] });
+    mocks.secrets.reveal.mockResolvedValue({ value: 'sk-kernel-2222' });
+
+    const user = userEvent.setup();
+    await renderWithProviders(
+      <ApiKeysModal
+        open
+        onOpenChange={() => {}}
+        providerId={PROVIDER_ID}
+        providerName="Test Provider"
+      />,
+    );
+    await screen.findByText('••••••••2222');
+    expect(screen.queryByText(/Copying and viewing keys is disabled/)).toBeNull();
+
+    await user.click(screen.getByLabelText('Copy key'));
+    await waitFor(() => {
+      expect(mocks.secrets.reveal).toHaveBeenCalledWith({
+        providerId: PROVIDER_ID,
+        secretId: KERNEL_SECRET.id,
+      });
+    });
+    expect(await navigator.clipboard.readText()).toBe('sk-kernel-2222');
   });
 });
 

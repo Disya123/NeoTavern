@@ -56,10 +56,15 @@ import {
   type ProfileExportResultDto,
   type ProfileImportResultDto,
   type ProviderConfigDto,
+  type ProviderCatalogResultDto,
+  type ProviderSecretDto,
+  type ListProviderSecretsResultDto,
+  type CreateProviderSecretResultDto,
+  type RevealProviderSecretResultDto,
+  type SecretsExposureResultDto,
   type PutAssetResultDto,
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
-  type SearchRequestDto,
   type SearchResultDto,
   type ChatsExportResultDto,
   type InstructFormatsResultDto,
@@ -416,6 +421,7 @@ export class LocalBackend implements NeoBackend {
     };
     this.providers = {
       list: () => this.invoke<ListProvidersResultDto>('providers.list', {}, undefined),
+      catalog: (opts) => this.invoke<ProviderCatalogResultDto>('providers.catalog', {}, opts),
       config: {
         set: (req, opts) => this.invoke<ProviderConfigDto>('providers.config.set', req, opts),
         get: (provider, name, opts) =>
@@ -424,6 +430,17 @@ export class LocalBackend implements NeoBackend {
           this.invoke<ListProviderConfigsResultDto>('providers.config.list', req, opts),
         del: (provider, name, opts) =>
           this.invoke<EmptyResultDto>('providers.config.delete', { provider, name }, opts),
+      },
+      secrets: {
+        list: (req, opts) =>
+          this.invoke<ListProviderSecretsResultDto>('providers.secrets.list', req, opts),
+        create: (req, opts) =>
+          this.invoke<CreateProviderSecretResultDto>('providers.secrets.create', req, opts),
+        update: (req, opts) =>
+          this.invoke<ProviderSecretDto>('providers.secrets.update', req, opts),
+        del: (req, opts) => this.invoke<EmptyResultDto>('providers.secrets.delete', req, opts),
+        reveal: (req, opts) =>
+          this.invoke<RevealProviderSecretResultDto>('providers.secrets.reveal', req, opts),
       },
     };
     this.plugins = {
@@ -464,6 +481,7 @@ export class LocalBackend implements NeoBackend {
     this.secrets = {
       status: (opts) => this.invoke<SecretsStatusResultDto>('secrets.status', {}, opts),
       lock: (opts) => this.invoke<SecretsLockResultDto>('secrets.lock', {}, opts),
+      exposure: (opts) => this.invoke<SecretsExposureResultDto>('secrets.exposure', {}, opts),
     };
     this.assets = {
       get: (assetId, opts) => this.invoke<GetAssetResultDto>('assets.get', { assetId }, opts),

@@ -308,16 +308,36 @@
       "milestone": "M2"
     },
     {
-      "id": "providers.list",
-      "title": "Provider catalog read",
-      "wireOps": ["providers.list"],
+      "id": "providers.secrets",
+      "title": "Named provider keys (multi-key manager, host-gated reveal)",
+      "wireOps": [
+        "providers.secrets.list",
+        "providers.secrets.create",
+        "providers.secrets.update",
+        "providers.secrets.delete",
+        "providers.secrets.reveal",
+        "secrets.exposure"
+      ],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Integrated"
       },
-      "notes": "Kernel op exists; provider configuration without secrets in DB is delivered (providers.config.*). M5 slice 4: every provider DTO now carries the adapter's honest capability declaration (wire.provider.capabilities: tools/vision/thinking/jsonMode/streaming) so the UI can pre-negotiate without guessing; the kernel generation path enforces the same declaration — a run that would send tool calls to a provider without tool support fails with CAPABILITY_UNAVAILABLE before any network request (kernel_capability_negotiation.rs proves generate is never invoked). Статус поднят до Integrated (ARC-10, M5 slice 55): useProviderCatalog (backend.providers.list) powers the provider select in GenerationPresetEditor/ProviderProfileEditor and the honest capability declarations drive CAPABILITY_UNAVAILABLE pre-negotiation on the kernel plane.",
+      "notes": "M7 Etap-4 cluster 7 (ТЗ §9.4/SEC-01 amendment): several labelled keys per provider config with exactly one ACTIVE key (schema v24 provider_secrets, partial unique index enforces the invariant at the storage layer; create/activate deactivate siblings in one transaction; deleting the active key reactivates the most recent remaining one; providers.config.delete revokes the named values through the SecretStore before the rows cascade). Every surface except reveal is value-free: list/update report a mask derived from the OPAQUE stored reference (never the key), and reveal is the only plaintext-carrying operation. Reveal is host-gated by the exposure policy (Kernel::set_secrets_exposure; legacy NEOTA_ALLOW_SECRETS_EXPOSURE parity), OFF by default — with the policy off it fails closed with the stable SECRETS_EXPOSURE_DISABLED product error before touching the store, and secrets.exposure reports the policy so the UI hides copy/reveal affordances. Generation resolves the ACTIVE named key first (provider_secrets.active = 1) and falls back to the config-level secret_ref; hasApiKey is true for either. The kernel catalog (providers.catalog) lists only sources the kernel materializes (openai/openai-compatible/fake) — the 20-source legacy registry is not mirrored, and a source is added to the catalog only together with adapter hydration support (register_config_adapter now materializes openai-compatible too).",
+      "milestone": "M7"
+    },
+    {
+      "id": "providers.list",
+      "title": "Provider catalog read",
+      "wireOps": ["providers.list", "providers.catalog"],
+      "hosts": {
+        "desktop": "Integrated",
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Integrated"
+      },
+      "notes": "Kernel op exists; provider configuration without secrets in DB is delivered (providers.config.*). M5 slice 4: every provider DTO now carries the adapter's honest capability declaration (wire.provider.capabilities: tools/vision/thinking/jsonMode/streaming) so the UI can pre-negotiate without guessing; the kernel generation path enforces the same declaration — a run that would send tool calls to a provider without tool support fails with CAPABILITY_UNAVAILABLE before any network request (kernel_capability_negotiation.rs proves generate is never invoked). Статус поднят до Integrated (ARC-10, M5 slice 55): useProviderCatalog (backend.providers.list) powers the provider select in GenerationPresetEditor/ProviderProfileEditor and the honest capability declarations drive CAPABILITY_UNAVAILABLE pre-negotiation on the kernel plane. M7 Etap-4 cluster 7: providers.catalog is the canonical source catalog consumed by both editors (backend.providers.catalog); the kernel answer is deliberately minimal — only sources it can materialize (openai, openai-compatible, fake), samplerSupport is empty until the kernel ProviderRequest carries sampler knobs, and Card fields the UI cannot represent (the test-only fake source) are skipped by the bridge instead of synthesizing labels.",
       "milestone": "M2"
     },
     {

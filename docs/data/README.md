@@ -30,7 +30,7 @@ Rules:
 
 ### Canonical kernel schema (database.sqlite)
 
-The kernel owns its own migration chain (schema v1–v23, STRICT tables,
+The kernel owns its own migration chain (schema v1–v24, STRICT tables,
 `user_version` ledger in `__neotavern_migrations`): the five product-core
 tables (`characters`, `chats`, `messages`, `lorebooks`, `presets`), the
 content-addressed `__neotavern_assets` registry plus `assets/` files, and —
@@ -50,9 +50,14 @@ v23 (`023_kernel_fts_search`, M7 cluster 16) adds the four FTS5 indexes
 INSERT/DELETE/UPDATE sync triggers and a transactional backfill — the
 `search.query`/`search.rebuild` pair serves them, and the trash filter stays
 a query-time concern (`characters.deleted_at IS NULL`); card fields inside
-`ext_json._card` are not indexed. Rollback for any kernel
-migration is the pre-migration backup restore
-(ТЗ §10.4); v20–v23 are additive.
+`ext_json._card` are not indexed. v24 (`024_provider_secrets`, M7 cluster 7)
+adds `provider_secrets` — several labelled named keys per provider config
+with a `secret_ref` and an `active` flag; a partial unique index
+(`config_id WHERE active = 1`) enforces exactly one active key per config at
+the storage layer, `config_id` CASCADEs on the config, and delete-reactivation
+is a plain `ORDER BY created_at DESC` pick in the same transaction. Rollback
+for any kernel migration is the pre-migration backup restore
+(ТЗ §10.4); v20–v24 are additive.
 
 ### Plugin state and grants
 
@@ -98,6 +103,18 @@ since migration 0024: `value_ref` holds the reference, per-plugin namespace
 store. Plugin OAuth material in `plugin_auth_connections` (tokens, PKCE
 state/verifier) is the documented residual — it moves behind the SecretStore
 in a dedicated slice.
+
+The kernel plane has its own `provider_secrets` table (kernel schema v24,
+see the canonical schema section above; distinct from the legacy `app.db`
+table of the same name): one row per NAMED key — `label`, `secret_ref`
+(namespace `provider-secret:<configId>`, id `<secretId>`) and `active`, with
+a partial unique index enforcing one active key per config. Both key
+surfaces coexist: `providers.config.set apiKey` keeps the config-level
+`provider_configs.secret_ref` (namespace `provider:<provider>`) for
+back-compat, while `providers.secrets.create` adds a named key; generation
+prefers the active named key and falls back to the config-level reference,
+and `hasApiKey` is true for either. Deleting a provider config revokes every
+named value before the rows cascade.
 
 ### SecretStore and secrets.enc
 

@@ -305,7 +305,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "802030afc99114a071268399896be612169459cf305a010170d98740be20077c"
+      "sha256": "91eaafd1ffdec33d11dcd8ec83a6d95ce30b4d1cc3b2498fb540d5352dbcc326"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -330,7 +330,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "c373e72c54f89e33f1f65de7730b3f784bfbf1aa861a65510f986312ef47ae43"
+      "sha256": "98b5d07f8b64fa72ad24083054080a8c64f3386c1ee686772dc8ba10d7f329c4"
     },
     {
       "source": "architecture/portable-data.md",
@@ -350,7 +350,7 @@
     {
       "source": "architecture/providers.md",
       "target": "architecture/providers.md",
-      "sha256": "0eb8969f55eb5323e83b8903f3cc6146211e6342eb01151dbdf3da7ebaa405ac"
+      "sha256": "4518f454c20af9443f46d530577fd26d09acc3a29d49d78e7a6caee3de6a6b29"
     },
     {
       "source": "architecture/resource-containment.md",
@@ -360,7 +360,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "7eb972564a6526f876f23c5404fdde8a35c3f39bb1b7030b88a89eec4d6801ad"
+      "sha256": "4eafd0470a968227be60f22971eb5b2fd58d3326d74280a4ef6fcecdd3d46286"
     },
     {
       "source": "architecture/version-axes.md",
@@ -370,7 +370,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "a79a94609235718305760a0a23a8f5ee394df9701eebe4667d95b244217fd17c"
+      "sha256": "1179e37f5eec32149fd453cef6160ab5ffbabc42030da0341865640136605d4d"
     },
     {
       "source": "audits/rust-app/INVENTORY.md",
@@ -405,17 +405,17 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "78ec919d8abfd3be2056e631c192d0c428111a47a6ff088ce48a6b2b73d4d376"
+      "sha256": "8fb1920d1696be57592d85f0a6819bad17e180a85a679d1620d6d813cf502a27"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "36478878ffe7e81ebe7999c12f00b69b7cf7d5607f0389e576184c82ebfb2cc6"
+      "sha256": "55ebd422ea9c5bb066524aa554917e9003c4f605c4b97f8b696422106a5532b8"
     },
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "7ea290d4efab91e9038be2cb499eb609114215570425f5940726a18695d06a81"
+      "sha256": "8cd300fbebfcf9985225f54856ac668519750ec2be567a901cedc12723de049c"
     },
     {
       "source": "desktop/chat-ui-recipe.md",

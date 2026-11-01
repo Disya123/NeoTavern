@@ -213,6 +213,13 @@ neotavern-headless --root <data-root>
   never a plaintext fallback (SEC-01); the passphrase itself never crosses
   the wire. The Desktop (Tauri) portable passphrase UX stays a host-side
   follow-up.
+- **Plaintext reveal is a separate opt-in.** `--allow-secrets-exposure`
+  (`NEOTA_ALLOW_SECRETS_EXPOSURE`; the same `1`/`true`/`yes` spellings the
+  legacy contour accepted as `true`) is OFF by default: with it off,
+  `providers.secrets.reveal` fails closed with `SECRETS_EXPOSURE_DISABLED`
+  and `secrets.exposure` reports `false`, so the UI hides copy/reveal
+  affordances. Every other provider-secret surface stays value-free
+  regardless of this flag; the desktop shell maps the same variable.
 - **Stdout** is a single `listening <ip:port>` line. The process waits for
   stdin EOF, then drains in-flight HTTP. Ctrl+C kills the process; durable
   generation runs recover on the next open.

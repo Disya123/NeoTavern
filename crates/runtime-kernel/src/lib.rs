@@ -44,6 +44,7 @@ pub mod plugins;
 pub mod product;
 pub mod profiles;
 pub mod prompt;
+pub mod provider_secrets;
 pub mod providers;
 pub mod providers_config;
 pub mod secrets;
@@ -360,6 +361,15 @@ enum Command {
         store: Arc<dyn SecretStore>,
         reply: mpsc::SyncSender<()>,
     },
+    /// Sets the host's plaintext-exposure policy for provider secrets
+    /// (`secrets.exposure`, M7 Etap-4 cluster 7). `false` (the default) makes
+    /// `providers.secrets.reveal` fail closed with `SECRETS_EXPOSURE_DISABLED`;
+    /// the legacy contour's `NEOTA_ALLOW_SECRETS_EXPOSURE` gate. Applied
+    /// immediately and acknowledged.
+    SetSecretsExposure {
+        allow: bool,
+        reply: mpsc::SyncSender<()>,
+    },
     /// Registers a runtime provider adapter (e.g. an OpenAI-compatible
     /// instance built from a stored provider config, ТЗ §9.3). Applied
     /// immediately and acknowledged.
@@ -641,6 +651,24 @@ fn handle_unary(
         "providers.config.delete" => with_db_opt(db, |db| {
             providers_config::delete(db, state.secret_store.as_ref(), req)
         }),
+        // M7 Etap-4 (cluster 7): canonical provider source catalog + named
+        // keys (multi-key manager with exactly one active key per config).
+        "providers.catalog" => providers::handle_providers_catalog(req),
+        "providers.secrets.list" => with_db_opt(db, |db| {
+            provider_secrets::list(db, state.secret_store.as_ref(), req)
+        }),
+        "providers.secrets.create" => with_db_opt(db, |db| {
+            provider_secrets::create(db, state.secret_store.as_ref(), req)
+        }),
+        "providers.secrets.update" => with_db_opt(db, |db| {
+            provider_secrets::update(db, state.secret_store.as_ref(), req)
+        }),
+        "providers.secrets.delete" => with_db_opt(db, |db| {
+            provider_secrets::delete(db, state.secret_store.as_ref(), req)
+        }),
+        "providers.secrets.reveal" => with_db_opt(db, |db| {
+            provider_secrets::reveal(db, state.secret_store.as_ref(), state.secrets_exposure, req)
+        }),
         // Этап 4 slice 5 remainder: canonical content-addressed AssetStore.
         "assets.put" => with_db_opt(db, |db| assets::assets_put(db, req)),
         "assets.get" => with_db_opt(db, |db| assets::assets_get(db, req)),
@@ -679,6 +707,8 @@ fn handle_unary(
         // SEC-01.1: value-free secret-backend mode surface (stateless seam).
         "secrets.status" => secrets::secrets_status(state.secret_store.as_ref(), req),
         "secrets.lock" => secrets::secrets_lock(state.secret_store.as_ref(), req),
+        // M7 Etap-4 (cluster 7): host plaintext-exposure policy (value-free).
+        "secrets.exposure" => provider_secrets::exposure(state.secrets_exposure, req),
         // Phase 6 generation operations.
         "generation.cancel" => {
             with_db_opt(db, |db| generation::generation_cancel(db, req, lease_owner))
@@ -818,6 +848,10 @@ fn drain_pending(
             }
             Command::SetSecretStore { store, reply } => {
                 state.secret_store = Some(store);
+                let _ = reply.send(());
+            }
+            Command::SetSecretsExposure { allow, reply } => {
+                state.secrets_exposure = allow;
                 let _ = reply.send(());
             }
             Command::RegisterProvider { adapter, reply } => {
@@ -978,6 +1012,10 @@ fn writer_main(
             }
             Command::SetSecretStore { store, reply } => {
                 state.secret_store = Some(store);
+                let _ = reply.send(());
+            }
+            Command::SetSecretsExposure { allow, reply } => {
+                state.secrets_exposure = allow;
                 let _ = reply.send(());
             }
             Command::RegisterProvider { adapter, reply } => {
@@ -1277,6 +1315,24 @@ impl Kernel {
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         let _ = self.cmd_tx.send(Command::SetSecretStore {
             store,
+            reply: reply_tx,
+        });
+        let _ = reply_rx.recv_timeout(Duration::from_secs(5));
+    }
+
+    /// Sets the host's plaintext-exposure policy for provider secrets
+    /// (`secrets.exposure`, M7 Etap-4 cluster 7).
+    ///
+    /// Default `false`: `providers.secrets.reveal` fails closed with the stable
+    /// `SECRETS_EXPOSURE_DISABLED` product error, so a secret value can never
+    /// cross the wire unless the host explicitly opted in (the legacy
+    /// `NEOTA_ALLOW_SECRETS_EXPOSURE` gate). Every other secret DTO is
+    /// value-free regardless of this flag. Fire-and-forget ack like
+    /// [`set_secret_resolver`](Self::set_secret_resolver).
+    pub fn set_secrets_exposure(&self, allow: bool) {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        let _ = self.cmd_tx.send(Command::SetSecretsExposure {
+            allow,
             reply: reply_tx,
         });
         let _ = reply_rx.recv_timeout(Duration::from_secs(5));

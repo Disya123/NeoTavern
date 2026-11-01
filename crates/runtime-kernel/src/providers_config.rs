@@ -23,7 +23,7 @@ use contracts_generated::generated::{
 };
 use neotavern_storage::open::Database;
 use neotavern_storage::StorageError;
-use rusqlite::{params, params_from_iter, types::Value};
+use rusqlite::{params, params_from_iter, types::Value, OptionalExtension};
 use secret_store::error::SecretStoreError;
 use secret_store::SecretStore;
 use std::sync::Arc;
@@ -59,7 +59,14 @@ fn no_secret_store() -> KernelError {
 }
 
 /// Renders a `provider_configs` row as the wire [`ProviderConfigDto`].
-fn row_to_provider_config(row: &rusqlite::Row) -> Result<ProviderConfigDto, KernelError> {
+///
+/// `has_active_secret` is the caller-computed answer to "does this config own
+/// an ACTIVE named key" (`provider_secrets`, v24) — the DTO reports the
+/// logical state (`hasApiKey`) without ever reading a value (SEC-01).
+fn row_to_provider_config(
+    row: &rusqlite::Row,
+    has_active_secret: bool,
+) -> Result<ProviderConfigDto, KernelError> {
     let config_json: String = row
         .get(3)
         .map_err(|e| sqlite(e, "provider_configs: read config_json"))?;
@@ -83,7 +90,7 @@ fn row_to_provider_config(row: &rusqlite::Row) -> Result<ProviderConfigDto, Kern
             .get(2)
             .map_err(|e| sqlite(e, "provider_configs: read name"))?,
         config,
-        has_api_key: secret_ref.is_some(),
+        has_api_key: secret_ref.is_some() || has_active_secret,
         created_at: row
             .get(5)
             .map_err(|e| sqlite(e, "provider_configs: read created_at"))?,
@@ -91,6 +98,22 @@ fn row_to_provider_config(row: &rusqlite::Row) -> Result<ProviderConfigDto, Kern
             .get(6)
             .map_err(|e| sqlite(e, "provider_configs: read updated_at"))?,
     })
+}
+
+/// Whether a provider config owns an ACTIVE named key (v24
+/// `provider_secrets`). Reads no secret value — the answer is a row
+/// existence check, so it can never leak a key.
+pub(crate) fn has_active_secret(
+    conn: &rusqlite::Connection,
+    config_id: &str,
+) -> Result<bool, KernelError> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM provider_secrets WHERE config_id = ?1 AND active = 1)",
+        params![config_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|found| found == 1)
+    .map_err(|e| sqlite(e, "provider_secrets: has_active"))
 }
 
 /// Selects one provider config row back out of the database.
@@ -112,7 +135,13 @@ fn query_provider_config(
         .next()
         .map_err(|e| sqlite(e, "query_provider_config: read row"))?
     {
-        Some(row) => Ok(Some(row_to_provider_config(row)?)),
+        Some(row) => {
+            let id: String = row
+                .get(0)
+                .map_err(|e| sqlite(e, "query_provider_config: read id"))?;
+            let has_active = has_active_secret(conn, &id)?;
+            Ok(Some(row_to_provider_config(row, has_active)?))
+        }
         None => Ok(None),
     }
 }
@@ -327,7 +356,11 @@ pub(crate) fn list(
             .next()
             .map_err(|e| sqlite(e, "providers_config_list: read row"))?
         {
-            items.push(row_to_provider_config(row)?);
+            let id: String = row
+                .get(0)
+                .map_err(|e| sqlite(e, "providers_config_list: read id"))?;
+            let has_active = has_active_secret(conn, &id)?;
+            items.push(row_to_provider_config(row, has_active)?);
         }
     }
     let dto = ResultListProviderConfigs { items };
@@ -335,15 +368,49 @@ pub(crate) fn list(
     encode(&dto)
 }
 
-/// `providers.config.delete` — remove the config and revoke its stored
-/// secret (best-effort store revocation after the row commit; a store
-/// failure never fails the deletion — the row is the authority).
+/// `providers.config.delete` — remove the config, every named key row and the
+/// stored secret values (best-effort store revocation after the row commit; a
+/// store failure never fails the deletion — the row is the authority).
+///
+/// SEC-01 cascade: named keys (`provider_secrets`, v24) are revoked BEFORE
+/// the row delete cascades them, so a store value can never orphan behind a
+/// reference that no longer exists.
 pub(crate) fn delete(
     db: &mut Database,
     store: Option<&Arc<dyn SecretStore>>,
     request: &[u8],
 ) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_delete_provider_config(request)?;
+    // Read what has to be revoked before the cascading delete hides it.
+    let config_id: Option<String> = {
+        let conn = db.conn();
+        conn.query_row(
+            "SELECT id FROM provider_configs WHERE provider = ?1 AND name = ?2",
+            params![&req.provider, &req.name],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "providers_config_delete: select id"))?
+    };
+    let mut named_secret_ids: Vec<String> = Vec::new();
+    if let Some(config_id) = &config_id {
+        let conn = db.conn();
+        let mut stmt = conn
+            .prepare("SELECT id FROM provider_secrets WHERE config_id = ?1")
+            .map_err(|e| sqlite(e, "providers_config_delete: prepare secret ids"))?;
+        let mut rows = stmt
+            .query(params![config_id])
+            .map_err(|e| sqlite(e, "providers_config_delete: query secret ids"))?;
+        while let Some(row) = rows
+            .next()
+            .map_err(|e| sqlite(e, "providers_config_delete: read secret id"))?
+        {
+            named_secret_ids.push(
+                row.get(0)
+                    .map_err(|e| sqlite(e, "providers_config_delete: secret id"))?,
+            );
+        }
+    }
     let changed = db.transaction(|tx| {
         tx.execute(
             "DELETE FROM provider_configs WHERE provider = ?1 AND name = ?2",
@@ -355,6 +422,16 @@ pub(crate) fn delete(
         return Err(config_not_found(&req.provider, &req.name));
     }
     if let Some(store) = store {
+        if let Some(config_id) = &config_id {
+            let namespace = crate::provider_secrets::secret_namespace(config_id);
+            for secret_id in &named_secret_ids {
+                if let Err(err) = store.delete(&namespace, secret_id) {
+                    // The row is gone; a failed revocation leaves an orphaned
+                    // store record at worst — never fail the operation.
+                    eprintln!("providers.config.delete: named secret revocation failed: {err}");
+                }
+            }
+        }
         if let Err(err) = store.delete(&secret_namespace(&req.provider), &req.name) {
             // The row is gone; a failed revocation leaves an orphaned store
             // record at worst — never fail the operation over it.

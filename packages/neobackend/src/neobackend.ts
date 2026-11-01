@@ -30,6 +30,17 @@ import type {
   CommitMessageDraftRequestDto,
   CreateCharacterRequestDto,
   CreateChatRequestDto,
+  CreateProviderSecretRequestDto,
+  CreateProviderSecretResultDto,
+  DeleteProviderSecretRequestDto,
+  ListProviderSecretsRequestDto,
+  ListProviderSecretsResultDto,
+  ProviderCatalogResultDto,
+  ProviderSecretDto,
+  RevealProviderSecretRequestDto,
+  RevealProviderSecretResultDto,
+  SecretsExposureResultDto,
+  UpdateProviderSecretRequestDto,
   CreateChatSnapshotRequestDto,
   RollbackChatSnapshotRequestDto,
   RollbackChatSnapshotResultDto,
@@ -575,6 +586,13 @@ export interface SecretsApi {
   status(opts?: BackendCallOptions): Promise<SecretsStatusResultDto>;
   /** Lock the secret store (idempotent; fail-closed without a store). */
   lock(opts?: BackendCallOptions): Promise<SecretsLockResultDto>;
+  /**
+   * Host plaintext-exposure policy for provider secrets (`secrets.exposure`,
+   * M7 Etap-4 cluster 7). `allowSecretsExposure: false` means
+   * `providers.secrets.reveal` fails closed; the UI must hide copy/reveal
+   * affordances instead of showing a broken action.
+   */
+  exposure(opts?: BackendCallOptions): Promise<SecretsExposureResultDto>;
 }
 
 /**
@@ -609,8 +627,19 @@ export interface ImportsApi {
 export interface ProvidersApi {
   /** List providers. */
   list(): Promise<ListProvidersResultDto>;
+  /**
+   * Canonical provider source catalog (wire `providers.catalog`, M7 Etap-4
+   * cluster 7): the sources the backend can actually materialize, with the
+   * per-source editable-field and sampler hints the editor drives from.
+   */
+  catalog(opts?: BackendCallOptions): Promise<ProviderCatalogResultDto>;
   /** Provider configuration (wire `providers.config.*`). */
   config: ProviderConfigsApi;
+  /**
+   * Named provider keys (wire `providers.secrets.*`, M7 Etap-4 cluster 7):
+   * several labelled keys per config with exactly one ACTIVE key.
+   */
+  secrets: ProviderSecretsApi;
 }
 
 /**
@@ -632,6 +661,41 @@ export interface ProviderConfigsApi {
   ): Promise<ListProviderConfigsResultDto>;
   /** Delete a config (revokes its stored secret). */
   del(provider: string, name: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+}
+
+/**
+ * Named provider keys (wire `providers.secrets.*`, M7 Etap-4 cluster 7, ТЗ
+ * §9.4/SEC-01).
+ *
+ * Every surface except `reveal` is value-free: `list`/`update` report a mask
+ * derived from the opaque stored reference, never the key. `reveal` is the
+ * single plaintext-carrying operation and is gated by the host's exposure
+ * policy (`secrets.exposure`) — with the policy off it fails closed with
+ * `SECRETS_EXPOSURE_DISABLED`.
+ */
+export interface ProviderSecretsApi {
+  /** List a config's keys (active first; masked, no values). */
+  list(
+    req: ListProviderSecretsRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ListProviderSecretsResultDto>;
+  /** Store a new key; it becomes the ACTIVE one (siblings deactivate). */
+  create(
+    req: CreateProviderSecretRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<CreateProviderSecretResultDto>;
+  /** Rename (empty string clears) and/or activate a key. */
+  update(
+    req: UpdateProviderSecretRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ProviderSecretDto>;
+  /** Delete a key (revives the most recent remaining one if it was active). */
+  del(req: DeleteProviderSecretRequestDto, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /** The ONLY plaintext-carrying op; fail-closed unless the host opted in. */
+  reveal(
+    req: RevealProviderSecretRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<RevealProviderSecretResultDto>;
 }
 
 /**

@@ -989,6 +989,43 @@ pub const MIGRATION_23_SQL: &str = migration_23_sql!();
 pub const MIGRATION_23_CHECKSUM: &str =
     "e107e2083d8fe6f822f44715d61e82c6d929c3484ff83d950ec36f1364b2d58f";
 
+/// Literal body of the provider-secrets (v24) schema migration (M7 Etap-4
+/// providers slice): named, labelled API keys per provider config with
+/// exactly one ACTIVE key — the canonical counterpart of the legacy
+/// `provider_secrets` table (ТЗ §9.4, SEC-01). Rows carry only the opaque
+/// SecretStore reference (`secret_ref`); the plaintext never enters the
+/// database. The partial unique index enforces "one active key per config"
+/// at the storage layer so no code path can leave two active keys behind;
+/// rows cascade-delete with their provider config, whose delete operation
+/// revokes the store values first. Additive; rollback is the pre-migration
+/// backup restore (ТЗ §10.4).
+macro_rules! migration_24_sql {
+    () => {
+        r#"CREATE TABLE provider_secrets (
+  id TEXT PRIMARY KEY,
+  config_id TEXT NOT NULL REFERENCES provider_configs(id) ON DELETE CASCADE,
+  label TEXT,
+  secret_ref TEXT NOT NULL,
+  active INTEGER NOT NULL CHECK (active IN (0, 1)),
+  created_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX idx_provider_secrets_config ON provider_secrets(config_id);
+CREATE UNIQUE INDEX idx_provider_secrets_active ON provider_secrets(config_id) WHERE active = 1;"#
+    };
+}
+
+/// Name of the provider-secrets (v24) schema migration.
+pub const MIGRATION_24_NAME: &str = "024_provider_secrets";
+
+/// Exact SQL of the provider-secrets schema migration (v24) — the
+/// `migration_24_sql!()` literal.
+pub const MIGRATION_24_SQL: &str = migration_24_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_24_SQL` string bytes (same
+/// computation as `MIGRATION_23_CHECKSUM`).
+pub const MIGRATION_24_CHECKSUM: &str =
+    "05deb3a3ff7314cd9d702184a4d6a70c680f859cd8435622eb4ccbe9acc5ba65";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1041,7 +1078,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_22_sql!(),
     "\n",
-    migration_23_sql!()
+    migration_23_sql!(),
+    "\n",
+    migration_24_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

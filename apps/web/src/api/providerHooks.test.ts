@@ -239,7 +239,7 @@ describe('provider config mutations', () => {
   });
 });
 
-describe('model discovery and secrets (kernel-plane honesty)', () => {
+describe('model discovery and secrets (kernel plane, cluster 7)', () => {
   it('model discovery is an honest UnsupportedError on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
     const { result } = renderHook(() => useDiscoverProviderModels(), {
@@ -252,61 +252,158 @@ describe('model discovery and secrets (kernel-plane honesty)', () => {
     expect((result.current.error as UnsupportedError).feature).toBe('providers.models.discovery');
   });
 
-  it('secret list is an honest UnsupportedError on the kernel plane', async () => {
+  it('catalog maps the wire sources onto the UI shape and drops unknown ids', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const catalogSpy = vi.spyOn(backend.providers, 'catalog').mockResolvedValue({
+      items: [
+        {
+          id: 'openai',
+          adapterKind: 'openai',
+          defaultBaseUrl: 'https://api.openai.com/v1',
+          apiKeyRequired: true,
+          baseUrlEditable: true,
+          samplerSupport: ['temperature', 'not-a-real-parameter'],
+        },
+        {
+          id: 'fake',
+          adapterKind: 'fake',
+          apiKeyRequired: false,
+          baseUrlEditable: false,
+          samplerSupport: [],
+        },
+      ],
+    });
+    const { result } = renderHook(() => useProviderCatalog(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(catalogSpy).toHaveBeenCalledTimes(1);
+    // The test-only `fake` source has no UI identity and is skipped; the
+    // sampler list narrows to known generation parameters.
+    expect(result.current.data).toEqual({
+      items: [
+        {
+          id: 'openai',
+          adapterKind: 'openai-compatible',
+          defaultBaseUrl: 'https://api.openai.com/v1',
+          apiKeyRequired: true,
+          baseUrlEditable: true,
+          samplerSupport: ['temperature'],
+        },
+      ],
+    });
+  });
+
+  it('secret list maps wire DTOs (RFC3339 dates, optional label) without fetching', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const listSpy = vi.spyOn(backend.providers.secrets, 'list').mockResolvedValue({
+      items: [
+        {
+          id: 'sec-1',
+          providerId: 'cfg-1',
+          active: true,
+          masked: '••••••aB9z',
+          createdAt: '2026-08-13T00:00:00Z',
+        },
+      ],
+    });
     const { result } = renderHook(() => useProviderSecrets('cfg-1'), {
       wrapper: wrapperFor(queryClient),
     });
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(result.current.error).toBeInstanceOf(UnsupportedError);
-    expect((result.current.error as UnsupportedError).feature).toBe('providers.secrets.list');
+    expect(listSpy).toHaveBeenCalledWith({ providerId: 'cfg-1' });
+    expect(result.current.data?.items[0]).toEqual({
+      id: 'sec-1',
+      providerId: 'cfg-1',
+      label: null,
+      active: true,
+      masked: '••••••aB9z',
+      createdAt: Date.parse('2026-08-13T00:00:00Z'),
+    });
   });
 
-  it('reports allowSecretsExposure=false on the kernel plane without fetching', async () => {
+  it('exposure reflects the host policy from the facade without fetching', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const exposureSpy = vi
+      .spyOn(backend.secrets, 'exposure')
+      .mockResolvedValue({ allowSecretsExposure: true });
     const { result } = renderHook(() => useSecretsExposure(), {
       wrapper: wrapperFor(queryClient),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(result.current.data).toEqual({ allowSecretsExposure: false });
+    expect(exposureSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.data).toEqual({ allowSecretsExposure: true });
   });
 
-  it('secret mutations are honest UnsupportedErrors on the kernel plane', async () => {
+  it('secret mutations forward the canonical wire payloads and map the results', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const createSpy = vi
+      .spyOn(backend.providers.secrets, 'create')
+      .mockResolvedValue({ id: 'sec-new' });
+    const updateSpy = vi.spyOn(backend.providers.secrets, 'update').mockResolvedValue({
+      id: 'sec-new',
+      providerId: 'cfg-1',
+      label: 'prod',
+      active: true,
+      masked: '••••••aB9z',
+      createdAt: '2026-08-13T00:00:00Z',
+    });
+    const deleteSpy = vi.spyOn(backend.providers.secrets, 'del').mockResolvedValue({});
+    const revealSpy = vi
+      .spyOn(backend.providers.secrets, 'reveal')
+      .mockResolvedValue({ value: 'sk-plain' });
+
     const create = renderHook(() => useCreateSecret(), { wrapper: wrapperFor(queryClient) });
-    act(() => create.result.current.mutate({ providerId: 'cfg-1', input: { value: 'sk-test' } }));
-    await waitFor(() => expect(create.result.current.isError).toBe(true));
-    expect(create.result.current.error).toBeInstanceOf(UnsupportedError);
-    expect((create.result.current.error as UnsupportedError).feature).toBe(
-      'providers.secrets.create',
+    act(() =>
+      create.result.current.mutate({
+        providerId: 'cfg-1',
+        input: { value: 'sk-test', label: 'prod' },
+      }),
     );
+    await waitFor(() => expect(create.result.current.isSuccess).toBe(true));
+    expect(create.result.current.data).toEqual({ id: 'sec-new' });
+    expect(createSpy).toHaveBeenCalledWith({
+      providerId: 'cfg-1',
+      value: 'sk-test',
+      label: 'prod',
+    });
 
     const update = renderHook(() => useUpdateSecret(), { wrapper: wrapperFor(queryClient) });
     act(() =>
       update.result.current.mutate({
         providerId: 'cfg-1',
-        secretId: 'sec-1',
-        update: { active: true },
+        secretId: 'sec-new',
+        // The legacy null label clears the field on the wire.
+        update: { label: null, active: true },
       }),
     );
-    await waitFor(() => expect(update.result.current.isError).toBe(true));
-    expect((update.result.current.error as UnsupportedError).feature).toBe(
-      'providers.secrets.update',
-    );
+    await waitFor(() => expect(update.result.current.isSuccess).toBe(true));
+    expect(updateSpy).toHaveBeenCalledWith({
+      providerId: 'cfg-1',
+      secretId: 'sec-new',
+      label: '',
+      active: true,
+    });
+    expect(update.result.current.data).toMatchObject({
+      id: 'sec-new',
+      label: 'prod',
+      active: true,
+    });
 
     const del = renderHook(() => useDeleteSecret(), { wrapper: wrapperFor(queryClient) });
-    act(() => del.result.current.mutate({ providerId: 'cfg-1', secretId: 'sec-1' }));
-    await waitFor(() => expect(del.result.current.isError).toBe(true));
-    expect((del.result.current.error as UnsupportedError).feature).toBe('providers.secrets.delete');
+    act(() => del.result.current.mutate({ providerId: 'cfg-1', secretId: 'sec-new' }));
+    await waitFor(() => expect(del.result.current.isSuccess).toBe(true));
+    expect(deleteSpy).toHaveBeenCalledWith({ providerId: 'cfg-1', secretId: 'sec-new' });
+    expect(del.result.current.data).toEqual({ ok: true });
 
     const reveal = renderHook(() => useRevealSecret(), { wrapper: wrapperFor(queryClient) });
-    act(() => reveal.result.current.mutate({ providerId: 'cfg-1', secretId: 'sec-1' }));
-    await waitFor(() => expect(reveal.result.current.isError).toBe(true));
-    expect((reveal.result.current.error as UnsupportedError).feature).toBe(
-      'providers.secrets.reveal',
-    );
+    act(() => reveal.result.current.mutate({ providerId: 'cfg-1', secretId: 'sec-new' }));
+    await waitFor(() => expect(reveal.result.current.isSuccess).toBe(true));
+    expect(revealSpy).toHaveBeenCalledWith({ providerId: 'cfg-1', secretId: 'sec-new' });
+    expect(reveal.result.current.data).toEqual({ value: 'sk-plain' });
 
     expect(fetchMock).not.toHaveBeenCalled();
   });

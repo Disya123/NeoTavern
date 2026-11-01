@@ -66,6 +66,9 @@ options:
                                 (NEOTA_SECRET_PASSPHRASE_FILE); the file's
                                 single trailing newline is stripped; a wrong
                                 passphrase fails closed at startup
+  --allow-secrets-exposure      enable plaintext API-key reveal
+                                (NEOTA_ALLOW_SECRETS_EXPOSURE=1; default OFF —
+                                every other secret surface stays value-free)
 
 stdout: one `listening <ip:port>` line, then the process waits for stdin EOF
         and drains the listener (exit 0). Ctrl+C kills the process; durable
@@ -108,6 +111,10 @@ pub struct HeadlessConfig {
     pub allowed_origins: Vec<String>,
     /// SecretStore backend wired into the kernel.
     pub secret_backend: SecretBackend,
+    /// Plaintext reveal policy for provider secrets (`secrets.exposure`).
+    /// `false` (default) makes `providers.secrets.reveal` fail closed; the
+    /// legacy `NEOTA_ALLOW_SECRETS_EXPOSURE` gate.
+    pub allow_secrets_exposure: bool,
 }
 
 /// Why argument parsing failed, or a request for `--help`.
@@ -148,6 +155,7 @@ where
     let mut bind: Option<String> = None;
     let mut remote_exposure_flag = false;
     let mut auth_flag = false;
+    let mut allow_secrets_exposure_flag = false;
     let mut allowed_origins: Vec<String> = Vec::new();
     let mut secret_backend: Option<String> = None;
     let mut secrets_enc: Option<PathBuf> = None;
@@ -171,6 +179,7 @@ where
             }
             "--remote-exposure" => remote_exposure_flag = true,
             "--auth" => auth_flag = true,
+            "--allow-secrets-exposure" => allow_secrets_exposure_flag = true,
             "--allowed-origin" => {
                 let value = rest.next().ok_or_else(|| {
                     ParseError::Usage("--allowed-origin requires an origin".to_string())
@@ -224,6 +233,8 @@ where
 
     let remote_exposure = remote_exposure_flag || env_flag(env, "NEOTA_REMOTE_EXPOSURE");
     let auth = auth_flag || env_flag(env, "NEOTA_HEADLESS_AUTH");
+    let allow_secrets_exposure =
+        allow_secrets_exposure_flag || env_flag(env, "NEOTA_ALLOW_SECRETS_EXPOSURE");
 
     if allowed_origins.is_empty() {
         if let Some(from_env) = env_value(env, "NEOTA_ALLOWED_ORIGINS") {
@@ -264,6 +275,7 @@ where
         auth,
         allowed_origins,
         secret_backend,
+        allow_secrets_exposure,
     })
 }
 
@@ -365,6 +377,10 @@ pub fn serve(config: HeadlessConfig) -> Result<(), String> {
     })
     .map_err(|err| format!("kernel open failed: {err}"))?;
     secrets::wire_secrets(&kernel, &config.secret_backend)?;
+    // SEC-01: plaintext reveal is host-gated, OFF by default (the legacy
+    // NEOTA_ALLOW_SECRETS_EXPOSURE contract). Every other provider-secret DTO
+    // stays value-free regardless.
+    kernel.set_secrets_exposure(config.allow_secrets_exposure);
     let kernel = Arc::new(Mutex::new(kernel));
 
     let adapter_config = RemoteAdapterConfig {
@@ -463,6 +479,7 @@ mod tests {
                 "https://a.example, https://b.example",
             ),
             ("NEOTA_SECRET_BACKEND", "unavailable"),
+            ("NEOTA_ALLOW_SECRETS_EXPOSURE", "1"),
         ];
         let config = parse_args_with(["neotavern-headless"], &env).expect("parse env");
         assert_eq!(config.data_root, PathBuf::from("/from-env"));
@@ -477,6 +494,7 @@ mod tests {
             ]
         );
         assert_eq!(config.secret_backend, SecretBackend::Unavailable);
+        assert!(config.allow_secrets_exposure);
     }
 
     #[test]
@@ -507,6 +525,10 @@ mod tests {
         assert!(!config.auth);
         assert!(config.allowed_origins.is_empty());
         assert_eq!(config.secret_backend, SecretBackend::Env);
+        assert!(
+            !config.allow_secrets_exposure,
+            "plaintext reveal is OFF by default (SEC-01)"
+        );
     }
 
     #[test]
@@ -518,6 +540,7 @@ mod tests {
             "127.0.0.1:0",
             "--remote-exposure",
             "--auth",
+            "--allow-secrets-exposure",
             "--allowed-origin",
             "https://app.example",
             "--secret-backend",
@@ -528,6 +551,10 @@ mod tests {
         assert!(config.bind_addr.ip().is_loopback());
         assert!(config.remote_exposure);
         assert!(config.auth);
+        assert!(
+            config.allow_secrets_exposure,
+            "the --allow-secrets-exposure flag opts in"
+        );
         assert_eq!(
             config.allowed_origins,
             vec!["https://app.example".to_string()]

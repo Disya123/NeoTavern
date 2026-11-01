@@ -131,6 +131,11 @@ pub struct KernelHostConfig {
     pub data_root: Option<std::path::PathBuf>,
     /// Which SecretStore backend to wire (default: session-only).
     pub secret_backend: SecretBackend,
+    /// Plaintext reveal policy for provider secrets (`secrets.exposure`,
+    /// M7 Etap-4 cluster 7). Default `false`: `providers.secrets.reveal`
+    /// fails closed. The shell maps its `NEOTA_ALLOW_SECRETS_EXPOSURE` flag
+    /// here; every other secret DTO stays value-free regardless.
+    pub allow_secrets_exposure: bool,
 }
 
 /// A wire-valid fallback for unreachable envelope-build invariants.
@@ -160,6 +165,9 @@ impl KernelHost {
                 secrets::wire_osvault_secrets(&kernel);
             }
         }
+        // SEC-01: plaintext reveal is host-gated and OFF by default, so a key
+        // value can never cross the wire unless the shell opted in.
+        kernel.set_secrets_exposure(config.allow_secrets_exposure);
         Ok(Self {
             kernel: Arc::new(Mutex::new(kernel)),
             streams: Arc::new(Mutex::new(HashMap::new())),
@@ -639,6 +647,32 @@ mod tests {
                     result.get("productWire").is_some(),
                     "meta result must carry productWire"
                 );
+            }
+            other => panic!("expected ok envelope, got {other:?}"),
+        }
+    }
+
+    /// SEC-01 (cluster 7): the host's exposure policy reaches the kernel
+    /// (`secrets.exposure`) and defaults to OFF.
+    #[test]
+    fn secrets_exposure_policy_reaches_the_kernel() {
+        let host = stateless_host();
+        match dispatch(&host, "secrets.exposure", json!({})) {
+            ResponseEnvelope::Ok { result, .. } => {
+                assert_eq!(result["allowSecretsExposure"], json!(false));
+            }
+            other => panic!("expected ok envelope, got {other:?}"),
+        }
+
+        let allowed = KernelHost::open(KernelHostConfig {
+            data_root: None,
+            allow_secrets_exposure: true,
+            ..Default::default()
+        })
+        .expect("host with exposure opted in must open");
+        match dispatch(&allowed, "secrets.exposure", json!({})) {
+            ResponseEnvelope::Ok { result, .. } => {
+                assert_eq!(result["allowSecretsExposure"], json!(true));
             }
             other => panic!("expected ok envelope, got {other:?}"),
         }

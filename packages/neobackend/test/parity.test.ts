@@ -9,6 +9,7 @@ import {
   type AssetDto,
   type CharacterDto,
   type CreateProfileResultDto,
+  type CreateProviderSecretResultDto,
   type DiagnosticsExportResultDto,
   type GenerationRunDto,
   type GetAssetContentResultDto,
@@ -27,6 +28,7 @@ import {
   type ListToolsResultDto,
   type ListMessageRevisionsResultDto,
   type ListMessageVariantsResultDto,
+  type ListProviderSecretsResultDto,
   type EmptyResultDto,
   type MemoryDto,
   type MessageDraftDto,
@@ -47,11 +49,15 @@ import {
   type ProfileDto,
   type ProfileExportResultDto,
   type ProfileImportResultDto,
+  type ProviderCatalogResultDto,
+  type ProviderSecretDto,
+  type RevealProviderSecretResultDto,
   type PutAssetResultDto,
   type ResultSettingsDto,
   type RollbackChatSnapshotResultDto,
   type ListChatSnapshotsRequestDto,
   type ListChatSnapshotsResultDto,
+  type SecretsExposureResultDto,
   type SecretsStatusResultDto,
   type ThemeDto,
   type WireGenerationEvent,
@@ -122,6 +128,46 @@ const PROVIDERS: ListProvidersResultDto = {
     },
   ],
 };
+
+// --- Provider catalog + named secrets fixtures (M7 Etap-4 cluster 7; wire
+// fixture shapes `wire.result.provider-catalog`, `wire.provider.secret.dto`,
+// `wire.result.provider-secrets`, `wire.result.provider-secret-reveal`,
+// `wire.result.secrets-exposure`). ---
+const PROVIDER_CONFIG_ID = '1a2b3c4d-5e6f-4a7b-8c9d-0a1b2c3d4e5f';
+const PROVIDER_SECRET_ID = '2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b';
+
+const PROVIDER_CATALOG: ProviderCatalogResultDto = {
+  items: [
+    {
+      id: 'openai',
+      adapterKind: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      apiKeyRequired: true,
+      baseUrlEditable: true,
+      samplerSupport: [],
+    },
+    {
+      id: 'openai-compatible',
+      adapterKind: 'openai-compatible',
+      apiKeyRequired: false,
+      baseUrlEditable: true,
+      samplerSupport: [],
+    },
+  ],
+};
+
+const PROVIDER_SECRET: ProviderSecretDto = {
+  id: PROVIDER_SECRET_ID,
+  providerId: PROVIDER_CONFIG_ID,
+  label: 'primary',
+  active: true,
+  masked: '••••••aB9z',
+  createdAt: '2026-06-01T12:00:00.000Z',
+};
+const PROVIDER_SECRET_LIST: ListProviderSecretsResultDto = { items: [PROVIDER_SECRET] };
+const PROVIDER_SECRET_CREATED: CreateProviderSecretResultDto = { id: PROVIDER_SECRET_ID };
+const PROVIDER_SECRET_REVEAL: RevealProviderSecretResultDto = { value: 'sk-fixture-revealed' };
+const SECRETS_EXPOSURE: SecretsExposureResultDto = { allowSecretsExposure: false };
 
 // --- Canonical generation fixtures (ТЗ §62–64, Phase 6). ---
 const RUN_ID = '6f5e4d3c-2b1a-4f0e-9d8c-7a6b5c4d3e2f';
@@ -558,6 +604,20 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: PAGED_MESSAGES };
       case 'providers.list':
         return { ok: true, value: PROVIDERS };
+      case 'providers.catalog':
+        return { ok: true, value: PROVIDER_CATALOG };
+      case 'providers.secrets.list':
+        return { ok: true, value: PROVIDER_SECRET_LIST };
+      case 'providers.secrets.create':
+        return { ok: true, value: PROVIDER_SECRET_CREATED };
+      case 'providers.secrets.update':
+        return { ok: true, value: PROVIDER_SECRET };
+      case 'providers.secrets.delete':
+        return { ok: true, value: EMPTY_RESULT };
+      case 'providers.secrets.reveal':
+        return { ok: true, value: PROVIDER_SECRET_REVEAL };
+      case 'secrets.exposure':
+        return { ok: true, value: SECRETS_EXPOSURE };
       case 'generation.get':
         return { ok: true, value: GENERATION_RUN };
       case 'generation.events':
@@ -713,6 +773,20 @@ function rpcResult(operationId: string | undefined): unknown {
       return PAGED_MESSAGES;
     case 'providers.list':
       return PROVIDERS;
+    case 'providers.catalog':
+      return PROVIDER_CATALOG;
+    case 'providers.secrets.list':
+      return PROVIDER_SECRET_LIST;
+    case 'providers.secrets.create':
+      return PROVIDER_SECRET_CREATED;
+    case 'providers.secrets.update':
+      return PROVIDER_SECRET;
+    case 'providers.secrets.delete':
+      return EMPTY_RESULT;
+    case 'providers.secrets.reveal':
+      return PROVIDER_SECRET_REVEAL;
+    case 'secrets.exposure':
+      return SECRETS_EXPOSURE;
     case 'generation.get':
       return GENERATION_RUN;
     case 'generation.events':
@@ -1068,6 +1142,80 @@ describe('Providers Local vs Remote parity (Phase 7)', () => {
 
     await expect(backend.providers.list()).resolves.toEqual(PROVIDERS);
     expect(kernel.requests).toEqual([{ operationId: 'providers.list', payload: {} }]);
+  });
+
+  it('providers.catalog returns deep-equal canonical catalog from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.providers.catalog(),
+      remote.providers.catalog(),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(PROVIDER_CATALOG);
+    expect(kernel.requests).toEqual([{ operationId: 'providers.catalog', payload: {} }]);
+  });
+
+  it('providers.secrets.* route the canonical payloads identically from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const listReq = { providerId: PROVIDER_CONFIG_ID };
+    const createReq = { providerId: PROVIDER_CONFIG_ID, value: 'sk-new', label: 'backup' };
+    const updateReq = {
+      providerId: PROVIDER_CONFIG_ID,
+      secretId: PROVIDER_SECRET_ID,
+      active: true,
+    };
+    const deleteReq = { providerId: PROVIDER_CONFIG_ID, secretId: PROVIDER_SECRET_ID };
+    const revealReq = { providerId: PROVIDER_CONFIG_ID, secretId: PROVIDER_SECRET_ID };
+
+    const [
+      localList,
+      remoteList,
+      localCreated,
+      remoteCreated,
+      localUpdated,
+      remoteUpdated,
+      localDeleted,
+      remoteDeleted,
+      localRevealed,
+      remoteRevealed,
+    ] = await Promise.all([
+      local.providers.secrets.list(listReq),
+      remote.providers.secrets.list(listReq),
+      local.providers.secrets.create(createReq),
+      remote.providers.secrets.create(createReq),
+      local.providers.secrets.update(updateReq),
+      remote.providers.secrets.update(updateReq),
+      local.providers.secrets.del(deleteReq),
+      remote.providers.secrets.del(deleteReq),
+      local.providers.secrets.reveal(revealReq),
+      remote.providers.secrets.reveal(revealReq),
+    ]);
+
+    expect(localList).toEqual(remoteList);
+    expect(localList).toEqual(PROVIDER_SECRET_LIST);
+    expect(localCreated).toEqual(remoteCreated);
+    expect(localCreated).toEqual(PROVIDER_SECRET_CREATED);
+    expect(localUpdated).toEqual(remoteUpdated);
+    expect(localUpdated).toEqual(PROVIDER_SECRET);
+    expect(localDeleted).toEqual(remoteDeleted);
+    expect(localDeleted).toEqual(EMPTY_RESULT);
+    expect(localRevealed).toEqual(remoteRevealed);
+    expect(localRevealed).toEqual(PROVIDER_SECRET_REVEAL);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'providers.secrets.list', payload: listReq },
+      { operationId: 'providers.secrets.create', payload: createReq },
+      { operationId: 'providers.secrets.update', payload: updateReq },
+      { operationId: 'providers.secrets.delete', payload: deleteReq },
+      { operationId: 'providers.secrets.reveal', payload: revealReq },
+    ]);
   });
 });
 
@@ -1546,6 +1694,37 @@ describe('LegacyBackend', () => {
   it('providers.list throws UnsupportedError', () => {
     const backend = makeLegacyBackend(new Map());
     expect(() => backend.providers.list()).toThrow(UnsupportedError);
+  });
+
+  it('providers.catalog and providers.secrets are kernel-only (UnsupportedError)', () => {
+    const backend = makeLegacyBackend(new Map());
+    expect(() => backend.providers.catalog()).toThrow(UnsupportedError);
+    expect(() => backend.providers.secrets.list({ providerId: PROVIDER_CONFIG_ID })).toThrow(
+      UnsupportedError,
+    );
+    expect(() =>
+      backend.providers.secrets.create({ providerId: PROVIDER_CONFIG_ID, value: 'sk-x' }),
+    ).toThrow(UnsupportedError);
+    expect(() =>
+      backend.providers.secrets.update({
+        providerId: PROVIDER_CONFIG_ID,
+        secretId: PROVIDER_SECRET_ID,
+        active: true,
+      }),
+    ).toThrow(UnsupportedError);
+    expect(() =>
+      backend.providers.secrets.del({
+        providerId: PROVIDER_CONFIG_ID,
+        secretId: PROVIDER_SECRET_ID,
+      }),
+    ).toThrow(UnsupportedError);
+    expect(() =>
+      backend.providers.secrets.reveal({
+        providerId: PROVIDER_CONFIG_ID,
+        secretId: PROVIDER_SECRET_ID,
+      }),
+    ).toThrow(UnsupportedError);
+    expect(() => backend.secrets.exposure()).toThrow(UnsupportedError);
   });
 
   it('generation.tools.list throws UnsupportedError (no legacy route)', () => {
@@ -2168,6 +2347,20 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(kernel.requests).toEqual([{ operationId: 'secrets.lock', payload: {} }]);
     expect(localResult).toEqual(remoteResult);
     expect(localResult).toEqual({ locked: true });
+  });
+
+  it('secrets.exposure reports the value-free host policy from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.secrets.exposure(),
+      remote.secrets.exposure(),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(SECRETS_EXPOSURE);
+    expect(kernel.requests).toEqual([{ operationId: 'secrets.exposure', payload: {} }]);
   });
 
   it('assets.get/content/put/delete forward the canonical ops and decode the DTOs from both backends', async () => {

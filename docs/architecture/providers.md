@@ -88,14 +88,28 @@ regression (§78 Фаза 7 deliverable). Fixtures live in
 
 ## Configuration and secrets (§55, §68)
 
-Migration 4 adds `provider_configs`:
+Migration 4 adds `provider_configs`; migration 24 adds the named-key table:
 
 ```sql
 provider_configs (
   id PK, provider, name, config_json DEFAULT '{}', secret_ref,
   created_at, updated_at, UNIQUE (provider, name)
 )
+
+provider_secrets (
+  id PK, config_id → provider_configs(id) ON DELETE CASCADE,
+  label, secret_ref, active ∈ {0,1}, created_at
+)
+CREATE UNIQUE INDEX … ON provider_secrets(config_id) WHERE active = 1;
 ```
+
+The two key surfaces coexist: `providers.config.set apiKey` keeps the
+config-level `secret_ref` (namespace `provider:<provider>`), while the named
+keys live under `provider-secret:<configId>` / id `<secretId>` with exactly
+one active key per config (the partial unique index enforces it in SQLite).
+`hasApiKey` is true when either surface holds a reference. The canonical
+source catalog is `providers.catalog` — deliberately smaller than the legacy
+20-source registry, listing only what the kernel can materialize.
 
 - Non-secret settings live in `config_json`; secrets live **only** as
   `secret_ref` references. The value never enters the DB, request snapshots,

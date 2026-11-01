@@ -1727,6 +1727,166 @@ export const DeleteProviderConfigRequestDtoSchema = Type.Object(
 );
 export type DeleteProviderConfigRequestDto = Static<typeof DeleteProviderConfigRequestDtoSchema>;
 
+/**
+ * Provider catalog entry DTO (`wire.provider.catalog.entry`) — a connection
+ * source the KERNEL can materialize into a generation adapter (M7 Etap-4
+ * cluster 7). The canonical catalog is deliberately smaller than the legacy
+ * `/api/v2/providers/catalog`: it lists only sources whose adapter kind the
+ * kernel actually builds, so the provider editor can never save a config that
+ * silently cannot generate. `samplerSupport` names the generation parameters
+ * the adapter maps (currently empty: the kernel adapter contract carries no
+ * sampler knobs yet — the UI hides what cannot be sent).
+ */
+export const ProviderCatalogEntryDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+    adapterKind: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+    defaultBaseUrl: Type.Optional(Type.String({ minLength: 1, maxLength: 2048 })),
+    apiKeyRequired: Type.Boolean(),
+    baseUrlEditable: Type.Boolean(),
+    samplerSupport: Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 64 }),
+  },
+  { $id: 'wire.provider.catalog.entry', additionalProperties: false },
+);
+export type ProviderCatalogEntryDto = Static<typeof ProviderCatalogEntryDtoSchema>;
+
+/** Provider catalog result DTO (`wire.result.provider-catalog`). */
+export const ProviderCatalogResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(ProviderCatalogEntryDtoSchema, { maxItems: 64 }),
+  },
+  { $id: 'wire.result.provider-catalog', additionalProperties: false },
+);
+export type ProviderCatalogResultDto = Static<typeof ProviderCatalogResultDtoSchema>;
+
+/**
+ * Provider secret DTO (`wire.provider.secret.dto`, ТЗ §9.4/SEC-01) — one
+ * stored API key of a provider config. A provider may hold several labelled
+ * keys; exactly one is `active` and generation resolves it. The value never
+ * crosses this DTO: `masked` carries only the display hint (bullets plus the
+ * last visible characters), and the plaintext is reachable exclusively
+ * through `providers.secrets.reveal` under the host exposure policy.
+ */
+export const ProviderSecretDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    providerId: Type.String({ format: 'uuid' }),
+    label: Type.Optional(Type.String({ maxLength: 128 })),
+    active: Type.Boolean(),
+    masked: Type.String({ maxLength: 64 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.provider.secret.dto', additionalProperties: false },
+);
+export type ProviderSecretDto = Static<typeof ProviderSecretDtoSchema>;
+
+/** List provider secrets result DTO (`wire.result.provider-secrets`). */
+export const ListProviderSecretsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(ProviderSecretDtoSchema, { maxItems: 64 }),
+  },
+  { $id: 'wire.result.provider-secrets', additionalProperties: false },
+);
+export type ListProviderSecretsResultDto = Static<typeof ListProviderSecretsResultDtoSchema>;
+
+/** List provider secrets request DTO (`wire.request.list-provider-secrets`). */
+export const ListProviderSecretsRequestDtoSchema = Type.Object(
+  {
+    providerId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.list-provider-secrets', additionalProperties: false },
+);
+export type ListProviderSecretsRequestDto = Static<typeof ListProviderSecretsRequestDtoSchema>;
+
+/**
+ * Create provider secret request DTO (`wire.request.create-provider-secret`).
+ * A created secret becomes the provider's active key and deactivates every
+ * sibling (legacy parity); `label` is an optional human label.
+ */
+export const CreateProviderSecretRequestDtoSchema = Type.Object(
+  {
+    providerId: Type.String({ format: 'uuid' }),
+    value: Type.String({ minLength: 1, maxLength: 100000 }),
+    label: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+  },
+  { $id: 'wire.request.create-provider-secret', additionalProperties: false },
+);
+export type CreateProviderSecretRequestDto = Static<typeof CreateProviderSecretRequestDtoSchema>;
+
+/** Create provider secret result DTO (`wire.result.provider-secret-created`). */
+export const CreateProviderSecretResultDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.result.provider-secret-created', additionalProperties: false },
+);
+export type CreateProviderSecretResultDto = Static<typeof CreateProviderSecretResultDtoSchema>;
+
+/**
+ * Update provider secret request DTO (`wire.request.update-provider-secret`).
+ * `label: ''` clears the stored label; `active: true` makes this the key
+ * generation uses and deactivates its siblings atomically.
+ */
+export const UpdateProviderSecretRequestDtoSchema = Type.Object(
+  {
+    providerId: Type.String({ format: 'uuid' }),
+    secretId: Type.String({ format: 'uuid' }),
+    label: Type.Optional(Type.String({ maxLength: 128 })),
+    active: Type.Optional(Type.Boolean()),
+  },
+  { $id: 'wire.request.update-provider-secret', additionalProperties: false },
+);
+export type UpdateProviderSecretRequestDto = Static<typeof UpdateProviderSecretRequestDtoSchema>;
+
+/** Delete provider secret request DTO (`wire.request.delete-provider-secret`). */
+export const DeleteProviderSecretRequestDtoSchema = Type.Object(
+  {
+    providerId: Type.String({ format: 'uuid' }),
+    secretId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.delete-provider-secret', additionalProperties: false },
+);
+export type DeleteProviderSecretRequestDto = Static<typeof DeleteProviderSecretRequestDtoSchema>;
+
+/** Reveal provider secret request DTO (`wire.request.reveal-provider-secret`). */
+export const RevealProviderSecretRequestDtoSchema = Type.Object(
+  {
+    providerId: Type.String({ format: 'uuid' }),
+    secretId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.reveal-provider-secret', additionalProperties: false },
+);
+export type RevealProviderSecretRequestDto = Static<typeof RevealProviderSecretRequestDtoSchema>;
+
+/**
+ * Reveal provider secret result DTO (`wire.result.provider-secret-reveal`) —
+ * the ONLY wire shape that carries a plaintext secret, gated by the host
+ * exposure policy (`secrets.exposure`, default off, mirrors the legacy
+ * `NEOTA_ALLOW_SECRETS_EXPOSURE` gate). With the policy off the op fails with
+ * the stable `SECRETS_EXPOSURE_DISABLED` product error and the value never
+ * leaves the store.
+ */
+export const RevealProviderSecretResultDtoSchema = Type.Object(
+  {
+    value: Type.String({ minLength: 1, maxLength: 100000 }),
+  },
+  { $id: 'wire.result.provider-secret-reveal', additionalProperties: false },
+);
+export type RevealProviderSecretResultDto = Static<typeof RevealProviderSecretResultDtoSchema>;
+
+/**
+ * Secrets exposure result DTO (`wire.result.secrets-exposure`) — whether the
+ * host enabled plaintext reveal (`NEOTA_ALLOW_SECRETS_EXPOSURE`). Value-free:
+ * the UI renders the reveal affordance from this flag and nothing else.
+ */
+export const SecretsExposureResultDtoSchema = Type.Object(
+  {
+    allowSecretsExposure: Type.Boolean(),
+  },
+  { $id: 'wire.result.secrets-exposure', additionalProperties: false },
+);
+export type SecretsExposureResultDto = Static<typeof SecretsExposureResultDtoSchema>;
+
 /** Empty result DTO (`wire.result.empty`). */
 export const EmptyResultDtoSchema = Type.Object(
   {},
@@ -2898,6 +3058,18 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.list-providers': ListProvidersResultDtoSchema,
   'wire.provider.config.dto': ProviderConfigDtoSchema,
   'wire.result.list-provider-configs': ListProviderConfigsResultDtoSchema,
+  'wire.provider.catalog.entry': ProviderCatalogEntryDtoSchema,
+  'wire.result.provider-catalog': ProviderCatalogResultDtoSchema,
+  'wire.provider.secret.dto': ProviderSecretDtoSchema,
+  'wire.result.provider-secrets': ListProviderSecretsResultDtoSchema,
+  'wire.request.list-provider-secrets': ListProviderSecretsRequestDtoSchema,
+  'wire.request.create-provider-secret': CreateProviderSecretRequestDtoSchema,
+  'wire.result.provider-secret-created': CreateProviderSecretResultDtoSchema,
+  'wire.request.update-provider-secret': UpdateProviderSecretRequestDtoSchema,
+  'wire.request.delete-provider-secret': DeleteProviderSecretRequestDtoSchema,
+  'wire.request.reveal-provider-secret': RevealProviderSecretRequestDtoSchema,
+  'wire.result.provider-secret-reveal': RevealProviderSecretResultDtoSchema,
+  'wire.result.secrets-exposure': SecretsExposureResultDtoSchema,
   'wire.request.profile-export': ProfileExportRequestDtoSchema,
   'wire.result.profile-export': ProfileExportResultDtoSchema,
   'wire.request.profile-import': ProfileImportRequestDtoSchema,

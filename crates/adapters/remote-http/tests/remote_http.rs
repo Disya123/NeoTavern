@@ -2017,6 +2017,93 @@ fn secrets_lock_over_http() {
     );
 }
 
+/// M7 Etap-4 cluster 7: named provider secrets over the HTTP host — the
+/// value-free surfaces (list/created) never carry the key, and the single
+/// value-carrying op (`providers.secrets.reveal`) is exposure-gated by the
+/// host policy: OFF by default → product `SECRETS_EXPOSURE_DISABLED`; after
+/// the host opts in, the same request returns the value.
+#[test]
+fn provider_secrets_over_http_are_exposure_gated() {
+    let server = TestServer::spawn();
+    let secrets_path = server.data_root().join("secrets.enc");
+    let file_store = FileEncryptedSecretStore::new(&secrets_path);
+    file_store
+        .create("test-master-passphrase")
+        .expect("create must initialize the encrypted store");
+    {
+        let kernel = server.kernel.lock().expect("kernel lock");
+        kernel.set_secret_store(Arc::new(file_store));
+        kernel.set_secrets_exposure(false);
+    }
+
+    let set = envelope_body(
+        &rid(1),
+        "providers.config.set",
+        json!({ "provider": "fake", "name": "local", "config": { "model": "mock-1" } }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &set);
+    assert_eq!(
+        response.status, 200,
+        "providers.config.set answers HTTP 200"
+    );
+    let (_, config) = expect_ok(decode_envelope(&response.body));
+    let config_id = config["id"].as_str().expect("config id").to_string();
+
+    let sentinel = "sk-http-named-sentinel-1234";
+    let create = envelope_body(
+        &rid(2),
+        "providers.secrets.create",
+        json!({ "providerId": config_id, "value": sentinel, "label": "primary" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create);
+    assert_eq!(response.status, 200, "providers.secrets.create answers 200");
+    let (_, created) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_provider_secret_created(&created).expect("created result is wire-valid");
+    let secret_id = created["id"].as_str().expect("secret id").to_string();
+
+    let list = envelope_body(
+        &rid(3),
+        "providers.secrets.list",
+        json!({ "providerId": config_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200, "providers.secrets.list answers 200");
+    let (_, listed) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_provider_secrets(&listed).expect("list result is wire-valid");
+    assert_eq!(listed["items"][0]["active"], json!(true));
+    assert!(
+        !String::from_utf8_lossy(&response.body).contains(sentinel),
+        "the list envelope must never carry the key value"
+    );
+
+    // Exposure policy OFF: reveal fails closed, no value on the wire.
+    let reveal = envelope_body(
+        &rid(4),
+        "providers.secrets.reveal",
+        json!({ "providerId": config_id, "secretId": secret_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &reveal);
+    assert_eq!(response.status, 200, "product errors ride the 200 envelope");
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(
+        error.code, "SECRETS_EXPOSURE_DISABLED",
+        "the stable product code rides the envelope verbatim"
+    );
+    assert!(!String::from_utf8_lossy(&response.body).contains(sentinel));
+
+    // The host opts in (NEOTA_ALLOW_SECRETS_EXPOSURE parity).
+    {
+        let kernel = server.kernel.lock().expect("kernel lock");
+        kernel.set_secrets_exposure(true);
+    }
+    let response = http_request(server.addr, "POST", "/rpc", &[], &reveal);
+    assert_eq!(response.status, 200);
+    let (request_id, revealed) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(4), "requestId is echoed");
+    gen::validate_result_provider_secret_reveal(&revealed).expect("reveal result is wire-valid");
+    assert_eq!(revealed["value"], json!(sentinel));
+}
+
 /// 35. М5 slice 42: `profile.import` over the HTTP host — export a container
 ///     on one server, stage it under a second server's data root (the
 ///     host-side staging step), import over HTTP with the reject policy and

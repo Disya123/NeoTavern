@@ -553,7 +553,12 @@ fn setup_local_kernel_mode(
         // kernel data root is guaranteed writable and exists).
         data_root: Some(data_dir.clone()),
         secret_backend: resolve_secret_backend(portable),
-        ..Default::default()
+        // SEC-01 plaintext-reveal gate: OFF unless the operator opted in
+        // (the legacy NEOTA_ALLOW_SECRETS_EXPOSURE contract; the accepted
+        // truthy spellings match the headless host).
+        allow_secrets_exposure: std::env::var("NEOTA_ALLOW_SECRETS_EXPOSURE")
+            .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false),
     })
     .map_err(|error| {
         // Controlled kernel error (contract mismatch, data_root_in_use,

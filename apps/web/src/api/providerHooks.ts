@@ -10,20 +10,27 @@
  * `UnsupportedError`, and nothing silently falls back to the legacy transport.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  ModelInfo,
-  ProviderCatalogResponse,
-  ProviderConfig,
-  ProviderConfigCreate,
-  ProviderConfigDto,
-  ProviderConfigUpdate,
-  ProviderSecret,
-  ProviderSecretCreate,
-  ProviderSecretCreated,
-  ProviderSecretList,
-  ProviderSecretReveal,
-  ProviderSecretUpdate,
-  SecretsExposure,
+import {
+  GenerationParameterIds,
+  ProviderSourceIds,
+  type GenerationParameterId,
+  type ModelInfo,
+  type ProviderCatalogEntry,
+  type ProviderCatalogResponse,
+  type ProviderCatalogResultDto,
+  type ProviderConfig,
+  type ProviderConfigCreate,
+  type ProviderConfigDto,
+  type ProviderConfigUpdate,
+  type ProviderSecret,
+  type ProviderSecretCreate,
+  type ProviderSecretCreated,
+  type ProviderSecretDto,
+  type ProviderSecretList,
+  type ProviderSecretReveal,
+  type ProviderSecretUpdate,
+  type ProviderSourceId,
+  type SecretsExposure,
 } from '@neotavern/contracts';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { ApiError, api } from './client.js';
@@ -59,6 +66,56 @@ export function translateProviderConfig(dto: ProviderConfigDto): ProviderConfig 
  */
 const LEGACY_CONFIG_NAME = 'default';
 
+const KNOWN_SOURCE_IDS = new Set<string>(ProviderSourceIds);
+const KNOWN_PARAMETER_IDS = new Set<string>(GenerationParameterIds);
+
+function isKnownSourceId(id: string): id is ProviderSourceId {
+  return KNOWN_SOURCE_IDS.has(id);
+}
+
+function isKnownParameterId(id: string): id is GenerationParameterId {
+  return KNOWN_PARAMETER_IDS.has(id);
+}
+
+/**
+ * Translate the canonical wire catalog to the UI catalog shape.
+ *
+ * The kernel catalog is deliberately smaller and truthful: it lists only the
+ * sources the kernel can materialize, all of which are the same
+ * OpenAI-compatible HTTP adapter (`adapterKind: 'openai-compatible'`). Entries
+ * the UI has no identity for (the test-only `fake` source) are skipped instead
+ * of inventing labels or values the backend would reject. `samplerSupport`
+ * narrows to the generation parameters the UI knows how to render.
+ */
+export function translateKernelCatalog(dto: ProviderCatalogResultDto): ProviderCatalogResponse {
+  const items: ProviderCatalogEntry[] = [];
+  for (const entry of dto.items) {
+    if (!isKnownSourceId(entry.id)) continue;
+    items.push({
+      id: entry.id,
+      adapterKind: 'openai-compatible',
+      defaultBaseUrl: entry.defaultBaseUrl ?? null,
+      apiKeyRequired: entry.apiKeyRequired,
+      baseUrlEditable: entry.baseUrlEditable,
+      samplerSupport: entry.samplerSupport.filter(isKnownParameterId),
+    });
+  }
+  return { items };
+}
+
+/** Translate a wire named-key DTO to the legacy secrets shape. */
+export function translateKernelSecret(dto: ProviderSecretDto): ProviderSecret {
+  return {
+    id: dto.id,
+    providerId: dto.providerId,
+    label: dto.label ?? null,
+    active: dto.active,
+    masked: dto.masked,
+    // RFC3339 (wire) → epoch-ms (legacy UI shape).
+    createdAt: Date.parse(dto.createdAt),
+  };
+}
+
 /** Stable keys shared by provider editors and precise mutation invalidations. */
 export const providerQueryKeys = {
   all: ['providers'] as const,
@@ -84,13 +141,12 @@ export function useProviders() {
 export function useProviderCatalog() {
   return useQuery({
     queryKey: providerQueryKeys.catalog,
-    queryFn: () => {
+    queryFn: async () => {
       if (isKernelMode()) {
-        // The static provider catalog (adapter kind, default base URLs, sampler
-        // support) is a legacy-contour registry; the wire plane has no catalog
-        // operation. The editor degrades to the built-in 'openai-compatible'
-        // default draft, so creating a config still works.
-        return Promise.reject(new UnsupportedError('providers.catalog'));
+        // Canonical source catalog (wire `providers.catalog`): the sources the
+        // backend can actually materialize, with the per-source hints the
+        // editor drives from.
+        return translateKernelCatalog(await backend.providers.catalog());
       }
       return api.get<ProviderCatalogResponse>('/providers/catalog');
     },
@@ -204,12 +260,11 @@ export function useDiscoverProviderModels() {
 export function useProviderSecrets(providerId: string | undefined) {
   return useQuery({
     queryKey: providerQueryKeys.secrets(providerId),
-    queryFn: () => {
+    queryFn: async () => {
       if (isKernelMode()) {
-        // The wire plane has no secrets CRUD: the API key lives inside the
-        // provider config (`providers.config.set apiKey`, SEC-01) and its value
-        // never crosses a DTO. A separate key manager is legacy-only.
-        return Promise.reject(new UnsupportedError('providers.secrets.list'));
+        if (providerId === undefined) return { items: [] };
+        const result = await backend.providers.secrets.list({ providerId });
+        return { items: result.items.map(translateKernelSecret) };
       }
       return api.get<ProviderSecretList>(`/providers/${providerId}/secrets`);
     },
@@ -221,12 +276,11 @@ export function useProviderSecrets(providerId: string | undefined) {
 export function useSecretsExposure() {
   return useQuery({
     queryKey: ['secrets-exposure'],
-    queryFn: () => {
+    queryFn: async () => {
       if (isKernelMode()) {
-        // The legacy 'allow secrets exposure' toggle gates reveal controls that
-        // cannot exist on the wire plane (a secret value never crosses a DTO),
-        // so the honest fail-closed answer is `false`.
-        return Promise.resolve<SecretsExposure>({ allowSecretsExposure: false });
+        // Host policy (wire `secrets.exposure`). When false, reveal is
+        // fail-closed and the UI hides copy/reveal affordances.
+        return backend.secrets.exposure();
       }
       return api.get<SecretsExposure>('/secrets/exposure');
     },
@@ -237,10 +291,19 @@ export function useSecretsExposure() {
 export function useCreateSecret() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ providerId, input }: { providerId: string; input: ProviderSecretCreate }) => {
+    mutationFn: async ({
+      providerId,
+      input,
+    }: {
+      providerId: string;
+      input: ProviderSecretCreate;
+    }): Promise<ProviderSecretCreated> => {
       if (isKernelMode()) {
-        // Keys are stored through `providers.config.set` on the wire plane.
-        return Promise.reject(new UnsupportedError('providers.secrets.create'));
+        return backend.providers.secrets.create({
+          providerId,
+          value: input.value,
+          ...(input.label !== undefined ? { label: input.label } : {}),
+        });
       }
       return api.post<ProviderSecretCreated>(`/providers/${providerId}/secrets`, input);
     },
@@ -254,7 +317,7 @@ export function useCreateSecret() {
 export function useUpdateSecret() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       providerId,
       secretId,
       update,
@@ -262,9 +325,16 @@ export function useUpdateSecret() {
       providerId: string;
       secretId: string;
       update: ProviderSecretUpdate;
-    }) => {
+    }): Promise<ProviderSecret> => {
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('providers.secrets.update'));
+        // Wire label `''` clears the field — the legacy null maps onto it.
+        const dto = await backend.providers.secrets.update({
+          providerId,
+          secretId,
+          ...(update.label !== undefined ? { label: update.label ?? '' } : {}),
+          ...(update.active !== undefined ? { active: update.active } : {}),
+        });
+        return translateKernelSecret(dto);
       }
       return api.patch<ProviderSecret>(`/providers/${providerId}/secrets/${secretId}`, update);
     },
@@ -278,9 +348,16 @@ export function useUpdateSecret() {
 export function useDeleteSecret() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ providerId, secretId }: { providerId: string; secretId: string }) => {
+    mutationFn: async ({
+      providerId,
+      secretId,
+    }: {
+      providerId: string;
+      secretId: string;
+    }): Promise<{ ok: true }> => {
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('providers.secrets.delete'));
+        await backend.providers.secrets.del({ providerId, secretId });
+        return { ok: true as const };
       }
       return api.del<{ ok: true }>(`/providers/${providerId}/secrets/${secretId}`);
     },
@@ -293,10 +370,17 @@ export function useDeleteSecret() {
 
 export function useRevealSecret() {
   return useMutation({
-    mutationFn: ({ providerId, secretId }: { providerId: string; secretId: string }) => {
+    mutationFn: async ({
+      providerId,
+      secretId,
+    }: {
+      providerId: string;
+      secretId: string;
+    }): Promise<ProviderSecretReveal> => {
       if (isKernelMode()) {
-        // A secret value can never cross the wire DTO boundary (SEC-01).
-        return Promise.reject(new UnsupportedError('providers.secrets.reveal'));
+        // The single plaintext-carrying op; the kernel fails closed with
+        // `SECRETS_EXPOSURE_DISABLED` unless the host opted in.
+        return backend.providers.secrets.reveal({ providerId, secretId });
       }
       return api.post<ProviderSecretReveal>(`/providers/${providerId}/secrets/${secretId}/reveal`);
     },

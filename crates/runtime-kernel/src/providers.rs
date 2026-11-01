@@ -86,6 +86,11 @@ pub(crate) struct ProviderState {
     /// provider-config operations store API keys through this seam and only
     /// the opaque reference reaches the database.
     pub secret_store: Option<Arc<dyn SecretStore>>,
+    /// Host plaintext-exposure policy for provider secrets (`secrets.exposure`,
+    /// M7 Etap-4 cluster 7). Default `false`: `providers.secrets.reveal`
+    /// fails closed. The host maps its `NEOTA_ALLOW_SECRETS_EXPOSURE` flag
+    /// through [`Kernel::set_secrets_exposure`](crate::Kernel::set_secrets_exposure).
+    pub secrets_exposure: bool,
     /// Per-run provider deadline for new generations.
     pub run_timeout: Duration,
     /// The kernel's declarative tool registry (ТЗ §8.3, Этап 2.7): the
@@ -103,6 +108,7 @@ impl ProviderState {
             registry: ProviderRegistry::new_builtins(),
             secret_resolver: None,
             secret_store: None,
+            secrets_exposure: false,
             run_timeout: RUN_TIMEOUT,
             tools: crate::tools::ToolRegistry::new(),
         }
@@ -165,6 +171,73 @@ pub(crate) fn handle_providers_list(
     crate::product::encode(&value)
 }
 
+/// The canonical provider-source catalog (M7 Etap-4 cluster 7).
+///
+/// Deliberately smaller than the legacy `/api/v2/providers/catalog`: it lists
+/// only the sources the KERNEL can materialize into a generation adapter
+/// ([`register_config_adapter`]), so the provider editor can never save a
+/// profile that silently cannot generate. `sampler_support` is empty because
+/// the kernel adapter contract carries no sampler knobs yet — an empty list is
+/// the honest answer, and the UI hides the controls it cannot send.
+///
+/// Growth rule: a new adapter is added here in the same change that teaches
+/// [`register_config_adapter`] to build it.
+fn provider_catalog_entries() -> Vec<generated::ProviderCatalogEntry> {
+    vec![
+        generated::ProviderCatalogEntry {
+            id: "openai".to_string(),
+            adapter_kind: "openai".to_string(),
+            // Base URL is editable so self-hosted gateways and compatible
+            // providers can reuse the same source.
+            default_base_url: Some("https://api.openai.com/v1".to_string()),
+            api_key_required: true,
+            base_url_editable: true,
+            sampler_support: Vec::new(),
+        },
+        generated::ProviderCatalogEntry {
+            id: "openai-compatible".to_string(),
+            adapter_kind: "openai-compatible".to_string(),
+            default_base_url: None,
+            api_key_required: false,
+            base_url_editable: true,
+            sampler_support: Vec::new(),
+        },
+        generated::ProviderCatalogEntry {
+            id: "fake".to_string(),
+            adapter_kind: "fake".to_string(),
+            default_base_url: None,
+            api_key_required: false,
+            base_url_editable: false,
+            sampler_support: Vec::new(),
+        },
+    ]
+}
+
+/// `providers.catalog` — the stateless built-in source catalog (no storage
+/// required). Strict empty request; the response is validated through the
+/// generated checker before serialization.
+pub(crate) fn handle_providers_catalog(request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    generated::decode_empty_request_dto(request)?;
+    let dto = generated::ResultProviderCatalog {
+        items: provider_catalog_entries(),
+    };
+    let value = serde_json::to_value(&dto).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize providers.catalog response: {err}"),
+        )
+    })?;
+    generated::validate_result_provider_catalog(&value).map_err(|issues| KernelError {
+        code: KernelErrorCode::ContractViolation,
+        message: "kernel providers.catalog response failed validation".to_string(),
+        issues,
+        params: Vec::new(),
+        product: None,
+    })?;
+    // Bounded serialization (plan rev 2.2 Layer C) — shared LimitedWriter.
+    crate::product::encode(&value)
+}
+
 /// Maps the sdk [`Availability`](provider_sdk::Availability) onto the wire
 /// [`ProviderAvailability`] enum (same `status`-tagged shape).
 fn map_availability(availability: &provider_sdk::Availability) -> ProviderAvailability {
@@ -188,7 +261,8 @@ fn map_availability(availability: &provider_sdk::Availability) -> ProviderAvaila
 // ---------------------------------------------------------------------------
 
 /// Builds the production adapter for a stored provider config, when the kernel
-/// knows how to materialize that provider kind (today: `openai`).
+/// knows how to materialize that provider kind (`openai` and the custom
+/// `openai-compatible` endpoint — both are the same HTTP adapter).
 ///
 /// The wire `config` blob is the non-secret settings object the UI stores
 /// through `providers.config.set` (connection fields like `baseUrl`/`model`
@@ -203,12 +277,12 @@ pub(crate) fn register_config_adapter(
     config: &serde_json::Value,
 ) {
     let adapter: Option<Arc<dyn ProviderAdapter>> = match provider {
-        "openai" => {
+        "openai" | "openai-compatible" => {
             let normalized = normalize_openai_config(config);
-            match provider_openai_compat::OpenAICompatProvider::from_config("openai", &normalized) {
+            match provider_openai_compat::OpenAICompatProvider::from_config(provider, &normalized) {
                 Ok(adapter) => Some(Arc::new(adapter)),
                 Err(err) => {
-                    eprintln!("kernel: provider 'openai' config rejected: {err}");
+                    eprintln!("kernel: provider '{provider}' config rejected: {err}");
                     None
                 }
             }

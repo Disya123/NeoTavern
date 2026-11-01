@@ -217,7 +217,11 @@ adds eight memories/presets operations — `presets.get`, `presets.create`,
 filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
 `(kind,name)`). All slice-3 additions are `transactional`, strict
-`additionalProperties: false`, ARC-07:
+`additionalProperties: false`, ARC-07. The M7 Этап-4 clusters then grew the
+registry to **119 ops** (the latest block is the provider catalog +
+named-key set described in §5); the authoritative live list with per-op
+metadata is the generated
+`packages/contracts/generated/contract-manifest.json`.
 
 | operationId                        | class         | idempotency    | retry | auth      | reqB    | respB  | eventB |
 | ---------------------------------- | ------------- | -------------- | ----- | --------- | ------- | ------ | ------ |
@@ -290,6 +294,25 @@ read-only backends surface `SECRET_STORE_READ_ONLY`. `delete` removes the
 row and revokes the stored secret (best-effort). `get`/`list` report only
 `hasApiKey`; a missing config yields `PROVIDER_CONFIG_NOT_FOUND` with
 `{provider, name}` params.
+
+M7 Этап-4 cluster 7 (schema v24) adds the canonical source catalog and the
+named-key manager. `providers.catalog` is stateless and lists only the
+sources the kernel can materialize (`openai`, `openai-compatible`, `fake`;
+`samplerSupport` is empty until the kernel request carries sampler knobs).
+`providers.secrets.{list,create,update,delete}` manage several labelled keys
+per config with **exactly one active key** — a partial unique index
+(`provider_secrets(config_id) WHERE active = 1`) enforces the invariant in
+the storage layer, create/activate deactivate siblings inside the
+transaction, and deleting the active key reactivates the most recent
+remaining one. Those four DTOs are value-free: `masked` is derived from the
+opaque stored reference, never the key. `providers.secrets.reveal` is the
+single plaintext-carrying operation on the whole wire and is gated by
+`secrets.exposure` — the host policy (default OFF, the legacy
+`NEOTA_ALLOW_SECRETS_EXPOSURE` gate) set through
+`Kernel::set_secrets_exposure`; with it off, reveal fails closed with
+`SECRETS_EXPOSURE_DISABLED` before touching the store. Generation prefers
+the active named key and falls back to the config-level `secret_ref`;
+`hasApiKey` is true for either surface.
 
 ## 6. Handshake and negotiation (§6.5)
 
