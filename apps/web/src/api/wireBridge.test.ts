@@ -401,6 +401,7 @@ describe('wire→UI translation', () => {
       tags: ['test'],
       createdAt: NOW_MS,
       updatedAt: NOW_MS,
+      deletedAt: null,
     });
   });
 
@@ -612,12 +613,24 @@ describe('readCharacters (kernel)', () => {
     expect(page.hasMore).toBe(true);
   });
 
-  it('rejects search, random sort, and includeDeleted honestly', async () => {
+  it('rejects search and random sort honestly', async () => {
     await expect(readCharacters({ q: 'Alice' })).rejects.toBeInstanceOf(UnsupportedError);
     await expect(readCharacters({ tag: 'x' })).rejects.toBeInstanceOf(UnsupportedError);
     await expect(readCharacters({ sort: 'random' })).rejects.toBeInstanceOf(UnsupportedError);
-    await expect(readCharacters({ includeDeleted: true })).rejects.toBeInstanceOf(UnsupportedError);
     expect(mocks.characters.list).not.toHaveBeenCalled();
+  });
+
+  it('passes includeDeleted through to the wire trash view (M7 cluster 26)', async () => {
+    mocks.characters.list.mockResolvedValue({
+      items: [{ ...WIRE_CHARACTER, deletedAt: '2026-08-14T00:00:00Z' }],
+      nextCursor: undefined,
+    });
+    const page = await readCharacters({ includeDeleted: true, limit: 50 });
+    expect(mocks.characters.list).toHaveBeenCalledWith({ limit: 50, includeDeleted: true });
+    expect(page.items[0]).toMatchObject({
+      id: CHAR_ID,
+      deletedAt: Date.parse('2026-08-14T00:00:00Z'),
+    });
   });
 
   it('sorts a kernel page A-Z without a wire sort field', async () => {

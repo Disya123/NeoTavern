@@ -11,6 +11,8 @@ import {
   useBackgrounds,
   useBackups,
   useCharacterGallery,
+  useCharacters,
+  useCharacterVersions,
   useClearDiagnosticCache,
   useCreateBackup,
   useDeleteBackground,
@@ -31,6 +33,8 @@ import {
   useRebuildSearch,
   useReorderChats,
   useRestoreBackup,
+  useRestoreCharacter,
+  useRestoreCharacterVersion,
   useUploadBackground,
   useUploadCharacterImage,
 } from './hooks.js';
@@ -132,6 +136,121 @@ describe('useDeleteCharacter', () => {
     expect(url).toBe('/api/v2/characters/char-1');
     expect(init.method).toBe('DELETE');
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['characters'] });
+  });
+});
+
+describe('character trash + version history hooks (M7 Etap-4 cluster 26)', () => {
+  const characterDto = {
+    id: '018f0000-0000-7000-8000-000000000401',
+    name: 'Seraphina',
+    description: 'Forest guardian',
+    tags: ['fantasy'],
+    createdAt: '2026-08-13T00:00:00Z',
+    updatedAt: '2026-08-13T00:00:00Z',
+  };
+
+  it('useRestoreCharacter restores via the wire op on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const restoreSpy = vi
+      .spyOn(backend.characters, 'restore')
+      .mockResolvedValue(characterDto as never);
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useRestoreCharacter(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() => result.current.mutate(characterDto.id));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(restoreSpy).toHaveBeenCalledWith(characterDto.id);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['characters'] });
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useRestoreCharacter posts the legacy restore route on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
+    const { result } = renderHook(() => useRestoreCharacter(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() => result.current.mutate('char-1'));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/v2/characters/char-1/restore');
+    expect(init.method).toBe('POST');
+  });
+
+  it('useCharacters asks the wire for trashed rows with includeDeleted', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const listSpy = vi.spyOn(backend.characters, 'list').mockResolvedValue({
+      items: [
+        characterDto,
+        {
+          ...characterDto,
+          id: '018f0000-0000-7000-8000-000000000402',
+          deletedAt: '2026-08-14T00:00:00Z',
+        },
+      ],
+      nextCursor: undefined,
+    } as never);
+    const { result } = renderHook(() => useCharacters({ includeDeleted: true, limit: 50 }), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(listSpy).toHaveBeenCalledWith({ limit: 50, includeDeleted: true });
+    const items = result.current.data?.pages.flatMap((page) => page.items) ?? [];
+    expect(items.map((item) => item.deletedAt)).toEqual([null, Date.parse('2026-08-14T00:00:00Z')]);
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useCharacterVersions maps the wire snapshot list on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const versionsSpy = vi.spyOn(backend.characters, 'versionsList').mockResolvedValue({
+      items: [
+        {
+          id: '018f0000-0000-7000-8000-000000000501',
+          characterId: characterDto.id,
+          version: 3,
+          createdAt: '2026-08-13T00:00:00Z',
+        },
+      ],
+      truncated: false,
+    } as never);
+    const { result } = renderHook(() => useCharacterVersions(characterDto.id), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(versionsSpy).toHaveBeenCalledWith(characterDto.id);
+    expect(result.current.data?.items[0]).toEqual({
+      id: '018f0000-0000-7000-8000-000000000501',
+      characterId: characterDto.id,
+      version: 3,
+      createdAt: Date.parse('2026-08-13T00:00:00Z'),
+    });
+    expect(result.current.data?.truncated).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useRestoreCharacterVersion applies a snapshot via the wire op', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const restoreSpy = vi
+      .spyOn(backend.characters, 'versionsRestore')
+      .mockResolvedValue(characterDto as never);
+    const { result } = renderHook(() => useRestoreCharacterVersion(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() => result.current.mutate({ characterId: characterDto.id, versionId: 'version-1' }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(restoreSpy).toHaveBeenCalledWith({
+      characterId: characterDto.id,
+      versionId: 'version-1',
+    });
+    expect(queryClient.getQueryData(['character', characterDto.id])).toMatchObject({
+      name: 'Seraphina',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
   });
 });
 

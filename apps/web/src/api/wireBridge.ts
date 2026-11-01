@@ -24,6 +24,7 @@ import {
   type CharacterGalleryImage,
   type CharacterSummary,
   type CharacterUpdate,
+  type CharacterVersion,
   type Chat,
   type ChatCreate,
   type ChatSummary,
@@ -567,6 +568,8 @@ export function translateCharacterSummary(dto: CharacterDto): CharacterSummary {
     tags: dto.tags,
     createdAt: toEpochMs(dto.createdAt),
     updatedAt: toEpochMs(dto.updatedAt),
+    // Trash marker: present only on a soft-deleted character (M7 cluster 26).
+    deletedAt: dto.deletedAt ? toEpochMs(dto.deletedAt) : null,
   };
 }
 
@@ -893,7 +896,6 @@ export async function readCharacters(
     // cursors stay created_at — A-Z is in-page until the wire grows a sort
     // field.
     if (query.q || query.tag) throw new UnsupportedError('characters.list.search');
-    if (query.includeDeleted) throw new UnsupportedError('characters.list.includeDeleted');
     if (
       query.sort !== undefined &&
       query.sort !== 'newest' &&
@@ -906,6 +908,9 @@ export async function readCharacters(
     const page = await backend.characters.list({
       ...(cursor !== undefined ? { cursor } : {}),
       ...(query.limit !== undefined ? { limit: query.limit } : {}),
+      // Trash view (M7 cluster 26): the wire list carries trashed rows too
+      // and each summary reports its `deletedAt`, so one list renders both.
+      ...(query.includeDeleted ? { includeDeleted: true } : {}),
     });
     let items = page.items.map(translateCharacterSummary);
     if (query.sort === 'name' || query.sort === 'name-desc') {
@@ -979,6 +984,50 @@ export async function deleteCharacter(id: string): Promise<void> {
     return;
   }
   await api.del(`/characters/${id}`);
+}
+
+/** Bring a trashed character back (wire `characters.restore`). */
+export async function restoreCharacter(id: string): Promise<void> {
+  if (isKernelMode()) {
+    await backend.characters.restore(id);
+    return;
+  }
+  await api.post(`/characters/${id}/restore`, {});
+}
+
+/** Stored snapshots of one character, newest first (wire
+ * `characters.versions.list`). `truncated` is false on the legacy plane,
+ * which returns every snapshot. */
+export async function readCharacterVersions(characterId: string): Promise<{
+  items: CharacterVersion[];
+  truncated: boolean;
+}> {
+  if (isKernelMode()) {
+    const result = await backend.characters.versionsList(characterId);
+    return {
+      items: result.items.map((version) => ({
+        id: version.id,
+        characterId: version.characterId,
+        version: version.version,
+        createdAt: toEpochMs(version.createdAt),
+      })),
+      truncated: result.truncated,
+    };
+  }
+  const page = await api.get<{ items: CharacterVersion[] }>(`/characters/${characterId}/versions`);
+  return { items: page.items, truncated: false };
+}
+
+/** Apply one stored snapshot back onto the character (wire
+ * `characters.versions.restore`); the current state is snapshotted first. */
+export async function restoreCharacterVersion(
+  characterId: string,
+  versionId: string,
+): Promise<Character> {
+  if (isKernelMode()) {
+    return translateCharacter(await backend.characters.versionsRestore({ characterId, versionId }));
+  }
+  return api.post<Character>(`/characters/${characterId}/versions/${versionId}/restore`, {});
 }
 
 /** List chats of one character (catalog). */

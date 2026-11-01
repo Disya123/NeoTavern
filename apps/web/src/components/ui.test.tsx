@@ -455,6 +455,13 @@ describe('CharacterManagementPanel', () => {
           headers: { 'content-type': 'application/json' },
         });
       }
+      if (url.endsWith(`/api/v2/characters/${character.id}/versions`)) {
+        // Version history (M7 cluster 26) renders in the edit tab.
+        return new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
       if (url.endsWith(`/api/v2/characters/${character.id}`) && init?.method === 'PATCH') {
         patchBody = JSON.parse(String(init.body)) as Record<string, unknown>;
         return new Response(JSON.stringify({ ...character, ...patchBody, updatedAt: 3 }), {
@@ -583,6 +590,140 @@ describe('CharacterManagementPanel', () => {
       await userEvent.selectOptions(columnSelect, '2');
       expect(columnSelect).toHaveValue('2');
       expect(panel.getByText('No gallery images')).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  }, 15_000);
+
+  it('restores a trashed character and an older version through the trash and history surfaces', async () => {
+    const character = {
+      id: '018f0000-0000-7000-8000-000000000401',
+      name: 'Seraphina',
+      avatar: null,
+      description: 'Forest guardian',
+      personality: '',
+      scenario: '',
+      firstMessage: '',
+      exampleDialogues: '',
+      systemPrompt: null,
+      postHistoryInstructions: null,
+      creator: null,
+      creatorNotes: '',
+      tags: ['fantasy'],
+      ext: {},
+      createdAt: 1,
+      updatedAt: 2,
+      lastUsedAt: null,
+      deletedAt: null,
+    };
+    const summary = {
+      id: character.id,
+      name: character.name,
+      avatar: null,
+      description: character.description,
+      tags: character.tags,
+      createdAt: character.createdAt,
+      updatedAt: character.updatedAt,
+    };
+    let restored = false;
+    const restoreCalls: string[] = [];
+    const versionRestores: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/api/v2/characters?') && url.includes('includeDeleted=true')) {
+        // Trash view: one trashed row until the restore lands, then empty.
+        return new Response(
+          JSON.stringify({
+            items: restored ? [] : [{ ...summary, deletedAt: 5 }],
+            nextCursor: null,
+            hasMore: false,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.includes('/api/v2/characters?')) {
+        return new Response(
+          JSON.stringify({ items: [summary], nextCursor: null, hasMore: false }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.endsWith(`/api/v2/characters/${character.id}/restore`) && init?.method === 'POST') {
+        restored = true;
+        restoreCalls.push(url);
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes(`/api/v2/characters/${character.id}/versions/`) && init?.method === 'POST') {
+        versionRestores.push(url);
+        return new Response(JSON.stringify({ ...character, name: 'Seraphina (restored)' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.endsWith(`/api/v2/characters/${character.id}/versions`)) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: '018f0000-0000-7000-8000-000000000501',
+                characterId: character.id,
+                version: 2,
+                createdAt: 4,
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.endsWith(`/api/v2/characters/${character.id}`)) {
+        return new Response(JSON.stringify(character), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.endsWith(`/api/v2/characters/${character.id}/gallery?sort=oldest`)) {
+        return new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      useUiStore.setState({ pinnedCharacterId: null });
+      const rendered = await renderWithProviders(
+        <CharacterManagementPanel onClose={() => undefined} />,
+      );
+      const panel = within(rendered.container);
+      expect(await panel.findByRole('button', { name: /Seraphina/ })).toBeInTheDocument();
+
+      // Trash view: the trashed card is not selectable and offers restore.
+      await userEvent.click(panel.getByRole('button', { name: 'Trash' }));
+      const restoreButton = await panel.findByRole('button', { name: 'Restore character' });
+      expect(
+        panel.getByText('Seraphina', { selector: '[data-part="character-card"] strong' }),
+      ).toBeInTheDocument();
+      await userEvent.click(restoreButton);
+      await waitFor(() => expect(restoreCalls).toHaveLength(1));
+      expect(await panel.findByText('Seraphina restored.')).toBeInTheDocument();
+      expect(await panel.findByText('Trash is empty')).toBeInTheDocument();
+
+      // Back to the library, open the editor, restore an older version.
+      await userEvent.click(panel.getByRole('button', { name: 'Trash' }));
+      const card = await panel.findByRole('button', { name: /Seraphina/ });
+      await userEvent.click(card);
+      await userEvent.click(panel.getByRole('button', { name: 'Edit character card' }));
+      const historyRestore = await panel.findByRole('button', { name: 'Restore version 2' });
+      expect(panel.getByText('Version 2', { exact: false })).toBeInTheDocument();
+      await userEvent.click(historyRestore);
+      await waitFor(() => expect(versionRestores).toHaveLength(1));
+      expect(versionRestores[0]).toContain(
+        '/versions/018f0000-0000-7000-8000-000000000501/restore',
+      );
+      expect(await panel.findByText('Restored version 2.')).toBeInTheDocument();
     } finally {
       vi.unstubAllGlobals();
     }

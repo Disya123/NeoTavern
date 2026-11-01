@@ -963,8 +963,12 @@ fn all_registered_read_ops_serve_seeded_data_over_http() {
 }
 
 /// 18. Write ops over HTTP: characters.update persists, characters.delete
-///     removes, and the follow-up get returns the stable product error
-///     `CHARACTER_NOT_FOUND` copied verbatim into the error envelope.
+///     is the SOFT delete (the character moves to the trash), the follow-up
+///     get still resolves the trashed row while the list hides it, the
+///     includeDeleted flag surfaces it, characters.restore brings it back and
+///     a `purge: true` delete erases it for good (`CHARACTER_NOT_FOUND`
+///     afterwards — the stable product error copied verbatim into the error
+///     envelope).
 #[test]
 fn character_update_and_delete_over_http() {
     let server = TestServer::spawn();
@@ -1007,7 +1011,51 @@ fn character_update_and_delete_over_http() {
     assert_eq!(response.status, 200);
     expect_ok(decode_envelope(&response.body));
 
-    // The follow-up get must surface the stable product error verbatim.
+    // Soft delete: the library hides the character …
+    let list = envelope_body(&rid(5), "characters.list", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    let (_, listed) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(listed["items"].as_array().map(Vec::len), Some(0));
+    // … the trash view shows it …
+    let trash = envelope_body(
+        &rid(6),
+        "characters.list",
+        json!({ "includeDeleted": true }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &trash);
+    let (_, trashed) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(trashed["items"].as_array().map(Vec::len), Some(1));
+    assert_eq!(trashed["items"][0]["id"], json!(character_id));
+    // … and the row itself is still resolvable (trash UI + history).
+    let response = http_request(server.addr, "POST", "/rpc", &[], &get);
+    let (_, trashed_row) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(trashed_row["id"], json!(character_id));
+
+    // Restore brings it back into the library.
+    let restore = envelope_body(
+        &rid(7),
+        "characters.restore",
+        json!({ "characterId": character_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &restore);
+    assert_eq!(response.status, 200);
+    let (_, restored) = expect_ok(decode_envelope(&response.body));
+    gen::validate_character_dto(&restored).expect("restored character is wire-valid");
+    assert_eq!(restored["name"], json!("Mira the Swift"));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    let (_, listed) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(listed["items"].as_array().map(Vec::len), Some(1));
+
+    // A purged character is gone for good: the follow-up get surfaces the
+    // stable product error verbatim.
+    let purge = envelope_body(
+        &rid(8),
+        "characters.delete",
+        json!({ "characterId": character_id, "purge": true }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &purge);
+    assert_eq!(response.status, 200);
+    expect_ok(decode_envelope(&response.body));
     let response = http_request(server.addr, "POST", "/rpc", &[], &get);
     assert_eq!(response.status, 200);
     let (request_id, error) = expect_error(decode_envelope(&response.body));
@@ -1355,7 +1403,10 @@ fn backups_delete_over_http() {
     let response = http_request(server.addr, "POST", "/rpc", &[], &create);
     assert_eq!(response.status, 200, "backups.create answers HTTP 200");
     let (_, created) = expect_ok(decode_envelope(&response.body));
-    let id = created["id"].as_str().expect("created backup has an id").to_string();
+    let id = created["id"]
+        .as_str()
+        .expect("created backup has an id")
+        .to_string();
 
     let delete = envelope_body(&rid(2), "backups.delete", json!({ "backupId": id }));
     let response = http_request(server.addr, "POST", "/rpc", &[], &delete);
@@ -1419,7 +1470,10 @@ fn characters_gallery_over_http() {
     assert_eq!(added["deduplicated"], json!(false));
     assert_eq!(added["item"]["filename"], json!("sunset.png"));
     assert_eq!(added["item"]["sizeBytes"], json!(5));
-    let asset_id = added["item"]["assetId"].as_str().expect("assetId").to_string();
+    let asset_id = added["item"]["assetId"]
+        .as_str()
+        .expect("assetId")
+        .to_string();
     let image_id = added["item"]["id"].as_str().expect("image id").to_string();
 
     // The published asset is metadata-readable through the assets port.
@@ -1465,6 +1519,77 @@ fn characters_gallery_over_http() {
     let get = envelope_body(&rid(7), "assets.get", json!({ "assetId": asset_id }));
     let response = http_request(server.addr, "POST", "/rpc", &[], &get);
     assert_eq!(response.status, 200, "asset outlives its gallery link");
+}
+
+/// M7 Etap-4 (cluster 26): `characters.versions.list` +
+/// `characters.versions.restore` over the HTTP host — every edit records a
+/// snapshot, the list is wire-valid and newest-first, restoring an older
+/// snapshot brings its state back, and an unknown version surfaces the
+/// `CHARACTER_VERSION_NOT_FOUND` product error.
+#[test]
+fn characters_versions_over_http() {
+    let server = TestServer::spawn();
+
+    let create = envelope_body(&rid(1), "characters.create", json!({ "name": "Versioned" }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create);
+    assert_eq!(response.status, 200, "characters.create answers HTTP 200");
+    let (_, created) = expect_ok(decode_envelope(&response.body));
+    let character_id = created["id"].as_str().expect("character id").to_string();
+
+    let update = envelope_body(
+        &rid(2),
+        "characters.update",
+        json!({ "characterId": character_id, "name": "Versioned II" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &update);
+    assert_eq!(response.status, 200, "characters.update answers HTTP 200");
+
+    let list = envelope_body(
+        &rid(3),
+        "characters.versions.list",
+        json!({ "characterId": character_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200, "versions.list answers HTTP 200");
+    let (request_id, versions) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(3), "requestId is echoed");
+    gen::validate_result_character_versions(&versions).expect("versions result is wire-valid");
+    assert_eq!(versions["truncated"], json!(false));
+    let items = versions["items"].as_array().expect("items array");
+    assert_eq!(
+        items.len(),
+        1,
+        "one edit = one snapshot of the replaced state"
+    );
+    assert_eq!(items[0]["version"], json!(1));
+    let version_id = items[0]["id"].as_str().expect("version id").to_string();
+
+    let restore = envelope_body(
+        &rid(4),
+        "characters.versions.restore",
+        json!({ "characterId": character_id, "versionId": version_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &restore);
+    assert_eq!(response.status, 200, "versions.restore answers HTTP 200");
+    let (_, restored) = expect_ok(decode_envelope(&response.body));
+    gen::validate_character_dto(&restored).expect("restored character is wire-valid");
+    assert_eq!(restored["name"], json!("Versioned"));
+
+    // An unknown version is a stable product error.
+    let unknown = envelope_body(
+        &rid(5),
+        "characters.versions.restore",
+        json!({
+            "characterId": character_id,
+            "versionId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &unknown);
+    assert_eq!(response.status, 200, "product errors answer HTTP 200");
+    let (request_id, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(5));
+    assert_eq!(error.code, "CHARACTER_VERSION_NOT_FOUND");
+    assert_eq!(error.params["versionId"].as_str().map(str::len), Some(36));
 }
 
 /// M7 Etap-4 (cluster 25): `chats.reorder` + `chats.list sort=manual` over
@@ -1530,7 +1655,10 @@ fn chats_order_over_http() {
         json!({ "characterId": character_id, "sort": "manual" }),
     );
     let response = http_request(server.addr, "POST", "/rpc", &[], &list);
-    assert_eq!(response.status, 200, "manual list after reorder answers 200");
+    assert_eq!(
+        response.status, 200,
+        "manual list after reorder answers 200"
+    );
     let (_, page) = expect_ok(decode_envelope(&response.body));
     let titles: Vec<&str> = page["items"]
         .as_array()
@@ -1644,7 +1772,8 @@ fn memories_unscope_over_http() {
     let (_, memory) = expect_ok(decode_envelope(&response.body));
     let memory_id = memory["id"].as_str().expect("memory id").to_string();
     assert_eq!(
-        memory["characterId"], json!(character_id),
+        memory["characterId"],
+        json!(character_id),
         "created with the owner"
     );
 
@@ -1681,13 +1810,19 @@ fn settings_instruct_formats_over_http() {
 
     let request = envelope_body(&rid(1), "settings.instructformats.list", json!({}));
     let response = http_request(server.addr, "POST", "/rpc", &[], &request);
-    assert_eq!(response.status, 200, "instruct-formats list answers HTTP 200");
+    assert_eq!(
+        response.status, 200,
+        "instruct-formats list answers HTTP 200"
+    );
     let (request_id, result) = expect_ok(decode_envelope(&response.body));
     assert_eq!(request_id, rid(1), "requestId is echoed");
     gen::validate_result_instruct_formats(&result).expect("catalog is wire-valid");
     let items = result["formats"].as_array().expect("formats array");
     assert_eq!(items.len(), 5, "the five AGENTS.md §9 formats");
-    let ids: Vec<&str> = items.iter().map(|f| f["id"].as_str().expect("id")).collect();
+    let ids: Vec<&str> = items
+        .iter()
+        .map(|f| f["id"].as_str().expect("id"))
+        .collect();
     assert_eq!(ids, ["chatml", "llama3", "alpaca", "mistral", "command-r"]);
 }
 

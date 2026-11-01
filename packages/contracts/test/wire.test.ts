@@ -68,8 +68,10 @@ describe('product wire registry', () => {
     // loudly. The M7 follow-up (2026-10-31) adds backups.delete (102); the
     // Etap-4 gallery slice adds characters.gallery.{list,add,delete} (105);
     // the instruct-formats slice adds settings.instructformats.list (106);
-    // the chats-order slice adds chats.reorder (107).
-    expect(registry.operations).toHaveLength(107);
+    // the chats-order slice adds chats.reorder (107); the characters-restore
+    // slice adds characters.restore + characters.versions.{list,restore}
+    // (110).
+    expect(registry.operations).toHaveLength(110);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -77,6 +79,9 @@ describe('product wire registry', () => {
       'characters.create',
       'characters.update',
       'characters.delete',
+      'characters.restore',
+      'characters.versions.list',
+      'characters.versions.restore',
       'characters.gallery.list',
       'characters.gallery.add',
       'characters.gallery.delete',

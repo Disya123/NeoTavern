@@ -63,6 +63,9 @@ import {
   deletePreset,
   readCharacters,
   readCharacter,
+  readCharacterVersions,
+  restoreCharacter,
+  restoreCharacterVersion,
   readChats,
   readRecentChats,
   readChat,
@@ -247,6 +250,45 @@ export function useDeleteCharacter() {
   return useMutation({
     mutationFn: (id: string) => deleteCharacter(id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['characters'] }),
+  });
+}
+
+/**
+ * Restore a trashed character (wire `characters.restore`, M7 Etap-4
+ * cluster 26). The library list — including the trash view — refetches.
+ */
+export function useRestoreCharacter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreCharacter(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['characters'] }),
+  });
+}
+
+/** Stored snapshots of one character (wire `characters.versions.list`). */
+export function useCharacterVersions(characterId: string | undefined) {
+  return useQuery({
+    queryKey: ['character-versions', characterId],
+    queryFn: () => readCharacterVersions(characterId ?? ''),
+    enabled: characterId !== undefined,
+  });
+}
+
+/**
+ * Apply a stored snapshot back onto the character (wire
+ * `characters.versions.restore`). A restore is itself snapshotted, so both
+ * the character and its history are refreshed.
+ */
+export function useRestoreCharacterVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { characterId: string; versionId: string }) =>
+      restoreCharacterVersion(input.characterId, input.versionId),
+    onSuccess: (character) => {
+      qc.setQueryData(['character', character.id], character);
+      void qc.invalidateQueries({ queryKey: ['characters'] });
+      void qc.invalidateQueries({ queryKey: ['character-versions', character.id] });
+    },
   });
 }
 

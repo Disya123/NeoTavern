@@ -30,14 +30,22 @@ Rules:
 
 ### Canonical kernel schema (database.sqlite)
 
-The kernel owns its own migration chain (schema v1–v20, STRICT tables,
+The kernel owns its own migration chain (schema v1–v22, STRICT tables,
 `user_version` ledger in `__neotavern_migrations`): the five product-core
 tables (`characters`, `chats`, `messages`, `lorebooks`, `presets`), the
 content-addressed `__neotavern_assets` registry plus `assets/` files, and —
 since v20 (`020_character_gallery`, M7 Etap-4 slice) — `character_images`,
 a link table joining characters to published assets (CASCADE with both
-owner rows; the asset bytes outlive links). Rollback for any kernel
-migration is the pre-migration backup restore (ТЗ §10.4); v20 is additive.
+owner rows; the asset bytes outlive links). v21 (`021_chat_sort_order`, M7
+cluster 25) adds `chats.sort_order` (the manual chat order; the legacy
+`PUT /api/v2/chats/order`) plus its `(character_id, sort_order,
+updated_at, id)` index. v22 (`022_character_trash_versions`, M7 cluster 26)
+adds `characters.deleted_at` (+ index) for the legacy-default soft delete
+and the `character_versions` snapshot table (`UNIQUE (character_id,
+version)`, CASCADE on the character; every character/card edit stores the
+state it replaced, and a version restore stores its own pre-image first).
+Rollback for any kernel migration is the pre-migration backup restore
+(ТЗ §10.4); v20–v22 are additive.
 
 ### Plugin state and grants
 

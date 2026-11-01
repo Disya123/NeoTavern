@@ -49,6 +49,9 @@ export const CharacterDtoSchema = Type.Object(
     profileId: Type.Optional(Type.String({ format: 'uuid' })),
     createdAt: Type.String({ format: 'rfc3339' }),
     updatedAt: Type.String({ format: 'rfc3339' }),
+    /** Set only on a trashed character (the soft `characters.delete`
+     * stamp); absent on a live one. `characters.restore` clears it. */
+    deletedAt: Type.Optional(Type.String({ format: 'rfc3339' })),
   },
   { $id: 'wire.character.dto', additionalProperties: false },
 );
@@ -633,11 +636,14 @@ export const EmptyRequestDtoSchema = Type.Object(
 );
 export type EmptyRequestDto = Static<typeof EmptyRequestDtoSchema>;
 
-/** List characters request DTO (`wire.request.list-characters`). */
+/** List characters request DTO (`wire.request.list-characters`).
+ * `includeDeleted` (optional, default false) also returns trashed
+ * characters (the restore surface); absent keeps the library clean. */
 export const ListCharactersRequestDtoSchema = Type.Object(
   {
     cursor: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+    includeDeleted: Type.Optional(Type.Boolean()),
   },
   { $id: 'wire.request.list-characters', additionalProperties: false },
 );
@@ -688,14 +694,74 @@ export const UpdateCharacterRequestDtoSchema = Type.Object(
 );
 export type UpdateCharacterRequestDto = Static<typeof UpdateCharacterRequestDtoSchema>;
 
-/** Delete character request DTO (`wire.request.delete-character`). */
+/**
+ * Delete character request DTO (`wire.request.delete-character`).
+ * `purge` (optional, default false) selects the delete mode: absent/false is
+ * the SOFT delete the product UI uses — the character moves to the trash
+ * (`deletedAt` set, chats and messages untouched) and `characters.restore`
+ * brings it back; `true` is the irreversible hard delete that also drops the
+ * character's chats and messages. The kernel never destroys data on an
+ * accidental delete (AGENTS.md §1.1).
+ */
 export const DeleteCharacterRequestDtoSchema = Type.Object(
   {
     characterId: Type.String({ format: 'uuid' }),
+    purge: Type.Optional(Type.Boolean()),
   },
   { $id: 'wire.request.delete-character', additionalProperties: false },
 );
 export type DeleteCharacterRequestDto = Static<typeof DeleteCharacterRequestDtoSchema>;
+
+/**
+ * Character version entry (`wire.character.version`): one stored snapshot of
+ * a character's card state (ТЗ §10.2 `character_versions`). The snapshot
+ * payload itself stays server-side — the wire exposes its identity (id,
+ * monotonic per-character `version`, `createdAt`) and `characters.versions
+ * .restore` applies it back.
+ */
+export const CharacterVersionDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    characterId: Type.String({ format: 'uuid' }),
+    version: Type.Integer({ minimum: 1, maximum: 1_000_000 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.character.version', additionalProperties: false },
+);
+export type CharacterVersionDto = Static<typeof CharacterVersionDtoSchema>;
+
+/**
+ * Character version list result (`wire.result.character-versions`): the
+ * snapshots of one character, newest first. `truncated` is true when the
+ * character has more snapshots than the page carries — the list is complete
+ * exactly when it is false, so the UI never claims a full history it did
+ * not receive.
+ */
+export const CharacterVersionsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(CharacterVersionDtoSchema, { maxItems: 500 }),
+    truncated: Type.Boolean(),
+  },
+  { $id: 'wire.result.character-versions', additionalProperties: false },
+);
+export type CharacterVersionsResultDto = Static<typeof CharacterVersionsResultDtoSchema>;
+
+/**
+ * Version restore request DTO (`wire.request.characters.versions.restore`):
+ * applies one stored snapshot back onto the character. The current state is
+ * snapshotted first, so a restore is itself reversible (the legacy
+ * `POST /characters/:id/versions/:versionId/restore` semantics).
+ */
+export const CharacterVersionRestoreRequestDtoSchema = Type.Object(
+  {
+    characterId: Type.String({ format: 'uuid' }),
+    versionId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.characters.versions.restore', additionalProperties: false },
+);
+export type CharacterVersionRestoreRequestDto = Static<
+  typeof CharacterVersionRestoreRequestDtoSchema
+>;
 
 /**
  * Lorebook entry payload for create/update (`wire.lorebook.entry.input`).
@@ -2785,6 +2851,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.characters-gallery-delete': GalleryDeleteResultDtoSchema,
   'wire.settings.instruct-format': InstructFormatEntryDtoSchema,
   'wire.result.instruct-formats': InstructFormatsResultDtoSchema,
+  'wire.character.version': CharacterVersionDtoSchema,
+  'wire.result.character-versions': CharacterVersionsResultDtoSchema,
+  'wire.request.characters.versions.restore': CharacterVersionRestoreRequestDtoSchema,
   'wire.request.imports.character.card': CharacterCardImportRequestDtoSchema,
   'wire.card.export.format': WireCardExportFormat,
   'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,

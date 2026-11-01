@@ -55,6 +55,10 @@ export const CharacterSummarySchema = Type.Object({
   tags: Type.Array(Type.String()),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
+  /** Trash marker (epoch ms) for a soft-deleted character; `null`/absent on
+   * a live one — the kernel-plane summary carries it so one list can render
+   * the library and the trash. */
+  deletedAt: Type.Optional(Type.Union([TimestampSchema, Type.Null()])),
 });
 export type CharacterSummary = Static<typeof CharacterSummarySchema>;
 

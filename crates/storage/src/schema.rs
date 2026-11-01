@@ -852,6 +852,42 @@ pub const MIGRATION_21_SQL: &str = migration_21_sql!();
 pub const MIGRATION_21_CHECKSUM: &str =
     "0fea2aa7adda556ebba008ef4f3c7b70fd317a702ea811a90d4153b9775fc6f3";
 
+/// Literal body of the character trash + version history (v22) schema
+/// migration (M7 Etap-4 characters-restore slice): `deleted_at` turns
+/// `characters.delete` into a soft delete (trash) with `characters.restore`
+/// as its inverse, matching the legacy `DELETE /characters/:id` +
+/// `POST /characters/:id/restore` pair; `character_versions` stores the
+/// snapshot history (`ТЗ §10.2`) the version-history routes read, one row
+/// per edit with a per-character monotonic `version`. Both objects are
+/// additive; rollback is the pre-migration backup restore (ТЗ §10.4).
+macro_rules! migration_22_sql {
+    () => {
+        r#"ALTER TABLE characters ADD COLUMN deleted_at TEXT;
+CREATE INDEX idx_characters_deleted ON characters(deleted_at);
+CREATE TABLE character_versions (
+    id TEXT PRIMARY KEY,
+    character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (character_id, version)
+) STRICT;
+CREATE INDEX idx_character_versions_character ON character_versions(character_id, version DESC);"#
+    };
+}
+
+/// Name of the character trash + version history (v22) schema migration.
+pub const MIGRATION_22_NAME: &str = "022_character_trash_versions";
+
+/// Exact SQL of the character trash + version history schema migration (v22)
+/// — the `migration_22_sql!()` literal.
+pub const MIGRATION_22_SQL: &str = migration_22_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_22_SQL` string bytes (same
+/// computation as `MIGRATION_21_CHECKSUM`).
+pub const MIGRATION_22_CHECKSUM: &str =
+    "2f4e79308baccbc44cdd3941b0b8ff02139b6da121c6c21788b638abb8df0a1d";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -900,7 +936,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_20_sql!(),
     "\n",
-    migration_21_sql!()
+    migration_21_sql!(),
+    "\n",
+    migration_22_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

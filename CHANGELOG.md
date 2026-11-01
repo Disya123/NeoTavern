@@ -4,6 +4,30 @@
 
 ### Added
 
+- **Character trash and version history on the kernel plane (M7 Etap-4
+  slice; cluster 26).** Schema v22 (`022_character_trash_versions`):
+  `characters.deleted_at` (+ index) and the `character_versions` table
+  (`UNIQUE (character_id, version)`, snapshot JSON, cascade on character
+  delete). `characters.delete` is now the legacy-default SOFT delete — the
+  character moves to the trash and its chats/messages survive — while the
+  additive `purge: true` request flag keeps the hard cascade; deleting an
+  already-trashed character is an idempotent no-op. New wire ops
+  `characters.restore` (clears `deleted_at`), `characters.versions.list`
+  (newest first, `truncated` past 500 snapshots) and
+  `characters.versions.restore` (applies a snapshot; the pre-restore state
+  is snapshotted first, so the restore is reversible). `characters.list`
+  gains the additive `includeDeleted` (trash view) and every
+  `characters.update` / `characters.card.update` snapshots the state it
+  replaced. `CharacterManagementPanel` gains the trash toggle with a
+  per-card restore action and the editor's Version history section
+  (`useRestoreCharacter`, `useCharacterVersions`,
+  `useRestoreCharacterVersion` route through the wire ops on the kernel
+  plane; the facade keeps `characters.del` soft and exposes no purge
+  argument — purge stays a wire/HTTP option). Tests: storage migration
+  corpus (v1..v22), kernel (soft/purge round trip, trash listing,
+  version history + restore, card-edit snapshots), remote-http parity, web
+  hook + component tests. Registry: 110 ops, 110/110 kernel-dispatched.
+
 - **Manual chat order on the kernel plane (M7 Etap-4 slice; cluster 25).**
   Schema v21 (`021_chat_sort_order`): `chats.sort_order INTEGER NOT NULL
   DEFAULT 0` + `(character_id, sort_order, updated_at, id)` index. New wire

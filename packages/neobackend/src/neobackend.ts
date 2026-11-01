@@ -19,6 +19,8 @@ import type {
   GalleryDeleteRequestDto,
   GalleryDeleteResultDto,
   CharacterCardImportResultDto,
+  CharacterVersionRestoreRequestDto,
+  CharacterVersionsResultDto,
   ChatsExportResultDto,
   CharacterDto,
   ChatDto,
@@ -144,8 +146,31 @@ export interface CharactersApi {
   create(req: CreateCharacterRequestDto, opts?: BackendCallOptions): Promise<CharacterDto>;
   /** Update a character. */
   update(req: UpdateCharacterRequestDto, opts?: BackendCallOptions): Promise<CharacterDto>;
-  /** Soft-delete a character by id. */
+  /** Soft-delete a character by id (the row moves to the trash; `purge`
+   * selects the irreversible hard delete — wire `characters.delete`). */
   del(characterId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /**
+   * Bring a trashed character back (wire `characters.restore`, M7 Etap-4
+   * cluster 26). Idempotent: an active character answers unchanged.
+   */
+  restore(characterId: string, opts?: BackendCallOptions): Promise<CharacterDto>;
+  /**
+   * List a character's stored snapshots, newest first (wire
+   * `characters.versions.list`, M7 Etap-4 cluster 26). Every edit records
+   * the state it replaced (ТЗ §10.2); `truncated` says when older snapshots
+   * exist beyond the returned page.
+   */
+  versionsList(characterId: string, opts?: BackendCallOptions): Promise<CharacterVersionsResultDto>;
+  /**
+   * Apply one stored snapshot back onto the character (wire
+   * `characters.versions.restore`, M7 Etap-4 cluster 26). The current state
+   * is snapshotted first, so the restore itself is reversible; the character
+   * is returned as the saved state.
+   */
+  versionsRestore(
+    req: CharacterVersionRestoreRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<CharacterDto>;
   /**
    * Export a character card (SillyTavern container, `json` or `png`; wire
    * `characters.export.card`, Этап 4.5). Imported characters round-trip the

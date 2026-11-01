@@ -81,6 +81,19 @@ const PAGED_CHARACTERS: PagedCharactersDto = {
   nextCursor: 'page-2',
 };
 
+/** `characters.versions.list` response (M7 Etap-4 cluster 26). */
+const CHARACTER_VERSIONS = {
+  items: [
+    {
+      id: '11111111-2222-4333-8444-555555555555',
+      characterId: CHARACTER.id,
+      version: 2,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+  ],
+  truncated: false,
+};
+
 const META: MetaDto = {
   appVersion: '0.1.0',
   api: { major: 2, minor: 0 },
@@ -517,6 +530,11 @@ class FakeKernelTransport implements LocalTransport {
     switch (operationId) {
       case 'characters.list':
         return { ok: true, value: PAGED_CHARACTERS };
+      case 'characters.restore':
+      case 'characters.versions.restore':
+        return { ok: true, value: CHARACTER };
+      case 'characters.versions.list':
+        return { ok: true, value: CHARACTER_VERSIONS };
       case 'chats.messages.list':
         return { ok: true, value: PAGED_MESSAGES };
       case 'providers.list':
@@ -663,6 +681,11 @@ function rpcResult(operationId: string | undefined): unknown {
   switch (operationId) {
     case 'characters.list':
       return PAGED_CHARACTERS;
+    case 'characters.restore':
+    case 'characters.versions.restore':
+      return CHARACTER;
+    case 'characters.versions.list':
+      return CHARACTER_VERSIONS;
     case 'chats.messages.list':
       return PAGED_MESSAGES;
     case 'providers.list':
@@ -2219,6 +2242,43 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
       ValidationError,
     );
     expect(kernel.calls).toBe(0);
+  });
+
+  it('characters.restore and characters.versions.* are routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localRestored, remoteRestored] = await Promise.all([
+      local.characters.restore(CHARACTER.id),
+      remote.characters.restore(CHARACTER.id),
+    ]);
+    expect(localRestored).toEqual(remoteRestored);
+    expect(localRestored).toEqual(CHARACTER);
+
+    const [localVersions, remoteVersions] = await Promise.all([
+      local.characters.versionsList(CHARACTER.id),
+      remote.characters.versionsList(CHARACTER.id),
+    ]);
+    expect(localVersions).toEqual(remoteVersions);
+    expect(localVersions).toEqual(CHARACTER_VERSIONS);
+
+    const versionId = CHARACTER_VERSIONS.items[0].id;
+    const [localVersionRestored, remoteVersionRestored] = await Promise.all([
+      local.characters.versionsRestore({ characterId: CHARACTER.id, versionId }),
+      remote.characters.versionsRestore({ characterId: CHARACTER.id, versionId }),
+    ]);
+    expect(localVersionRestored).toEqual(remoteVersionRestored);
+    expect(localVersionRestored).toEqual(CHARACTER);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'characters.restore', payload: { characterId: CHARACTER.id } },
+      { operationId: 'characters.versions.list', payload: { characterId: CHARACTER.id } },
+      {
+        operationId: 'characters.versions.restore',
+        payload: { characterId: CHARACTER.id, versionId },
+      },
+    ]);
   });
 
   it('chats.export is routed identically by local and remote backends', async () => {

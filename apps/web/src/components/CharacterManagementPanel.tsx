@@ -1,7 +1,9 @@
 import {
+  ArrowCounterClockwise,
   ArrowLeft,
   CaretDown,
   Check,
+  ClockCounterClockwise,
   Copy,
   DownloadSimple,
   Eye,
@@ -47,6 +49,7 @@ import {
   useCharacter,
   useCharacterGallery,
   useCharacters,
+  useCharacterVersions,
   useContinueCharacterChat,
   useCreateCharacter,
   useCreateLorebook,
@@ -54,6 +57,8 @@ import {
   useDeleteCharacterImage,
   useImportCharacter,
   useLorebooks,
+  useRestoreCharacter,
+  useRestoreCharacterVersion,
   useSettings,
   useUpdateCharacter,
   useUpdateLorebook,
@@ -278,6 +283,10 @@ export function CharacterManagementPanel({ onClose }: CharacterManagementPanelPr
   const [status, setStatus] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [draft, setDraft] = useState<CharacterDraft | null>(null);
+  // Trash view (M7 Etap-4 cluster 26): the library hides soft-deleted
+  // characters, the trash view asks the wire for them (`includeDeleted`) and
+  // shows only the trashed rows.
+  const [trashView, setTrashView] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const continuationRequestRef = useRef(0);
 
@@ -285,14 +294,18 @@ export function CharacterManagementPanel({ onClose }: CharacterManagementPanelPr
     q: deferredSearch || undefined,
     sort,
     limit: 50,
+    ...(trashView ? { includeDeleted: true } : {}),
   });
-  const items = characters.data?.pages.flatMap((page) => page.items) ?? [];
+  const items = (characters.data?.pages.flatMap((page) => page.items) ?? []).filter((item) =>
+    trashView ? Boolean(item.deletedAt) : !item.deletedAt,
+  );
   const character = useCharacter(selectedCharacterId ?? undefined);
   const updateCharacter = useUpdateCharacter();
   const continueCharacterChat = useContinueCharacterChat();
   const createCharacter = useCreateCharacter();
   const importCharacter = useImportCharacter();
   const deleteCharacter = useDeleteCharacter();
+  const restoreCharacter = useRestoreCharacter();
   const settings = useSettings();
 
   useEffect(() => {
@@ -441,6 +454,16 @@ export function CharacterManagementPanel({ onClose }: CharacterManagementPanelPr
     }
   };
 
+  const restoreTrashedCharacter = async (summary: CharacterSummary): Promise<void> => {
+    setActionError(null);
+    try {
+      await restoreCharacter.mutateAsync(summary.id);
+      showStatus(t('characters:restoreSuccess', { name: summary.name }));
+    } catch (error) {
+      showError(error);
+    }
+  };
+
   return (
     <FloatingTabPanel
       component="character-management"
@@ -524,6 +547,16 @@ export function CharacterManagementPanel({ onClose }: CharacterManagementPanelPr
                   loadingMore={characters.isFetchingNextPage}
                   hasMore={characters.hasNextPage}
                   error={characters.isError ? errorText(characters.error) : null}
+                  trashMode={trashView}
+                  onToggleTrash={() => {
+                    setTrashView((current) => !current);
+                    setSelectedCharacterId(null);
+                    setActiveTab('cards');
+                  }}
+                  onRestore={(id) => {
+                    const summary = items.find((item) => item.id === id);
+                    if (summary) void restoreTrashedCharacter(summary);
+                  }}
                   onSearchChange={setSearchInput}
                   onSortChange={setSort}
                   onViewChange={setView}
@@ -634,6 +667,11 @@ interface CardsTabProps {
   loadingMore: boolean;
   hasMore: boolean;
   error: string | null;
+  /** Trash view: the list carries only soft-deleted characters and every
+   * card offers the restore action instead of selection. */
+  trashMode: boolean;
+  onToggleTrash: () => void;
+  onRestore: (id: string) => void;
   onSearchChange: (value: string) => void;
   onSortChange: (value: CharacterSort) => void;
   onViewChange: (value: CharacterView) => void;
@@ -655,6 +693,9 @@ function CardsTab({
   loadingMore,
   hasMore,
   error,
+  trashMode,
+  onToggleTrash,
+  onRestore,
   onSearchChange,
   onSortChange,
   onViewChange,
@@ -699,6 +740,19 @@ function CardsTab({
             data-ui-action="characters.import"
           >
             {t('characters:importShort')}
+          </Button>
+          <Button
+            startIcon={<Trash aria-hidden="true" />}
+            onClick={onToggleTrash}
+            aria-pressed={trashMode}
+            title={trashMode ? t('characters:hideTrash') : t('characters:showTrash')}
+            data-state={trashMode ? 'active' : 'inactive'}
+            data-ui-node="character-trash-toggle"
+            data-ui-component="CharacterToolbar"
+            data-ui-action="characters.trash.toggle"
+            data-ui-bind="characters.trash"
+          >
+            {t('characters:trash')}
           </Button>
         </ActionBarGroup>
         <label className={styles.sortControl}>
@@ -786,12 +840,24 @@ function CardsTab({
         <PanelError message={error} onRetry={onRetry} />
       ) : items.length === 0 ? (
         <div className={styles.emptyState}>
-          <UsersThree size={32} aria-hidden="true" />
+          {trashMode ? (
+            <Trash size={32} aria-hidden="true" />
+          ) : (
+            <UsersThree size={32} aria-hidden="true" />
+          )}
           <strong>
-            {searchInput ? t('characters:noResultsTitle') : t('characters:emptyTitle')}
+            {trashMode
+              ? t('characters:trashEmptyTitle')
+              : searchInput
+                ? t('characters:noResultsTitle')
+                : t('characters:emptyTitle')}
           </strong>
           <p>
-            {searchInput ? t('characters:noResultsDescription') : t('characters:emptyDescription')}
+            {trashMode
+              ? t('characters:trashEmptyDescription')
+              : searchInput
+                ? t('characters:noResultsDescription')
+                : t('characters:emptyDescription')}
           </p>
         </div>
       ) : (
@@ -799,6 +865,62 @@ function CardsTab({
           {items.map((item) => {
             const selected = item.id === selectedCharacterId;
             const pinned = item.id === pinnedCharacterId;
+            const cardContent = (
+              <>
+                <CharacterAvatar character={item} className={styles.cardAvatar} />
+                <span className={styles.cardCopy}>
+                  <strong>{item.name}</strong>
+                  <span>{item.description || t('characters:noDescription')}</span>
+                  {item.tags.length > 0 ? (
+                    <span className={styles.tags}>
+                      {item.tags.slice(0, 3).map((tag) => (
+                        <span key={tag}>{tag}</span>
+                      ))}
+                    </span>
+                  ) : null}
+                </span>
+                {pinned && !trashMode ? (
+                  <PushPin
+                    className={styles.pinnedIcon}
+                    weight="fill"
+                    aria-label={t('characters:pinnedShort')}
+                  />
+                ) : null}
+              </>
+            );
+            // Trash view: a trashed card is not selectable — it offers the
+            // restore action the wire `characters.restore` backs.
+            if (trashMode) {
+              return (
+                <div
+                  key={item.id}
+                  className={styles.characterCard}
+                  data-part="character-card"
+                  data-name={item.name}
+                  data-state="trashed"
+                  data-pinned={pinned ? 'true' : 'false'}
+                  data-ui-node="character-card"
+                  data-ui-component="CharacterCard"
+                  data-ui-key={item.id}
+                  data-ui-state="trashed"
+                  data-ui-bind="characters.items[*]"
+                >
+                  {cardContent}
+                  <IconButton
+                    className={styles.iconButton}
+                    onClick={() => onRestore(item.id)}
+                    aria-label={t('characters:restore')}
+                    title={t('characters:restore')}
+                    data-ui-node="character-restore"
+                    data-ui-component="CharacterCard"
+                    data-ui-key={item.id}
+                    data-ui-action="characters.restore"
+                  >
+                    <ArrowCounterClockwise size={17} aria-hidden="true" />
+                  </IconButton>
+                </div>
+              );
+            }
             return (
               <button
                 type="button"
@@ -817,25 +939,7 @@ function CardsTab({
                 data-ui-action="characters.select"
                 data-ui-bind="characters.items[*]"
               >
-                <CharacterAvatar character={item} className={styles.cardAvatar} />
-                <span className={styles.cardCopy}>
-                  <strong>{item.name}</strong>
-                  <span>{item.description || t('characters:noDescription')}</span>
-                  {item.tags.length > 0 ? (
-                    <span className={styles.tags}>
-                      {item.tags.slice(0, 3).map((tag) => (
-                        <span key={tag}>{tag}</span>
-                      ))}
-                    </span>
-                  ) : null}
-                </span>
-                {pinned ? (
-                  <PushPin
-                    className={styles.pinnedIcon}
-                    weight="fill"
-                    aria-label={t('characters:pinnedShort')}
-                  />
-                ) : null}
+                {cardContent}
               </button>
             );
           })}
@@ -1142,7 +1246,104 @@ function EditTab({
           <small className={styles.inlineEmpty}>{t('characters:noTags')}</small>
         )}
       </section>
+
+      <CharacterHistorySection characterId={characterId} onStatus={onStatus} onError={onError} />
     </div>
+  );
+}
+
+/**
+ * Version history (M7 Etap-4 cluster 26): the snapshots every edit stores,
+ * newest first — wire `characters.versions.list` — each restorable through
+ * `characters.versions.restore`. A restore snapshots the current state
+ * first, so it is itself reversible.
+ */
+function CharacterHistorySection({
+  characterId,
+  onStatus,
+  onError,
+}: {
+  characterId: string | undefined;
+  onStatus: (message: string) => void;
+  onError: (error: unknown) => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const errorText = useErrorText();
+  const versions = useCharacterVersions(characterId);
+  const restoreVersion = useRestoreCharacterVersion();
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const items = versions.data?.items ?? [];
+
+  // Snapshot timestamps are numeric epochs; format them through Intl so the
+  // date/time follows the active UI language (AGENTS §16).
+  const formatTimestamp = (value: number): string => {
+    try {
+      return new Intl.DateTimeFormat(i18n.language, {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(value);
+    } catch {
+      return new Date(value).toLocaleString();
+    }
+  };
+
+  const restore = async (versionId: string, version: number): Promise<void> => {
+    if (!characterId) return;
+    setPendingId(versionId);
+    try {
+      await restoreVersion.mutateAsync({ characterId, versionId });
+      onStatus(t('characters:historyRestoreSuccess', { version }));
+    } catch (error) {
+      onError(error);
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  return (
+    <section className={styles.tagEditor} data-part="character-history">
+      <div className={styles.subsectionHeader}>
+        <div>
+          <strong>{t('characters:history')}</strong>
+          <small>{t('characters:historyHint')}</small>
+        </div>
+      </div>
+      {versions.isLoading ? (
+        <Skeleton />
+      ) : versions.isError ? (
+        <small className={styles.inlineEmpty}>{errorText(versions.error)}</small>
+      ) : items.length === 0 ? (
+        <small className={styles.inlineEmpty}>{t('characters:historyEmpty')}</small>
+      ) : (
+        <div>
+          {items.map((version) => (
+            <div
+              className={styles.greetingHeader}
+              key={version.id}
+              data-part="character-history-entry"
+              data-state={pendingId === version.id ? 'pending' : 'idle'}
+            >
+              <span>
+                <ClockCounterClockwise size={15} aria-hidden="true" />{' '}
+                {t('characters:historyVersion', { version: version.version })}
+                <small> · {formatTimestamp(version.createdAt)}</small>
+              </span>
+              <Button
+                size="sm"
+                onClick={() => void restore(version.id, version.version)}
+                disabled={pendingId !== null}
+                aria-label={t('characters:historyRestore', { version: version.version })}
+              >
+                {t('characters:restoreShort')}
+              </Button>
+            </div>
+          ))}
+          {versions.data?.truncated ? (
+            <small className={styles.inlineEmpty}>{t('characters:historyTruncated')}</small>
+          ) : null}
+        </div>
+      )}
+    </section>
   );
 }
 

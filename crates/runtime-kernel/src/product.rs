@@ -210,6 +210,7 @@ impl<W: std::io::Write> std::io::Write for LimitedWriter<W> {
 pub(crate) fn not_found(entity: &str, id: &str) -> KernelError {
     let param = match entity {
         "CHARACTER" => "characterId",
+        "CHARACTER_VERSION" => "versionId",
         "CHAT" => "chatId",
         "MESSAGE" => "messageId",
         "MESSAGE_VARIANT" => "variantId",
@@ -300,7 +301,9 @@ fn validate_character_profile(db: &Database, profile_id: Option<&str>) -> Result
     Ok(())
 }
 
-/// Renders a `characters` row as the wire [`CharacterDto`].
+/// Renders a `characters` row as the wire [`CharacterDto`]. Column order:
+/// id, name, description, avatar_asset_id, tags_json, profile_id, created_at,
+/// updated_at, deleted_at.
 fn row_to_character(row: &rusqlite::Row) -> Result<CharacterDto, KernelError> {
     let tags_json: String = row
         .get(4)
@@ -327,6 +330,10 @@ fn row_to_character(row: &rusqlite::Row) -> Result<CharacterDto, KernelError> {
         updated_at: row
             .get(7)
             .map_err(|e| sqlite(e, "characters: read updated_at"))?,
+        // Column 8 carries the soft-delete stamp (v22); absent on a live row.
+        deleted_at: row
+            .get(8)
+            .map_err(|e| sqlite(e, "characters: read deleted_at"))?,
     })
 }
 
@@ -614,7 +621,7 @@ pub(crate) fn query_character(
 ) -> Result<Option<CharacterDto>, KernelError> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, description, avatar_asset_id, tags_json, profile_id, created_at, updated_at \
+            "SELECT id, name, description, avatar_asset_id, tags_json, profile_id, created_at, updated_at, deleted_at \
              FROM characters WHERE id = ?1",
         )
         .map_err(|e| sqlite(e, "characters_get: prepare"))?;
@@ -630,25 +637,37 @@ pub(crate) fn query_character(
     }
 }
 
-/// `characters.list` — paginated characters, newest first.
+/// `characters.list` — paginated characters, newest first. Trashed
+/// characters (`deleted_at` set by the soft `characters.delete`) stay out of
+/// the library unless the request asks for them (`includeDeleted`), which is
+/// the trash view `characters.restore` brings them back from.
 pub fn characters_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_list_characters(request)?;
     let limit = page_limit(req.limit);
+    let include_deleted = req.include_deleted == Some(true);
     let mut items: Vec<CharacterDto> = Vec::new();
     let mut next_cursor: Option<String> = None;
     {
         let conn = db.conn();
         let mut sql = String::from(
-            "SELECT id, name, description, avatar_asset_id, tags_json, profile_id, created_at, updated_at \
+            "SELECT id, name, description, avatar_asset_id, tags_json, profile_id, created_at, updated_at, deleted_at \
              FROM characters",
         );
         let mut params: Vec<Value> = Vec::new();
+        let mut where_clauses: Vec<&str> = Vec::new();
+        if !include_deleted {
+            where_clauses.push("deleted_at IS NULL");
+        }
         if let Some(cursor) = &req.cursor {
             let (created_at, id) = decode_cursor(cursor)?;
-            sql.push_str(" WHERE (created_at < ?) OR (created_at = ? AND id < ?)");
+            where_clauses.push("((created_at < ?) OR (created_at = ? AND id < ?))");
             params.push(Value::Text(created_at.clone()));
             params.push(Value::Text(created_at));
             params.push(Value::Text(id));
+        }
+        if !where_clauses.is_empty() {
+            sql.push_str(" WHERE ");
+            sql.push_str(&where_clauses.join(" AND "));
         }
         sql.push_str(" ORDER BY created_at DESC, id DESC LIMIT ?");
         // Probe one row past the page so the last exact page carries no cursor.
@@ -754,6 +773,9 @@ pub fn characters_card_update(db: &mut Database, request: &[u8]) -> Result<Vec<u
             )
         })?;
     db.transaction(|tx| {
+        // Card edits are versioned (ТЗ §10.2): the pre-edit card state is
+        // snapshotted in the same transaction.
+        snapshot_character_version(tx, &id)?;
         tx.execute(
             "UPDATE characters SET ext_json = ?1, updated_at = ?2 WHERE id = ?3",
             params![&ext_json, now(), &id],
@@ -834,6 +856,9 @@ pub fn characters_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, K
     // exist; `profileId` absent leaves the current binding untouched.
     validate_character_profile(db, req.profile_id.as_deref())?;
     let changed = db.transaction(|tx| {
+        // Edits are versioned (ТЗ §10.2): the pre-edit state is snapshotted
+        // in the same transaction before the row changes.
+        snapshot_character_version(tx, &id)?;
         let mut sets: Vec<&str> = Vec::new();
         let mut values: Vec<Value> = Vec::new();
         if let Some(name) = &req.name {
@@ -871,23 +896,297 @@ pub fn characters_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, K
     encode(&dto)
 }
 
-/// `characters.delete` — remove a character (cascades to its chats and
-/// messages); missing character → `CHARACTER_NOT_FOUND`.
+/// `characters.delete` — removes a character. The default mode is the SOFT
+/// delete the product UI uses: the row moves to the trash (`deleted_at`
+/// set, chats and messages untouched) and `characters.restore` brings it
+/// back — mirroring the legacy `DELETE /characters/:id` default. `purge:
+/// true` is the irreversible hard delete (the row and its chats/messages
+/// cascade away), the legacy `?purge=true` mode. Deleting an
+/// already-trashed character is an idempotent no-op; an unknown character is
+/// `CHARACTER_NOT_FOUND`.
 pub fn characters_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_delete_character(request)?;
-    let changed = db.transaction(|tx| {
-        tx.execute(
-            "DELETE FROM characters WHERE id = ?1",
-            params![&req.character_id],
-        )
-        .map_err(|e| StorageError::from_sqlite(e, "characters_delete: delete"))
-    })?;
+    let id = req.character_id.clone();
+    let changed = if req.purge == Some(true) {
+        db.transaction(|tx| {
+            tx.execute("DELETE FROM characters WHERE id = ?1", params![&id])
+                .map_err(|e| StorageError::from_sqlite(e, "characters_delete: purge"))
+        })?
+    } else {
+        let now = now();
+        db.transaction(|tx| {
+            tx.execute(
+                "UPDATE characters SET deleted_at = ?1, updated_at = ?2 \
+                 WHERE id = ?3 AND deleted_at IS NULL",
+                params![&now, &now, &id],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "characters_delete: soft delete"))
+        })?
+    };
     if changed == 0 {
-        return Err(not_found("CHARACTER", &req.character_id));
+        // Soft delete of an ALREADY-trashed character is an idempotent no-op
+        // (the row still exists); an unknown character is not found.
+        let already_trashed = req.purge != Some(true)
+            && db
+                .conn()
+                .query_row(
+                    "SELECT 1 FROM characters WHERE id = ?1 AND deleted_at IS NOT NULL",
+                    params![&id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()
+                .map_err(|e| sqlite(e, "characters_delete: trash lookup"))?
+                .is_some();
+        if !already_trashed {
+            return Err(not_found("CHARACTER", &id));
+        }
     }
     let dto = ResultEmpty {};
     validate(&dto, generated::validate_result_empty)?;
     encode(&dto)
+}
+
+/// `characters.restore` — brings a trashed character back (`deleted_at`
+/// cleared). Restoring an already-active character is an idempotent no-op
+/// that still answers with the character; an unknown id is
+/// `CHARACTER_NOT_FOUND`. Its chats and messages were never touched by the
+/// soft delete, so they reappear with it.
+pub fn characters_restore(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_get_character(request)?;
+    let id = req.character_id.clone();
+    let changed = db.transaction(|tx| {
+        tx.execute(
+            "UPDATE characters SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
+            params![now(), &id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "characters_restore: restore"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("CHARACTER", &id));
+    }
+    let dto = query_character(db.conn(), &id)?.ok_or_else(|| not_found("CHARACTER", &id))?;
+    validate(&dto, generated::validate_character_dto)?;
+    encode(&dto)
+}
+
+/// The printable state of one character that a version snapshot keeps:
+/// `(name, description, avatar_asset_id, tags_json, ext_json, profile_id)`.
+type CharacterVersionSource = (
+    String,
+    Option<String>,
+    Option<String>,
+    String,
+    String,
+    Option<String>,
+);
+
+/// Snapshots the current canonical state of one character into
+/// `character_versions` (ТЗ §10.2) before a mutation overwrites it. Callers
+/// run this inside the SAME transaction as the mutation, so every applied
+/// edit always has its pre-image and a failed edit never leaves a stray
+/// snapshot. An absent character is a silent no-op — the caller's mutation
+/// reports the not-found condition itself.
+fn snapshot_character_version(
+    tx: &rusqlite::Transaction<'_>,
+    character_id: &str,
+) -> Result<(), StorageError> {
+    let current: Option<CharacterVersionSource> = tx
+        .query_row(
+            "SELECT name, description, avatar_asset_id, tags_json, ext_json, profile_id \
+             FROM characters WHERE id = ?1",
+            params![character_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| StorageError::from_sqlite(e, "character_versions: read current"))?;
+    let Some((name, description, avatar_asset_id, tags_json, ext_json, profile_id)) = current
+    else {
+        return Ok(());
+    };
+    // Malformed stored JSON degrades to the column default rather than
+    // blocking the edit; `Value::to_string` cannot fail.
+    let snapshot = serde_json::json!({
+        "name": name,
+        "description": description,
+        "avatarAssetId": avatar_asset_id,
+        "tags": serde_json::from_str::<serde_json::Value>(&tags_json)
+            .unwrap_or_else(|_| serde_json::json!([])),
+        "ext": serde_json::from_str::<serde_json::Value>(&ext_json)
+            .unwrap_or_else(|_| serde_json::json!({})),
+        "profileId": profile_id,
+    })
+    .to_string();
+    let version: i64 = tx
+        .query_row(
+            "SELECT COALESCE(MAX(version), 0) + 1 FROM character_versions WHERE character_id = ?1",
+            params![character_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "character_versions: next version"))?;
+    tx.execute(
+        "INSERT INTO character_versions (id, character_id, version, snapshot_json, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![new_id(), character_id, version, snapshot, now()],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "character_versions: insert"))?;
+    Ok(())
+}
+
+/// Upper bound of one version-history page (the wire DTO carries at most
+/// this many entries; `truncated` says when older snapshots exist).
+const CHARACTER_VERSIONS_PAGE: i64 = 500;
+
+/// `characters.versions.list` — the stored snapshots of one character,
+/// newest first. A trashed character still lists its history (its id
+/// addresses the row); an unknown id is `CHARACTER_NOT_FOUND`.
+pub fn characters_versions_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_get_character(request)?;
+    let id = req.character_id.clone();
+    let mut items: Vec<generated::CharacterVersion> = Vec::new();
+    {
+        let conn = db.conn();
+        let exists: Option<i64> = conn
+            .query_row(
+                "SELECT 1 FROM characters WHERE id = ?1",
+                params![&id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| sqlite(e, "characters.versions.list: lookup"))?;
+        if exists.is_none() {
+            return Err(not_found("CHARACTER", &id));
+        }
+        // Probe one row past the page so `truncated` is exact.
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, character_id, version, created_at FROM character_versions \
+                 WHERE character_id = ?1 ORDER BY version DESC LIMIT ?2",
+            )
+            .map_err(|e| sqlite(e, "characters.versions.list: prepare"))?;
+        let mut rows = stmt
+            .query(params![&id, CHARACTER_VERSIONS_PAGE + 1])
+            .map_err(|e| sqlite(e, "characters.versions.list: query"))?;
+        while let Some(row) = rows
+            .next()
+            .map_err(|e| sqlite(e, "characters.versions.list: read row"))?
+        {
+            items.push(generated::CharacterVersion {
+                id: row
+                    .get(0)
+                    .map_err(|e| sqlite(e, "character_versions: read id"))?,
+                character_id: row
+                    .get(1)
+                    .map_err(|e| sqlite(e, "character_versions: read character_id"))?,
+                version: row
+                    .get(2)
+                    .map_err(|e| sqlite(e, "character_versions: read version"))?,
+                created_at: row
+                    .get(3)
+                    .map_err(|e| sqlite(e, "character_versions: read created_at"))?,
+            });
+        }
+    }
+    let truncated = items.len() as i64 > CHARACTER_VERSIONS_PAGE;
+    items.truncate(CHARACTER_VERSIONS_PAGE as usize);
+    let dto = generated::ResultCharacterVersions { items, truncated };
+    validate(&dto, generated::validate_result_character_versions)?;
+    encode(&dto)
+}
+
+/// `characters.versions.restore` — applies one stored snapshot back onto
+/// the character (the legacy-version-restore semantics). The CURRENT state
+/// is snapshotted first, so the restore itself is reversible; the restored
+/// card keeps its id and creation time. An unknown character or an unknown
+/// version of it is a product not-found error.
+pub fn characters_versions_restore(
+    db: &mut Database,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_characters_versions_restore(request)?;
+    let id = req.character_id.clone();
+    let version_id = req.version_id.clone();
+    let snapshot_json: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT snapshot_json FROM character_versions WHERE id = ?1 AND character_id = ?2",
+            params![&version_id, &id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "characters.versions.restore: lookup"))?;
+    let Some(snapshot_json) = snapshot_json else {
+        return Err(not_found("CHARACTER_VERSION", &version_id));
+    };
+    let snapshot: serde_json::Value = serde_json::from_str(&snapshot_json).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("characters.versions.restore: unreadable snapshot: {err}"),
+        )
+    })?;
+    let snapshot = snapshot.as_object().ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "characters.versions.restore: snapshot is not a JSON object",
+        )
+    })?;
+    let now = now();
+    let changed = db.transaction(|tx| {
+        snapshot_character_version(tx, &id)?;
+        let mut sets: Vec<&str> = vec!["updated_at = ?"];
+        let mut values: Vec<Value> = vec![Value::Text(now.clone())];
+        if let Some(name) = snapshot.get("name").and_then(|v| v.as_str()) {
+            sets.push("name = ?");
+            values.push(Value::Text(name.to_string()));
+        }
+        if let Some(value) = snapshot.get("description") {
+            sets.push("description = ?");
+            values.push(json_to_sql(value));
+        }
+        if let Some(value) = snapshot.get("avatarAssetId") {
+            sets.push("avatar_asset_id = ?");
+            values.push(json_to_sql(value));
+        }
+        if let Some(value) = snapshot.get("tags") {
+            sets.push("tags_json = ?");
+            values.push(Value::Text(value.to_string()));
+        }
+        if let Some(value) = snapshot.get("ext") {
+            sets.push("ext_json = ?");
+            values.push(Value::Text(value.to_string()));
+        }
+        if let Some(value) = snapshot.get("profileId") {
+            sets.push("profile_id = ?");
+            values.push(json_to_sql(value));
+        }
+        let sql = format!("UPDATE characters SET {} WHERE id = ?", sets.join(", "));
+        values.push(Value::Text(id.clone()));
+        tx.execute(&sql, params_from_iter(values))
+            .map_err(|e| StorageError::from_sqlite(e, "characters.versions.restore: update"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("CHARACTER", &id));
+    }
+    let dto = query_character(db.conn(), &id)?.ok_or_else(|| not_found("CHARACTER", &id))?;
+    validate(&dto, generated::validate_character_dto)?;
+    encode(&dto)
+}
+
+/// Maps one snapshot JSON scalar onto the SQL value of its column.
+fn json_to_sql(value: &serde_json::Value) -> Value {
+    match value {
+        serde_json::Value::String(text) => Value::Text(text.clone()),
+        serde_json::Value::Null => Value::Null,
+        other => Value::Text(other.to_string()),
+    }
 }
 
 /// `chats.list` — paginated chats (optionally filtered by character), newest

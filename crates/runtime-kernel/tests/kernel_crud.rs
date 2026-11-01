@@ -128,7 +128,9 @@ fn character_create_get_update_delete_round_trip() {
     assert_ne!(updated.updated_at, created_at, "updatedAt must change");
     assert_eq!(updated.created_at, created_at, "createdAt must not change");
 
-    // delete → empty result
+    // delete → empty result (SOFT delete: the character moves to the trash
+    // and its chats survive — the restore surface owns the trash, see the
+    // characters-trash suite for the round trip).
     let deleted = dispatch_decoded::<ResultEmpty>(
         &kernel,
         "characters.delete",
@@ -137,28 +139,52 @@ fn character_create_get_update_delete_round_trip() {
     .expect("delete must succeed");
     assert_eq!(deleted, ResultEmpty {});
 
-    // get after delete → product error with stable code + params
-    let err = dispatch_json(
+    // A trashed character drops out of the library list …
+    let page: PagedCharacters =
+        dispatch_decoded(&kernel, "characters.list", json!({})).expect("list must succeed");
+    assert!(
+        page.items.iter().all(|item| item.id != character_id),
+        "a trashed character must not appear in the library list"
+    );
+    // … and shows up only in the trash view.
+    let trash: PagedCharacters = dispatch_decoded(
+        &kernel,
+        "characters.list",
+        json!({ "includeDeleted": true }),
+    )
+    .expect("trash list must succeed");
+    assert!(
+        trash.items.iter().any(|item| item.id == character_id),
+        "includeDeleted must surface the trashed character"
+    );
+
+    // `characters.get` still resolves the trashed row (parity with the legacy
+    // repository read) so the trash UI and the version history keep working.
+    let trashed = dispatch_decoded::<CharacterDto>(
         &kernel,
         "characters.get",
         json!({ "characterId": character_id }),
     )
-    .expect_err("get after delete must fail");
-    assert_eq!(err.code, KernelErrorCode::NotFound);
-    let product = err.product.expect("product error must carry the wire dto");
-    assert_eq!(product.code, "CHARACTER_NOT_FOUND");
-    assert_eq!(product.params["characterId"], json!(character_id));
+    .expect("get must resolve a trashed character");
+    assert_eq!(trashed.id, character_id);
 
-    // delete again → same product error
-    let err = dispatch_json(
+    // Deleting an already-trashed character is an idempotent no-op.
+    dispatch_decoded::<ResultEmpty>(
         &kernel,
         "characters.delete",
         json!({ "characterId": character_id }),
     )
-    .expect_err("delete after delete must fail");
+    .expect("deleting a trashed character must stay a no-op success");
+
+    // An unknown character is still a stable product error.
+    let err = dispatch_json(
+        &kernel,
+        "characters.delete",
+        json!({ "characterId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd" }),
+    )
+    .expect_err("delete of an unknown character must fail");
     let product = err.product.expect("product error must carry the wire dto");
     assert_eq!(product.code, "CHARACTER_NOT_FOUND");
-    assert_eq!(product.params["characterId"], json!(character_id));
 }
 
 /// UI-02 (ADR-0057 Phase 2): `characters.card.get` /

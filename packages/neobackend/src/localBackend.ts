@@ -36,6 +36,7 @@ import {
   type GalleryListResultDto,
   type GalleryAddResultDto,
   type GalleryDeleteResultDto,
+  type CharacterVersionsResultDto,
   type DataActivationStatusResultDto,
   type ListBackupsResultDto,
   type ListLorebookEntriesResultDto,
@@ -286,6 +287,12 @@ export class LocalBackend implements NeoBackend {
       update: (req, opts) => this.invoke<CharacterDto>('characters.update', req, opts),
       del: (characterId, opts) =>
         this.invoke<EmptyResultDto>('characters.delete', { characterId }, opts),
+      restore: (characterId, opts) =>
+        this.invoke<CharacterDto>('characters.restore', { characterId }, opts),
+      versionsList: (characterId, opts) =>
+        this.invoke<CharacterVersionsResultDto>('characters.versions.list', { characterId }, opts),
+      versionsRestore: (req, opts) =>
+        this.invoke<CharacterDto>('characters.versions.restore', req, opts),
       exportCard: (characterId, format, opts) =>
         this.invoke<CharacterCardExportResultDto>(
           'characters.export.card',

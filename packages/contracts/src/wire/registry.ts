@@ -399,6 +399,48 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'characters.restore',
+    'transactional',
+    'idempotent',
+    'none',
+    'app.write',
+    'wire.request.get-character',
+    'wire.character.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'characters.versions.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.get-character',
+    'wire.result.character-versions',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'characters.versions.restore',
+    'transactional',
+    'idempotent',
+    'none',
+    'app.write',
+    'wire.request.characters.versions.restore',
+    'wire.character.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    4096,
+    262144,
+    undefined,
+  ),
+  op(
     'characters.gallery.list',
     'transactional',
     'idempotent',
@@ -1863,6 +1905,7 @@ const UUID_WORKFLOW = '9c8b7a6e-5d4c-4b3a-9f8e-7d6c5b4a3f2e';
 const UUID_CONFIG = '4d5e6f70-8a9b-4c2d-9e3f-4a5b6c7d8e9f';
 const UUID_AVATAR = '5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f';
 const UUID_GALLERY_ITEM = '5e7f8091-ab2c-4d3e-8f4a-5b6c7d8e9f02';
+const UUID_CHARACTER_VERSION = '6b7c8d9e-0f1a-4b2c-8d3e-4f5a6b7c8d9e';
 const UUID_ASSET = '6f8091a2-bc3d-4e4f-9a5b-6c7d8e9f0314';
 const UUID_RUN = '6e7f8091-ab2c-4d3e-9f4a-5b6c7d8e9f01';
 const UUID_STEP = 'a1a2a3a4-b5c6-4d7e-8f90-1a2b3c4d5e6f';
@@ -2329,6 +2372,36 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('characters-delete-request', 'characters.delete', 'request', true, {
     characterId: UUID_CHARACTER,
   }),
+  fx('characters-delete-purge-request', 'characters.delete', 'request', true, {
+    characterId: UUID_CHARACTER,
+    purge: true,
+  }),
+  fx('characters-restore-request', 'characters.restore', 'request', true, {
+    characterId: UUID_CHARACTER,
+  }),
+  fx('characters-versions-list-request', 'characters.versions.list', 'request', true, {
+    characterId: UUID_CHARACTER,
+  }),
+  fx('characters-versions-restore-request', 'characters.versions.restore', 'request', true, {
+    characterId: UUID_CHARACTER,
+    versionId: UUID_CHARACTER_VERSION,
+  }),
+  fx(
+    'neg-characters-versions-restore-missing-version',
+    'characters.versions.restore',
+    'request',
+    false,
+    {
+      characterId: UUID_CHARACTER,
+    },
+  ),
+  fx('neg-characters-restore-bad-id', 'characters.restore', 'request', false, {
+    characterId: 'not-a-uuid',
+  }),
+  fx('neg-characters-delete-bad-purge', 'characters.delete', 'request', false, {
+    characterId: UUID_CHARACTER,
+    purge: 'yes',
+  }),
   fx('characters-gallery-list-request', 'characters.gallery.list', 'request', true, {
     characterId: UUID_CHARACTER,
     sort: 'oldest',
@@ -2680,6 +2753,29 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('characters-create-response', 'characters.create', 'response', true, CHARACTER_VALUE),
   fx('characters-update-response', 'characters.update', 'response', true, CHARACTER_VALUE),
   fx('characters-delete-response', 'characters.delete', 'response', true, {}),
+  fx('characters-restore-response', 'characters.restore', 'response', true, CHARACTER_VALUE),
+  fx('characters-versions-list-response', 'characters.versions.list', 'response', true, {
+    items: [
+      {
+        id: UUID_CHARACTER_VERSION,
+        characterId: UUID_CHARACTER,
+        version: 2,
+        createdAt: '2026-08-13T00:00:00Z',
+      },
+    ],
+    truncated: false,
+  }),
+  fx(
+    'characters-versions-restore-response',
+    'characters.versions.restore',
+    'response',
+    true,
+    CHARACTER_VALUE,
+  ),
+  fx('neg-characters-versions-list-truncated-flag', 'characters.versions.list', 'response', false, {
+    items: [],
+    truncated: 'no',
+  }),
   fx('characters-gallery-list-response', 'characters.gallery.list', 'response', true, {
     items: [GALLERY_ITEM_VALUE],
   }),

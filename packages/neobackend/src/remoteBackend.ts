@@ -68,6 +68,7 @@ import type {
   GalleryListResultDto,
   GalleryAddResultDto,
   GalleryDeleteResultDto,
+  CharacterVersionsResultDto,
   CharacterCardImportResultDto,
   ChatsExportResultDto,
 } from '@neotavern/contracts';
@@ -133,6 +134,18 @@ export class RemoteBackend implements NeoBackend {
           signal: opts?.signal,
         },
       ),
+    restore: (characterId, opts) =>
+      this.sdk.call<CharacterDto>('characters.restore', { characterId }, { signal: opts?.signal }),
+    versionsList: (characterId, opts) =>
+      this.sdk.call<CharacterVersionsResultDto>(
+        'characters.versions.list',
+        { characterId },
+        { signal: opts?.signal },
+      ),
+    versionsRestore: (req, opts) =>
+      this.sdk.call<CharacterDto>('characters.versions.restore', req, {
+        signal: opts?.signal,
+      }),
     exportCard: (characterId, format, opts) =>
       this.sdk.call<CharacterCardExportResultDto>(
         'characters.export.card',
