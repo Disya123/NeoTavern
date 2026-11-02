@@ -61,9 +61,16 @@ plugin→message block attachment per row (block type, renderer id, immutable
 attach-time `descriptor_json`, optional `serialized_state_json` captured by
 `blocks.freeze`); both FKs CASCADE (message delete and plugin uninstall leave
 no orphans) and the two indexes cover the batch read by message and the
-uninstall sweep by plugin. Rollback
-for any kernel migration is the pre-migration backup restore
-(ТЗ §10.4); v20–v25 are additive.
+uninstall sweep by plugin. v26 (`026_app_events`, M7 cluster 18) adds
+`app_events` — the append-only application event log: one row per
+client-relevant product mutation (`event`, opaque `payload_json`, `created_at`)
+with an AUTOINCREMENT `sequence` as the resumable cursor. Writers append and
+prune to a bounded retention window inside the same transaction as the
+mutation, so a client can never observe an event without its data change;
+`events.poll` reports `truncated` when the requested cursor has already aged
+out, and the subscriber then resets its caches instead of pretending it saw a
+complete stream. Rollback for any kernel migration is the pre-migration
+backup restore (ТЗ §10.4); v20–v26 are additive.
 
 ### Plugin state and grants
 

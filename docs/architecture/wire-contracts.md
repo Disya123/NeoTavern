@@ -190,6 +190,7 @@ ops (eventSchemaId) carrying a response schema; empty/unknown
 | `generation.cancel`       | transactional | idempotent     | safe  | app.write | 2048    | 1024   | –      |
 | `generation.get`          | transactional | idempotent     | safe  | app.read  | 2048    | 65536  | –      |
 | `generation.events`       | transactional | idempotent     | safe  | app.read  | 4096    | 262144 | –      |
+| `events.poll`             | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
 | `generation.retry`        | workflow      | non-idempotent | none  | app.write | 2048    | –      | 65536  |
 | `generation.keep`         | transactional | idempotent     | safe  | app.write | 2048    | 65536  | –      |
 | `generation.discard`      | transactional | idempotent     | safe  | app.write | 2048    | 65536  | –      |
@@ -214,7 +215,7 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
 `(kind,name)`). All slice-3 additions are `transactional`, strict
 `additionalProperties: false`, ARC-07. The M7 Этап-4 clusters then grew the
-registry to **130 ops** (the latest additions are the cluster-8 provider-access
+registry to **131 ops** (the latest additions are the cluster-8 provider-access
 pair `providers.models` / `providers.test`, the cluster-23 maintenance op
 `diagnostics.cache.clear`, the cluster-17 audit op `chats.context.audit`
 — the chat's latest durable `wire.prompt.plan`, after the provider catalog +
@@ -223,9 +224,13 @@ named-key set described in §5 — the cluster-15 block-attachment family
 `blocks.delete`, whose `descriptor`/`serializedState` fields are free-form
 JSON objects via `wire.free-object`, the cluster-14 theme-settings pair
 `themes.settings.get` / `themes.settings.update`, whose `values` map is the
-same `wire.free-object` shape, and the cluster-17 preview op
+same `wire.free-object` shape, the cluster-17 preview op
 `chats.prompt.preview`, which answers `wire.prompt.preview` — the one-plan
-shape minus the run identity, because a preview is not a generation run);
+shape minus the run identity, because a preview is not a generation run, and
+the cluster-18 app-event cursor `events.poll`, which answers
+`wire.result.app-events-page` of `wire.app-event` items — the durable,
+resumable replacement for the legacy SSE relay, see
+[ADR-0060](../adr/0060-app-event-cursor-not-sse.md));
 the authoritative live list with per-op
 metadata is the generated `packages/contracts/generated/contract-manifest.json`.
 
@@ -281,6 +286,16 @@ both emit `wire.generation.event` frames (`generation.delta`,
 monotonic `sequence`, tagged `payload`), and `generation.keep` /
 `generation.discard` are the idempotent post-terminal reconciliation commands
 over a partial artifact (ТЗ §63).
+
+`events.poll` pages the durable app-event log (`wire.result.app-events-page` —
+`wire.app-event` items with a monotonic `sequence`, the contract `event` name,
+an id-only `payload` object and `createdAt`, plus `hasMore` and `truncated`).
+It is the canonical replacement for the legacy `GET /api/v2/events` SSE relay:
+the cursor is exclusive (`afterSequence`), `-1` starts at the oldest retained
+row, `hasMore` means "drain again immediately", and `truncated` means the
+cursor aged out of the bounded (2048-row) retention window, so the subscriber
+must reset its caches instead of assuming a complete stream. Push is a host
+concern — see [ADR-0060](../adr/0060-app-event-cursor-not-sse.md).
 
 `providers.list` reports the registered provider adapters (ТЗ §55/§60):
 `wire.result.list-providers` items carry id/name/builtin, the

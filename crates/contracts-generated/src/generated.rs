@@ -67,6 +67,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "generation.cancel" => Some(2048),
         "generation.get" => Some(2048),
         "generation.events" => Some(4096),
+        "events.poll" => Some(2048),
         "generation.retry" => Some(2048),
         "generation.keep" => Some(2048),
         "generation.discard" => Some(2048),
@@ -205,6 +206,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "generation.cancel" => Some(1024),
         "generation.get" => Some(65536),
         "generation.events" => Some(262144),
+        "events.poll" => Some(262144),
         "generation.retry" => Some(1024),
         "generation.keep" => Some(65536),
         "generation.discard" => Some(65536),
@@ -18307,6 +18309,220 @@ pub fn validate_paged_generation_events(value: &Value) -> Result<(), Vec<Issue>>
 
 pub fn decode_paged_generation_events(bytes: &[u8]) -> Result<PagedGenerationEvents, WireError> {
     crate::decode::<PagedGenerationEvents>(validate_paged_generation_events, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AppEvent {
+    pub sequence: i64,
+    pub event: String,
+    pub payload: FreeObject,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}
+
+pub(crate) fn check_app_event(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("sequence").is_none() {
+            issues.push(Issue::new(join_path(path, "sequence"), "RequiredProperty"));
+        }
+        if value.get("event").is_none() {
+            issues.push(Issue::new(join_path(path, "event"), "RequiredProperty"));
+        }
+        if value.get("payload").is_none() {
+            issues.push(Issue::new(join_path(path, "payload"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("sequence") {
+            let child_path = join_path(path, "sequence");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("event") {
+            let child_path = join_path(path, "event");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("payload") {
+            let child_path = join_path(path, "payload");
+            check_free_object(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "sequence" | "event" | "payload" | "createdAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_app_event(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_app_event(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_app_event(bytes: &[u8]) -> Result<AppEvent, WireError> {
+    crate::decode::<AppEvent>(validate_app_event, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestAppEventsPoll {
+    #[serde(rename = "afterSequence", default, skip_serializing_if = "Option::is_none")]
+    pub after_sequence: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+}
+
+pub(crate) fn check_request_app_events_poll(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if let Some(child) = value.get("afterSequence") {
+            let child_path = join_path(path, "afterSequence");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < -1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("limit") {
+            let child_path = join_path(path, "limit");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "afterSequence" | "limit") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_app_events_poll(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_app_events_poll(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_app_events_poll(bytes: &[u8]) -> Result<RequestAppEventsPoll, WireError> {
+    crate::decode::<RequestAppEventsPoll>(validate_request_app_events_poll, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultAppEventsPage {
+    pub items: Vec<AppEvent>,
+    #[serde(rename = "hasMore")]
+    pub has_more: bool,
+    pub truncated: bool,
+}
+
+pub(crate) fn check_result_app_events_page(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if value.get("hasMore").is_none() {
+            issues.push(Issue::new(join_path(path, "hasMore"), "RequiredProperty"));
+        }
+        if value.get("truncated").is_none() {
+            issues.push(Issue::new(join_path(path, "truncated"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_app_event(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(child) = value.get("hasMore") {
+            let child_path = join_path(path, "hasMore");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("truncated") {
+            let child_path = join_path(path, "truncated");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items" | "hasMore" | "truncated") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_app_events_page(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_app_events_page(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_app_events_page(bytes: &[u8]) -> Result<ResultAppEventsPage, WireError> {
+    crate::decode::<ResultAppEventsPage>(validate_result_app_events_page, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

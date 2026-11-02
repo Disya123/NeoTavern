@@ -1,5 +1,21 @@
 # Architecture Decision Records
 
+## ADR-0060: App events are a durable cursor, not an SSE relay
+
+**Accepted (2026-11-09).** The canonical plane replaces the legacy
+`GET /api/v2/events` SSE relay with an append-only `app_events` log (schema
+v26) written inside the same transaction as every client-relevant mutation,
+and a unary `events.poll` cursor (`afterSequence`, `hasMore`, `truncated`).
+Payloads are id-only; the log keeps 2048 rows and reports a cursor that aged
+out instead of silently skipping changes; push stays a host concern (the React
+contour polls with a 2 s interval and drains backlogs immediately). This makes
+invalidation resumable across reloads, tabs, reconnects and non-HTTP transports
+(Tauri IPC, JNI), and it closes the cross-client message-block boundary that
+cluster 15 documented. Alternatives (in-memory broadcast, kernel-hosted SSE,
+long-polling, reusing `generation.events`) are recorded with their rejection
+reasons. Full decision:
+[ADR-0060](0060-app-event-cursor-not-sse.md).
+
 ## ADR-0059: React-primary pivot — the React contour is the product UI
 
 **Accepted (owner decision, 2026-10-31).** The React contour (apps/web on

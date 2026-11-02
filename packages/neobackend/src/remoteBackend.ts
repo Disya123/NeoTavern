@@ -14,6 +14,7 @@ import type {
   DiagnosticsExportResultDto,
   EmptyResultDto,
   SearchResultDto,
+  AppEventsPageDto,
   GenerationRunDto,
   InstallPluginResultDto,
   InstallThemeResultDto,
@@ -106,6 +107,7 @@ import type {
   ProfilesApi,
   ProvidersApi,
   SearchApi,
+  EventsApi,
   SecretsApi,
   SettingsApi,
   ThemesApi,
@@ -488,6 +490,11 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<SearchResultDto>('search.query', req, { signal: opts?.signal }),
     rebuild: (opts) =>
       this.sdk.call<SearchResultDto>('search.rebuild', {}, { signal: opts?.signal }),
+  };
+
+  readonly events: EventsApi = {
+    poll: (req, opts) =>
+      this.sdk.call<AppEventsPageDto>('events.poll', req ?? {}, { signal: opts?.signal }),
   };
 
   private async *streamOperation(

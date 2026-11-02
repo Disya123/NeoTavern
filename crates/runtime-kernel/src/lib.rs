@@ -30,6 +30,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub mod app_events;
 pub mod assets;
 pub mod backup;
 pub mod blocks;
@@ -736,6 +737,8 @@ fn handle_unary(
         }
         "generation.get" => with_db_opt(db, |db| generation::generation_get(db, req)),
         "generation.events" => with_db_opt(db, |db| generation::generation_events(db, req)),
+        // M7 Etap-4 (cluster 18): resumable app-event log cursor.
+        "events.poll" => with_db_opt(db, |db| app_events::events_poll(db, req)),
         "generation.keep" => with_db_opt(db, |db| generation::generation_keep(db, req)),
         "generation.discard" => with_db_opt(db, |db| generation::generation_discard(db, req)),
         "generation.prompt.plan" => {

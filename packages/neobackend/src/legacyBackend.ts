@@ -49,6 +49,7 @@ import type {
   ProfilesApi,
   ProvidersApi,
   SearchApi,
+  EventsApi,
   SecretsApi,
   SettingsApi,
   ThemesApi,
@@ -365,6 +366,16 @@ export class LegacyBackend implements NeoBackend {
   readonly search: SearchApi = {
     query: (req) => this.searchQuery(req),
     rebuild: () => this.rebuildSearch(),
+  };
+
+  /**
+   * `events.poll` on the legacy plane: the sidecar relays its events over SSE
+   * (`GET /api/v2/events`) instead of a durable cursor, so there is nothing
+   * honest to poll — the kernel-only op refuses (ARC-02) and the web client
+   * keeps its SSE subscriber for this contour.
+   */
+  readonly events: EventsApi = {
+    poll: () => this.unsupported('events.poll'),
   };
 
   /**

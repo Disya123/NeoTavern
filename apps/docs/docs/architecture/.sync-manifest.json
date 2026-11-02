@@ -278,9 +278,14 @@
       "sha256": "f8e14d29bd1a5646229662a796e2a185c8e5a6169c8c5d9f45b71a3d8033c223"
     },
     {
+      "source": "adr/0060-app-event-cursor-not-sse.md",
+      "target": "adr/0060-app-event-cursor-not-sse.md",
+      "sha256": "719ce80e3924578c484a9f193728a3bfa12d9ba73e39557d2c596961802192fc"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "61a1a83608c37570e974257f7e2f3cec5e550b2ece9f16da4174667186eddb03"
+      "sha256": "828f5e7c3ce93b48ce3bd74eb6023f7ea6d59fed40f5eae9baedaf70ac2fc8dd"
     },
     {
       "source": "android/README.md",
@@ -290,7 +295,7 @@
     {
       "source": "api/README.md",
       "target": "api/README.md",
-      "sha256": "b3034950dfba13cfe294e4d3f97932819fa36b67d41653b18b26b6b667d0646a"
+      "sha256": "e015f149a955dcc139009c1f7c1534065b06a53fa673c01abcb1c4f4b445e197"
     },
     {
       "source": "architecture/README.md",
@@ -305,7 +310,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "3c80e621ef3fd09b4754f3c481c5d65963fe783b78244e8f7f5ea9241f821481"
+      "sha256": "851b6b595a54b5fa70d29bec84d49d7d29104a3822cee2b872a1669e49bc284b"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -330,7 +335,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "57dd41e40c5fe115bc0dfa4024991a5b11117c60e4d2ebc7898dc5a7f2683df2"
+      "sha256": "d16730b829093e9e878a0536568849466119f99899cbff04f3109b9d75ec1633"
     },
     {
       "source": "architecture/portable-data.md",
@@ -360,7 +365,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "b0b0fb74aa394ea82464680b8a20f7e5b9d2911e9398fcee092afe0c2d3b4ff0"
+      "sha256": "6a296c58a004aba16f35622e55c56908a78d4779f15598bfb7d7eedfe9a38e27"
     },
     {
       "source": "architecture/version-axes.md",
@@ -370,7 +375,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "4d2bc0c9aee042945bd7d5dd6d1329e3d767a43d11a25b2276c19e0abddae27c"
+      "sha256": "3ef22cdb6e81bee471e991cb6ba5a7a55fba88274668723cf2fb24054b818495"
     },
     {
       "source": "audits/rust-app/INVENTORY.md",
@@ -405,12 +410,12 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "b188146eec3bf4c7d9fa10726517839aa3abd17ae53b2d118d8c450405c3f868"
+      "sha256": "44acef1d2228f05e2c8755a6d27575399bd999df87aa319bf021ef29acbdae6a"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "871c7809b7a84b629dc30905115db14de51ba6e0c9785c787a293ab0b303db08"
+      "sha256": "198acbe38afc04399010d8eb29069df6ec5fbc80b9514f7d9bcc93f02fbea961"
     },
     {
       "source": "desktop/README.md",

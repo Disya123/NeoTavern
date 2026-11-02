@@ -80,8 +80,9 @@ describe('product wire registry', () => {
     // cluster 15) adds chats.blocks.{list,attach} + blocks.{update,delete}
     // (127); the theme-settings slice (M7 cluster 14) adds
     // themes.settings.{get,update} (129); the prompt-preview slice (M7
-    // cluster 17, part 2) adds chats.prompt.preview (130).
-    expect(registry.operations).toHaveLength(130);
+    // cluster 17, part 2) adds chats.prompt.preview (130); the app-event slice
+    // (M7 cluster 18) adds events.poll (131).
+    expect(registry.operations).toHaveLength(131);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -130,6 +131,7 @@ describe('product wire registry', () => {
       'generation.cancel',
       'generation.get',
       'generation.events',
+      'events.poll',
       'generation.retry',
       'generation.keep',
       'generation.discard',

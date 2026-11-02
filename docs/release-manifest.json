@@ -598,6 +598,19 @@
       "milestone": "M5"
     },
     {
+      "id": "app.live-events",
+      "title": "Cross-client app event channel (cache invalidation stream)",
+      "wireOps": ["events.poll"],
+      "hosts": {
+        "desktop": "Integrated",
+        "headless": "Integrated",
+        "android": "Designed",
+        "webClient": "Integrated"
+      },
+      "notes": "M7 Etap-4 cluster 18: the legacy SSE relay (GET /api/v2/events) invalidated TanStack caches from an in-memory bus. The canonical plane replaces the socket with a durable, resumable app-event log: every client-relevant mutation appends its event INSIDE the same transaction as the data change (chat.created, chat.message.created/updated/deleted, chat.message.block.changed, generation.finished/error, plugin.installed/activated/disabled/deleted), and subscribers resume from the last sequence they saw via events.poll (exclusive afterSequence, hasMore, truncated). Schema v26 app_events (AUTOINCREMENT cursor, bounded retention 2048 rows pruned by the writer). Payloads are id-only, so an event can never smuggle message text or secrets; the push transport stays a host concern (the Web Client polls the wire op; a host-native SSE bridge is not built). Honest boundaries: no chat.deleted/chat.opened events (the legacy relay never forwarded them either), cancelled runs publish generation.finished with status=cancelled, and Android is Designed because the JNI transport was not exercised for the polling loop.",
+      "milestone": "M7"
+    },
+    {
       "id": "ui.run-transcript",
       "title": "Durable run-step transcript (generation timeline)",
       "wireOps": [],

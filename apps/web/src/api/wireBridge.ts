@@ -87,6 +87,7 @@ import {
   type ChatContextAuditResultDto,
   type ChatPromptPreviewRequestDto,
   type ChatPromptPreviewResultDto,
+  type AppEventsPageDto,
   type MessageBlock,
   type MessageBlockDto,
   type BlockAttach,
@@ -1331,6 +1332,23 @@ export async function getChatPromptPreview(
     return backend.chats.previewPrompt(request);
   }
   throw new UnsupportedError('chats.prompt.preview');
+}
+
+/**
+ * One page of the durable app-event log (wire `events.poll`, M7 Etap-4
+ * cluster 18): the canonical plane's replacement for the legacy SSE relay.
+ * The caller echoes the last `sequence` it saw, so a reload, a second tab or a
+ * reconnect never depends on being connected at the exact moment of a change.
+ * Kernel plane only; the legacy contour keeps its `EventSource` subscriber.
+ */
+export async function pollAppEvents(
+  afterSequence: number,
+  signal?: AbortSignal,
+): Promise<AppEventsPageDto> {
+  if (isKernelMode()) {
+    return backend.events.poll({ afterSequence }, { signal });
+  }
+  throw new UnsupportedError('events.poll');
 }
 
 /** One durable generation step rendered in the run transcript (ТЗ §8.3). */

@@ -1732,6 +1732,18 @@ fn terminal_completed(
                 params![run.run_id, seq, &event_payload, &created_at],
             )
             .map_err(|e| StorageError::from_sqlite(e, "generation completed: terminal event"))?;
+            // Cluster 18: the assistant message and its app event commit
+            // together, so another tab refreshes exactly once.
+            crate::app_events::append(
+                tx,
+                crate::app_events::GENERATION_FINISHED,
+                crate::app_events::payload(&[
+                    ("chatId", &chat_id),
+                    ("runId", &run.run_id),
+                    ("messageId", &message_id),
+                    ("status", "completed"),
+                ]),
+            )?;
             Ok(TerminalCommit::Applied(seq))
         })?;
         match outcome {
@@ -1795,6 +1807,13 @@ fn terminal_failed(
                 params![run.run_id, seq, &event_payload, &updated_at],
             )
             .map_err(|e| StorageError::from_sqlite(e, "generation failed: terminal event"))?;
+            // Cluster 18: a failed run is a client-visible `generation.error`
+            // (id-only payload — the provider error stays on the run row).
+            crate::app_events::append(
+                tx,
+                crate::app_events::GENERATION_ERROR,
+                crate::app_events::payload(&[("chatId", &run.chat_id), ("runId", &run.run_id)]),
+            )?;
             Ok(TerminalCommit::Applied(seq))
         })?;
         match outcome {
@@ -1851,6 +1870,18 @@ fn terminal_cancelled(
                 params![run.run_id, seq, &event_payload, &updated_at],
             )
             .map_err(|e| StorageError::from_sqlite(e, "generation cancelled: terminal event"))?;
+            // Cluster 18: a cancellation is a terminal `generation.finished`
+            // with an explicit status — subscribers invalidate the same
+            // caches they would for a completed run.
+            crate::app_events::append(
+                tx,
+                crate::app_events::GENERATION_FINISHED,
+                crate::app_events::payload(&[
+                    ("chatId", &run.chat_id),
+                    ("runId", &run.run_id),
+                    ("status", "cancelled"),
+                ]),
+            )?;
             Ok(TerminalCommit::Applied(seq))
         })?;
         match outcome {

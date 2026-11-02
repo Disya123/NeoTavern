@@ -9,6 +9,9 @@ import { WindowRoleManager, type WindowRoleSnapshot } from './windows.js';
 import { RUN_DEADLINE_MS } from './kernel/commands.js';
 import { snapshotPluginUiTokens } from './themeTokens.js';
 import { slotRegistry, slotsContributionFromDefinition } from './slots.js';
+import { isKernelMode } from '../api/backend.js';
+import { pollAppEvents } from '../api/wireBridge.js';
+import { startAppEventPolling } from '../api/appEventPoller.js';
 
 /**
  * Permissions-Policy directives denied in every plugin sandbox iframe.
@@ -464,6 +467,8 @@ export class FrontendPluginRuntime {
   private currentChatIdValue: string | null = null;
   private activeProviderConfigIdValue: string | null = null;
   private eventSource: EventSource | null = null;
+  /** Kernel-plane cursor drain for sandbox app events (cluster 18). */
+  private appEventPolling: (() => void) | null = null;
   /** Theme-token sync to sandboxed UI (api.ui.modelMenu). */
   private themeTokenObserver: MutationObserver | null = null;
   private themeTokenPushFrame: number | null = null;
@@ -2044,8 +2049,26 @@ export class FrontendPluginRuntime {
    * App-event delivery (ТЗ §7.2 «обработчики событий»): while any plugin frame
    * is alive, subscribe to the backend event channel and relay whitelisted app
    * events into subscribed sandboxes.
+   *
+   * The transport differs per plane: the legacy sidecar pushes SSE frames,
+   * while the kernel plane exposes a durable cursor (`events.poll`) that the
+   * plugin relay drains (cluster 18). Both feed the same `deliverAppEvent`, so
+   * a sandbox cannot tell which plane it runs on.
    */
   private syncEventStream(): void {
+    if (isKernelMode()) {
+      if (this.frames.size > 0 && !this.appEventPolling) {
+        this.appEventPolling = startAppEventPolling({
+          poll: (afterSequence, signal) => pollAppEvents(afterSequence, signal),
+          onEvent: (event, payload) => this.deliverAppEvent(event, payload),
+        });
+      }
+      if (this.frames.size === 0 && this.appEventPolling) {
+        this.appEventPolling();
+        this.appEventPolling = null;
+      }
+      return;
+    }
     if (this.frames.size > 0 && !this.eventSource && typeof EventSource !== 'undefined') {
       const source = new EventSource('/api/v2/events');
       source.onmessage = (event) => {
@@ -2056,19 +2079,7 @@ export class FrontendPluginRuntime {
             payload?: unknown;
           };
           if (data.type === 'event' && typeof data.event === 'string') {
-            this.emitEvent(data.event, data.payload);
-            if (data.event === 'plugin.capability.revoked') this.onAppEventRevoked(data.payload);
-            // rev4 §J2: update/uninstall lifecycle events reach the live
-            // sandbox as hooks.
-            if (
-              data.event === 'plugin.updating' ||
-              data.event === 'plugin.updated' ||
-              data.event === 'plugin.rollback' ||
-              data.event === 'plugin.uninstalling'
-            ) {
-              this.applyLifecycleEvent(data.event, data.payload);
-            }
-            this.dispatchAppEvent(data.event, data.payload);
+            this.deliverAppEvent(data.event, data.payload);
           }
         } catch {
           // Ignore malformed frames.
@@ -2086,6 +2097,23 @@ export class FrontendPluginRuntime {
       this.eventSource.close();
       this.eventSource = null;
     }
+  }
+
+  /** One relayed app event: sandboxes, revocations, lifecycle, runtime hooks. */
+  private deliverAppEvent(event: string, payload: unknown): void {
+    this.emitEvent(event, payload);
+    if (event === 'plugin.capability.revoked') this.onAppEventRevoked(payload);
+    // rev4 §J2: update/uninstall lifecycle events reach the live sandbox as
+    // hooks.
+    if (
+      event === 'plugin.updating' ||
+      event === 'plugin.updated' ||
+      event === 'plugin.rollback' ||
+      event === 'plugin.uninstalling'
+    ) {
+      this.applyLifecycleEvent(event, payload);
+    }
+    this.dispatchAppEvent(event, payload);
   }
 
   private sendLanguage(frame: RuntimeFrame, language: string): void {

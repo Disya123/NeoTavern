@@ -984,6 +984,24 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     262144,
     undefined,
   ),
+  // M7 Etap-4 cluster 18: the app-event log cursor. The canonical plane has a
+  // single writer, so a subscriber resumes from the last `sequence` it saw
+  // instead of holding an SSE connection open (the push transport is a host
+  // concern, not a contract one).
+  op(
+    'events.poll',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.app-events-poll',
+    'wire.result.app-events-page',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
   op(
     'generation.retry',
     'workflow',
@@ -3030,6 +3048,11 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     afterSequence: -1,
     limit: 50,
   }),
+  fx('events-poll-request', 'events.poll', 'request', true, {
+    afterSequence: 17,
+    limit: 50,
+  }),
+  fx('events-poll-request-from-start', 'events.poll', 'request', true, {}),
   fx('generation-retry-request', 'generation.retry', 'request', true, {
     sourceRunId: UUID_RUN,
   }),
@@ -3380,6 +3403,37 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('generation-events-response', 'generation.events', 'response', true, {
     items: [GENERATION_EVENT_ENVELOPE_VALUE],
     hasMore: false,
+  }),
+  fx('events-poll-response', 'events.poll', 'response', true, {
+    items: [
+      {
+        sequence: 18,
+        event: 'chat.message.created',
+        payload: { chatId: UUID_CHAT, messageId: UUID_MESSAGE },
+        createdAt: TIMESTAMP,
+      },
+      {
+        sequence: 19,
+        event: 'plugin.activated',
+        payload: { pluginId: 'clockwork' },
+        createdAt: TIMESTAMP,
+      },
+    ],
+    hasMore: false,
+    truncated: false,
+  }),
+  fx('neg-events-poll-response-missing-truncated', 'events.poll', 'response', false, {
+    items: [],
+    hasMore: false,
+  }),
+  fx('neg-events-poll-response-unknown-field', 'events.poll', 'response', false, {
+    items: [],
+    hasMore: false,
+    truncated: false,
+    nextPageToken: 'nope',
+  }),
+  fx('neg-events-poll-negative-cursor', 'events.poll', 'request', false, {
+    afterSequence: -5,
   }),
   fx('generation-retry-event', 'generation.retry', 'event', true, {
     type: 'generation.completed',

@@ -606,6 +606,30 @@ authorization and CSRF policy. Typical errors: `THEME_INVALID` (422),
 `FILE_TYPE_NOT_ALLOWED` (415). The Theme API version is set by the manifest
 `apiVersion`; the current host accepts versions no newer than `1`.
 
+### App events
+
+The legacy surface pushes application events over SSE: `GET /api/v2/events`
+relays a whitelist (`chat.created`, `chat.message.created|updated|deleted`,
+`generation.finished|error`, the `plugin.*` lifecycle names and
+`chat.message.block.changed`) from the sidecar's in-memory bus. Frames are
+`{ type: 'event', event, payload }`; a `ready` frame announces the open stream
+and a 25 s keep-alive ping keeps intermediaries from buffering.
+
+On the canonical plane the same information is a durable, resumable cursor
+(wire `events.poll`, M7 Этап-4 cluster 18). Every client-relevant mutation
+appends an id-only event inside the same transaction as the data change
+(schema v26 `app_events`), and a subscriber resumes from the last `sequence` it
+saw: `{ afterSequence, limit }` in, `{ items: [{ sequence, event, payload,
+createdAt }], hasMore, truncated }` out. `hasMore` means "a backlog larger than
+one page — poll again immediately"; `truncated` means the cursor aged out of
+the 2048-row retention window, and the subscriber must reset its caches rather
+than assume a complete stream. The payload carries ids only (`chatId`,
+`messageId`, `runId`, `pluginId`, `status`) — never message text or secrets.
+Push remains a host concern; the React contour polls every 2 s, drains
+backlogs immediately and backs off on failure without losing the cursor. See
+[ADR-0060](../adr/0060-app-event-cursor-not-sse.md) for the transport decision
+and the reasons the legacy SSE endpoint is not reproduced on the kernel plane.
+
 ### Settings, search, backups
 
 - `GET/PATCH /api/v2/settings` → `AppSettings`. The `contextStrategy` field

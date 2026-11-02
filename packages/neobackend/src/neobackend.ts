@@ -88,6 +88,8 @@ import type {
   ChatContextAuditResultDto,
   ChatPromptPreviewRequestDto,
   ChatPromptPreviewResultDto,
+  AppEventsPollRequestDto,
+  AppEventsPageDto,
   WireGenerationEvent,
   BackupsRestoreResultDto,
   BackupsDeleteResultDto,
@@ -655,6 +657,20 @@ export interface DiagnosticsApi {
 }
 
 /**
+ * App-event subscription (M7 Etap-4 cluster 18). The canonical plane has a
+ * single writer and a durable, resumable event log, so a client subscribes by
+ * POLLING a cursor instead of holding a socket: echo the last `sequence` you
+ * saw as `afterSequence`, and treat `hasMore` as "poll again immediately" and
+ * `truncated` as "your cursor aged out — reset your caches". Events carry
+ * ids only, so they can never smuggle message text; the subscriber re-reads
+ * whatever it needs through the normal read operations.
+ */
+export interface EventsApi {
+  /** One page of the app-event log after an exclusive cursor. */
+  poll(req?: AppEventsPollRequestDto, opts?: BackendCallOptions): Promise<AppEventsPageDto>;
+}
+
+/**
  * Secret-store operations (wire `secrets.status` / `secrets.lock`,
  * SEC-01.1). `status` reports the explicit store mode WITHOUT invoking get —
  * a value can never cross the DTO. `lock` performs the manual lock: the
@@ -837,4 +853,6 @@ export interface NeoBackend {
   assets: AssetsApi;
   imports: ImportsApi;
   search: SearchApi;
+  /** App-event cursor (cluster 18); kernel-only, legacy refuses honestly. */
+  events: EventsApi;
 }

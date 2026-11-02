@@ -33,6 +33,9 @@ const mocks = vi.hoisted(() => {
     del: vi.fn(),
     exportCard: vi.fn(),
   };
+  const events = {
+    poll: vi.fn(),
+  };
   const chats = {
     list: vi.fn(),
     get: vi.fn(),
@@ -145,6 +148,7 @@ const mocks = vi.hoisted(() => {
   return {
     characters,
     chats,
+    events,
     lorebooks,
     personas,
     presets,
@@ -182,6 +186,7 @@ vi.mock('./backend.js', () => ({
     settings: mocks.settings,
     search: mocks.search,
     providers: mocks.providers,
+    events: mocks.events,
   },
   isKernelMode: mocks.isKernelMode,
 }));
@@ -280,6 +285,7 @@ import {
   getPromptPlan,
   getChatContextAudit,
   getChatPromptPreview,
+  pollAppEvents,
   getDataActivationStatus,
   importCharacter,
   warmProviderModels,
@@ -1831,6 +1837,33 @@ describe('imports/exports (kernel plane wire flow)', () => {
     await expect(
       getChatPromptPreview({ chatId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', userMessage: 'hi' }),
     ).rejects.toBeInstanceOf(UnsupportedError);
+  });
+
+  it('polls the app-event cursor through the kernel facade', async () => {
+    const page = {
+      items: [
+        {
+          sequence: 12,
+          event: 'chat.message.created',
+          payload: { chatId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' },
+          createdAt: NOW,
+        },
+      ],
+      hasMore: false,
+      truncated: false,
+    };
+    mocks.events.poll.mockResolvedValueOnce(page);
+    const signal = new AbortController().signal;
+
+    const result = await pollAppEvents(11, signal);
+
+    expect(mocks.events.poll).toHaveBeenCalledWith({ afterSequence: 11 }, { signal });
+    expect(result).toEqual(page);
+  });
+
+  it('refuses the app-event cursor on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValueOnce(false);
+    await expect(pollAppEvents(-1)).rejects.toBeInstanceOf(UnsupportedError);
   });
 
   it('lists the durable run steps from generation.events, keeping only step envelopes', async () => {

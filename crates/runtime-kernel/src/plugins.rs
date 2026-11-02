@@ -31,10 +31,11 @@ use contracts_generated::generated::{
     RequestPluginsUninstall, ResultPluginsInstall, ResultPluginsList,
 };
 use neotavern_storage::open::Database;
+use neotavern_storage::StorageError;
 use rusqlite::OptionalExtension;
 
 use crate::product::now;
-use crate::{KernelError, KernelErrorCode};
+use crate::{app_events, KernelError, KernelErrorCode};
 
 /// Trust rank for the SEC-05 ordering (higher = more trusted). An install
 /// that would lower the recorded rank is rejected. The wire contract pins
@@ -96,8 +97,8 @@ pub(crate) fn plugins_install(db: &mut Database, request: &[u8]) -> Result<Vec<u
 
     match existing {
         None => {
-            db.conn()
-                .execute(
+            db.transaction(|tx| {
+                tx.execute(
                     "INSERT INTO plugins \
                      (id, name, version, enabled, manifest_json, permissions_json, \
                       last_error_code, source_json, trust_state, publisher_key_id, \
@@ -115,7 +116,15 @@ pub(crate) fn plugins_install(db: &mut Database, request: &[u8]) -> Result<Vec<u
                         now
                     ],
                 )
-                .map_err(|err| sqlite(err, "plugins.install: insert"))?;
+                .map_err(|err| StorageError::from_sqlite(err, "plugins.install: insert"))?;
+                // Cluster 18: the registry change and its event commit together.
+                app_events::append(
+                    tx,
+                    app_events::PLUGIN_INSTALLED,
+                    app_events::payload(&[("pluginId", &req.id), ("version", &req.version)]),
+                )?;
+                Ok(())
+            })?;
         }
         Some((existing_version, existing_trust)) => {
             if existing_version != req.version {
@@ -124,8 +133,8 @@ pub(crate) fn plugins_install(db: &mut Database, request: &[u8]) -> Result<Vec<u
                     return Err(trust_downgrade(&req.id, &existing_version));
                 }
             }
-            db.conn()
-                .execute(
+            db.transaction(|tx| {
+                tx.execute(
                     "UPDATE plugins \
                      SET name = ?2, version = ?3, manifest_json = ?4, permissions_json = ?5, \
                          trust_state = ?6, publisher_key_id = ?7, updated_at = ?8 \
@@ -141,7 +150,14 @@ pub(crate) fn plugins_install(db: &mut Database, request: &[u8]) -> Result<Vec<u
                         now
                     ],
                 )
-                .map_err(|err| sqlite(err, "plugins.install: update"))?;
+                .map_err(|err| StorageError::from_sqlite(err, "plugins.install: update"))?;
+                app_events::append(
+                    tx,
+                    app_events::PLUGIN_INSTALLED,
+                    app_events::payload(&[("pluginId", &req.id), ("version", &req.version)]),
+                )?;
+                Ok(())
+            })?;
         }
     }
 
@@ -165,13 +181,22 @@ pub(crate) fn plugins_disable(db: &mut Database, request: &[u8]) -> Result<Vec<u
 /// `plugins.uninstall` — durable row removal.
 pub(crate) fn plugins_uninstall(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req: RequestPluginsUninstall = generated::decode_request_plugins_uninstall(request)?;
-    let changed = db
-        .conn()
-        .execute(
-            "DELETE FROM plugins WHERE id = ?1",
-            rusqlite::params![req.id],
-        )
-        .map_err(|err| sqlite(err, "plugins.uninstall: delete"))?;
+    let changed = db.transaction(|tx| {
+        let changed = tx
+            .execute(
+                "DELETE FROM plugins WHERE id = ?1",
+                rusqlite::params![req.id],
+            )
+            .map_err(|err| StorageError::from_sqlite(err, "plugins.uninstall: delete"))?;
+        if changed > 0 {
+            app_events::append(
+                tx,
+                app_events::PLUGIN_DELETED,
+                app_events::payload(&[("pluginId", &req.id)]),
+            )?;
+        }
+        Ok(changed)
+    })?;
     if changed == 0 {
         return Err(plugin_not_found(&req.id));
     }
@@ -182,13 +207,28 @@ pub(crate) fn plugins_uninstall(db: &mut Database, request: &[u8]) -> Result<Vec
 
 fn set_enabled(db: &mut Database, id: &str, enabled: bool) -> Result<Vec<u8>, KernelError> {
     let now = now();
-    let changed = db
-        .conn()
-        .execute(
-            "UPDATE plugins SET enabled = ?2, updated_at = ?3 WHERE id = ?1",
-            rusqlite::params![id, enabled as i64, now],
-        )
-        .map_err(|err| sqlite(err, "plugins: set enabled"))?;
+    let changed = db.transaction(|tx| {
+        let changed = tx
+            .execute(
+                "UPDATE plugins SET enabled = ?2, updated_at = ?3 WHERE id = ?1",
+                rusqlite::params![id, enabled as i64, now],
+            )
+            .map_err(|err| StorageError::from_sqlite(err, "plugins: set enabled"))?;
+        if changed > 0 {
+            // An idempotent no-op transition publishes nothing: subscribers
+            // only hear about an actual lifecycle flip.
+            app_events::append(
+                tx,
+                if enabled {
+                    app_events::PLUGIN_ACTIVATED
+                } else {
+                    app_events::PLUGIN_DISABLED
+                },
+                app_events::payload(&[("pluginId", id)]),
+            )?;
+        }
+        Ok(changed)
+    })?;
     if changed == 0 {
         return Err(plugin_not_found(id));
     }

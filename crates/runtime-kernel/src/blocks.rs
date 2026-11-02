@@ -39,11 +39,12 @@ use contracts_generated::generated::{
     RequestChatsBlocksAttach, RequestChatsBlocksList, ResultChatsBlocksList,
 };
 use neotavern_storage::open::Database;
+use neotavern_storage::StorageError;
 use rusqlite::types::Value;
 use rusqlite::{params, params_from_iter, OptionalExtension};
 
 use crate::product::{self, new_id, now};
-use crate::KernelError;
+use crate::{app_events, KernelError};
 
 /// `chats.blocks.list` — batched read for one rendered page of messages.
 pub(crate) fn chats_blocks_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
@@ -99,15 +100,17 @@ pub(crate) fn chats_blocks_attach(
     let id = new_id();
     let timestamp = now();
     let descriptor_json = descriptor_json(req.descriptor.as_ref())?;
-    db.conn()
-        .execute(
+    let chat_id = req.chat_id.clone();
+    let message_id = req.message_id.clone();
+    db.transaction(|tx| {
+        tx.execute(
             "INSERT INTO message_blocks \
              (id, message_id, plugin_id, block_type, renderer_id, descriptor_json, \
               serialized_state_json, created_at, updated_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?7)",
             params![
                 id,
-                req.message_id,
+                message_id,
                 req.plugin_id,
                 req.block_type,
                 req.renderer_id,
@@ -115,7 +118,15 @@ pub(crate) fn chats_blocks_attach(
                 timestamp
             ],
         )
-        .map_err(|err| sqlite(err, "chats.blocks.attach: insert"))?;
+        .map_err(|err| StorageError::from_sqlite(err, "chats.blocks.attach: insert"))?;
+        // Cluster 18: cross-client invalidation rides the app-event log.
+        app_events::append(
+            tx,
+            app_events::CHAT_MESSAGE_BLOCK_CHANGED,
+            app_events::block_payload(&chat_id, &message_id, &id),
+        )?;
+        Ok(())
+    })?;
     encode_block(&block_by_id(db, &id)?)
 }
 
@@ -158,10 +169,20 @@ pub(crate) fn blocks_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>
     values.push(Value::Text(req.block_id.clone()));
 
     let sql = format!("UPDATE message_blocks SET {} WHERE id = ?", sets.join(", "));
-    let changed = db
-        .conn()
-        .execute(&sql, params_from_iter(values))
-        .map_err(|err| sqlite(err, "blocks.update: update"))?;
+    let chat_id = chat_id_of_message(db, &existing.message_id)?;
+    let changed = db.transaction(|tx| {
+        let changed = tx
+            .execute(&sql, params_from_iter(values))
+            .map_err(|err| StorageError::from_sqlite(err, "blocks.update: update"))?;
+        if changed > 0 {
+            app_events::append(
+                tx,
+                app_events::CHAT_MESSAGE_BLOCK_CHANGED,
+                app_events::block_payload(&chat_id, &existing.message_id, &req.block_id),
+            )?;
+        }
+        Ok(changed)
+    })?;
     if changed == 0 {
         return Err(block_not_found(&req.block_id));
     }
@@ -171,13 +192,24 @@ pub(crate) fn blocks_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>
 /// `blocks.delete` — detach one block by id.
 pub(crate) fn blocks_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req: RequestBlocksDelete = generated::decode_request_blocks_delete(request)?;
-    let changed = db
-        .conn()
-        .execute(
-            "DELETE FROM message_blocks WHERE id = ?1",
-            params![req.block_id],
-        )
-        .map_err(|err| sqlite(err, "blocks.delete: delete"))?;
+    let existing = block_by_id(db, &req.block_id)?;
+    let chat_id = chat_id_of_message(db, &existing.message_id)?;
+    let changed = db.transaction(|tx| {
+        let changed = tx
+            .execute(
+                "DELETE FROM message_blocks WHERE id = ?1",
+                params![req.block_id],
+            )
+            .map_err(|err| StorageError::from_sqlite(err, "blocks.delete: delete"))?;
+        if changed > 0 {
+            app_events::append(
+                tx,
+                app_events::CHAT_MESSAGE_BLOCK_CHANGED,
+                app_events::block_payload(&chat_id, &existing.message_id, &req.block_id),
+            )?;
+        }
+        Ok(changed)
+    })?;
     if changed == 0 {
         return Err(block_not_found(&req.block_id));
     }
@@ -267,6 +299,22 @@ fn require_plugin(db: &Database, plugin_id: &str) -> Result<(), KernelError> {
         return Err(plugin_not_found(plugin_id));
     }
     Ok(())
+}
+
+/// The chat a block's message belongs to — the app-event payload needs the
+/// subscriber's cache key. A block row cannot outlive its message (`ON DELETE
+/// CASCADE`), so a missing message here is a `MESSAGE_NOT_FOUND` corruption
+/// answer, never a silently empty chat id.
+fn chat_id_of_message(db: &Database, message_id: &str) -> Result<String, KernelError> {
+    db.conn()
+        .query_row(
+            "SELECT chat_id FROM messages WHERE id = ?1",
+            params![message_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|err| sqlite(err, "blocks: chat of message"))?
+        .ok_or_else(|| message_not_found(message_id))
 }
 
 /// `BLOCK_NOT_FOUND` product error (`blockId` param).

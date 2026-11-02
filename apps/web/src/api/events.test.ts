@@ -9,9 +9,11 @@ import { connectAppEvents } from './events.js';
 const mocks = vi.hoisted(() => ({
   isKernelMode: vi.fn(() => false),
   needsHostConnect: vi.fn(() => false),
+  pollAppEvents: vi.fn(),
 }));
 vi.mock('./backend.js', () => ({ isKernelMode: mocks.isKernelMode }));
 vi.mock('./hostSession.js', () => ({ needsHostConnect: mocks.needsHostConnect }));
+vi.mock('./wireBridge.js', () => ({ pollAppEvents: mocks.pollAppEvents }));
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -45,6 +47,8 @@ function frame(envelope: unknown): void {
 }
 
 beforeEach(() => {
+  mocks.isKernelMode.mockReturnValue(false);
+  mocks.pollAppEvents.mockReset();
   FakeEventSource.instances = [];
   vi.stubGlobal('EventSource', FakeEventSource);
   queryClient = new QueryClient();
@@ -153,13 +157,47 @@ describe('connectAppEvents', () => {
     expect(source.close).toHaveBeenCalledOnce();
   });
 
-  it('is an honest no-op on the kernel plane (no silent /api/v2 stream)', () => {
+  it('polls the durable cursor on the kernel plane instead of opening a stream', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    mocks.pollAppEvents.mockResolvedValue({
+      items: [
+        {
+          sequence: 4,
+          event: 'chat.message.created',
+          payload: { chatId: 'chat-42' },
+          createdAt: '2026-08-13T00:00:00Z',
+        },
+      ],
+      hasMore: false,
+      truncated: false,
+    });
+    queryClient.clear();
+    invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
     const kernelTeardown = connectAppEvents(queryClient);
-    // Only the beforeEach legacy-plane stream exists — kernel mode opens
-    // nothing.
+    // No EventSource on the kernel plane: only the beforeEach legacy stream.
     expect(FakeEventSource.instances).toHaveLength(1);
-    expect(() => kernelTeardown()).not.toThrow();
+    await vi.waitFor(() =>
+      expect(mocks.pollAppEvents).toHaveBeenCalledWith(-1, expect.any(AbortSignal)),
+    );
+    await vi.waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['chats'] }));
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['messages', 'chat-42'] });
+
+    kernelTeardown();
+    mocks.pollAppEvents.mockReset();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('resets every cache when the kernel cursor aged out of retention', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    mocks.pollAppEvents.mockResolvedValue({ items: [], hasMore: false, truncated: true });
+    queryClient.clear();
+    invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const kernelTeardown = connectAppEvents(queryClient);
+    await vi.waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith());
+    kernelTeardown();
+    mocks.pollAppEvents.mockReset();
     mocks.isKernelMode.mockReturnValue(false);
   });
 

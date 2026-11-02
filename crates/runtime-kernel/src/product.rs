@@ -14,7 +14,7 @@
 //! panic. All writes flow through `Database::transaction` (the single-writer
 //! coordinator); reads use prepared statements on `Database::conn()`.
 
-use crate::{KernelError, KernelErrorCode};
+use crate::{app_events, KernelError, KernelErrorCode};
 use contracts_generated::generated::{
     self, CharacterDto, ChatDto, FreeObject, LorebookDto, MemoryDto, MemoryScope, MessageDraftDto,
     MessageDto, MessageRevisionDto, MessageRole, MessageVariantDto, PagedCharacters, PagedChats,
@@ -1766,6 +1766,12 @@ pub fn chats_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kernel
             params![&id, &title, &character_id, &req.persona_id, &now, &now],
         )
         .map_err(|e| StorageError::from_sqlite(e, "chats_create: insert"))?;
+        // Cluster 18: the event is committed with the row it describes.
+        app_events::append(
+            tx,
+            app_events::CHAT_CREATED,
+            app_events::payload(&[("chatId", &id), ("characterId", &character_id)]),
+        )?;
         Ok(())
     })?;
     let dto = query_chat(db.conn(), &id)?.ok_or_else(|| {
@@ -1864,6 +1870,11 @@ pub fn messages_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
             ],
         )
         .map_err(|e| StorageError::from_sqlite(e, "messages_create: insert"))?;
+        app_events::append(
+            tx,
+            app_events::CHAT_MESSAGE_CREATED,
+            app_events::payload(&[("chatId", &chat_id), ("messageId", &id)]),
+        )?;
         Ok(sequence)
     })?;
     let dto = query_message(db.conn(), &chat_id, &id)?.ok_or_else(|| {
@@ -1954,6 +1965,11 @@ pub fn messages_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
                     .map_err(|e| StorageError::from_sqlite(e, "messages_update: update"))?;
                 }
             }
+            app_events::append(
+                tx,
+                app_events::CHAT_MESSAGE_UPDATED,
+                app_events::payload(&[("chatId", &req.chat_id), ("messageId", &req.message_id)]),
+            )?;
             Ok(())
         })?;
     }
@@ -1968,11 +1984,20 @@ pub fn messages_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
 pub fn messages_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_delete_message(request)?;
     let changed = db.transaction(|tx| {
-        tx.execute(
-            "DELETE FROM messages WHERE id = ?1 AND chat_id = ?2",
-            params![&req.message_id, &req.chat_id],
-        )
-        .map_err(|e| StorageError::from_sqlite(e, "messages_delete: delete"))
+        let changed = tx
+            .execute(
+                "DELETE FROM messages WHERE id = ?1 AND chat_id = ?2",
+                params![&req.message_id, &req.chat_id],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "messages_delete: delete"))?;
+        if changed > 0 {
+            app_events::append(
+                tx,
+                app_events::CHAT_MESSAGE_DELETED,
+                app_events::payload(&[("chatId", &req.chat_id), ("messageId", &req.message_id)]),
+            )?;
+        }
+        Ok(changed)
     })?;
     if changed == 0 {
         return Err(not_found("MESSAGE", &req.message_id));

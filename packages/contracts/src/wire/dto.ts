@@ -1610,6 +1610,55 @@ export const PagedGenerationEventsDtoSchema = Type.Object(
 );
 export type PagedGenerationEventsDto = Static<typeof PagedGenerationEventsDtoSchema>;
 
+/**
+ * One relayed application event (`wire.app-event`, M7 Etap-4 cluster 18):
+ * the durable counterpart of a legacy SSE frame. `sequence` is the app-event
+ * log cursor the client echoes back as `afterSequence`; `event` is the
+ * contract name from the app-event registry; `payload` carries only the ids a
+ * subscriber needs to pick the caches to invalidate.
+ */
+export const AppEventDtoSchema = Type.Object(
+  {
+    sequence: Type.Integer({ minimum: 0 }),
+    event: Type.String({ minLength: 1, maxLength: 128 }),
+    payload: WireFreeObjectSchema,
+    createdAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.app-event', additionalProperties: false },
+);
+export type AppEventDto = Static<typeof AppEventDtoSchema>;
+
+/**
+ * Poll request for the app-event log (`wire.request.app-events-poll`).
+ * `afterSequence` is exclusive (default `-1` — everything retained), so a
+ * subscriber advances by echoing the last seen `sequence`.
+ */
+export const AppEventsPollRequestDtoSchema = Type.Object(
+  {
+    afterSequence: Type.Optional(Type.Integer({ minimum: -1 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+  },
+  { $id: 'wire.request.app-events-poll', additionalProperties: false },
+);
+export type AppEventsPollRequestDto = Static<typeof AppEventsPollRequestDtoSchema>;
+
+/**
+ * One page of the app-event log (`wire.result.app-events-page`). `hasMore`
+ * means "poll again immediately" (a backlog larger than one page);
+ * `truncated` means the requested cursor had already aged out of the bounded
+ * retention window, so the subscriber must reset its caches instead of
+ * assuming it saw every change.
+ */
+export const AppEventsPageDtoSchema = Type.Object(
+  {
+    items: Type.Array(AppEventDtoSchema),
+    hasMore: Type.Boolean(),
+    truncated: Type.Boolean(),
+  },
+  { $id: 'wire.result.app-events-page', additionalProperties: false },
+);
+export type AppEventsPageDto = Static<typeof AppEventsPageDtoSchema>;
+
 /** Cancel generation request DTO (`wire.request.cancel-generation`). */
 export const CancelGenerationRequestDtoSchema = Type.Object(
   {
@@ -3552,6 +3601,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.data.activation-pending': DataActivationPendingDtoSchema,
   'wire.result.data.activation-status': DataActivationStatusResultDtoSchema,
   'wire.paged.generation-events': PagedGenerationEventsDtoSchema,
+  'wire.app-event': AppEventDtoSchema,
+  'wire.request.app-events-poll': AppEventsPollRequestDtoSchema,
+  'wire.result.app-events-page': AppEventsPageDtoSchema,
   'wire.result.list-lorebooks': ListLorebooksResultDtoSchema,
   'wire.result.list-presets': ListPresetsResultDtoSchema,
   'wire.result.list-memories': ListMemoriesResultDtoSchema,

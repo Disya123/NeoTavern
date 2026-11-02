@@ -55,6 +55,7 @@
   "data.activation.status",
   "diagnostics.cache.clear",
   "diagnostics.export",
+  "events.poll",
   "generation.cancel",
   "generation.discard",
   "generation.events",

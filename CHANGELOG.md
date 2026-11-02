@@ -4,6 +4,30 @@
 
 ### Added
 
+- **Durable app-event plane on the kernel (M7 Etap-4 slice; cluster 18).** The
+  legacy `GET /api/v2/events` SSE relay is replaced on the canonical plane by a
+  resumable cursor: schema v26 adds the STRICT `app_events` log
+  (`sequence INTEGER PRIMARY KEY AUTOINCREMENT`, `event`, id-only
+  `payload_json`, `created_at`), and every client-relevant mutation appends its
+  event INSIDE the same transaction as the data change — `chat.created`,
+  `chat.message.created|updated|deleted`, `chat.message.block.changed`,
+  `generation.finished|error` (a cancelled run publishes `finished` with
+  `status: "cancelled"`) and `plugin.installed|activated|disabled|deleted`.
+  One new wire op, `events.poll` (`app.read`): exclusive `afterSequence` in,
+  `{ items, hasMore, truncated }` out, with a bounded 2048-row retention that
+  the writer prunes in the same transaction. Facade:
+  `backend.events.poll()` (local/remote implemented; the legacy facade keeps
+  `UnsupportedError`). Web: `connectAppEvents` polls the cursor in kernel mode
+  with a 2 s idle interval, an immediate drain while `hasMore`, exponential
+  backoff that keeps the cursor on failure, and a full cache reset on
+  `truncated`; the plugin runtime feeds its existing `runtime.onAppEvent`
+  relay from the same log, which makes cross-client `chat.message.block.changed`
+  sync real (this closes the boundary cluster 15 documented). Decision and
+  rejected alternatives (in-memory bus, kernel-hosted SSE, long-polling) are
+  recorded in ADR-0060. Honest boundaries: the wire exports a cursor, not a
+  socket, so push latency is bounded by the poll interval; `chat.opened`,
+  `character.selected` and `generation.delta` are not published. Contract hash
+  `76747667…`; registry 131 ops.
 - **Side-effect-free prompt preview on the kernel plane (M7 Etap-4 slice;
   cluster 17 part 2).** One new wire op: `chats.prompt.preview` — the plan the
   next turn WOULD send, built by exactly the pipeline that produces the

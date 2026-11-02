@@ -47,6 +47,7 @@ import {
   type PromptPlanDto,
   type ChatContextAuditResultDto,
   type ChatPromptPreviewResultDto,
+  type AppEventsPageDto,
   type ListMessageBlocksResultDto,
   type MessageBlockDto,
   type BackupsRestoreResultDto,
@@ -460,9 +461,23 @@ const PROMPT_PLAN: PromptPlanDto = {
 const CHAT_CONTEXT_AUDIT: ChatContextAuditResultDto = { plan: PROMPT_PLAN };
 
 /** chats.prompt.preview response (M7 Etap-4 cluster 17 part 2): the
- * next-turn plan WITHOUT the run identity � a preview is not a run. */
+ * next-turn plan WITHOUT the run identity — a preview is not a run. */
 const { runId: _previewRunId, ...CHAT_PROMPT_PREVIEW_PLAN } = PROMPT_PLAN;
 const CHAT_PROMPT_PREVIEW: ChatPromptPreviewResultDto = { plan: CHAT_PROMPT_PREVIEW_PLAN };
+
+/** One page of the durable app-event log (M7 Etap-4 cluster 18). */
+const APP_EVENTS_PAGE: AppEventsPageDto = {
+  items: [
+    {
+      sequence: 7,
+      event: 'chat.message.created',
+      payload: { chatId: CHAT_ID, messageId: MESSAGE_ID },
+      createdAt: '2026-08-13T00:05:00Z',
+    },
+  ],
+  hasMore: false,
+  truncated: false,
+};
 
 /** One durable plugin→message attachment (M7 Etap-4 cluster 15). */
 const MESSAGE_BLOCK: MessageBlockDto = {
@@ -767,6 +782,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: SEARCH_RESULT };
       case 'search.rebuild':
         return { ok: true, value: SEARCH_REBUILT };
+      case 'events.poll':
+        return { ok: true, value: APP_EVENTS_PAGE };
       case 'secrets.status':
         return { ok: true, value: SECRETS_STATUS };
       case 'secrets.lock':
@@ -957,6 +974,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return SEARCH_RESULT;
     case 'search.rebuild':
       return SEARCH_REBUILT;
+    case 'events.poll':
+      return APP_EVENTS_PAGE;
     case 'secrets.status':
       return SECRETS_STATUS;
     case 'secrets.lock':
@@ -2871,6 +2890,46 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
       } as unknown as Parameters<typeof backend.chats.previewPrompt>[0]),
     ).rejects.toThrow(ValidationError);
     expect(kernel.calls).toBe(0);
+  });
+
+  it('events.poll is routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const request = { afterSequence: 6, limit: 50 };
+    const [localResult, remoteResult] = await Promise.all([
+      local.events.poll(request),
+      remote.events.poll(request),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(APP_EVENTS_PAGE);
+    expect(kernel.requests).toEqual([{ operationId: 'events.poll', payload: request }]);
+  });
+
+  it('events.poll defaults to the whole retained log when no cursor is given', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+
+    const page = await local.events.poll();
+    expect(page).toEqual(APP_EVENTS_PAGE);
+    expect(kernel.requests).toEqual([{ operationId: 'events.poll', payload: {} }]);
+  });
+
+  it('events.poll rejects a cursor below -1 before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(backend.events.poll({ afterSequence: -5 })).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
+  });
+
+  it('the legacy backend refuses the kernel-only app-event cursor honestly', async () => {
+    const backend = new LegacyBackend({
+      baseUrl: 'http://legacy.local',
+      fetchImpl: () => Promise.reject(new Error('no request must be made')),
+    });
+    expect(() => backend.events.poll({ afterSequence: 0 })).toThrow(UnsupportedError);
   });
 
   it('the four block operations are routed identically by local and remote backends', async () => {

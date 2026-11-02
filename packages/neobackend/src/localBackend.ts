@@ -33,6 +33,7 @@ import {
   type PromptPlanDto,
   type ChatContextAuditResultDto,
   type ChatPromptPreviewResultDto,
+  type AppEventsPageDto,
   type ListMessageBlocksResultDto,
   type MessageBlockDto,
   type ThemeSettingsResultDto,
@@ -107,6 +108,7 @@ import type {
   GenerationApi,
   ImportsApi,
   SearchApi,
+  EventsApi,
   LorebooksApi,
   MemoriesApi,
   NeoBackend,
@@ -276,6 +278,7 @@ export class LocalBackend implements NeoBackend {
   readonly assets: AssetsApi;
   readonly imports: ImportsApi;
   readonly search: SearchApi;
+  readonly events: EventsApi;
 
   private readonly transport: LocalTransport;
   private readonly operations: ReadonlyMap<string, CompiledOperation>;
@@ -521,6 +524,9 @@ export class LocalBackend implements NeoBackend {
     this.search = {
       query: (req, opts) => this.invoke<SearchResultDto>('search.query', req, opts),
       rebuild: (opts) => this.invoke<SearchResultDto>('search.rebuild', {}, opts),
+    };
+    this.events = {
+      poll: (req, opts) => this.invoke<AppEventsPageDto>('events.poll', req ?? {}, opts),
     };
   }
 

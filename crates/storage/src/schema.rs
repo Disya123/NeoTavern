@@ -1066,6 +1066,40 @@ pub const MIGRATION_25_SQL: &str = migration_25_sql!();
 pub const MIGRATION_25_CHECKSUM: &str =
     "804246b89411308a9fa754c461167a717f48b704f3c8837f0c0dab217cdc746a";
 
+/// Literal body of the app-event log (v26) schema migration (M7 Etap-4
+/// cluster 18): the STRICT `app_events` table — one appended row per
+/// client-relevant product mutation, so any client can resume from a cursor
+/// instead of trusting an in-memory bus. `sequence` is AUTOINCREMENT, so a
+/// resumed cursor can never silently point at a recycled id; `event` carries
+/// the contract name and `payload_json` the opaque per-event fields
+/// (`chatId`, `messageId`, `runId` …). The log is bounded by retention in the
+/// writer (old rows are pruned inside the same transaction), which is why a
+/// poll also reports whether the requested cursor was already truncated.
+/// Additive; rollback is the pre-migration backup restore (ТЗ §10.4).
+macro_rules! migration_26_sql {
+    () => {
+        r#"CREATE TABLE app_events (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  event TEXT NOT NULL,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX idx_app_events_created ON app_events(created_at);"#
+    };
+}
+
+/// Name of the app-event log (v26) schema migration.
+pub const MIGRATION_26_NAME: &str = "026_app_events";
+
+/// Exact SQL of the app-event log schema migration (v26) — the
+/// `migration_26_sql!()` literal.
+pub const MIGRATION_26_SQL: &str = migration_26_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_26_SQL` string bytes (same
+/// computation as `MIGRATION_25_CHECKSUM`).
+pub const MIGRATION_26_CHECKSUM: &str =
+    "a7e28e3ac45f37c628400511015aac526d561132d45b8f6491349a8675d8d9b4";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1122,7 +1156,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_24_sql!(),
     "\n",
-    migration_25_sql!()
+    migration_25_sql!(),
+    "\n",
+    migration_26_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.
