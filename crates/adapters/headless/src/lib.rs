@@ -50,6 +50,7 @@ const MAX_CREDENTIALS: usize = 16;
 /// Usage text printed for `--help` and usage errors.
 pub const USAGE: &str = "\
 usage: neotavern-headless --root <data-root> [options]
+       neotavern-headless legacy-import --source <app.db> --root <data-root> [--activate]
        neotavern-headless --help
 
 options:
@@ -346,7 +347,11 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    match parse_args(args) {
+    let all: Vec<String> = args.into_iter().map(|a| a.as_ref().to_string()).collect();
+    if all.get(1).map(String::as_str) == Some("legacy-import") {
+        return legacy_import_run(all);
+    }
+    match parse_args(all) {
         Err(ParseError::Help) => {
             println!("neotavern-headless — Headless Kernel host (ТЗ §11.3)");
             println!("{USAGE}");
@@ -366,6 +371,124 @@ where
         },
     }
 }
+
+/// The `legacy-import` subcommand (ADR-0062, release-gate G7): a local
+/// kernel entry point for migrating a legacy `app.db` into a staged data
+/// root. Default = plan + stage + validate; `--activate` additionally runs
+/// the ADR-0041 activation (`kind: "import"`). Never an HTTP route; the
+/// remote Web Client cannot trigger it.
+fn legacy_import_run(argv: Vec<String>) -> u8 {
+    match legacy_import_parse(&argv) {
+        Err(ParseError::Help) => {
+            println!("{LEGACY_IMPORT_USAGE}");
+            EXIT_OK
+        }
+        Err(ParseError::Usage(message)) => {
+            eprintln!("neotavern-headless legacy-import: {message}");
+            eprintln!("{LEGACY_IMPORT_USAGE}");
+            EXIT_USAGE
+        }
+        Ok(options) => match legacy_import_exec(&options) {
+            Ok(()) => EXIT_OK,
+            Err(message) => {
+                eprintln!("neotavern-headless legacy-import: {message}");
+                EXIT_ERROR
+            }
+        },
+    }
+}
+
+/// `legacy-import` options.
+struct LegacyImportOptions {
+    source: PathBuf,
+    data_root: PathBuf,
+    activate: bool,
+}
+
+fn legacy_import_parse(argv: &[String]) -> Result<LegacyImportOptions, ParseError> {
+    let mut source: Option<PathBuf> = None;
+    let mut data_root: Option<PathBuf> = None;
+    let mut activate = false;
+    let mut rest = argv.iter().skip(2); // argv[0] + the subcommand
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--help" | "-h" => return Err(ParseError::Help),
+            "--source" => {
+                let value = rest
+                    .next()
+                    .ok_or_else(|| ParseError::Usage("--source requires a path".to_string()))?;
+                source = Some(PathBuf::from(value.as_str()));
+            }
+            "--root" => {
+                let value = rest
+                    .next()
+                    .ok_or_else(|| ParseError::Usage("--root requires a path".to_string()))?;
+                data_root = Some(PathBuf::from(value.as_str()));
+            }
+            "--activate" => activate = true,
+            other => {
+                return Err(ParseError::Usage(format!("unknown argument {other:?}")));
+            }
+        }
+    }
+    let source =
+        source.ok_or_else(|| ParseError::Usage("--source <app.db> is required".to_string()))?;
+    let data_root =
+        data_root.ok_or_else(|| ParseError::Usage("--root <data-root> is required".to_string()))?;
+    Ok(LegacyImportOptions {
+        source,
+        data_root,
+        activate,
+    })
+}
+
+fn legacy_import_exec(options: &LegacyImportOptions) -> Result<(), String> {
+    use neotavern_storage::legacy_import;
+
+    let staged_plan =
+        legacy_import::plan(&options.source).map_err(|err| format!("plan failed: {err}"))?;
+    for family in &staged_plan.families {
+        println!("family {} {}", family.family, family.count);
+    }
+    if !staged_plan.ready {
+        for problem in &staged_plan.problems {
+            eprintln!("problem: {problem}");
+        }
+        return Err("legacy source fails the mandatory run group; nothing staged".into());
+    }
+
+    let staged = legacy_import::stage(&options.source, &options.data_root)
+        .map_err(|err| format!("stage failed: {err}"))?;
+    let report = &staged.report;
+    println!(
+        "converted characters {} chats {} messages {} lorebooks {} presets {}",
+        report.characters, report.chats, report.messages, report.lorebooks, report.presets,
+    );
+    println!("staged {}", staged.root_id);
+
+    if options.activate {
+        let from_root = neotavern_storage::activation::active_root(&options.data_root)
+            .map_err(|err| format!("resolve active root failed: {err}"))?;
+        legacy_import::activate_staged(&options.data_root, &staged, &from_root)
+            .map_err(|err| format!("activation failed: {err}"))?;
+        println!("activated {}", staged.root_id);
+    } else {
+        println!("not activated (pass --activate after review)");
+    }
+    Ok(())
+}
+
+const LEGACY_IMPORT_USAGE: &str = "\
+usage: neotavern-headless legacy-import --source <app.db> --root <data-root> [--activate]
+
+Stages a legacy Drizzle `app.db` into a new versioned data root
+(ADR-0062, ADR-0041): plan (dry run) -> staged copy -> validation.
+The active root is never written by this command; `--activate` runs the
+activation journal (kind \"import\") only after validation passes.
+
+stdout: `family <name> <count>` per source family, `converted ...`,
+        `staged <root-id>`, then `activated <root-id>` with --activate.
+exit:   0 ok, 1 source/import failure (problems on stderr), 2 usage.";
 
 /// Opens the kernel, binds the adapter, prints `listening <addr>`, waits for
 /// stdin EOF, then drains the listener.

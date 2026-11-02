@@ -2206,9 +2206,11 @@ name = "neotavern-headless"
 version = "0.1.0"
 dependencies = [
  "contracts-generated",
+ "neotavern-storage",
  "provider-sdk",
  "remote-http-adapter",
  "runtime-kernel",
+ "rusqlite",
  "secret-store",
  "serde_json",
  "tempfile",

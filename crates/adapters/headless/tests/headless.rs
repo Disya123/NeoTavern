@@ -532,3 +532,171 @@ fn portable_wrong_passphrase_fails_startup() {
         stderr_text(&incomplete)
     );
 }
+
+// ---------------------------------------------------------------------------
+// `legacy-import` subcommand (ADR-0062, release-gate G7)
+// ---------------------------------------------------------------------------
+
+/// Builds a minimal legacy Drizzle-era `app.db` with the exact table shapes
+/// the storage converter maps (same fixture family as the storage tests).
+fn build_legacy_fixture(source: &Path) {
+    let conn = rusqlite::Connection::open(source).expect("open legacy db");
+    conn.execute_batch(
+        "CREATE TABLE characters (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, avatar TEXT,
+            ext TEXT DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE chats (
+            id TEXT PRIMARY KEY, title TEXT, character_id TEXT,
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE messages (
+            id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, role TEXT, content TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE lorebooks (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE lore_entries (
+            id TEXT PRIMARY KEY, lorebook_id TEXT NOT NULL, keys_json TEXT, secondary_keys TEXT,
+            content TEXT NOT NULL, enabled INTEGER DEFAULT 1, position INTEGER DEFAULT 0,
+            constant INTEGER DEFAULT 0, selective INTEGER DEFAULT 0, metadata TEXT DEFAULT '{}',
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE presets (
+            id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, data TEXT DEFAULT '{}',
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );",
+    )
+    .expect("create legacy tables");
+    conn.execute(
+        "INSERT INTO characters (id, name, created_at, updated_at) \
+         VALUES ('leg-c1', 'Alice', 1, 2)",
+        [],
+    )
+    .expect("seed character");
+    conn.execute(
+        "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
+         VALUES ('leg-h1', 'Chat', 'leg-c1', 3, 4)",
+        [],
+    )
+    .expect("seed chat");
+    conn.execute(
+        "INSERT INTO messages (id, chat_id, role, content, created_at) \
+         VALUES ('leg-m1', 'leg-h1', 'user', 'Hello', 5)",
+        [],
+    )
+    .expect("seed message");
+    conn.execute(
+        "INSERT INTO lorebooks (id, name, description, created_at, updated_at) \
+         VALUES ('leg-l1', 'Lore', 'd', 6, 7)",
+        [],
+    )
+    .expect("seed lorebook");
+    conn.execute(
+        "INSERT INTO presets (id, kind, name, data, created_at, updated_at) \
+         VALUES ('leg-p1', 'default', 'Preset', '{}', 8, 9)",
+        [],
+    )
+    .expect("seed preset");
+}
+
+#[test]
+fn legacy_import_stages_without_activating() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let source = dir.path().join("app.db");
+    build_legacy_fixture(&source);
+    let data_root = dir.path().join("data");
+    std::fs::create_dir_all(&data_root).expect("create data root");
+
+    let output = run_failing(&[
+        "legacy-import",
+        "--source",
+        source.to_str().expect("utf8 source"),
+        "--root",
+        data_root.to_str().expect("utf8 root"),
+    ]);
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert_eq!(exit_code(&output), 0, "stderr: {}", stderr_text(&output));
+    assert!(stdout.contains("family characters 1"), "{stdout}");
+    assert!(stdout.contains("staged import-"), "{stdout}");
+    assert!(stdout.contains("not activated"), "{stdout}");
+    assert!(
+        !data_root.join("active-root.json").exists(),
+        "staging must not activate"
+    );
+}
+
+#[test]
+fn legacy_import_activate_flips_the_pointer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let source = dir.path().join("app.db");
+    build_legacy_fixture(&source);
+    let data_root = dir.path().join("data");
+    std::fs::create_dir_all(&data_root).expect("create data root");
+
+    let output = run_failing(&[
+        "legacy-import",
+        "--source",
+        source.to_str().expect("utf8 source"),
+        "--root",
+        data_root.to_str().expect("utf8 root"),
+        "--activate",
+    ]);
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert_eq!(exit_code(&output), 0, "stderr: {}", stderr_text(&output));
+    assert!(stdout.contains("activated import-"), "{stdout}");
+    assert!(
+        data_root.join("active-root.json").exists(),
+        "activation writes the pointer"
+    );
+}
+
+#[test]
+fn legacy_import_refuses_a_source_without_the_mandatory_group() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let source = dir.path().join("app.db");
+    build_legacy_fixture(&source);
+    {
+        let conn = rusqlite::Connection::open(&source).expect("reopen source");
+        conn.execute("DROP TABLE presets", [])
+            .expect("drop presets");
+    }
+    let data_root = dir.path().join("data");
+    std::fs::create_dir_all(&data_root).expect("create data root");
+
+    let output = run_failing(&[
+        "legacy-import",
+        "--source",
+        source.to_str().expect("utf8 source"),
+        "--root",
+        data_root.to_str().expect("utf8 root"),
+    ]);
+    assert_eq!(exit_code(&output), 1);
+    assert!(
+        stderr_text(&output).contains("mandatory run group"),
+        "{}",
+        stderr_text(&output)
+    );
+    assert!(
+        !data_root.join("roots").exists(),
+        "refusal must not stage anything"
+    );
+}
+
+#[test]
+fn legacy_import_usage_requires_source_and_root() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let output = run_failing(&[
+        "legacy-import",
+        "--root",
+        dir.path().to_str().expect("utf8"),
+    ]);
+    assert_eq!(exit_code(&output), 2);
+    assert!(
+        stderr_text(&output).contains("--source"),
+        "{}",
+        stderr_text(&output)
+    );
+}

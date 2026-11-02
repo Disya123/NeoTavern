@@ -4,6 +4,18 @@
 
 ### Added
 
+- **`neotavern-headless legacy-import` — the local G7 entry point (round
+  17/40).** ADR-0062 requires the legacy `app.db` migration to be a local
+  kernel operation, never an HTTP route. The headless host now ships the
+  subcommand: plan (per-family counts printed) → staged copy into a new
+  versioned root → validation, with `--activate` running the ADR-0041 journal
+  (`kind: "import"`) only after validation passes. The active root is never
+  written by staging; a refused run group (missing mandatory family) exits 1
+  with the problems on stderr and stages nothing. Documented in the crate
+  README; four integration tests spawn the real binary (stage without
+  activation, activation flips the pointer, refusal keeps the data root
+  untouched, usage errors exit 2).
+
 - **ADR-0062 draft: legacy `app.db` import contract (round 12/40).** Row G7 of
   the release gate needs a migration that does not exist yet; the draft fixes
   its rules before code: read-only source, per-family transactions with import

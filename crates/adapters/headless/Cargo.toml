@@ -15,8 +15,11 @@ provider-sdk = { path = "../../provider-sdk" }
 remote-http-adapter = { path = "../remote-http" }
 runtime-kernel = { path = "../../runtime-kernel" }
 secret-store = { path = "../../secret-store" }
+neotavern-storage = { path = "../../storage" }
 
 [dev-dependencies]
 tempfile = "3"
+# The legacy-import fixture builds a real legacy `app.db` (Drizzle-era schema).
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
 serde_json = "1"
 contracts-generated = { path = "../../contracts-generated" }

@@ -30,6 +30,7 @@ coordinator, ТЗ §22).
 
 ```text
 neotavern-headless --root <data-root> [options]
+neotavern-headless legacy-import --source <app.db> --root <data-root> [--activate]
 ```
 
 | Flag / env                                                  | Default                 | Meaning                                                                                                                                                  |
@@ -48,6 +49,24 @@ process then waits for **stdin EOF** and drains in-flight HTTP (exit 0).
 Ctrl+C kills the process — durable generation runs recover on the next open
 (ТЗ §8.3 interrupted / recoverable terminal). Tokens never go to stdout,
 logs, or the product database.
+
+### `legacy-import` (ADR-0062, release-gate G7)
+
+A local kernel entry point for migrating a legacy Drizzle `app.db` into a
+staged versioned data root (ADR-0041). Not an HTTP route — the remote Web
+Client cannot trigger it.
+
+```text
+neotavern-headless legacy-import --source <app.db> --root <data-root> [--activate]
+```
+
+Default = plan (dry run) → staged copy → validation; the active root is never
+written. `--activate` runs the activation journal (`kind: "import"`) only after
+validation passes; a failed validation keeps the previous root active and the
+staged root on disk for inspection. stdout: `family <name> <count>` per source
+family, `converted …`, `staged <root-id>`, `activated <root-id>` with
+`--activate`. Import of legacy plugin state is intentionally deferred
+(quarantine policy, ADR-0062).
 
 ### Exit codes
 
