@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Re-run conflict detection test for the legacy import (round 20/40).** The
+  last unpinned ADR-0062 verification: staging again after the source gained
+  rows creates a new staged root whose receipts carry the new fingerprint —
+  no duplicates (runs never share a root), the previous staged root stays
+  valid, and the fingerprint change makes the source modification visible
+  instead of silently overwriting.
+
 - **`activation::rollback_to` — the G8 rollback mechanism (round 19/40).**
   After a committed import activation the data root can return to the
   retained previous root through the same durable journal stages

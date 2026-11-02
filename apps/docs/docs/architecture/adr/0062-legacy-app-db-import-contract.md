@@ -112,10 +112,14 @@ source fingerprint, target root, imported at)` — where the fingerprint is
 - The contract is implemented as `neotavern_storage::legacy_import`
   (`plan` / `stage` / `validate_staged` / `activate_staged`) on top of the
   existing `convert_legacy` converter and the ADR-0041 journal.
-- G7 verification becomes four tests, not a manual ritual: dry-run plan on an
-  ST-era fixture, re-run idempotency inside the staged root, failed validation
-  leaves the active root and its journal untouched, and a passing run flips
-  `active-root.json` with a `kind: "import"` journal entry.
+- G7 verification is four tests, not a manual ritual (all pinned in
+  `crates/storage/tests/migration.rs`): dry-run plan counts families and
+  writes nothing, a re-run after a changed source makes a NEW staged root
+  with a different fingerprint (no duplicates, previous root untouched —
+  runs never share a root, so idempotency holds by construction and conflicts
+  are visible), a refused run group leaves the active root and journal
+  untouched, and a passing run flips `active-root.json` with a
+  `kind: "import"` journal entry.
 - G6 evidence can finally be produced from real user data, which is what the
   Packaged rows are supposed to mean.
 - Cost: two extra passes (plan, then commit) and a snapshot copy for large

@@ -1553,3 +1553,64 @@ fn rollback_refuses_a_missing_target_and_keeps_the_pointer() {
         .expect("pointer exists");
     assert_eq!(pointer.root, staged.staged_root, "pointer untouched");
 }
+
+/// A re-run after the source changed is a NEW staged root whose receipts carry
+/// the new fingerprint: no duplicates anywhere, the previous staged root is
+/// untouched, and the changed source is a detectable conflict (different
+/// fingerprint), never a silent overwrite.
+#[test]
+fn legacy_import_rerun_after_a_source_change_makes_a_new_root() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+
+    let first = plan(&source).expect("plan");
+    let first_fp = first
+        .families
+        .iter()
+        .find(|f| f.family == "characters")
+        .map(|f| f.fingerprint.clone())
+        .expect("characters fingerprint");
+
+    let run_one = stage(&source, &data_root).expect("first stage");
+
+    // The source gains a character between runs.
+    {
+        let conn = rusqlite::Connection::open(&source).expect("reopen source");
+        conn.execute(
+            "INSERT INTO characters (id, name, created_at, updated_at) \
+             VALUES ('leg-c3', 'Carol', 1700000020000, 1700000021000)",
+            [],
+        )
+        .expect("add character");
+    }
+
+    let second = plan(&source).expect("plan after change");
+    assert!(
+        second.ready,
+        "an added character is not a refusal: {:?}",
+        second.problems
+    );
+    let second_fp = second
+        .families
+        .iter()
+        .find(|f| f.family == "characters")
+        .map(|f| f.fingerprint.clone())
+        .expect("characters fingerprint after change");
+    assert_ne!(
+        first_fp, second_fp,
+        "a changed source must plan with a different fingerprint"
+    );
+
+    let run_two = stage(&source, &data_root).expect("second stage");
+    assert_ne!(run_one.root_id, run_two.root_id, "runs never share a root");
+    assert_eq!(run_two.report.characters, 3, "the new row is included");
+    validate_staged(&run_two).expect("second staged root validates");
+    validate_staged(&run_one).expect("first staged root is untouched and still valid");
+    assert!(
+        !data_root.join(ACTIVE_ROOT_FILE).exists(),
+        "re-staging must not activate anything"
+    );
+}
