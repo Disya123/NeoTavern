@@ -4,6 +4,14 @@
 
 ### Added
 
+- **`neotavern-headless legacy-rollback` — the G8 operator command (round
+  21/40).** Completes the import/rollback loop over the real binary: returns
+  the data root to the retained previous root (newest inactive root under
+  `roots/`, or `--to <path>`) through the activation journal
+  (`kind: "rollback"`). Backed by the new `activation::previous_root` helper;
+  three integration tests cover the two-activation rollback round-trip, the
+  refusal when nothing is retained, and the usage contract.
+
 - **Re-run conflict detection test for the legacy import (round 20/40).** The
   last unpinned ADR-0062 verification: staging again after the source gained
   rows creates a new staged root whose receipts carry the new fingerprint —

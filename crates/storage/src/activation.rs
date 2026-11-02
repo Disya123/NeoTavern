@@ -729,6 +729,29 @@ pub fn prune_previous_roots(data_root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The newest retained inactive root — the default rollback target (mirror of
+/// the retention rule [`prune_previous_roots`] applies). `None` when every
+/// root directory is active or none exist (v1 flat layout).
+pub fn previous_root(data_root: &Path) -> Result<Option<PathBuf>> {
+    let active = read_pointer(data_root)?.map(|pointer| pointer.root);
+    let roots = roots_dir(data_root);
+    let Ok(entries) = fs::read_dir(&roots) else {
+        return Ok(None);
+    };
+    let mut candidates: Vec<PathBuf> = entries
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|p| {
+            p.is_dir()
+                && Some(p) != active.as_ref()
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with(ROOT_DIR_PREFIX))
+        })
+        .collect();
+    candidates.sort();
+    Ok(candidates.pop())
+}
+
 /// Parses one journal entry object. `format_version` selects the root
 /// encoding: v1 stores absolute paths, v2+ stores portable relative
 /// references resolved against `data_root`.

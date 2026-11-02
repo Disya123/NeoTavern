@@ -700,3 +700,111 @@ fn legacy_import_usage_requires_source_and_root() {
         stderr_text(&output)
     );
 }
+
+// ---------------------------------------------------------------------------
+// `legacy-rollback` subcommand (ADR-0062, release-gate G8)
+// ---------------------------------------------------------------------------
+
+/// The `root` reference from the active-root pointer (the whole JSON also
+/// carries `activatedAt`, which changes on every write — compare the target).
+fn pointer_root(data_root: &Path) -> String {
+    let text = std::fs::read_to_string(data_root.join("active-root.json")).expect("read pointer");
+    let value: serde_json::Value = serde_json::from_str(&text).expect("pointer is JSON");
+    value["root"]
+        .as_str()
+        .expect("root is a string")
+        .to_string()
+}
+
+/// With two committed import activations there is one retained previous root;
+/// `legacy-rollback` returns the pointer to it through the journal, and the
+/// root reference matches the first activation's again.
+#[test]
+fn legacy_rollback_returns_to_the_retained_previous_root() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let source = dir.path().join("app.db");
+    build_legacy_fixture(&source);
+    let data_root = dir.path().join("data");
+    std::fs::create_dir_all(&data_root).expect("create data root");
+    let source_arg = source.to_str().expect("utf8 source");
+    let root_arg = data_root.to_str().expect("utf8 root");
+
+    let first = run_failing(&[
+        "legacy-import",
+        "--source",
+        source_arg,
+        "--root",
+        root_arg,
+        "--activate",
+    ]);
+    assert_eq!(exit_code(&first), 0, "{}", stderr_text(&first));
+    let root_after_first = pointer_root(&data_root);
+
+    let second = run_failing(&[
+        "legacy-import",
+        "--source",
+        source_arg,
+        "--root",
+        root_arg,
+        "--activate",
+    ]);
+    assert_eq!(exit_code(&second), 0, "{}", stderr_text(&second));
+    assert_ne!(
+        pointer_root(&data_root),
+        root_after_first,
+        "the second activation moves the pointer"
+    );
+
+    let rollback = run_failing(&["legacy-rollback", "--root", root_arg]);
+    let stdout = String::from_utf8_lossy(&rollback.stdout).into_owned();
+    assert_eq!(exit_code(&rollback), 0, "{}", stderr_text(&rollback));
+    assert!(stdout.contains("rolled back to"), "{stdout}");
+    assert_eq!(
+        pointer_root(&data_root),
+        root_after_first,
+        "the previous root is active again"
+    );
+}
+
+/// With every staged root active (a single import activation) there is no
+/// retained previous root and the rollback refuses without moving anything.
+#[test]
+fn legacy_rollback_without_a_retained_root_fails() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let source = dir.path().join("app.db");
+    build_legacy_fixture(&source);
+    let data_root = dir.path().join("data");
+    std::fs::create_dir_all(&data_root).expect("create data root");
+    let root_arg = data_root.to_str().expect("utf8 root");
+
+    let activate = run_failing(&[
+        "legacy-import",
+        "--source",
+        source.to_str().expect("utf8 source"),
+        "--root",
+        root_arg,
+        "--activate",
+    ]);
+    assert_eq!(exit_code(&activate), 0, "{}", stderr_text(&activate));
+    let before = pointer_root(&data_root);
+
+    let rollback = run_failing(&["legacy-rollback", "--root", root_arg]);
+    assert_eq!(exit_code(&rollback), 1);
+    assert!(
+        stderr_text(&rollback).contains("no retained previous root"),
+        "{}",
+        stderr_text(&rollback)
+    );
+    assert_eq!(pointer_root(&data_root), before, "pointer untouched");
+}
+
+#[test]
+fn legacy_rollback_usage_requires_root() {
+    let output = run_failing(&["legacy-rollback"]);
+    assert_eq!(exit_code(&output), 2);
+    assert!(
+        stderr_text(&output).contains("--root"),
+        "{}",
+        stderr_text(&output)
+    );
+}

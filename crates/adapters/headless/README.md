@@ -31,6 +31,7 @@ coordinator, ТЗ §22).
 ```text
 neotavern-headless --root <data-root> [options]
 neotavern-headless legacy-import --source <app.db> --root <data-root> [--activate]
+neotavern-headless legacy-rollback --root <data-root> [--to <path>]
 ```
 
 | Flag / env                                                  | Default                 | Meaning                                                                                                                                                  |
@@ -67,6 +68,15 @@ staged root on disk for inspection. stdout: `family <name> <count>` per source
 family, `converted …`, `staged <root-id>`, `activated <root-id>` with
 `--activate`. Import of legacy plugin state is intentionally deferred
 (quarantine policy, ADR-0062).
+
+### `legacy-rollback` (ADR-0062, release-gate G8)
+
+Returns the data root to the retained previous root — by default the newest
+inactive root under `roots/` (`activation::previous_root`), or the path given
+by `--to` — through the activation journal (`kind: "rollback"`). The
+rolled-back-from root stays on disk, so the switch is itself reversible.
+stdout: `rolled back to <path>`; exit 1 when no retained previous root exists
+or the rollback fails; exit 2 on usage errors.
 
 ### Exit codes
 

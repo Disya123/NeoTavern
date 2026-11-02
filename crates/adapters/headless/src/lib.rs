@@ -51,6 +51,7 @@ const MAX_CREDENTIALS: usize = 16;
 pub const USAGE: &str = "\
 usage: neotavern-headless --root <data-root> [options]
        neotavern-headless legacy-import --source <app.db> --root <data-root> [--activate]
+       neotavern-headless legacy-rollback --root <data-root> [--to <path>]
        neotavern-headless --help
 
 options:
@@ -348,8 +349,10 @@ where
     S: AsRef<str>,
 {
     let all: Vec<String> = args.into_iter().map(|a| a.as_ref().to_string()).collect();
-    if all.get(1).map(String::as_str) == Some("legacy-import") {
-        return legacy_import_run(all);
+    match all.get(1).map(String::as_str) {
+        Some("legacy-import") => return legacy_import_run(all),
+        Some("legacy-rollback") => return legacy_rollback_run(all),
+        _ => {}
     }
     match parse_args(all) {
         Err(ParseError::Help) => {
@@ -490,6 +493,89 @@ stdout: `family <name> <count>` per source family, `converted ...`,
         `staged <root-id>`, then `activated <root-id>` with --activate.
 exit:   0 ok, 1 source/import failure (problems on stderr), 2 usage.";
 
+/// The `legacy-rollback` subcommand (ADR-0062, release-gate G8): return the
+/// data root to the retained previous root through the activation journal.
+fn legacy_rollback_run(argv: Vec<String>) -> u8 {
+    match legacy_rollback_parse(&argv) {
+        Err(ParseError::Help) => {
+            println!("{LEGACY_ROLLBACK_USAGE}");
+            EXIT_OK
+        }
+        Err(ParseError::Usage(message)) => {
+            eprintln!("neotavern-headless legacy-rollback: {message}");
+            eprintln!("{LEGACY_ROLLBACK_USAGE}");
+            EXIT_USAGE
+        }
+        Ok(options) => match legacy_rollback_exec(&options) {
+            Ok(()) => EXIT_OK,
+            Err(message) => {
+                eprintln!("neotavern-headless legacy-rollback: {message}");
+                EXIT_ERROR
+            }
+        },
+    }
+}
+
+/// `legacy-rollback` options.
+struct LegacyRollbackOptions {
+    data_root: PathBuf,
+    to: Option<PathBuf>,
+}
+
+fn legacy_rollback_parse(argv: &[String]) -> Result<LegacyRollbackOptions, ParseError> {
+    let mut data_root: Option<PathBuf> = None;
+    let mut to: Option<PathBuf> = None;
+    let mut rest = argv.iter().skip(2); // argv[0] + the subcommand
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--help" | "-h" => return Err(ParseError::Help),
+            "--root" => {
+                let value = rest
+                    .next()
+                    .ok_or_else(|| ParseError::Usage("--root requires a path".to_string()))?;
+                data_root = Some(PathBuf::from(value.as_str()));
+            }
+            "--to" => {
+                let value = rest
+                    .next()
+                    .ok_or_else(|| ParseError::Usage("--to requires a path".to_string()))?;
+                to = Some(PathBuf::from(value.as_str()));
+            }
+            other => {
+                return Err(ParseError::Usage(format!("unknown argument {other:?}")));
+            }
+        }
+    }
+    let data_root =
+        data_root.ok_or_else(|| ParseError::Usage("--root <data-root> is required".to_string()))?;
+    Ok(LegacyRollbackOptions { data_root, to })
+}
+
+fn legacy_rollback_exec(options: &LegacyRollbackOptions) -> Result<(), String> {
+    use neotavern_storage::activation;
+
+    let target = match &options.to {
+        Some(path) => path.clone(),
+        None => activation::previous_root(&options.data_root)
+            .map_err(|err| format!("scan retained roots failed: {err}"))?
+            .ok_or_else(|| "no retained previous root to roll back to".to_string())?,
+    };
+    activation::rollback_to(&options.data_root, &target)
+        .map_err(|err| format!("rollback failed: {err}"))?;
+    println!("rolled back to {}", target.display());
+    Ok(())
+}
+
+const LEGACY_ROLLBACK_USAGE: &str = "\
+usage: neotavern-headless legacy-rollback --root <data-root> [--to <path>]
+
+Returns the data root to the retained previous root (default: the newest
+inactive root under roots/, or the path given by --to) through the activation
+journal (kind \"rollback\", ADR-0041/0062). The rolled-back-from root stays on
+disk, so the switch is itself reversible.
+
+stdout: `rolled back to <path>`.
+exit:   0 ok, 1 no retained root / rollback failure, 2 usage.";
 /// Opens the kernel, binds the adapter, prints `listening <addr>`, waits for
 /// stdin EOF, then drains the listener.
 pub fn serve(config: HeadlessConfig) -> Result<(), String> {
