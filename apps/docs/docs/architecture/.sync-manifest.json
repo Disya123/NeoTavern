@@ -380,7 +380,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "b163834c58e59f2529ac5fc52c82203ed0eaa2c3465adab59fdc4a3b61a8cfe8"
+      "sha256": "b6cc42e4b7f5c57857958d8d66cc06aaccc1abbd15923b3080688b628f4fd2ac"
     },
     {
       "source": "architecture/resource-containment.md",

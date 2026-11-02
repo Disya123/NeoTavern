@@ -117,7 +117,7 @@ fn host_executor_completes_the_safe_tool_round_trip() {
 
     // The host registers the declarative contract AND the effect executor.
     host.register_tool(serde_json::json!({
-        "id": "app.now",
+        "id": "app-now",
         "name": "app_now",
         "description": "Return the current UTC date and time.",
         "inputSchema": { "type": "object" },
@@ -189,7 +189,7 @@ fn without_an_executor_the_run_stays_durably_waiting() {
 
     // Tool contract registered, NO executor — the pre-slice behavior.
     host.register_tool(serde_json::json!({
-        "id": "app.now",
+        "id": "app-now",
         "name": "app_now",
         "description": "Return the current UTC date and time.",
         "inputSchema": { "type": "object" },
@@ -225,4 +225,43 @@ fn without_an_executor_the_run_stays_durably_waiting() {
         serde_json::json!("waiting_for_tool"),
         "{run}"
     );
+}
+
+/// The registration seam must enforce the `wire.tool.spec` contract (the
+/// packaged-smoke round 22 defect): an id with a dot deserializes into the
+/// generated DTO fine but violates the TypeBox pattern, and before the seam
+/// check it detonated only later, inside `generation.tools.list` result
+/// validation (`items[0]/id` StringPattern).
+#[test]
+fn register_tool_refuses_ids_that_violate_the_contract_pattern() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let host = open_host(&dir);
+
+    let refused = host.register_tool(serde_json::json!({
+        "id": "app.now",
+        "name": "app_now",
+        "description": "Return the current UTC date and time.",
+        "inputSchema": { "type": "object" },
+    }));
+    let message = refused.expect_err("a dotted id must be refused at the seam");
+    assert!(message.contains("violates the contract"), "{message}");
+
+    host.register_tool(serde_json::json!({
+        "id": "app-now",
+        "name": "app_now",
+        "description": "Return the current UTC date and time.",
+        "inputSchema": { "type": "object" },
+    }))
+    .expect("a pattern-valid id registers");
+
+    let request = build_request_envelope("generation.tools.list", serde_json::json!({}), REQ_ID);
+    let body = host
+        .dispatch_envelope(&request)
+        .expect("transport accepts the envelope");
+    let envelope: serde_json::Value = serde_json::from_slice(&body).expect("response is JSON");
+    let items = envelope["result"]["items"]
+        .as_array()
+        .expect("tools.list returns items");
+    assert_eq!(items.len(), 1, "only the valid contract is registered");
+    assert_eq!(items[0]["id"], serde_json::json!("app-now"));
 }

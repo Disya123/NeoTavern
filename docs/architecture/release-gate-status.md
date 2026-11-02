@@ -21,14 +21,14 @@ capability matrix (`docs/capability-matrix.json`, generated), [cutover registry]
 
 ## Not satisfied
 
-| Row                                                                                 | Condition                                                              | What is actually missing                                                                                                                                                                                                           | Status                     |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| G6                                                                                  | Every mandatory Desktop capability `Packaged` in the capability matrix | 0 of 43 rows are `Packaged` on desktop; 30 `Integrated`, 8 `Implemented`. Promotion needs packaged-artifact evidence, which this environment cannot produce.                                                                       | **FAIL**                   |
-| G7                                                                                  | `app.db` → `database.sqlite` migration verified on packaged artifacts  | No importer exists in the Kernel at all (`git grep app.db` hits only docs). A migration harness has to be built from scratch — its contract is drafted in                                                                          |
-| [ADR-0062](../adr/0062-legacy-app-db-import-contract.md) before it can be verified. | **FAIL**                                                               |
-| G8                                                                                  | Rollback verified                                                      | `activation::rollback_to` (round 19) journals `kind: "rollback"` through the same durable stages and repoints `active-root.json`; journal-level tests PASS. Still FAIL as defined: verification must happen ON PACKAGED ARTIFACTS. | **FAIL** (mechanism ready) |
-| G9                                                                                  | Playwright E2E on the packaged build                                   | Not run in any round of this program.                                                                                                                                                                                              | **FAIL**                   |
-| G10                                                                                 | Accessibility (WCAG 2.2 AA) and visual regression gates                | Not run in any round of this program.                                                                                                                                                                                              | **FAIL**                   |
+| Row                                                                                 | Condition                                                             | What is actually missing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Status                                              |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| G6                                                                                  | Capability matrix to Packaged                                         | First packaged release build produced on the branch (round 22, `tauri build --no-bundle`, 2m56s release profile) and the packaged kernel boots: the shell smoke ran the golden path (meta/characters/backups/list, a deterministic generation saved, a tool round trip). The smoke ALSO caught a real packaged-only defect (the host built-in tool id `app.now` violated the `wire.tool.spec` pattern; fixed to `app-now` with a seam-level contract check), then passed. Matrix rows still need per-capability evidence on the portable bundle. | **FAIL** (pipeline works; evidence per row pending) |
+| G7                                                                                  | `app.db` → `database.sqlite` migration verified on packaged artifacts | No importer exists in the Kernel at all (`git grep app.db` hits only docs). A migration harness has to be built from scratch — its contract is drafted in                                                                                                                                                                                                                                                                                                                                                                                        |
+| [ADR-0062](../adr/0062-legacy-app-db-import-contract.md) before it can be verified. | **FAIL**                                                              |
+| G8                                                                                  | Rollback verified                                                     | `activation::rollback_to` (round 19) journals `kind: "rollback"` through the same durable stages and repoints `active-root.json`; journal-level tests PASS. Still FAIL as defined: verification must happen ON PACKAGED ARTIFACTS.                                                                                                                                                                                                                                                                                                               | **FAIL** (mechanism ready)                          |
+| G9                                                                                  | Playwright E2E on the packaged build                                  | Not run in any round of this program.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | **FAIL**                                            |
+| G10                                                                                 | Accessibility (WCAG 2.2 AA) and visual regression gates               | Not run in any round of this program.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | **FAIL**                                            |
 
 ## Consequence
 
@@ -41,24 +41,30 @@ public default and the Kernel stays an explicit Preview
 
 ## Next step order
 
-G7 is the keystone: it is the only row that unblocks two others (G8 rollback
-needs a migration to roll back from; G6 Packaged needs a dataset that came
-through it). So the next slices, in order:
+Rounds 16–21 built the migration plane the older version of this list called
+"the keystone": the `import_receipts` ledger (schema v31), the staged-root
+import lifecycle `legacy_import::{plan,stage,validate_staged,activate_staged}`
+(ADR-0062), the operator CLI `neotavern-headless legacy-import` /
+`legacy-rollback`, and the durable rollback mechanism
+`activation::rollback_to` — all journal-level tested. What remains, in order:
 
-1. **G7 harness** — a Kernel-side reader for the legacy `app.db` shape
-   (Drizzle tables: characters, chats, messages, presets, lorebooks, personas,
-   settings, plugins, asset metadata) that copies rows into `database.sqlite`
-   inside one transaction per entity family, with a dry-run mode that reports
-   counts and refuses on unknown columns. The source is opened read-only and
-   never written back (ADR-0038: no dual-write).
-2. **G7 verification** — fixtures seeded from a realistic ST-era `app.db`, a
-   re-run test (importing twice creates no duplicates, AGENTS §11) and a
-   rollback test that restores the pre-import `database.sqlite` snapshot.
-3. **G6 evidence** — a packaged desktop build launched on the imported dataset,
-   with capability rows promoted only by observed behaviour.
-4. **G9/G10** — Playwright E2E, a11y and visual gates on that packaged build.
+1. **Packaged build (stream 2 keystone).** A release desktop build must exist
+   and boot kernel-mode with its local database (the
+   `desktop:shell-smoke` protocol: `NEOTA_DESKTOP_SMOKE=1 NEOTA_KERNEL=1`,
+   exit 0, `database.sqlite` created). Every G6 row and the packaged halves
+   of G7/G8 evidence hang on this artifact; G9/G10 need the same build to run
+   their Playwright/a11y/visual suites against.
+2. **G6 evidence** — the capability matrix rows promoted to Packaged only by
+   observed behaviour on that build, with the imported dataset in place.
+3. **G7/G8 packaged halves** — the import/rollback flow executed ON the
+   packaged artifact (Desktop host command over the storage plane; the CLI
+   covers headless only), then the matrix rows.
+4. **G9/G10** — Playwright E2E, a11y and visual gates on the packaged build.
+5. **Largest remaining wire-gap** — row 10 (SillyTavern backup import): the
+   ADR-0061 transport exists (`assets.upload.*`), the kernel importer is a
+   multi-round port of the legacy analyzer (11 categories, conflicts, aborts).
 
 Until then nothing in this list is "done", and the sidecar stays the default.
-Deleting `fastify`/`drizzle`/`api/v2` is the last step of the same gate: it can
-only happen when the legacy plane is provably unnecessary, which is exactly what
-G6–G8 measure.
+Deleting `fastify`/`drizzle`/`api/v2` is the last step of the same gate: it
+can only happen when the legacy plane is provably unnecessary, which is exactly
+what G6–G8 measure.

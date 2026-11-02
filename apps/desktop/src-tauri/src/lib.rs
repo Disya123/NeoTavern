@@ -574,7 +574,7 @@ fn setup_local_kernel_mode(
     // built-in executor that resumes waiting runs automatically.
     host.set_tool_executor(Some(Arc::new(neotavern_host_tools::BuiltinToolExecutor)));
     host.register_tool(serde_json::json!({
-        "id": "app.now",
+        "id": "app-now",
         "name": "app_now",
         "description": "Return the current UTC date and time.",
         "inputSchema": { "type": "object" },
@@ -892,8 +892,16 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         return Err(format!("tool run did not wait: {tool_run}"));
     }
     let tools = dispatch_ok(&host, "generation.tools.list", serde_json::json!({}))?;
-    if tools["items"].as_array().map(|items| items.len()) != Some(1) {
-        return Err(format!("tools.list must serve one contract: {tools}"));
+    let tool_ids: Vec<&str> = tools["items"]
+        .as_array()
+        .map(|items| items.iter().filter_map(|t| t["id"].as_str()).collect())
+        .unwrap_or_default();
+    // The host registers its built-in `app-now` clock contract at startup
+    // (M5 slice 57); the smoke adds exactly one more.
+    if tool_ids != ["app-now", "lookup-weather"] {
+        return Err(format!(
+            "tools.list must serve the built-in plus the smoke contract: {tools}"
+        ));
     }
     let events = dispatch_ok(
         &host,

@@ -384,12 +384,26 @@ impl KernelHost {
 
     /// Registers a declarative tool contract (`wire.tool.spec`) with the
     /// shared kernel — the host-side seam for `Kernel::register_tool`
-    /// (Этап 2.7). Deserialization into the generated DTO validates the spec;
-    /// a malformed spec is an IPC-level error, never a kernel write. The
-    /// registry is in-memory per kernel: hosts re-register after restart.
+    /// (Этап 2.7). The spec is validated against the wire contract BEFORE it
+    /// reaches the registry (deserialization into the generated DTO alone
+    /// does NOT enforce the TypeBox patterns — an id like `app.now` must be
+    /// refused here, at the IPC seam, instead of detonating later inside
+    /// `generation.tools.list` result validation).
     pub fn register_tool(&self, spec: serde_json::Value) -> Result<(), String> {
         let spec: ToolSpec =
             serde_json::from_value(spec).map_err(|e| format!("invalid wire.tool.spec: {e}"))?;
+        let spec_value = serde_json::to_value(&spec)
+            .map_err(|e| format!("spec re-serialization failed: {e}"))?;
+        contracts_generated::generated::validate_tool_spec(&spec_value).map_err(|issues| {
+            format!(
+                "wire.tool.spec violates the contract: {}",
+                issues
+                    .iter()
+                    .map(|issue| format!("{}: {}", issue.path, issue.rule))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )
+        })?;
         let guard = self
             .kernel
             .lock()

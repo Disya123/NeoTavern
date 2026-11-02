@@ -730,7 +730,7 @@ fn host_executor_completes_the_safe_tool_round_trip_over_sse() {
 
     let server = spawn_seeded_server();
     let spec: gen::ToolSpec = serde_json::from_value(json!({
-        "id": "app.now",
+        "id": "app-now",
         "name": "app_now",
         "description": "Return the current UTC date and time.",
         "inputSchema": { "type": "object" },

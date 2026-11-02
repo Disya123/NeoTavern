@@ -951,6 +951,968 @@
 
 ### Fixed
 
+- **Desktop: the built-in `app.now` tool id now satisfies the `wire.tool.spec`
+  contract (round 22/40).** The first packaged release build's shell smoke
+  caught a packaged-only defect: the host registered its clock tool with the
+  id `app.now`, whose dot violates the contract pattern
+  (`^[a-z][a-z0-9-]{1,63}# Changelog
+
+## Unreleased
+
+### Added
+
+- **`neotavern-headless legacy-rollback` — the G8 operator command (round
+  21/40).** Completes the import/rollback loop over the real binary: returns
+  the data root to the retained previous root (newest inactive root under
+  `roots/`, or `--to <path>`) through the activation journal
+  (`kind: "rollback"`). Backed by the new `activation::previous_root` helper;
+  three integration tests cover the two-activation rollback round-trip, the
+  refusal when nothing is retained, and the usage contract.
+
+- **Re-run conflict detection test for the legacy import (round 20/40).** The
+  last unpinned ADR-0062 verification: staging again after the source gained
+  rows creates a new staged root whose receipts carry the new fingerprint —
+  no duplicates (runs never share a root), the previous staged root stays
+  valid, and the fingerprint change makes the source modification visible
+  instead of silently overwriting.
+
+- **`activation::rollback_to` — the G8 rollback mechanism (round 19/40).**
+  After a committed import activation the data root can return to the
+  retained previous root through the same durable journal stages
+  (`kind: "rollback"`, `prepared -> committed`); the rolled-back-from root
+  stays on disk, so the switch is itself reversible. Refuses a target without
+  a database (`IntegrityViolation`) and rolling back to the already-active
+  root (`Conflict`). Two journal-level tests pin the flow; packaged-artifact
+  verification (the actual G8 gate row) stays open.
+
+- **`neotavern-headless legacy-import` — the local G7 entry point (round
+  17/40).** ADR-0062 requires the legacy `app.db` migration to be a local
+  kernel operation, never an HTTP route. The headless host now ships the
+  subcommand: plan (per-family counts printed) → staged copy into a new
+  versioned root → validation, with `--activate` running the ADR-0041 journal
+  (`kind: "import"`) only after validation passes. The active root is never
+  written by staging; a refused run group (missing mandatory family) exits 1
+  with the problems on stderr and stages nothing. Documented in the crate
+  README; four integration tests spawn the real binary (stage without
+  activation, activation flips the pointer, refusal keeps the data root
+  untouched, usage errors exit 2).
+
+- **ADR-0062 draft: legacy `app.db` import contract (round 12/40).** Row G7 of
+  the release gate needs a migration that does not exist yet; the draft fixes
+  its rules before code: read-only source, per-family transactions with import
+  receipts (so a second run is idempotent and a changed row is a conflict, not
+  an overwrite), dry-run by default with a hard refusal on unknown columns,
+  rollback via a `database.sqlite` snapshot instead of an inverse script, asset
+  bytes through the existing asset plane, legacy plugin state as opaque blobs
+  and plugin code discarded (ADR-0059).
+
+- **Release gate status page (round 10/40).** The Kernel default switch has
+  five verified rows — clippy `-D warnings`, `pnpm format:check`, the
+  no-silent-fallbacks gate, the 51-site legacy audit and wire codegen — and
+  five that cannot pass here: zero of 43 Desktop capabilities are `Packaged`,
+  no `app.db` → `database.sqlite` importer exists, rollback therefore cannot be
+  verified, and Playwright E2E plus a11y/visual gates were never run in this
+  program. Recorded in
+  [release-gate-status.md](docs/architecture/release-gate-status.md) so the
+  remaining work is a checklist with commands, not an intention.
+
+- **"No silent fallbacks" gate for the kernel plane (round 6/40 of the
+  legacy-removal goal).** Release-gate item 4 asks for the absence of silent
+  fallbacks; until now it was a review habit, not a check. `pnpm ui:fallback:check`
+  (`scripts/check-kernel-empty.mjs`) now audits every `if (isKernelMode())` branch
+  and requires one of three outcomes: a backend call, a fail-closed
+  `UnsupportedError`, or a colocated `// kernel-empty: <reason>` marker. The
+  classifier is AST-based (TypeScript compiler API) because a textual scan
+  misreads negated guards, ternaries, thrown closures and
+  `new UnsupportedError(...)`. Three honest empty branches were found and
+  registered in place: the local auth session, `wallpaperBackgroundUrl` and
+  `themeUserCssUrl` (the kernel has no remote-token session and no URL surface).
+  The gate runs in CI next to the legacy-surface gate.
+  Docs: new [kernel-empty-branches.md](docs/architecture/kernel-empty-branches.md).
+  Tests: 8 classifier fixtures (`scripts/check-kernel-empty.test.mjs`).
+
+- **Explicit host-surface boundary for the plugin host (round 5/40 of the
+  legacy-removal goal).** The seven plugin-host capabilities the web contour
+  needs but Product Wire deliberately does not model — package install
+  verification, Git install, safe-mode enter/exit and the three OAuth
+  connection calls — moved out of the transport module into
+  `apps/web/src/api/hostSurfaces.ts`, where `HOST_SURFACES` states for each one
+  its legacy route, why it is host-owned and what stage 6 must replace it with.
+  Behaviour is unchanged on the legacy plane and stays fail-closed on the kernel
+  plane (`UnsupportedError` whose `feature` is the registry id, no network call),
+  but the boundary can no longer drift: the id, the error and the table row are
+  the same string, and a test pins the registry id set to the exported calls.
+  `wireBridge` re-exports the functions so existing importers are untouched.
+  The legacy audit also closed a real hole: pnpm ui:api:check only matched literal
+  /api/v2 routes and legacyRaw() helpers, so plugin-host calls (whose prefix
+  the shared client injects) were never counted. It now has a third kind,
+  host-surface, and the baseline grew from 44 to 51 audited sites because those
+  calls became visible � an audit closure, not a regression.
+  Docs: new [host-surface-boundary.md](docs/architecture/host-surface-boundary.md),
+  cutover registry rows 19/20/21a now point at it. Tests: 15 new cases
+  (`apps/web/src/api/hostSurfaces.test.ts`) covering the registry invariants, the
+  kernel-plane refusals and the legacy routes/methods.
+
+- **Chat wallpapers on the kernel plane (round 4/40 of the legacy-removal
+  goal).** The backgrounds cluster is flipped from the sidecar filesystem
+  contour to the canonical asset plane, and the wallpaper becomes product data:
+  `wire.chat.dto` carries an optional `backgroundAssetId` and `chats.update`
+  accepts it together with the explicit `clearBackground` flag (the wire has no
+  nullable fields, so `null` cannot mean "unset"; setting and clearing at once
+  is `CONTRACT_VIOLATION`). The kernel validates the reference —
+  `ASSET_NOT_FOUND` for an unknown id, `CONTRACT_VIOLATION` when the asset is
+  not kind `background` — so the panel catalog and the chat field cannot
+  disagree. New schema migration **v30** adds nullable
+  `chats.background_asset_id` with no foreign key; `assets.delete` detaches
+  every chat reference itself, so deleting an asset never fails on a reference.
+  UI: `useBackgrounds` lists `assets.list({kind:"background"})`,
+  `useUploadBackground` stages `assets.upload.begin`/`append`/`finish` in
+  bounded chunks (the legacy 25 MiB multipart cap is gone),
+  `useDeleteBackground` calls `assets.delete`, the wallpaper renders from
+  `assets.content` as a data URL, grid previews come from `assets.thumb` (now
+  also on the facade: `backend.assets.thumb(assetId, maxPx)`), and the panel
+  preview became a per-card component so a catalog never pulls originals.
+  Tests: 4 new kernel tests (`crates/runtime-kernel/tests/chat_background.rs`:
+  attach/round-trip, clear-only unset + conflict, kind validation + unknown
+  asset, delete detaches) and the fixture-less hooks suite grew kernel cases for
+  catalog/upload/delete/wallpaper URL. Contract hash `92ed6a1c...`; registry
+  stays **143 ops** (additive fields and one facade method on existing ops).
+
+- **Asset catalog on the kernel plane (round 3/40 of the legacy-removal goal).**
+  One new wire op, `assets.list`: newest-first enumeration of the content
+  catalogue with an optional `kind` filter and the shared opaque keyset cursor
+  (`limit` 1–200, default 50). It is the missing half of the ingestion
+  contract from round 2 — `assets.upload.*`/\`assets.put` can now publish a
+  wallpaper or a gallery image AND the UI can enumerate what was published,
+  without a per-feature store. Feature collections become `kind` conventions
+  (`background`, `gallery`, `plugin-blob`), which is what lets clusters 10,
+  13, 20 and 21a drop their legacy file contours in the following rounds.
+  Kernel: `crates/runtime-kernel/src/assets.rs::assets_list` (kind + cursor
+  predicates, one-row probe, malformed cursor → `CONTRACT_VIOLATION`); the
+  shared cursor helpers in `product.rs` became crate-visible instead of being
+  duplicated. Facade: `backend.assets.list` (local and remote implemented,
+  legacy keeps `UnsupportedError`). Contract hash `8e1b5470...`; registry
+  **143 ops**. Tests: 4 new kernel tests
+  (`crates/runtime-kernel/tests/asset_catalog.rs`: kind isolation, ordering,
+  cursor paging without gaps/repeats, malformed cursor, delete leaves the
+  catalog) and a new neobackend parity test.
+  Honest boundary: the consumer flip (wallpaper panel reads the catalog and
+  uploads through `assets.upload.*`) is the next round — the legacy
+  `/backgrounds/*` routes still serve the UI today.
+
+- **Chunked upload as the large-file ingestion contract (M7 Etap-4 slice; round
+  2/40 of the legacy-removal goal).** Four wire operations let any client send a
+  file larger than the 1 MiB request cap without a second transport:
+  `assets.upload.begin` (reserves an id, returns `chunkSizeBytes` = 512 KiB raw
+  and `expiresAt`), `assets.upload.append` (`index` must equal `nextIndex`;
+  base64 chunk), `assets.upload.finish` (publishes ONE immutable
+  content-addressed asset and answers the SAME DTO as `assets.put`) and
+  `assets.upload.abort` (idempotent). Rationale and the rejected alternatives
+  are recorded in [ADR-0061](docs/adr/0061-large-file-ingestion.md): the
+  host-staged-path variant cannot serve the remote Web Client, whose only channel
+  is Product Wire. Staged bytes live in `<data_root>/staged/<uploadId>/` and the
+  new schema **v29** `asset_uploads` row is bookkeeping only (AGENTS.md §11 — no
+  media BLOBs in SQLite). The declared length is authoritative: an over-size
+  chunk is refused on `append`, `finish` refuses a length mismatch
+  (`ASSET_UPLOAD_INCOMPLETE`) and the storage layer re-checks the staged file
+  length before registering the asset, so a truncated transfer can never be
+  published. `finish` streams the file through sha256 (never into memory),
+  dedupes by `(kind, sha256)` and publishes through the same atomic
+  rename + row insert as `assets.put`;
+  `neotavern_storage::assets::publish_asset_from_file` / `sha256_file_hex` are
+  the streaming primitives. Uploads expire after 24 h and `begin` sweeps expired
+  rows with their bytes. Facade:
+  `backend.assets.uploadBegin/uploadAppend/uploadFinish/uploadAbort` (local and
+  remote implemented, legacy facade keeps `UnsupportedError`). Honest boundary:
+  this lands the CONTRACT and the kernel/storage implementation — the 22
+  transport-blocked routes in the cutover registry still need their consumers
+  wired (backup import, wallpapers, plugin blobs, speech/image inputs), so the
+  legacy sidecar keeps serving them until those slices land. Contract hash
+  `b0fd0b6e...`; registry 142 ops. Tests: 5 kernel tests
+  (`crates/runtime-kernel/tests/asset_upload.rs`), the storage publish path
+  exercised through them, and a new neobackend parity test (115 in that file).
+
+### Changed
+
+- **Etap-4 cutover registry: every remaining plugin/theme runtime route now
+  carries a recorded verdict** (`docs/architecture/etap4-ui-cutover-registry.md`
+  rows 14, 19, 20). Cluster 20's eight runtime-surface routes are classified
+  as HTTP/host surface with a per-route reason instead of a bare "missing":
+  git install needs the host package verifier (the same boundary that keeps
+  `plugins.install` partial), the legacy safe-mode flag is a boot-time file
+  whose kernel-plane equivalent is the per-plugin `enabled` flag, the
+  capability query/write routes are redundant (and the write would widen
+  rights outside a consent moment — the wire must not allow it), and the
+  sandbox bootstrap plus package assets are static delivery for the iframe.
+  `themes/boot` is documented as a first-paint boundary: a pre-hydration
+  bootstrap fetch has no wire transport alive yet, so kernel mode paints
+  default tokens and applies the active theme once the app resolves it.
+  Row 19's status now reflects the four wired lifecycle ops.
+
+### Added
+
+- **Plugin secret store on the kernel plane (M7 Etap-4 slice; cluster 21 part 2).**
+  Four wire ops give a plugin its own secret store: `plugins.secrets.list`,
+  `plugins.secrets.set`, `plugins.secrets.delete` and `plugins.secrets.reveal`,
+  backed by schema v28 STRICT `plugin_secrets`. The security model is the one
+  already approved for provider keys (SEC-01), not a second one: rows carry only
+  the opaque `SecretStore` reference (namespace `plugin-secret:<pluginId>`,
+  deterministic entry id per `(scope, owner, key)` so re-setting a key cannot
+  orphan a value), every DTO is value-free with `masked` derived from the
+  reference, and the plaintext crosses the wire through exactly one op behind the
+  host exposure policy plus the `secrets.reveal` grant (`secrets.manageOwn`
+  covers list/set/delete). Scope/owner addressing follows the plugin KV store
+  (`chat` requires an explicit ownerId), `plugins.uninstall` revokes the stored
+  values before the rows cascade, and a host without a wired store fails writes
+  closed with `SECRET_UNAVAILABLE`. Facade:
+  `backend.plugins.secretsList/secretSet/secretsDelete/secretReveal` (local and
+  remote implemented, legacy facade keeps `UnsupportedError`). Honest boundary:
+  the React plugin sandbox has no secrets host handler today (the legacy routes
+  served the legacy server-side plugin host), so the family is reachable through
+  the Product Wire on every host without a UI consumer yet. Contract hash
+  `5e272e18...`; registry 138 ops.
+- **Plugin KV state on the kernel plane (M7 Etap-4 slice; cluster 21 part 1).**
+  Three new wire ops move the plugin KV store off the legacy
+  `/api/v2/plugins/:id/state` route: `plugins.state.get`,
+  `plugins.state.set` (whole-value CAS write) and `plugins.state.delete`
+  (idempotent), backed by schema v27 STRICT `plugin_state` — one row per
+  `(plugin, scope, owner)` with `revision`, `schema_version`, the opaque
+  plugin object and the FK CASCADE on uninstall. The scope doubles as the
+  required capability (`storage.installation|user|workspace|chat`, the set
+  recorded at install = the consent moment), `installation`/`user` are
+  singleton rows (the result reports an empty `ownerId` — the wire has no
+  nullable field), `workspace` is the literal workspace row and `chat`
+  REQUIRES an explicit `ownerId`, so a plugin can never address another
+  chat's state; an owner supplied for a singleton scope is a VALIDATION
+  refusal. A stale `expectedRevision` is `REVISION_CONFLICT` carrying the
+  stored revision instead of a silent overwrite, and the documented
+  64-key/64-KiB quota is enforced before the write
+  (`STATE_QUOTA_EXCEEDED`). Facade: `backend.plugins.stateGet/stateSet/
+  stateDelete` (local/remote implemented; the legacy facade keeps
+  `UnsupportedError`). Web: the plugin sandbox's `storage.kv.*` handlers read
+  and write through the wire on the kernel plane with the same capability
+  gates and the same sandbox error codes. Honest boundary: binary plugin
+  blobs stay on the legacy route on both transports — the wire v1 has no
+  binary body. Contract hash `d9cf483f…`; registry 134 ops.
+- **Durable app-event plane on the kernel (M7 Etap-4 slice; cluster 18).** The
+  legacy `GET /api/v2/events` SSE relay is replaced on the canonical plane by a
+  resumable cursor: schema v26 adds the STRICT `app_events` log
+  (`sequence INTEGER PRIMARY KEY AUTOINCREMENT`, `event`, id-only
+  `payload_json`, `created_at`), and every client-relevant mutation appends its
+  event INSIDE the same transaction as the data change — `chat.created`,
+  `chat.message.created|updated|deleted`, `chat.message.block.changed`,
+  `generation.finished|error` (a cancelled run publishes `finished` with
+  `status: "cancelled"`) and `plugin.installed|activated|disabled|deleted`.
+  One new wire op, `events.poll` (`app.read`): exclusive `afterSequence` in,
+  `{ items, hasMore, truncated }` out, with a bounded 2048-row retention that
+  the writer prunes in the same transaction. Facade:
+  `backend.events.poll()` (local/remote implemented; the legacy facade keeps
+  `UnsupportedError`). Web: `connectAppEvents` polls the cursor in kernel mode
+  with a 2 s idle interval, an immediate drain while `hasMore`, exponential
+  backoff that keeps the cursor on failure, and a full cache reset on
+  `truncated`; the plugin runtime feeds its existing `runtime.onAppEvent`
+  relay from the same log, which makes cross-client `chat.message.block.changed`
+  sync real (this closes the boundary cluster 15 documented). Decision and
+  rejected alternatives (in-memory bus, kernel-hosted SSE, long-polling) are
+  recorded in ADR-0060. Honest boundaries: the wire exports a cursor, not a
+  socket, so push latency is bounded by the poll interval; `chat.opened`,
+  `character.selected` and `generation.delta` are not published. Contract hash
+  `76747667…`; registry 131 ops.
+- **Side-effect-free prompt preview on the kernel plane (M7 Etap-4 slice;
+  cluster 17 part 2).** One new wire op: `chats.prompt.preview` — the plan the
+  next turn WOULD send, built by exactly the pipeline that produces the
+  durable `wire.prompt.plan` (character/persona/lorebook/memory system blocks,
+  bounded history, the `{{user}}` macro, token budget, oldest-first context
+  shifting) but WITHOUT a generation run: nothing is persisted, no message is
+  created, no provider is contacted. It answers `wire.prompt.preview` — the
+  plan shape minus the run identity, borrowed field-by-field from the durable
+  plan schema so the two cannot drift — with `CHAT_NOT_FOUND` for an unknown
+  chat and `PROVIDER_CONFIG_NOT_FOUND` for a dangling active profile; the
+  provider/model context window comes from the adapter's own model list, else
+  the planner's documented default budget. An empty composer draft is a
+  legitimate request and budgets the history only (the legacy preview's rule;
+  real runs always carry a non-empty message, so their durable plans are
+  unchanged). Facade: `backend.chats.previewPrompt()` (local/remote implemented;
+  the legacy facade keeps `UnsupportedError`). Web: the composer context meter
+  now meters an EXISTING chat from the preview in kernel mode (it previously
+  rejected with a typed `UnsupportedError`, so kernel mode showed an error
+  banner); the new `summarizePlanUsage` splits the kernel plan by block source
+  and keeps the pipeline's own token budget authoritative. Honest boundary: the
+  kernel planner is chat-scoped, so the legacy NEW-chat preview branch
+  (character + greeting, no chat yet) keeps the labeled local estimate instead
+  of an error. Contract hash `51fb9be7…`; registry 130 ops.
+- **Theme-owned settings on the kernel plane (M7 Etap-4 slice; cluster 14).**
+  Two new wire ops: `themes.settings.get` (the manifest-merged view for one
+  theme — every manifest-declared setting id resolved to its persisted value
+  when that value still validates against the declared type, else the
+  manifest default or null; undeclared stored keys are never surfaced) and
+  `themes.settings.update` (a validated PARTIAL merge, the legacy PATCH
+  shape: every supplied key must be declared in the theme manifest and pass
+  its type validation — a color is a ≤100-char string without CSS
+  constructs (THEME-45), booleans, finite numbers and declared select
+  options pass — and one bad key refuses the whole patch with `VALIDATION`
+  before any write). The persisted values live in the kernel's shared
+  non-secret `settings` table under the legacy `theme.settings.<id>` key —
+  no schema change, and a future legacy import maps 1:1. Facade:
+  `backend.themes.getSettings()` / `backend.themes.updateSettings()`
+  (local/remote implemented; the legacy facade keeps `UnsupportedError`).
+  Web: `readThemeSettings` now returns the real merged map in kernel mode
+  (it reported an honest `undefined` before) and the new `updateThemeSettings`
+  persists patches on both planes; `ThemeSync` keeps applying the merged
+  values as the manifest-declared CSS custom properties. Honest verdicts for
+  the rest of the cluster-14 tail: `themes/boot` stays transport-blocked
+  (a pre-hydration inline `index.html` fetch that cannot ride the app-bundle
+  wire bridge — it needs a host-native kernel HTTP route, the same family as
+  the cluster-18 events SSE), `themes/:id/assets/*` is N/A (the wire theme
+  model carries exactly one content-addressed CSS asset through
+  `assets.put`/`assets.content`; the legacy per-theme file tree has no
+  kernel counterpart) and `user.css` stays transport-blocked (a data-root
+  file the kernel does not own; kernel mode loads none). Contract hash
+  `ddf931a2…`; registry 129 ops.
+- **Durable plugin message blocks on the kernel plane (M7 Etap-4 slice;
+  cluster 15).** Schema v25 (`025_message_blocks`): the STRICT
+  `message_blocks` table — one plugin→message attachment per row (block type,
+  renderer id, immutable attach-time `descriptor_json`, optional
+  `serialized_state_json` captured by `blocks.freeze`), with CASCADE from both
+  the message and the plugin, so a message delete or an uninstall leaves no
+  orphans. Four new wire ops: `chats.blocks.list` (one batched read per
+  rendered page, ≤100 ids; only attachments of messages that belong to the
+  chat are returned — foreign ids are ignored, never leaked),
+  `chats.blocks.attach` (`CHAT_NOT_FOUND` / `MESSAGE_NOT_FOUND` for a foreign
+  chat / explicit `PLUGIN_NOT_FOUND` instead of a raw FK failure),
+  `blocks.update` (replace the descriptor and/or persist the renderer state;
+  `clearSerializedState: true` is the wire spelling of the legacy
+  `serializedState: null` clear, and supplying both is a `VALIDATION`) and
+  `blocks.delete` (`BLOCK_NOT_FOUND`). `descriptor` and `serializedState` are
+  free-form JSON OBJECTS (`wire.free-object`) — the legacy plane stored any
+  JSON value, and a scalar is now an honest refusal instead of a silent
+  coercion. Facade: `backend.chats.{listBlocks,attachBlock,updateBlock,
+  deleteBlock}` (local/remote implemented; the legacy facade keeps
+  `UnsupportedError`). Web: `readMessageBlocks` / `attachMessageBlock` /
+  `updateMessageBlock` / `deleteMessageBlock` in the wire bridge;
+  `plugins/kernel/blocks.ts` — the rev4 block host — now persists through the
+  bridge instead of `legacyRaw`, so block attachments work on both planes
+  (its `legacyRaw` baseline sites are gone: the UI gate drops 49 → 46). The
+  cross-client `chat.message.block.changed` push stays legacy-only until the
+  kernel event plane (cluster 18): the client that made the change updates
+  locally and every other client refreshes on load. Contract hash
+  `c3ef6a14…`; registry 127 ops.
+- **Live provider access on the kernel plane (M7 Etap-4 slice; cluster 8
+  part 1).** Two new wire ops, both addressed by one stored config id:
+  `providers.models` (live model discovery over the standard
+  `GET {baseUrl}/models`; the kernel materializes a per-config adapter so the
+  endpoint and the resolved key follow THAT row — the ACTIVE named key first,
+  else the config-level `secret_ref`; ids only, `name` mirrors the id, the
+  upstream body is bounded at 1 MiB and the result at 256 models; an adapter
+  without discovery now returns the new trait-level
+  `ProviderErrorCode::CapabilityUnavailable`, surfaced as
+  `CAPABILITY_UNAVAILABLE`, never a synthesized list) and `providers.test`
+  (ONE non-streaming test message through the addressed model — legacy
+  `/providers/:id/test` parity — bounded at 120 s / 60k chars, returning
+  `{ text, usage: { steps, outputChars } }`; provider failures map to the
+  documented `PROVIDER_*` product codes and the key never reaches the wire).
+  The built-in `fake` provider answers `providers.models` from its local
+  deterministic set, so discovery works without a network upstream. Facade:
+  `backend.providers.models()` / `backend.providers.test()` (local/remote
+  implemented; the legacy facade keeps `UnsupportedError`). Web:
+  `useDiscoverProviderModels` and `warmProviderModels` now route through the
+  wire op on the kernel plane (RFC 3339-free shape rebuilt for the editor)
+  instead of rejecting. Cluster-8 tail: `speech`, `images` and `transcribe`
+  stay legacy-only — their binary/multipart payloads need a media transport
+  contract (asset plane) before a value-free wire DTO can carry them
+  honestly. Contract hash `ed2aded3…`; registry 121 ops.
+- **Provider catalog and named API keys on the kernel plane (M7 Etap-4
+  slice; cluster 7).** Schema v24 (`024_provider_secrets`): the STRICT
+  `provider_secrets` table — one row per named key (`label`, opaque
+  `secret_ref`, `active`, `created_at`) with a partial unique index
+  (`config_id WHERE active = 1`) enforcing exactly one active key per
+  provider config at the storage layer, plus `config_id` CASCADE. New wire
+  ops: `providers.catalog` (the canonical source catalog — only the sources
+  the kernel materializes: `openai`, `openai-compatible`, `fake`;
+  `samplerSupport` is empty because the kernel `ProviderRequest` carries no
+  sampler knobs yet; the 20-source legacy registry is not mirrored),
+  `providers.secrets.{list,create,update,delete,reveal}` (list/update are
+  value-free — the mask is derived from the OPAQUE stored reference, never
+  the key; create/activate deactivate siblings inside one transaction;
+  deleting the active key reactivates the most recent remaining one;
+  deleting a provider config revokes every named store value before the rows
+  cascade) and `secrets.exposure` (the host plaintext-exposure policy).
+  `providers.secrets.reveal` is the ONLY value-carrying wire operation and
+  is host-gated (`Kernel::set_secrets_exposure`, legacy
+  `NEOTA_ALLOW_SECRETS_EXPOSURE` parity, OFF by default): with the policy off
+  it fails closed with the stable `SECRETS_EXPOSURE_DISABLED` product error
+  before touching the store, and the UI hides copy/reveal affordances.
+  `hasApiKey` now reports either an active named key or the config-level
+  `secret_ref`; generation resolves the active named key first and falls
+  back to the config-level reference. `register_config_adapter` also
+  materializes `openai-compatible` (previously only `openai`, so a
+  custom-endpoint profile was never hydratable). Facade:
+  `backend.providers.catalog()`, `backend.providers.secrets.*`,
+  `backend.secrets.exposure()` (local/remote implemented; the legacy facade
+  stays honest `UnsupportedError` — the provider domain is kernel-only
+  there). Web: `useProviderCatalog` now maps the wire catalog onto the
+  editor shape instead of rejecting, and the secrets hooks
+  (`useProviderSecrets`/`useCreateSecret`/`useUpdateSecret`/`useDeleteSecret`/
+  `useRevealSecret`/`useSecretsExposure`) drive ApiKeysModal on the kernel
+  plane. Hosts map the exposure flag: headless
+  `--allow-secrets-exposure`/`NEOTA_ALLOW_SECRETS_EXPOSURE`, desktop shell
+  `NEOTA_ALLOW_SECRETS_EXPOSURE=1`. Tests: storage migration corpus
+  (v1..v24), kernel provider-secrets suite (CRUD, one-active invariant,
+  reveal gating on/off, exposure, catalog statelessness, cascade revocation,
+  generation preferring the active key), headless/tauri-local policy wiring,
+  remote-http secrets over the wire, neobackend parity, web hook + component
+  tests. Registry: 119 ops, 119/119 kernel-dispatched.
+
+- **Full-text search on the kernel plane (M7 Etap-4 slice; cluster 16).**
+  Schema v23 (`023_kernel_fts_search`): four FTS5 indexes
+  (`characters_fts` over name/description/tags, `chats_fts` over titles,
+  `messages_fts` over content, `lorebooks_fts` over name/description plus
+  the embedded `entries_json` text; `unicode61 remove_diacritics 2`) kept in
+  sync by AFTER INSERT/DELETE/UPDATE triggers like the legacy contour, with
+  a transactional backfill of the existing rows. New wire ops `search.query`
+  (safe prefix-MATCH terms — at most ten, quotes stripped — per-scope FTS
+  rank, merged and re-sorted by `relevance`/`date`/`name`, characters-only
+  `tag` filter, trashed characters excluded at query time, FTS5 `snippet()`
+  texts) and `search.rebuild` (the whole index wiped and repopulated in one
+  transaction — readers never observe a partial index; the legacy
+  `GET /api/v2/search` + `POST /api/v2/search/rebuild` pair is now fully
+  covered). The facade gains `backend.search.{query,rebuild}`;
+  `useRebuildSearch` routes through the wire op on the kernel plane (the
+  honest UnsupportedError placeholder is retired) and the DiagnosticsPanel
+  re-enables the rebuild action in kernel mode (the thumbnail-cache action
+  stays legacy-only). Card fields inside `ext_json._card` are not indexed
+  (follow-up tail). Tests: storage migration corpus (v1..v23), kernel
+  (every-scope hits, scope/tag/sort/limit, trash filter, trigger freshness,
+  rebuild convergence, contract violations), remote-http parity, web
+  hook + wireBridge tests. Registry: 112 ops, 112/112 kernel-dispatched.
+
+- **Character trash and version history on the kernel plane (M7 Etap-4
+  slice; cluster 26).** Schema v22 (`022_character_trash_versions`):
+  `characters.deleted_at` (+ index) and the `character_versions` table
+  (`UNIQUE (character_id, version)`, snapshot JSON, cascade on character
+  delete). `characters.delete` is now the legacy-default SOFT delete — the
+  character moves to the trash and its chats/messages survive — while the
+  additive `purge: true` request flag keeps the hard cascade; deleting an
+  already-trashed character is an idempotent no-op. New wire ops
+  `characters.restore` (clears `deleted_at`), `characters.versions.list`
+  (newest first, `truncated` past 500 snapshots) and
+  `characters.versions.restore` (applies a snapshot; the pre-restore state
+  is snapshotted first, so the restore is reversible). `characters.list`
+  gains the additive `includeDeleted` (trash view) and every
+  `characters.update` / `characters.card.update` snapshots the state it
+  replaced. `CharacterManagementPanel` gains the trash toggle with a
+  per-card restore action and the editor's Version history section
+  (`useRestoreCharacter`, `useCharacterVersions`,
+  `useRestoreCharacterVersion` route through the wire ops on the kernel
+  plane; the facade keeps `characters.del` soft and exposes no purge
+  argument — purge stays a wire/HTTP option). Tests: storage migration
+  corpus (v1..v22), kernel (soft/purge round trip, trash listing,
+  version history + restore, card-edit snapshots), remote-http parity, web
+  hook + component tests. Registry: 110 ops, 110/110 kernel-dispatched.
+
+- **Manual chat order on the kernel plane (M7 Etap-4 slice; cluster 25).**
+  Schema v21 (`021_chat_sort_order`): `chats.sort_order INTEGER NOT NULL
+  DEFAULT 0` + `(character_id, sort_order, updated_at, id)` index. New wire
+  op `chats.reorder` persists the drag-and-drop order of a character's
+  chats (legacy `PUT /api/v2/chats/order` parity): the listed chats take
+  the leading block in the requested order, unlisted chats keep their
+  relative order below it; duplicates → VALIDATION, an unknown character →
+  CHARACTER_NOT_FOUND, an id that is not that character's live chat →
+  CHAT_NOT_FOUND (the legacy plugin's single behavior). `chats.list` gains
+  the additive `sort: 'recent' | 'manual'` — the manual walk is
+  cursor-paginated over `sort_order ASC, updated_at DESC, id DESC` with its
+  own three-component opaque cursor ("manual order + new on top": new
+  chats default to sort_order 0 and surface on top until reordered).
+  `useReorderChats` reorders through the wire op on the kernel plane (the
+  UnsupportedError placeholder is retired). The cluster's restore and
+  branches routes stay kernel-less by design: the kernel keeps one linear
+  sequence per chat and deletes chats permanently — no trash to restore
+  from, no branch model on the wire (documented N/A). Tests: storage
+  migration corpus (v1..v21), kernel (reorder round trip, manual list +
+  cursor pagination, malformed cursor, error paths, idempotent
+  convergence), remote-http parity, web hook test.
+
+- **Lorebook entry position/metadata on the wire (M7 Etap-4 slice; cluster 2
+  entries-PATCH tail closed).** `wire.lorebook.entry.patch` gains `position`
+  (re-orders the entry inside the book) and `metadata` (replaced wholesale);
+  `wire.lorebook.entry.dto` surfaces both on read (optional — entries stored
+  before the slice project without them). The web transport carries the
+  fields through and surfaces them in the legacy UI shape (the honest
+  UnsupportedError placeholder is retired). The legacy restore route stays
+  kernel-less by design: kernel `lorebooks.delete` is permanent, so no
+  soft-deleted trash exists to restore from (documented N/A). Tests: kernel
+  (position/metadata patch + list reflection), remote-http parity, web
+  wireBridge test; WIRE_SCHEMA_HASH bumped, op count unchanged (106).
+
+- **Persona avatar clear on the wire (M7 Etap-4 slice; cluster 1 fully
+  covered).** `personas.update` gains the explicit `clearAvatar` flag — the
+  wire form of the legacy `avatar: null` PATCH clear (the wire `avatar`
+  field is a plain string and absence means "unchanged"). Setting `avatar`
+  and `clearAvatar` in one request is a contradiction and rejects with a
+  stable VALIDATION product error (the row is untouched). The web
+  transport maps the legacy null clear to the flag. Tests: kernel
+  (clear round trip, contradiction, rejected patch leaves the row intact),
+  remote-http host parity, web wireBridge test.
+
+- **Memory un-scoping on the kernel plane (M7 Etap-4 slice; cluster 5 fully
+  covered).** The wire DTO cannot express `characterId: null`, so
+  `memories.update` with `scope: "global"` now IS the un-scope: the kernel
+  clears the stored owner (previously a silent no-op risk). Contradictory
+  patches reject with stable VALIDATION product errors — `global` scope
+  together with a `characterId`, and a `characterId` without a scope switch
+  on a stored global row (which would build a global row with a non-NULL
+  owner). Character → character re-binding without an explicit scope keeps
+  working. The web transport maps the legacy `characterId: null` clear to
+  the scope switch (and keeps the honest error for the contradictory
+  `scope: "character"` + null form). Tests: kernel (un-scope round trip,
+  both VALIDATION paths, re-binding), remote-http host parity (owner
+  cleared over HTTP, VALIDATION product error), web wireBridge test.
+
+- **Built-in instruct-format catalog on the wire (M7 Etap-4 slice;
+  cluster 27 fully covered).** New op `settings.instructformats.list`
+  serves the static built-in catalog — chatml, llama3, alpaca, mistral,
+  command-r with their versions and stop strings — as pure metadata from a
+  kernel constant mirrored from the legacy catalog (no database read,
+  stateless-kernel-safe; rendering templates stay out of the wire and
+  custom user formats are not part of the catalog). `useInstructFormats`
+  reads the wire catalog on the kernel plane; the honest-empty placeholder
+  is retired. Tests: kernel (catalog on seeded + stateless kernels),
+  remote-http host parity, contracts op-count 106, web hook test.
+
+- **Character gallery on the kernel plane (M7 Etap-4 slice; cluster 12).**
+  New wire ops `characters.gallery.list/add/delete` over a new `character_images`
+  schema table (v20) that links characters into the immutable
+  content-addressed asset store: `add` publishes the bytes (kind `gallery`,
+  deduplicated exactly like `assets.put`) and links them to the character;
+  `delete` removes only the link — asset bytes are never destroyed;
+  `avatar-original` needs no new op (`characters.avatarAssetId` +
+  `assets.content`). The Settings → Character Management Gallery tab now
+  works on the kernel plane (upload / set-primary / delete with the
+  existing confirm dialog); the legacy plane keeps its routes. Honest v1
+  limits: upload capped by the 1 MiB wire request limit and the list serves
+  full-size data URLs (thumbnail downsizing and a chunked upload op are
+  follow-up tails). Tests: storage (round trip, owner scoping, FK integrity,
+  cascade), kernel dispatch (round trip, dedup second link, owner-scoped
+  idempotent delete, CHARACTER_NOT_FOUND, stateless rejection), remote-http
+  host parity, web hooks (3 kernel-plane tests), contracts op-count 105.
+
+- **`backups.delete` wire op delivered (M7 follow-up; first Этап-4 wire-gap
+  slice).** The backups cluster is now fully covered on the kernel plane:
+  new op `backups.delete` (idempotent, request `{ backupId: uuid }`,
+  response `{ deleted: boolean }`) with kernel arm + storage
+  `delete_backup` (the id must parse as a UUID before any filesystem path
+  is built — traversal can never escape the backups dir; provisional and
+  foreign directories are never touched; a missing container converges to
+  `deleted: false`). The React Settings → Data panel gained a Delete
+  action per backup with an explicit confirmation on both planes (legacy
+  DELETE endpoint translated in the typed facade; legacy 404 maps to
+  `deleted: false`). Tests: contracts fixtures + op-count 102,
+  kernel dispatch (round trip, idempotence, non-uuid rejection,
+  stateless rejection), storage (uuid gate, idempotence, scoping),
+  web hooks (kernel wire call, legacy endpoint). Secret-store 21/21 and
+  headless 25/25 unaffected.
+
+- **`secrets.enc` v1→v2 converter delivered (ADR-0040 §3; SEC-01).** New
+  `secret_store::migrate`: `read_v1_records` (decrypted legacy records for
+  migration reports) and `convert_v1_file` (legacy scrypt v1 file →
+  canonical Argon2id v2). Safety properties: the v1 file is never modified
+  or deleted (it stays the pre-conversion backup); an existing v2 target is
+  never overwritten (`Corrupt`, verified untouched by test); a wrong v1
+  passphrase or a tampered header fails closed with no output file
+  (AuthFailed/Corrupt); v1 header KDF parameters are used as authenticated
+  — never downgraded. The v2 reader's rejection message now names the
+  delivered converter. Cargo dep: `scrypt 0.11` (pure Rust, std-only crate
+  rule holds). Tests: 6 converter tests (round trip preserving values and
+  createdAt/updatedAt, wrong passphrase, existing target, tampered header,
+  v2-masquerading-as-v1 refused, report surface) — secret-store 21/21,
+  headless 25/25, tauri-local 14/14, workspace `cargo check` clean.
+
+- **Headless: portable `secrets.enc` backend + full secret-seam wiring
+  (SEC-01/SEC-01.1, M7 follow-up).** `neotavern-headless --secret-backend
+  portable --secrets-enc <path> --secret-passphrase-file <path>` opens the
+  canonical portable v2 store (ADR-0040): the file is created on first
+  launch when absent, a wrong master passphrase fails the startup closed
+  (never a fallback store, the passphrase never crosses the wire — only
+  its file path may come from argv/env). Every headless backend now wires
+  BOTH kernel seams — the writable store AND the execution-time resolver —
+  fixing the asymmetry where the store was wired but `set_secret_resolver`
+  never was (saved keys were unusable at generation time; fail-closed).
+  Tests: 16 lib (portable flag matrix, first-launch create/reopen with
+  surviving records, wrong-passphrase fail-closed, empty passphrase
+  refusal, fail-closed resolver) + 9 integration incl. `secrets.status`
+  reporting kind `portable` over `/rpc` and the wrong-passphrase startup
+  failure. Docs: headless README, docs/desktop README, release-manifest
+  (security.secret-store honest status), ADR-0038 status note, secret-store
+  and data READMEs.
+
+- **SillyTavern-era plugin compatibility removed (ADR-0059 Amendment 1;
+  owner decision 2026-10-31 — "думать о них не стоит").** The whole ST
+  plugin-compat layer is deleted with no migration guide: the Express
+  compatibility host (`apps/server/src/legacy/`), the trusted `legacy.js`
+  frontend loader and its app gate, the `window.SillyTavern` /
+  `window.eventSource` / `window.event_types` / `window.extension_settings`
+  / jQuery globals and unmanaged DOM islands (`packages/legacy-compat`
+  deleted), the `legacy` manifest block and the `legacy.trusted` permission
+  (manifests carrying the block are now rejected at install with
+  PLUGIN_INVALID), `@fastify/express`/`express` dependencies, and the
+  ST-plugin unit/E2E specs. Kept: SillyTavern DATA import (character cards,
+  chats, ZIP backup migration — user data, not plugins), the Plugin SDK
+  runtime (slots, sandboxed iframe, IR v1), and the ADR-0039
+  authority-non-expanding rule as a standing norm (the ADR itself is marked
+  obsolete). AGENTS §1/§3/§18/§23 amended; capability-matrix row
+  `compat.authority-boundary` → Deprecated; the ui-legacy-surface baseline
+  regenerated without the plugin-compat rows. Note honestly: this removes a
+  user-facing capability — ST extensions no longer run, and none shipped
+  with the app.
+
+- **ADR-0059: React-primary pivot — the branch `react-primary`.** The owner
+  decided (2026-10-31) that the React contour is THE product UI and the
+  native-first takeover is cancelled: the Rust Runtime Kernel,
+  SQLite/migrations/recovery and the React + Theme SDK + Plugin SDK stack
+  stay (React is no longer a "legacy plane with a sunset date"); the Rust
+  Headless host becomes the unified kernel-bearing backend target for VPS
+  and Desktop; **the Dioxus/Blitz presentation contour is removed now** —
+  12 crates (`presentation-m0`, `presentation-m0-d2`,
+  `presentation-dioxus-shell`, `presentation-chat`, `presentation-session`,
+  `presentation-kernel-wire`, `presentation-perf-probe`,
+  `presentation-design-system`, `presentation-blueprint`,
+  `presentation-scene`, `presentation-scene-chat-pilot`, `chat-viewport`),
+  the four vendor patches (`anyrender`, `blitz-dom`, `blitz-paint`,
+  `vello`), the M0/Milestone-B/PERF capture-adjudicate-golden script
+  family, `tools/presentation-codegen` and the CI jobs that built them;
+  **NeoCompositor stays as an experimental crate** (candidate for the
+  Android live-glass path, no product mounting, no milestone gates). The
+  workspace drops from 31 to 19 crates and compiles clean. The TypeScript
+  presentation contracts in `packages/contracts` (blueprint documents,
+  boundary, projection) are React-plane and stay; blueprint chat rendering
+  follows ADR-0056 again (its ADR-0057 supersession is void). ADR-0057 is
+  superseded in its product-UI goal (Phases 3–4 void; the document remains
+  the historical record; the Kernel-side data-integrity fixes landed and
+  stay landed); ADR-0058's end-state is amended (the Web Client does not
+  sunset "with the legacy contour"; the IR v1 schema remains the versioned
+  plugin-UI contract — see `docs/plugin-sdk/visual-surface-ir.md` — with
+  host rendering bound to whatever native surface is actually built);
+  ADR-0051's WebView-fallback posture is the product posture; ADR-0052's
+  no-WebView cutover is void. AGENTS §2/§13/§14/§17/§18/§19/§21/§23 are
+  amended to the single-contour reality. Decision record:
+  `docs/adr/0059-react-primary-pivot.md`. Note honestly: the audit-class
+  fixes UI-01..UI-08 from the previous commits rode on the removed native
+  session layer and are preserved in history, not in the tree.
+
+- **`PluginVisualSurface` IR schema v1 + security review (ADR-0058;
+  ADR-0057 Phase 2 gate).** The declarative, host-rendered plugin UI
+  surface now has its versioned, bounded fragment schema:
+  `packages/plugin-sdk/src/visual-surface.ts` — a fragment envelope
+  (`irVersion: 1`, reverse-DNS `surfaceId`, closed `placement` set,
+  exactly one root `container`, an `actions` map binding control ids to
+  the plugin's registered RPC handler names — data and handlers, never
+  markup or code) and five node kinds (container with token-name gaps,
+  text, plugin-staged image refs, buttons, FieldId-addressable inputs).
+  `validateVisualSurfaceFragment()` enforces every normative budget
+  fail-fast with stable error codes: 256 nodes, depth 8, 32 children per
+  container, 32 images/inputs, 64 actions, 2048/256/128-char string
+  caps, token-only styling (a raw spacing number or color is a schema
+  violation), control characters rejected, dangling action references
+  rejected, unknown IR versions rejected closed. The validator reads a
+  container's child count before recursing and counts nodes during the
+  walk, so a hostile million-child fragment fails in bounded time
+  (behaviorally tested). The security review — bounds, counts,
+  permissions (named RPC bindings gated by the plugin's grants; the host
+  validates image-asset ownership) and crash isolation (a bad fragment
+  or handler degrades to an honest per-fragment error, never a host
+  freeze) — is recorded in `docs/plugin-sdk/visual-surface-ir.md`.
+  Status honesty: host rendering of fragments and the plugin-slot
+  conformance scenarios remain the ADR-0057 Phase 3 deliverable; until
+  then no surface claims IR-based plugin UI as shipped.
+
+- **ADR-0057 Phase 1 increment A — presentation-scene platform core
+  (`crates/presentation-scene`).** Product-free retained-scene platform
+  core for the native contour: epoch-validated scene arena with
+  slot-reuse honesty (`SceneId`), token-only styling model (no literal
+  colors/spacing/radii/control sizes — hardcoding bans of AGENTS §14 hold
+  in Rust), the golden-dark theme resolving the React `--st-*` tokens,
+  a char-boundary-safe editor core (cursor/selection ops, IME composition
+  seam) — the single text-editing model for every host bridge, a scene
+  tree with FieldId-keyed editors that survive node churn (INV-1),
+  Parley text engine (shape, caret geometry, point→byte-index,
+  per-line selection rects — one geometry, INV-2), taffy layout with the
+  Parley measure closure and retained taffy nodes for stable scene ids,
+  a `FrameSnapshot` fold (paint order, focus order, input frames,
+  semantic a11y items, deterministic FNV geometry digest for the
+  refactor-stability golden, INV-2/INV-3), reverse-paint-order
+  hit-testing with caret-byte resolution through the same shaped text,
+  and a Vello paint encoding (`gpu` feature) — headless-encodable, the
+  single render path (INV-3). 33 unit tests; `cargo test -p
+  neotavern-presentation-scene` green. No product surface mounted yet;
+  the chat-screen pilot projection is the next increment.
+
+- **ADR-0057 Phase 1 chat-screen pilot
+  (`crates/presentation-scene-chat-pilot`) — gate green on the real
+  Kernel.** `ChatPilot` projects `ChatSession` route state onto the
+  retained scene (stable per-message scene ids keyed by durable message
+  ids; header, message rows, streaming row, composer input, send button)
+  and routes host input back through the session command surface:
+  `apply_composer_op` (editor-core op → text syncs to the session; the
+  caret never leaves the editor core, INV-1/INV-4) and `handle_hit`
+  (send button sends, composer clicks position the caret through the
+  snapshot's shaped text, INV-2). The Phase 1 gate
+  (`tests/phase1_gate.rs`) runs the full journey against the real Kernel
+  in an isolated SQLite root: open → caret/selection editing → caret
+  geometry round-trip through the snapshot → send via the hit-tested
+  button → stream completes durably → reopen verifies both messages in
+  SQLite → restart restores the unsent draft → digest invariants (same
+  state → same digest, changed state → changed digest, no NaN rects).
+  The editor-core `Insert { batch }` op gained drain semantics (the
+  flushed batch leaves the pending queue) — the pilot caught the old
+  index-forever semantics re-inserting stale text, proving the
+  unit-testable input model (INV-4) on a real surface. The pilot is not
+  the shipped desktop UI; the legacy contour still ships.
+
+- **ADR-0057 Phase 1 — winit desktop bridge + local raster harness for
+  the pilot (`scene-pilot`, feature `desktop-host`).** Dev evidence host
+  behind `--features desktop-host --bin scene-pilot`: a winit 0.30
+  window with a minimal wgpu present — one vello render of the
+  `FrameSnapshot` into an `Rgba8Unorm` raster, then a fullscreen blit
+  onto the swapchain (deliberately NOT the legacy `PresentSurface`,
+  whose chrome/wallpaper/overscan contracts belong to the frozen
+  contour; INV-3 stays per-surface). Keyboard maps to editor-core
+  `CursorOp`s (typing, backspace/delete, arrows+Shift, Home/End, Ctrl+A;
+  plain Enter sends, Shift+Enter inserts a newline — INV-4), mouse
+  clicks hit-test through the one snapshot (INV-2), stream pumping runs
+  at ≤30 updates/s (AGENTS §24) from `about_to_wait` until the terminal
+  event, resize reconfigures at frame time, DPI changes cold re-produce.
+  Two wire modes: FakeWire (title-tagged `— FAKE WIRE (dev)`, INV-7) and
+  `--root <dir>` over the real Kernel (seeds a demo chat only into an
+  empty workspace). `--golden <dir>` renders the pilot offscreen at the
+  m0-d2 golden corpus sizes (1100×760, 900×700, 620×800, 900×220) into
+  PNGs — local-only evidence (`artifacts/` is gitignored, never CI);
+  both modes verified pixel-level against the theme tokens (canvas
+  `#151311`, accent `#e38a62`, glyph antialiasing). Honest bridge
+  limits: no wheel mapping (the pilot's message column is not
+  scrollable — no parallel geometry may fake it), only Ctrl+A of the
+  clipboard shortcuts, DPI > 1 stretches the CSS-px raster linearly
+  until the physical-scale layout pass.
+
+- **ADR-0057 Phase 1 — file-based refactor-stability digest corpus
+  (`tests/refactor_stability.rs` +
+  `tests/golden/frame-digests.txt`).** The Phase-1 gate's
+  "refactor-stability suite green" criterion is now a committed file:
+  a scripted FakeWire journey (open across the 4 golden viewports,
+  typing, select-all, whole-buffer replace, caret moves, Cyrillic
+  clusters through the Onest face, long-paragraph wrap regimes, send +
+  stream completion) folds 13 named `FrameSnapshot` digests (FNV-1a,
+  quantized 1/4 px), compared against the committed goldens with a
+  per-checkpoint CHANGED/MISSING/NEW report. A fresh second run must
+  reproduce every digest bit-for-bit before comparison (determinism
+  self-check: arena, HashMap order, stream pump). Machine-portable by
+  construction: the golden font faces are bundled with
+  `system_fonts: false`, scene epochs stay outside the hash. INV-7
+  framing: this gates GEOMETRY/editing stability only — product truth
+  stays gated by `phase1_gate.rs` on the real Kernel. Intentional
+  geometry changes regenerate via `UPDATE_GOLDENS=1`; the update run
+  fails on purpose so no golden lands blind.
+
+- **ADR-0057 Phase 1 — physical-scale paint
+  (`render_frame_at_scale`).** The vello encode path gained a device
+  scale: every rect, radius, stroke width and glyph transform is
+  multiplied at paint time, so the desktop bridge rasters at
+  `CSS px × density` and the blit samples 1:1 — fractional-DPI text
+  lands on real pixels instead of the stretched linear blit the bridge
+  shipped an hour earlier. The snapshot geometry is untouched (INV-2:
+  CSS px stays the one geometry; hit-tests, a11y bounds and the digest
+  corpus never see a scale), and `render_frame` keeps its scale-1
+  contract. Unit test: the encoded vello path stream doubles its
+  coordinates at 2:1 (canvas 400×700 paints 800/1400; no stale CSS-px
+  edge survives). The committed digest goldens stay byte-identical —
+  geometry is orthogonal to paint.
+
+- **ADR-0057 Phase 1 — draft restart rehydration over the Product Wire
+  (`chats.messages.drafts.list`).** New wire op (99th; registry + fixtures
+  → codegen → kernel dispatch arm + SQLite impl, newest-first
+  `ORDER BY updated_at DESC`, chat-scoped, `CHAT_NOT_FOUND` on an unknown
+  chat): the native composer — already persisting its unsent draft over
+  the wire on typing (`drafts.save`, role=user) — now restores the newest
+  uncommitted user draft when a chat becomes the open chat (session open,
+  chat switch). Closes the restart gap where the durable draft row
+  existed but the UI could not learn its id after a process restart
+  (`reload_draft` needed an in-memory id; its only caller was a test).
+  Verified end-to-end on the real Kernel:
+  `kernel_restart_restores_the_unsent_draft` (open → type → drop session
+  and wire → reopen the same data root → composer restored, typing
+  continues on the same draft row). FakeWire implements the op with the
+  same newest-first contract (INV-7: fake parity only, never a product
+  claim). React contour unaffected (its composer draft stays
+  session-local, AGENTS §13).
+
+### Added
+
+- **Regenerable-cache cleanup on the kernel plane (M7 Etap-4 slice; cluster
+  23).** New wire op `diagnostics.cache.clear` (`DELETE
+  /api/v2/diagnostics/cache` parity): deletes the kernel cache tree
+  (`<data-root>/cache/`, today derived thumbnails only) and recreates it empty
+  so artifacts rebuild lazily — original user files under `files/` are never
+  read or deleted (AGENTS.md §12), the walk skips symlinks so a planted link
+  cannot reach outside the cache root, an absent cache is a no-op, and a second
+  call on an empty cache returns zeros (idempotent). The result is the legacy
+  `CacheCleanupResult` shape (`removedFiles` / `removedBytes` /
+  `metadataRowsRemoved`); the kernel keeps no cache-metadata rows, so that
+  counter is honestly `0` instead of a fabricated legacy number. Facade:
+  `backend.diagnostics.cacheClear()` (local/remote implemented; the legacy
+  facade keeps `UnsupportedError`). Web: `useClearDiagnosticCache` routes
+  through the wire op on the kernel plane and the DiagnosticsPanel enables the
+  maintenance action there (the "maintenance unavailable in Kernel Preview"
+  hint is gone — both maintenance actions, search rebuild and cache cleanup,
+  now work on both planes). The diagnostics SNAPSHOT route remains a documented
+  partial: `diagnostics.export` is the SEC-07 allowlist bundle, not the legacy
+  rich snapshot, and the panel keeps mapping the two planes honestly. Contract
+  hash `e38584b4…`; registry 122 ops.
+### Architecture
+
+- **Background import named transport-blocked (M7 Etap-4 cluster 13).** The
+  four `/api/v2/backgrounds` routes stay legacy-side: the upload is multipart
+  up to the legacy 25 MiB cap (a wire request is JSON and `assets.put` admits
+  1 MiB) and original wallpapers above the 4 MiB `assets.content` cap cannot
+  ride the wire either — the same large-file ingestion contract gap already
+  blocking clusters 8-tail and 10. Shipping kernel-side `list`/`delete` alone
+  would mean a wallpaper manager that cannot add wallpapers, so all four wait
+  for the ingestion decision. Registry row, blocked-work table and the
+  operations inventory are updated; no wire, kernel or UI code change.- **Chat context audit on the kernel plane (M7 Etap-4 cluster 17, part 1).**
+  New wire op `chats.context.audit` (app.read): the LATEST durable
+  `wire.prompt.plan` of a chat, resolved by chat id — the same plan shape as
+  `generation.prompt.plan`, so what context entered the chat's most recent
+  provider request is inspectable the moment a chat is open, without knowing
+  a run id. A chat without generations resolves to an omitted plan (absence
+  is data, never a fabricated empty audit); unknown chats fail with
+  `CHAT_NOT_FOUND`. The PromptPlanPanel gains an honest fallback: when a
+  requested run has no recorded plan (old runs, discarded runs), it serves
+  the chat's latest plan instead of a dead end. Facade
+  `backend.chats.contextAudit()` (local/remote; the legacy facade keeps
+  `UnsupportedError` — the legacy audit is a different, richer contract).
+  Honest boundary: the kernel plan does not carry the legacy audit's
+  per-template-block entries, so the prompt-template editor keeps its local
+  token estimates in kernel mode; `context-preview` (cluster 17 part 2) and
+  the plugin-intercept callback (blocked on the kernel plugin host) stay
+  missing. Registry 123 ops (97/5/63), schema hash 43cce244…, operation-id
+  snapshot 123. Tests: 3 kernel (latest-plan ordering, honest absence,
+  unknown chat), 3 facade parity, 3 hook, 2 panel fallback, 2 wireBridge.- **Auth/session documented N/A on the kernel plane (M7 Etap-4 cluster
+  22).** The three legacy `/api/v2/auth/session` routes are the Fastify HTTP
+  transport's browser-session layer (bootstrap token → bounded HttpOnly
+  `__Host-` cookie + in-memory CSRF) — cookies and CSRF headers are not
+  expressible in transport-neutral Product Wire DTOs, and the kernel plane
+  already authenticates at the layer where this belongs: the `remote-http`
+  adapter's pairing credentials (random bearer token returned exactly once,
+  revocable, capped, constant-time verification, audit events) carried by the
+  Web Client's HostConnect flow as `Authorization: Bearer` (sessionStorage at
+  most, never localStorage — M6). Local planes (Tauri IPC, loopback) need no
+  auth; the session hook already reports the honest
+  `{ required: false, authenticated: true }` in kernel mode and the AuthGate
+  works on both planes today. The routes stay functional in the sidecar and
+  retire with it. Registry row, coverage note, operations inventory and the
+  API doc are updated; no wire operations, contracts or code change.- **Large-file ingestion is now a named blocker, not a silent backlog item
+  (M7 Etap-4 clusters 8 tail + 10).** Two clusters cannot be honestly ported
+  before the wire grows a large-file ingestion contract: the speech / images /
+  transcribe tail (binary or multipart payloads, multi-MB base64 results) and
+  the SillyTavern-backup import (a multipart archive up to the legacy 4 GiB
+  cap, with extraction that takes minutes). Wire requests are JSON and
+  `assets.put` admits 1 MiB, while the kernel is a synchronous single writer —
+  so the registry now marks cluster 10 **blocked (ingestion transport)** and
+  records the decision itself: (1) a host-staged path (the host streams into
+  the data root and passes a staged-upload id/relative path) or (2) chunked
+  `assets.upload.*` ops with bounded chunks, a TTL and cancellation. Neither
+  is implemented and no ADR is recorded yet — the choice is the owner's. Until
+  then the React hooks keep refusing in kernel mode with a stable
+  `UnsupportedError`, and the legacy sidecar keeps the feature. Registry row,
+  coverage note, operations inventory and this entry are the honest state.- **Connection profiles documented N/A on the kernel plane (M7 Etap-4
+  cluster 9).** The six legacy `/api/v2/connection-profiles` routes are not
+  ported: no React consumer exists (the AI Settings API tab manages provider
+  configs through `providers.config.*`; the React SPA is the only product UI,
+  including when the legacy server serves it), and the apply semantics depend
+  on the legacy provider model — `chat`/`text` mode, the `assistantPrefill`
+  capability and provider `settings.source` — that the kernel deliberately
+  replaced. Their canonical equivalents are `providers.config.*` +
+  `providers.secrets.*` + `presets.*`. The rows are also not carried by the
+  legacy→kernel conversion (they reference provider configs, which are never
+  copied), so the surface retires with the legacy sidecar; the routes stay
+  functional there until then. Registry, operations inventory, API/UX docs and
+  the portable-data converter note are updated; no wire operations, contracts
+  or code change in this slice.
+- **Native-first product UI: own retained-scene platform over mature
+  primitives (ADR-0057, owner direction 2026-10-04).** The product UI
+  path is native-only: the browser-form emulation layers leave the
+  product contour — Dioxus/native-dom VDOM, blitz-dom + stylo CSS
+  cascade, the hand-rolled CSS baking, the `shell_hit` parallel
+  geometry and the Blueprint-vs-RSX guard duality are replaced by an
+  own retained-scene platform built over taffy (layout), Parley (text)
+  and Vello/wgpu (paint), governed by seven non-negotiable invariants
+  (single state truth / single geometry / single render path / single
+  input model / single stream driver / bridges-only adapters /
+  behavioral evidence against the real Kernel). React keeps only its
+  assigned roles — remote Web Client (ADR-0043), legacy migration plane
+  (ADR-0038) and CONTAINED plugin WebSurface (ADR-0054) — and is no
+  longer the product UI target. The old Dioxus/Blitz contour is
+  feature-frozen (defect/security fixes and the pilot comparison
+  baseline only) and is deleted at the Phase-4 gate; ADR-0049-D2 and
+  ADR-0056 supersede there, ADR-0051's WebView accessibility fallback is
+  retired by native semantic-tree evidence at Phase 3. Normative
+  platform spec:
+  `docs/architecture/native-presentation-platform.md`; evidence base:
+  the 2026-10-04 Rust-branch audit (`docs/audits/rust-app/`). The AGENTS.md
+  §2/§13/§14/§21/§23 amendments recording the new contour split were applied
+  in the same change (platform spec §9). This change is documentation-only:
+  no product code, contracts, schemas or migrations were modified.
+
+- **No-web end state (ADR-0058, owner direction 2026-10-04 — "web не будет
+  больше").** Native product clients embed no browser engine at all. The
+  plugin UI platform of record is declarative slots (ADR-0037) + the
+  `PluginVisualSurface` IR pulled forward from ADR-0050 Milestone D into the
+  ADR-0057 platform Phases 2–3: a versioned, bounded scene-fragment schema
+  with token-only styling, INV-4 input, semantic-tree accessibility,
+  ADR-0022 z-order and permission-gated crash isolation — plugins ship data
+  and handlers, never markup, pixels or engines; the ADR-0054 plugin
+  WebSurface is superseded (no WebSurface in native clients ever). SillyTavern
+  web-extension compatibility becomes a property of the legacy/React contour
+  only, alive exactly as long as it (ADR-0038 timeline; ADR-0057 Phase-4
+  gate) and ending with a mandatory migration guide to the native Plugin
+  SDK. The Remote Web Client (ADR-0043) sunsets as a product: it remains
+  installable only while the legacy contour is the shipped desktop UI;
+  remote access after the transition is a recorded future native-client
+  connection mode over remote-http (ADR-0030), not a shipped capability.
+  Documentation-only decision record: no product code, contracts, schemas or
+  migrations were modified; the capability matrix and compatibility-matrix
+  rows keep describing the transitional code until it actually changes.
+  AGENTS.md §1/§2/§13/§17/§18/§19/§21 amendments applied in the same change.
+
+### Changed
+
+- Native desktop chat scroll now runs at the monitor's refresh rate with a
+  handful of produces per gesture (follow-up: "8% CPU at 30fps is terrible —
+  I have a 144 Hz screen, it must be 144 fps at <4%"). The 30 fps
+  produce-driven quantum is replaced by an overscan runway: the virtualized
+  paint window bakes the two neighbouring rows beyond the chat band, the
+  viewport box extends `CHAT_OVERSCAN_CSS` (256 css px) past the panel on
+  both sides, and the scene/resolve rasters are that much taller — so the
+  vsync blit shift presents REAL rows on the leading edge instead of the
+  wallpaper filler that bounded the old 96 px cap. Produces happen only when
+  the ack drift crosses the painted runway (directional caps:
+  `ScrollAckLoop::set_runway_caps` — at the bottom pin the below-band runway
+  is zero, but the offset cannot move past the pin): a 600 px wheel gesture
+  lands 2 produces (was 9), a 2000 px fling 6. Touch drags move the visual
+  directly (1:1 blit, no pending accumulator). The scroll frame re-arm
+  timer dropped from 8 ms to 1 ms: on a 144 Hz monitor the 8 ms timer fired
+  BETWEEN vsyncs, so present intervals alternated 7/14 ms and the motion
+  juddered — the FIFO swapchain is the pacer now (frames align to the
+  refresh at any rate). The blit uniform grew to five
+  vec4 rows on both hosts (screen→raster window mapping in `scroll[3].zw`,
+  the filler source window in `scroll[4].xy`); Android writes the flat
+  mapping and the old band bounds, so its present path is unchanged.
+
+), so `generation.tools.list` refused its own
+  registry with `CONTRACT_VIOLATION` on `items[0]/id`. The id is now
+  `app-now`, and the tauri-local registration seam validates every spec
+  against the wire contract BEFORE the registry, so a malformed id is an
+  IPC-level error at registration time (as its contract always claimed),
+  never a delayed detonation inside list validation.
+
 - **Workspace clippy is green again under `-D warnings` (round 7/40).** The
   release gate requires green clippy/format, but `cargo clippy --workspace
   --all-targets -- -D warnings` (the exact CI command) failed: 12 lint hits
