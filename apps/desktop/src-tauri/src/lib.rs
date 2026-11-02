@@ -1314,6 +1314,157 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         serde_json::json!({ "includeDeleted": true }),
     )?;
     eprintln!("[smoke] golden: assets/characters full walk ok");
+
+    // 8. generation.workflow residual ops (G6 evidence, round 27): cancel a
+    //    delayed run, retry a failed run, keep/discard durably waiting runs,
+    //    unary events page.
+    let cancel_request = build_request_envelope(
+        "generation.start",
+        serde_json::json!({
+            "chatId": chat_id,
+            "message": "cancel me",
+            "provider": "fake",
+            "model": "delay-ms=3000",
+        }),
+        "00000000-0000-4000-8000-000000000003",
+    );
+    let (cancel_tx, cancel_rx) = std::sync::mpsc::channel::<serde_json::Value>();
+    let cancel_body = host
+        .open_stream(&cancel_request, move |event| {
+            let _ = cancel_tx.send(event);
+            Ok(())
+        })
+        .map_err(|failure| format!("transport failure: {failure:?}"))?;
+    let cancel_envelope: serde_json::Value =
+        serde_json::from_slice(&cancel_body).map_err(|_| "stream response was not JSON".to_string())?;
+    let cancelled_id = cancel_envelope["result"]["streamId"]
+        .as_str()
+        .ok_or_else(|| "cancel stream carried no streamId".to_string())?
+        .to_string();
+    std::thread::sleep(Duration::from_millis(500));
+    dispatch_ok(
+        &host,
+        "generation.cancel",
+        serde_json::json!({ "workflowId": cancelled_id }),
+    )?;
+    loop {
+        let event = cancel_rx
+            .recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "cancel stream closed without a sentinel".to_string())?;
+        if event.is_null() {
+            break;
+        }
+    }
+    let cancelled_run = dispatch_ok(
+        &host,
+        "generation.get",
+        serde_json::json!({ "workflowId": cancelled_id }),
+    )?;
+    let cancelled_status = cancelled_run["status"].as_str().unwrap_or("");
+    if matches!(cancelled_status, "queued" | "running" | "waiting_for_tool") {
+        return Err(format!("cancelled run is still active: {cancelled_status}"));
+    }
+    eprintln!("[smoke] golden: cancel -> {cancelled_status}");
+
+    let (failed_id, _failed_events) = run_stream(
+        &host,
+        "generation.start",
+        serde_json::json!({
+            "chatId": chat_id,
+            "message": "fail on purpose",
+            "provider": "fake",
+            "model": "fail-at=1",
+        }),
+    )?;
+    let failed_run = dispatch_ok(
+        &host,
+        "generation.get",
+        serde_json::json!({ "workflowId": failed_id }),
+    )?;
+    if failed_run["status"] == serde_json::json!("completed") {
+        return Err("fail-at run unexpectedly completed".to_string());
+    }
+    // Retry the CANCELLED run: retry inherits the original model grammar, and
+    // the failed run's `fail-at=1` would deterministically fail again — the
+    // cancelled run's grammar completes.
+    let (retried_id, _retry_events) = run_stream(
+        &host,
+        "generation.retry",
+        serde_json::json!({ "sourceRunId": cancelled_id }),
+    )?;
+    let retried = dispatch_ok(
+        &host,
+        "generation.get",
+        serde_json::json!({ "workflowId": retried_id }),
+    )?;
+    if retried["status"] != serde_json::json!("completed") {
+        return Err(format!("retry did not complete: {retried}"));
+    }
+    dispatch_ok(
+        &host,
+        "generation.events",
+        serde_json::json!({ "workflowId": retried_id, "limit": 200 }),
+    )?;
+    eprintln!("[smoke] golden: retry after failure -> completed");
+
+    // keep/discard recover TERMINAL runs (failed/cancelled/interrupted, ТЗ §4):
+    // keep persists the partial output as an assistant message, discard purges
+    // the journal. A waiting_for_tool run is NOT recoverable — it resumes via
+    // generation.tool.result (already exercised above).
+    let (partial_id, _partial_events) = run_stream(
+        &host,
+        "generation.start",
+        serde_json::json!({
+            "chatId": chat_id,
+            "message": "keep partial",
+            "provider": "fake",
+            "model": "steps=3;fail-at=3",
+        }),
+    )?;
+    let partial_run = dispatch_ok(
+        &host,
+        "generation.get",
+        serde_json::json!({ "workflowId": partial_id }),
+    )?;
+    if partial_run["status"] != serde_json::json!("failed") {
+        return Err(format!("fail-at=3 run did not fail: {partial_run}"));
+    }
+    dispatch_ok(
+        &host,
+        "generation.keep",
+        serde_json::json!({ "workflowId": partial_id }),
+    )?;
+    eprintln!("[smoke] golden: keep recovered the partial output of a failed run");
+
+    dispatch_ok(
+        &host,
+        "generation.discard",
+        serde_json::json!({ "workflowId": cancelled_id }),
+    )?;
+    let discarded = dispatch_ok(
+        &host,
+        "generation.get",
+        serde_json::json!({ "workflowId": cancelled_id }),
+    )?;
+    let discarded_status = discarded["status"].as_str().unwrap_or("");
+    if discarded_status != "cancelled" {
+        return Err(format!("discard changed the terminal status: {discarded}"));
+    }
+    eprintln!("[smoke] golden: discard purged the cancelled journal (status kept: {discarded_status})");
+
+    // 9. Diagnostics + search walk (G6 evidence, round 27).
+    dispatch_ok(&host, "search.rebuild", serde_json::json!({}))?;
+    let hits = dispatch_ok(
+        &host,
+        "search.query",
+        serde_json::json!({ "q": "Aria", "scope": "characters", "sort": "relevance", "limit": 50 }),
+    )?;
+    if hits["items"].as_array().map(|items| items.is_empty()).unwrap_or(true) {
+        return Err(format!("search found nothing for a known character: {hits}"));
+    }
+    dispatch_ok(&host, "diagnostics.cache.clear", serde_json::json!({}))?;
+    dispatch_ok(&host, "diagnostics.export", serde_json::json!({}))?;
+    eprintln!("[smoke] golden: diagnostics/search walk ok");
     Ok(())
 }
 

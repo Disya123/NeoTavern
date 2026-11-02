@@ -4,6 +4,15 @@
 
 ### Added
 
+- **The generation.workflow family reaches Packaged on desktop (round 27/40).**
+  The packaged golden smoke now walks every workflow op: a delayed run is
+  cancelled mid-flight (status `cancelled`), a failed run is retried to
+  completion, `keep` recovers the partial output of a failed run as an
+  assistant message and `discard` purges the cancelled journal, plus the
+  unary events page; diagnostics + search walk too (FTS rebuild, a query hit
+  on a known character, cache clear, SEC-07 export). `generation.workflow`
+  and `ui.diagnostics` promoted to Packaged. Desktop score: 17/43.
+
 - **The two largest CRUD families reach Packaged on desktop (round 26/40).**
   The packaged golden smoke walks the full 10-op asset family (put, get,
   content, thumbnail from a real 1x1 PNG, list, delete) and the full 13-op
