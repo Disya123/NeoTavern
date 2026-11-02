@@ -282,8 +282,8 @@ impl QueueInner {
 
     fn take(&mut self, out: &mut [PlatformPointerSample]) -> usize {
         let n = self.len.min(out.len());
-        for i in 0..n {
-            out[i] = self.slots[self.index(i)].expect("occupied");
+        for (i, slot) in out.iter_mut().take(n).enumerate() {
+            *slot = self.slots[self.index(i)].expect("occupied");
             self.slots[self.index(i)] = None;
         }
         self.head = 0;
@@ -442,6 +442,10 @@ impl PlatformInputAdapter {
         Ok((n, path.present(self.presentation_time())))
     }
 
+    // The drain needs the fast path, the session, both snapshots, the paint plan,
+    // the viewport and the sequence counter; bundling them into a struct would
+    // allocate for no benefit on the per-frame path.
+    #[allow(clippy::too_many_arguments)]
     pub fn drain_selection(
         &self,
         path: &mut CompositorFastPath,

@@ -69,7 +69,7 @@ fn chats_reorder_round_trip_and_manual_list() {
     let character_id = create_character(&kernel, "Reorderer");
 
     let first = create_chat(&kernel, &character_id, "First");
-    let second = create_chat(&kernel, &character_id, "Second");
+    let _second = create_chat(&kernel, &character_id, "Second");
     let third = create_chat(&kernel, &character_id, "Third");
 
     // Recent order (default): newest first.

@@ -450,11 +450,11 @@ pub(crate) fn encode_thumb_with_ladder(
             // can reach it with an RGBA thumbnail) — collapse to RGB8 first.
             let rgb = image::DynamicImage::ImageRgb8(thumb.to_rgb8());
             let mut out = Vec::new();
-            let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 82);
+            let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 82);
             rgb.write_with_encoder(encoder).map_err(encode_failure)?;
             (AssetThumbFormat::Jpeg, out)
         };
-        let b64_len = (encoded.len() + 2) / 3 * 4;
+        let b64_len = encoded.len().div_ceil(3) * 4;
         if b64_len <= response_limit {
             return Ok((format, encoded, thumb.width(), thumb.height()));
         }
@@ -716,9 +716,9 @@ mod thumb_ladder_tests {
         let limit = generated::operation_response_limit("assets.thumb")
             .expect("assets.thumb declares a response limit");
         assert!(
-            (encoded.len() + 2) / 3 * 4 <= limit as usize,
+            encoded.len().div_ceil(3) * 4 <= limit as usize,
             "base64 {} exceeds limit {}",
-            (encoded.len() + 2) / 3 * 4,
+            encoded.len().div_ceil(3) * 4,
             limit
         );
         // `thumbnail` preserves the 10:7 source aspect (longest side = step).

@@ -896,6 +896,18 @@
 
 ### Fixed
 
+- **Workspace clippy is green again under `-D warnings` (round 7/40).** The
+  release gate requires green clippy/format, but `cargo clippy --workspace
+  --all-targets -- -D warnings` (the exact CI command) failed: 12 lint hits
+  across `runtime-kernel` (useless `as i64` conversions, manual `div_ceil`,
+  redundant closures, two `contains()`-instead-of-`iter().any()`, one unused
+  test binding) and `neocompositor` (needless range loop, too many arguments,
+  manual checked division). Behaviour is unchanged: `cargo clippy --fix`
+  handled the mechanical ones, the compositor drain got a documented
+  `#[allow(clippy::too_many_arguments)]` (structing the per-frame arguments
+  would allocate for nothing), and `pressure.rs` uses `checked_div`, which
+  keeps the `cap_bytes == 0` fallback explicit instead of a branch.
+
 - Startup hydration survives the built-in defaults (UI-06 audit class,
   ADR-0057 Phase 2). The session applied its static view defaults AFTER
   loading the kernel settings snapshot, so a persisted ru locale / text

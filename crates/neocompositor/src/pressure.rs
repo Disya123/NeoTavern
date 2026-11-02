@@ -256,12 +256,10 @@ impl PressureController {
             self.tier = PressureTier::Degraded;
             return;
         }
-        let pct = if self.cap_bytes == 0 {
-            DENOM
-        } else {
-            u32::try_from((self.used_bytes.saturating_mul(DENOM as usize)) / self.cap_bytes)
-                .unwrap_or(DENOM)
-        };
+        let pct = (self.used_bytes.saturating_mul(DENOM as usize))
+            .checked_div(self.cap_bytes)
+            .and_then(|value| u32::try_from(value).ok())
+            .unwrap_or(DENOM);
         self.tier = if pct >= DEGRADED_NUM {
             PressureTier::Degraded
         } else if pct >= CRITICAL_NUM {

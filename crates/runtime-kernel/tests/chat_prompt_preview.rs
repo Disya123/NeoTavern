@@ -124,7 +124,7 @@ fn chat_prompt_preview_builds_the_next_prompt_without_a_run() {
     );
     let contents: Vec<&str> = plan.messages.iter().map(|m| m.content.as_str()).collect();
     assert!(
-        contents.iter().any(|c| *c == "Hello Aria") && contents.iter().any(|c| *c == "Hi there!"),
+        contents.contains(&"Hello Aria") && contents.contains(&"Hi there!"),
         "chat history enters the preview: {contents:?}"
     );
     assert_eq!(

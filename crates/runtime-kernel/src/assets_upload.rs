@@ -280,7 +280,7 @@ fn sweep_expired(db: &Database) {
 /// `assets.upload.begin` — reserve an upload id and record the declared size.
 pub(crate) fn upload_begin(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_assets_upload_begin(request)?;
-    if i64::from(req.total_bytes) > MAX_UPLOAD_BYTES {
+    if req.total_bytes > MAX_UPLOAD_BYTES {
         return Err(KernelError::new(
             crate::KernelErrorCode::ContractViolation,
             format!(
@@ -304,7 +304,7 @@ pub(crate) fn upload_begin(db: &mut Database, request: &[u8]) -> Result<Vec<u8>,
                 &req.kind,
                 &req.filename,
                 req.content_type.as_deref(),
-                i64::from(req.total_bytes),
+                req.total_bytes,
                 &created_at
             ],
         )
@@ -329,11 +329,11 @@ pub(crate) fn upload_append(db: &mut Database, request: &[u8]) -> Result<Vec<u8>
     {
         return Err(upload_expired(&req.upload_id, &expiry_of(&row)));
     }
-    if i64::from(req.index) != row.next_index {
+    if req.index != row.next_index {
         return Err(upload_out_of_order(
             &req.upload_id,
             row.next_index,
-            i64::from(req.index),
+            req.index,
         ));
     }
 
@@ -430,7 +430,7 @@ pub(crate) fn upload_finish(db: &mut Database, request: &[u8]) -> Result<Vec<u8>
     }
     let path = data_path(db, &req.upload_id);
     let (checksum, hashed_bytes) =
-        neotavern_storage::assets::sha256_file_hex(&path).map_err(|err| KernelError::from(err))?;
+        neotavern_storage::assets::sha256_file_hex(&path).map_err(KernelError::from)?;
     if hashed_bytes != row.declared_bytes {
         return Err(upload_incomplete(
             &req.upload_id,
@@ -466,7 +466,7 @@ pub(crate) fn upload_finish(db: &mut Database, request: &[u8]) -> Result<Vec<u8>
                 &checksum,
                 row.declared_bytes,
             )
-            .map_err(|err| KernelError::from(err))?;
+            .map_err(KernelError::from)?;
             (id, false)
         }
     };

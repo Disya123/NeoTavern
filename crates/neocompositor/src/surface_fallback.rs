@@ -344,7 +344,7 @@ fn select_policy(
     viewport: Rect,
 ) -> Result<FallbackPolicy, SurfaceCompileError> {
     let fullscreen = spec.promote_fullscreen || spec.bounds.covers(viewport);
-    let requested = spec.requested_policy.or_else(|| {
+    let requested = spec.requested_policy.or({
         if fullscreen {
             Some(FallbackPolicy::FullscreenSurface)
         } else {
