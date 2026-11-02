@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+### Added
+
+- **Chunked upload as the large-file ingestion contract (M7 Etap-4 slice; round
+  2/40 of the legacy-removal goal).** Four wire operations let any client send a
+  file larger than the 1 MiB request cap without a second transport:
+  `assets.upload.begin` (reserves an id, returns `chunkSizeBytes` = 512 KiB raw
+  and `expiresAt`), `assets.upload.append` (`index` must equal `nextIndex`;
+  base64 chunk), `assets.upload.finish` (publishes ONE immutable
+  content-addressed asset and answers the SAME DTO as `assets.put`) and
+  `assets.upload.abort` (idempotent). Rationale and the rejected alternatives
+  are recorded in [ADR-0061](docs/adr/0061-large-file-ingestion.md): the
+  host-staged-path variant cannot serve the remote Web Client, whose only channel
+  is Product Wire. Staged bytes live in `<data_root>/staged/<uploadId>/` and the
+  new schema **v29** `asset_uploads` row is bookkeeping only (AGENTS.md §11 — no
+  media BLOBs in SQLite). The declared length is authoritative: an over-size
+  chunk is refused on `append`, `finish` refuses a length mismatch
+  (`ASSET_UPLOAD_INCOMPLETE`) and the storage layer re-checks the staged file
+  length before registering the asset, so a truncated transfer can never be
+  published. `finish` streams the file through sha256 (never into memory),
+  dedupes by `(kind, sha256)` and publishes through the same atomic
+  rename + row insert as `assets.put`;
+  `neotavern_storage::assets::publish_asset_from_file` / `sha256_file_hex` are
+  the streaming primitives. Uploads expire after 24 h and `begin` sweeps expired
+  rows with their bytes. Facade:
+  `backend.assets.uploadBegin/uploadAppend/uploadFinish/uploadAbort` (local and
+  remote implemented, legacy facade keeps `UnsupportedError`). Honest boundary:
+  this lands the CONTRACT and the kernel/storage implementation — the 22
+  transport-blocked routes in the cutover registry still need their consumers
+  wired (backup import, wallpapers, plugin blobs, speech/image inputs), so the
+  legacy sidecar keeps serving them until those slices land. Contract hash
+  `b0fd0b6e...`; registry 142 ops. Tests: 5 kernel tests
+  (`crates/runtime-kernel/tests/asset_upload.rs`), the storage publish path
+  exercised through them, and a new neobackend parity test (115 in that file).
+
 ### Changed
 
 - **Etap-4 cutover registry: every remaining plugin/theme runtime route now

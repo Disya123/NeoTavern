@@ -153,6 +153,13 @@ import type {
   ProfileImportResultDto,
   ProviderConfigDto,
   PutAssetRequestDto,
+  BeginAssetUploadRequestDto,
+  BeginAssetUploadResultDto,
+  AppendAssetUploadRequestDto,
+  AppendAssetUploadResultDto,
+  FinishAssetUploadRequestDto,
+  AbortAssetUploadRequestDto,
+  AbortAssetUploadResultDto,
   PutAssetResultDto,
   RenameProfileRequestDto,
   InstructFormatsResultDto,
@@ -772,6 +779,38 @@ export interface AssetsApi {
   put(req: PutAssetRequestDto, opts?: BackendCallOptions): Promise<PutAssetResultDto>;
   /** Asset delete (wire `assets.delete`). */
   del(assetId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /**
+   * Reserve a chunked upload (wire `assets.upload.begin`, ADR-0061) — the only
+   * path for a file larger than the `assets.put` request cap. Returns the
+   * upload id, the maximum raw chunk size and the staged-bytes expiry.
+   */
+  uploadBegin(
+    req: BeginAssetUploadRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<BeginAssetUploadResultDto>;
+  /**
+   * Append one sequential chunk (wire `assets.upload.append`). `index` must be
+   * the previous `nextIndex`; a lost chunk is a stable CONFLICT rather than a
+   * silently corrupt file.
+   */
+  uploadAppend(
+    req: AppendAssetUploadRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<AppendAssetUploadResultDto>;
+  /**
+   * Publish the assembled upload (wire `assets.upload.finish`). The result is
+   * the same DTO `put` returns — an immutable, content-addressed, deduplicated
+   * asset — and `ASSET_UPLOAD_INCOMPLETE` refuses a truncated transfer.
+   */
+  uploadFinish(
+    req: FinishAssetUploadRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<PutAssetResultDto>;
+  /** Drop a staged upload (wire `assets.upload.abort`); idempotent. */
+  uploadAbort(
+    req: AbortAssetUploadRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<AbortAssetUploadResultDto>;
 }
 
 /**

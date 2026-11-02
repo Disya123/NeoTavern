@@ -87,6 +87,9 @@ import type {
   GetAssetContentResultDto,
   GetAssetResultDto,
   PutAssetResultDto,
+  BeginAssetUploadResultDto,
+  AppendAssetUploadResultDto,
+  AbortAssetUploadResultDto,
   CharacterCardExportResultDto,
   GalleryListResultDto,
   GalleryAddResultDto,
@@ -501,6 +504,20 @@ export class RemoteBackend implements NeoBackend {
       ),
     put: (req, opts) =>
       this.sdk.call<PutAssetResultDto>('assets.put', req, { signal: opts?.signal }),
+    uploadBegin: (req, opts) =>
+      this.sdk.call<BeginAssetUploadResultDto>('assets.upload.begin', req, {
+        signal: opts?.signal,
+      }),
+    uploadAppend: (req, opts) =>
+      this.sdk.call<AppendAssetUploadResultDto>('assets.upload.append', req, {
+        signal: opts?.signal,
+      }),
+    uploadFinish: (req, opts) =>
+      this.sdk.call<PutAssetResultDto>('assets.upload.finish', req, { signal: opts?.signal }),
+    uploadAbort: (req, opts) =>
+      this.sdk.call<AbortAssetUploadResultDto>('assets.upload.abort', req, {
+        signal: opts?.signal,
+      }),
     del: (assetId, opts) =>
       this.sdk.call<EmptyResultDto>('assets.delete', { assetId }, { signal: opts?.signal }),
   };

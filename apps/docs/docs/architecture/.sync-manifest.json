@@ -283,9 +283,14 @@
       "sha256": "719ce80e3924578c484a9f193728a3bfa12d9ba73e39557d2c596961802192fc"
     },
     {
+      "source": "adr/0061-large-file-ingestion.md",
+      "target": "adr/0061-large-file-ingestion.md",
+      "sha256": "c266cacdbe2e5787a3302bca2839d103faa04f0a7463c0122101f28374fa6ecc"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "828f5e7c3ce93b48ce3bd74eb6023f7ea6d59fed40f5eae9baedaf70ac2fc8dd"
+      "sha256": "dd33af9a403894f245c4a1c3d040071d500dc14a986fdfff1104de35b641ed74"
     },
     {
       "source": "android/README.md",
@@ -310,7 +315,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "94f640023bd6f21ce5b4d8448b64c592166708cdfcecd64782c460f5e7425329"
+      "sha256": "0192c703d8c9645b752594166b1e891eb363cead7cb3c523185c709ed2438ed2"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -375,7 +380,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "1fd1ce886ce21ef6af71ef899b9405c9a331a81353c92bd49ed7b80b41aeb4a5"
+      "sha256": "f7664a44a6ecc90c63bf0868dc319ce8fb5a3489e73266146f04ff457a1fb7c5"
     },
     {
       "source": "audits/rust-app/INVENTORY.md",
@@ -410,12 +415,12 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "6941df8579c9f81fb800bf494221ad13bd8acd73c2e7451f3334c874a33023a3"
+      "sha256": "307fdb6bacc9ed54db24477fd027abca9c4503118e78148385f5191bb0a02d64"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "1b5a57f53fe715c52703902f4682da2e61c1bb57299474fcf7a1c183f9265858"
+      "sha256": "4916facf89bff485071619917221e403df915767137ead44a0da152597d977a8"
     },
     {
       "source": "desktop/README.md",

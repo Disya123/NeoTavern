@@ -97,6 +97,21 @@ legacy `app.db` `plugin_secrets` table is a different database and stays
 untouched: the kernel table is the canonical one. Rollback for any kernel
 migration is the pre-migration backup restore (ТЗ §10.4); v20–v28 are additive.
 
+v29 (`029_asset_uploads`, ingestion contract
+[ADR-0061](../adr/0061-large-file-ingestion.md)) adds `asset_uploads`: one
+STRICT bookkeeping row per in-flight chunked upload (`id`, `kind`, `filename`,
+`content_type`, `declared_bytes`, `received_bytes`, `next_index`,
+`created_at`, `updated_at`), indexed by `updated_at` for the TTL sweep. The
+BYTES are deliberately absent — they grow in
+`<data_root>/staged/<uploadId>/data.part`, outside both the database and the
+asset plane, so AGENTS.md §11 holds (media never lives in SQLite), a database
+copy can never contain a half-written upload, and content addressing/GC only
+ever see complete assets. `finish` publishes the assembled file into
+`__neotavern_assets` through the same atomic rename + row insert as
+`assets.put` and deletes the row; `abort` (or the 24 h expiry swept on every
+`begin`) deletes row and bytes. A leftover row is harmless: it expires and its
+staged directory is reclaimed. v29 is additive.
+
 ### Plugin state and grants
 
 `plugin_state` stores user plugin state separately from `plugin_registry`

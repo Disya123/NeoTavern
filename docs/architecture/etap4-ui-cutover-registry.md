@@ -171,14 +171,14 @@ together with the legacy server itself — deleting them earlier would break the
 sidecar build, which is still the public default until the release gate passes.
 That deletion is tracked in sections 4.2 and 5, not per cluster.
 
-## 4. Blocked on the ingestion transport (decision pending)
+## 4. Large-file ingestion transport — decided (ADR-0061), consumers pending
 
-Two clusters cannot be honestly ported before the wire grows a large-file
-ingestion contract. Both are blocked by the same fact: wire requests are JSON
+Two clusters could not be honestly ported before the wire grew a large-file
+ingestion contract. Both were blocked by the same fact: wire requests are JSON
 (and `assets.put`, the only byte-carrying op, admits **1 MiB**), while the
 kernel is a synchronous single writer.
 
-| Cluster | Payload                                                | Why the wire cannot carry it today                                                                      |
+| Cluster | Payload                                                | Why the wire cannot carry it in one request                                                             |
 | ------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | 8 tail  | TTS audio / generated images / transcription uploads   | binary or multipart; multi-MB base64 results would blow DTO budgets                                     |
 | 10      | SillyTavern backups (`/imports/sillytavern/*`)         | multipart archive up to the legacy **4 GiB** cap; extraction is minutes                                 |
@@ -186,22 +186,23 @@ kernel is a synchronous single writer.
 | 21a     | Plugin blobs (`/plugins/:id/blobs*`)                   | binary bodies with an 8 MiB per-blob legacy cap; the sandbox streams them through the host session      |
 | 20      | Plugin sandbox/assets (`:id/sandbox*`, `:id/assets/*`) | whole package files served to the iframe; the wire has no "raw file bytes" body type                    |
 
-Candidate contracts (owner decision required — no ADR is recorded yet, and
-neither is implemented):
+**Decision (2026-11-02): candidate 2, chunked upload.**
+[ADR-0061](../adr/0061-large-file-ingestion.md) records why candidate 1
+(host-staged path) lost: the remote Web Client's only channel is Product Wire, so
+a host-staged path would force a second, non-canonical upload endpoint — exactly
+the second backend surface ADR-0038 forbids for new product logic.
 
-1. **Host-staged path.** The host (desktop Tauri / headless server) streams the
-   file into the data root itself and calls a wire op with a staged-upload id
-   or a relative path. Small wire surface, no kernel streaming; the remote Web
-   Client needs the host's own HTTP upload endpoint (outside Product Wire).
-2. **Chunked upload ops.** `assets.upload.begin/append/finish` with bounded
-   chunks (≤1 MiB each), assembling under the asset plane with a TTL and
-   explicit cancellation. Works for every client uniformly and keeps Product
-   Wire canonical, but adds a mutable staged-upload resource the kernel must
-   own, clean up and bound.
-
-Until then the honest state is what ships today: the React hooks refuse in
-kernel mode with a stable `UnsupportedError`, and the legacy sidecar keeps the
-feature.
+**Status of this section:** the CONTRACT and the kernel plane are implemented —
+`assets.upload.begin|append|finish|abort` (registry **142 ops**, schema **v29**
+`asset_uploads`, 5 kernel tests in `crates/runtime-kernel/tests/asset_upload.rs`,
+facade `backend.assets.uploadBegin/…`). What is NOT done is the per-route work
+above: each row needs its consumer (hooks, backup importer, wallpaper picker,
+plugin blob reader, sandbox asset reader) rewired onto the new family. Until
+those land, the honest state is unchanged: the React hooks refuse in kernel mode
+with a stable `UnsupportedError`, and the legacy sidecar keeps the feature. The
+"transport-blocked" classification of these rows is therefore lifted to
+"contract landed, consumer pending" — it is no longer a blocker that code alone
+cannot move.
 
 ### 4.1 Reassessment after cluster 21 part 2
 
@@ -210,12 +211,13 @@ The plugin secret store closed the last family that was still parked behind a
 model: each remaining route falls into exactly one of four buckets, and none of
 them can be moved by writing code alone.
 
-1. **Ingestion transport (the decision above).** Row 8 tail (audio/images/
-   transcribe), row 10 (backup import), row 13 (wallpapers), row 21a (plugin
-   blobs) and the asset half of row 20 all need bytes that a JSON request
-   cannot carry. Both candidate contracts are recorded in the table above and
-   neither is approved; implementing one unilaterally would change the
-   transport contract without an owner decision.
+1. **Ingestion transport — RESOLVED (ADR-0061, chunked upload implemented).**
+   Row 8 tail (audio/images/transcribe), row 10 (backup import), row 13
+   (wallpapers), row 21a (plugin blobs) and the asset half of row 20 all need
+   bytes a JSON request cannot carry; the family
+   `assets.upload.begin|append|finish|abort` now carries them, so this bucket
+   became ordinary per-route work ("contract landed, consumer pending", see
+   §4).
 2. **Host/HTTP surface by architecture, not by omission.** Row 19's install
    verifier, row 20 (git install, safe-mode file, sandbox session, package
    assets), row 21b (`pluginJobs` — the in-process sandbox executor queue) and
@@ -235,15 +237,18 @@ them can be moved by writing code alone.
    kernel already supplies its inputs and the documented first-paint difference
    stands.
 
-Consequence for planning: the wire-coverage program in this registry is at its
-honest ceiling — 112 covered / 5 partial / 48 missing, with every missing route
-classified above. The next move on buckets 1–2 is the owner's: pick the
-ingestion contract (host-staged vs chunked upload), and state explicitly
-whether any host/HTTP surface should be pulled into the kernel. Bucket 3 stays
-N/A and bucket 4 stays a documented boundary. The remaining product work on
-covered rows was the separate UI-flag-flip program, which is now complete (see
-the note above the cluster tables): the wire side of this registry and the UI
-side have both landed, so what remains is the stage-6 deletion below.
+Consequence for planning: the wire-coverage program in this registry is past its
+old ceiling — 112 covered / 5 partial / 48 missing, and the first bucket is no
+longer blocked: chunked upload
+([ADR-0061](../adr/0061-large-file-ingestion.md)) removed "the wire cannot carry
+these bytes" as a reason, so those routes are now ordinary consumer work for the
+following rounds. What still needs an owner decision is bucket 2: whether any
+host/HTTP surface (job queue, OAuth proxy, git-install verifier, sandbox session)
+should be pulled into the kernel at all. Bucket 3 stays N/A and bucket 4 stays a
+documented boundary. The remaining product work on covered rows was the separate
+UI-flag-flip program, which is now complete (see the note above the cluster
+tables): the wire side of this registry and the UI side have both landed, so what
+remains is the stage-6 deletion below.
 
 ### 4.2 Stage-6 deletion plan (what removes Fastify/Drizzle)
 

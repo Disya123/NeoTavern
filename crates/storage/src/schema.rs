@@ -1190,6 +1190,47 @@ pub const MIGRATION_28_SQL: &str = migration_28_sql!();
 pub const MIGRATION_28_CHECKSUM: &str =
     "1e0d384580c24177baf1d0697a496a2be0bea214fd19c6f20a2e350aee6fec72";
 
+/// `asset_uploads` table (ADR-0061, chunked-upload ingestion contract). One
+/// row per in-flight upload: the staged BYTES never enter the database (they
+/// grow in `<data_root>/staged/<uploadId>/data.part`), so this row is pure
+/// bookkeeping — the address, the declared size, how much arrived and which
+/// chunk index is next. `finish` publishes the assembled file into the asset
+/// plane and drops the row; `abort` (or the TTL sweep) drops row + bytes.
+///
+/// `declared_bytes` is required: the kernel refuses to publish an upload that
+/// does not match the declared length, so a truncated transfer can never be
+/// mistaken for a complete file. `updated_at` powers the TTL sweep. Additive
+/// and self-cleaning; rollback is the pre-migration backup restore (TZ 10.4),
+/// and a leftover row simply expires.
+macro_rules! migration_29_sql {
+    () => {
+        r#"CREATE TABLE asset_uploads (
+  id TEXT NOT NULL PRIMARY KEY,
+  kind TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  content_type TEXT,
+  declared_bytes INTEGER NOT NULL,
+  received_bytes INTEGER NOT NULL DEFAULT 0,
+  next_index INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX idx_asset_uploads_updated ON asset_uploads(updated_at);"#
+    };
+}
+
+/// Name of the chunked-upload staging (v29) schema migration.
+pub const MIGRATION_29_NAME: &str = "029_asset_uploads";
+
+/// Exact SQL of the chunked-upload staging schema migration (v29) — the
+/// `migration_29_sql!()` literal.
+pub const MIGRATION_29_SQL: &str = migration_29_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_29_SQL` string bytes (same
+/// computation as `MIGRATION_28_CHECKSUM`).
+pub const MIGRATION_29_CHECKSUM: &str =
+    "af028805717ce6b2de1b9b9946baca04256e315624f7520d46c397c34699c1dd";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1252,7 +1293,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_27_sql!(),
     "\n",
-    migration_28_sql!()
+    migration_28_sql!(),
+    "\n",
+    migration_29_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

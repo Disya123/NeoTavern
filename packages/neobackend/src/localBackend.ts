@@ -79,6 +79,9 @@ import {
   type RevealProviderSecretResultDto,
   type SecretsExposureResultDto,
   type PutAssetResultDto,
+  type BeginAssetUploadResultDto,
+  type AppendAssetUploadResultDto,
+  type AbortAssetUploadResultDto,
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
   type SearchResultDto,
@@ -533,6 +536,14 @@ export class LocalBackend implements NeoBackend {
       content: (assetId, opts) =>
         this.invoke<GetAssetContentResultDto>('assets.content', { assetId }, opts),
       put: (req, opts) => this.invoke<PutAssetResultDto>('assets.put', req, opts),
+      uploadBegin: (req, opts) =>
+        this.invoke<BeginAssetUploadResultDto>('assets.upload.begin', req, opts),
+      uploadAppend: (req, opts) =>
+        this.invoke<AppendAssetUploadResultDto>('assets.upload.append', req, opts),
+      uploadFinish: (req, opts) =>
+        this.invoke<PutAssetResultDto>('assets.upload.finish', req, opts),
+      uploadAbort: (req, opts) =>
+        this.invoke<AbortAssetUploadResultDto>('assets.upload.abort', req, opts),
       del: (assetId, opts) => this.invoke<EmptyResultDto>('assets.delete', { assetId }, opts),
     };
     this.imports = {

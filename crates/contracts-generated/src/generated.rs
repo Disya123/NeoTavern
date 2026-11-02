@@ -98,6 +98,10 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "profile.export" => Some(4096),
         "profile.import" => Some(4096),
         "assets.put" => Some(1048576),
+        "assets.upload.begin" => Some(2048),
+        "assets.upload.append" => Some(1048576),
+        "assets.upload.finish" => Some(1024),
+        "assets.upload.abort" => Some(1024),
         "assets.get" => Some(1024),
         "assets.content" => Some(1024),
         "assets.thumb" => Some(1024),
@@ -244,6 +248,10 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "profile.export" => Some(262144),
         "profile.import" => Some(262144),
         "assets.put" => Some(262144),
+        "assets.upload.begin" => Some(1024),
+        "assets.upload.append" => Some(1024),
+        "assets.upload.finish" => Some(4096),
+        "assets.upload.abort" => Some(1024),
         "assets.get" => Some(262144),
         "assets.content" => Some(4194304),
         "assets.thumb" => Some(3145728),
@@ -6310,6 +6318,490 @@ pub fn validate_result_assets_put(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_result_assets_put(bytes: &[u8]) -> Result<ResultAssetsPut, WireError> {
     crate::decode::<ResultAssetsPut>(validate_result_assets_put, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestAssetsUploadBegin {
+    pub kind: String,
+    pub filename: String,
+    #[serde(rename = "contentType", default, skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
+    #[serde(rename = "totalBytes")]
+    pub total_bytes: i64,
+}
+
+pub(crate) fn check_request_assets_upload_begin(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9.-]*$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("kind").is_none() {
+            issues.push(Issue::new(join_path(path, "kind"), "RequiredProperty"));
+        }
+        if value.get("filename").is_none() {
+            issues.push(Issue::new(join_path(path, "filename"), "RequiredProperty"));
+        }
+        if value.get("totalBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "totalBytes"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("kind") {
+            let child_path = join_path(path, "kind");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("filename") {
+            let child_path = join_path(path, "filename");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 255 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("contentType") {
+            let child_path = join_path(path, "contentType");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("totalBytes") {
+            let child_path = join_path(path, "totalBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 4294967296 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "kind" | "filename" | "contentType" | "totalBytes") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_assets_upload_begin(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_assets_upload_begin(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_assets_upload_begin(bytes: &[u8]) -> Result<RequestAssetsUploadBegin, WireError> {
+    crate::decode::<RequestAssetsUploadBegin>(validate_request_assets_upload_begin, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultAssetsUploadBegin {
+    #[serde(rename = "uploadId")]
+    pub upload_id: String,
+    #[serde(rename = "chunkSizeBytes")]
+    pub chunk_size_bytes: i64,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: String,
+}
+
+pub(crate) fn check_result_assets_upload_begin(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("uploadId").is_none() {
+            issues.push(Issue::new(join_path(path, "uploadId"), "RequiredProperty"));
+        }
+        if value.get("chunkSizeBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "chunkSizeBytes"), "RequiredProperty"));
+        }
+        if value.get("expiresAt").is_none() {
+            issues.push(Issue::new(join_path(path, "expiresAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("uploadId") {
+            let child_path = join_path(path, "uploadId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("chunkSizeBytes") {
+            let child_path = join_path(path, "chunkSizeBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("expiresAt") {
+            let child_path = join_path(path, "expiresAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "uploadId" | "chunkSizeBytes" | "expiresAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_assets_upload_begin(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_assets_upload_begin(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_assets_upload_begin(bytes: &[u8]) -> Result<ResultAssetsUploadBegin, WireError> {
+    crate::decode::<ResultAssetsUploadBegin>(validate_result_assets_upload_begin, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestAssetsUploadAppend {
+    #[serde(rename = "uploadId")]
+    pub upload_id: String,
+    pub index: i64,
+    #[serde(rename = "contentBase64")]
+    pub content_base64: String,
+}
+
+pub(crate) fn check_request_assets_upload_append(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[A-Za-z0-9+/]*={0,2}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("uploadId").is_none() {
+            issues.push(Issue::new(join_path(path, "uploadId"), "RequiredProperty"));
+        }
+        if value.get("index").is_none() {
+            issues.push(Issue::new(join_path(path, "index"), "RequiredProperty"));
+        }
+        if value.get("contentBase64").is_none() {
+            issues.push(Issue::new(join_path(path, "contentBase64"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("uploadId") {
+            let child_path = join_path(path, "uploadId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("index") {
+            let child_path = join_path(path, "index");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("contentBase64") {
+            let child_path = join_path(path, "contentBase64");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "uploadId" | "index" | "contentBase64") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_assets_upload_append(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_assets_upload_append(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_assets_upload_append(bytes: &[u8]) -> Result<RequestAssetsUploadAppend, WireError> {
+    crate::decode::<RequestAssetsUploadAppend>(validate_request_assets_upload_append, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultAssetsUploadAppend {
+    #[serde(rename = "uploadId")]
+    pub upload_id: String,
+    #[serde(rename = "receivedBytes")]
+    pub received_bytes: i64,
+    #[serde(rename = "nextIndex")]
+    pub next_index: i64,
+}
+
+pub(crate) fn check_result_assets_upload_append(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("uploadId").is_none() {
+            issues.push(Issue::new(join_path(path, "uploadId"), "RequiredProperty"));
+        }
+        if value.get("receivedBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "receivedBytes"), "RequiredProperty"));
+        }
+        if value.get("nextIndex").is_none() {
+            issues.push(Issue::new(join_path(path, "nextIndex"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("uploadId") {
+            let child_path = join_path(path, "uploadId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("receivedBytes") {
+            let child_path = join_path(path, "receivedBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("nextIndex") {
+            let child_path = join_path(path, "nextIndex");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "uploadId" | "receivedBytes" | "nextIndex") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_assets_upload_append(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_assets_upload_append(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_assets_upload_append(bytes: &[u8]) -> Result<ResultAssetsUploadAppend, WireError> {
+    crate::decode::<ResultAssetsUploadAppend>(validate_result_assets_upload_append, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestAssetsUploadFinish {
+    #[serde(rename = "uploadId")]
+    pub upload_id: String,
+}
+
+pub(crate) fn check_request_assets_upload_finish(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("uploadId").is_none() {
+            issues.push(Issue::new(join_path(path, "uploadId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("uploadId") {
+            let child_path = join_path(path, "uploadId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "uploadId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_assets_upload_finish(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_assets_upload_finish(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_assets_upload_finish(bytes: &[u8]) -> Result<RequestAssetsUploadFinish, WireError> {
+    crate::decode::<RequestAssetsUploadFinish>(validate_request_assets_upload_finish, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestAssetsUploadAbort {
+    #[serde(rename = "uploadId")]
+    pub upload_id: String,
+}
+
+pub(crate) fn check_request_assets_upload_abort(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("uploadId").is_none() {
+            issues.push(Issue::new(join_path(path, "uploadId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("uploadId") {
+            let child_path = join_path(path, "uploadId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "uploadId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_assets_upload_abort(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_assets_upload_abort(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_assets_upload_abort(bytes: &[u8]) -> Result<RequestAssetsUploadAbort, WireError> {
+    crate::decode::<RequestAssetsUploadAbort>(validate_request_assets_upload_abort, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultAssetsUploadAbort {
+    pub deleted: bool,
+}
+
+pub(crate) fn check_result_assets_upload_abort(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("deleted").is_none() {
+            issues.push(Issue::new(join_path(path, "deleted"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("deleted") {
+            let child_path = join_path(path, "deleted");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "deleted") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_assets_upload_abort(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_assets_upload_abort(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_assets_upload_abort(bytes: &[u8]) -> Result<ResultAssetsUploadAbort, WireError> {
+    crate::decode::<ResultAssetsUploadAbort>(validate_result_assets_upload_abort, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

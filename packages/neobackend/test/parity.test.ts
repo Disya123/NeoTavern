@@ -70,6 +70,9 @@ import {
   type ProviderTestResultDto,
   type RevealProviderSecretResultDto,
   type PutAssetResultDto,
+  type BeginAssetUploadResultDto,
+  type AppendAssetUploadResultDto,
+  type AbortAssetUploadResultDto,
   type ResultSettingsDto,
   type RollbackChatSnapshotResultDto,
   type ListChatSnapshotsRequestDto,
@@ -428,6 +431,17 @@ const ASSET_CONTENT: GetAssetContentResultDto = {
   contentBase64: 'iVBORw0KGgoAAAANSUhEUg==',
 };
 const ASSET_PUT: PutAssetResultDto = { asset: ASSET, deduplicated: false };
+const ASSET_UPLOAD_BEGIN: BeginAssetUploadResultDto = {
+  uploadId: '00000000-0000-4000-8000-0000000000a1',
+  chunkSizeBytes: 524288,
+  expiresAt: TIMESTAMP,
+};
+const ASSET_UPLOAD_APPEND: AppendAssetUploadResultDto = {
+  uploadId: '00000000-0000-4000-8000-0000000000a1',
+  receivedBytes: 5,
+  nextIndex: 1,
+};
+const ASSET_UPLOAD_ABORT: AbortAssetUploadResultDto = { deleted: true };
 
 /** `imports.character.card` response (Этап 4.5): the imported character. */
 const CHARACTER_CARD_IMPORT: CharacterCardImportResultDto = {
@@ -840,6 +854,14 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: ASSET_CONTENT };
       case 'assets.put':
         return { ok: true, value: ASSET_PUT };
+      case 'assets.upload.begin':
+        return { ok: true, value: ASSET_UPLOAD_BEGIN };
+      case 'assets.upload.append':
+        return { ok: true, value: ASSET_UPLOAD_APPEND };
+      case 'assets.upload.finish':
+        return { ok: true, value: ASSET_PUT };
+      case 'assets.upload.abort':
+        return { ok: true, value: ASSET_UPLOAD_ABORT };
       case 'assets.delete':
         return { ok: true, value: EMPTY_RESULT };
       case 'imports.character.card':
@@ -1046,6 +1068,14 @@ function rpcResult(operationId: string | undefined): unknown {
       return ASSET_CONTENT;
     case 'assets.put':
       return ASSET_PUT;
+    case 'assets.upload.begin':
+      return ASSET_UPLOAD_BEGIN;
+    case 'assets.upload.append':
+      return ASSET_UPLOAD_APPEND;
+    case 'assets.upload.finish':
+      return ASSET_PUT;
+    case 'assets.upload.abort':
+      return ASSET_UPLOAD_ABORT;
     case 'assets.delete':
       return EMPTY_RESULT;
     case 'imports.character.card':
@@ -2408,6 +2438,51 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     );
   });
 
+  it('assets.upload.* stages chunks and publishes the same asset DTO as put', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const begin = { kind: 'background', filename: 'wallpaper.png', totalBytes: 1048576 };
+    const [beginLocal, beginRemote] = await Promise.all([
+      local.assets.uploadBegin(begin),
+      remote.assets.uploadBegin(begin),
+    ]);
+    expect(beginLocal).toEqual(beginRemote);
+    expect(beginLocal).toEqual(ASSET_UPLOAD_BEGIN);
+    // assets.upload.begin forwards the declared size verbatim.
+
+    const append = { uploadId: beginLocal.uploadId, index: 0, contentBase64: 'aGVsbG8=' };
+    const [appendLocal, appendRemote] = await Promise.all([
+      local.assets.uploadAppend(append),
+      remote.assets.uploadAppend(append),
+    ]);
+    expect(appendLocal).toEqual(appendRemote);
+    expect(appendLocal).toEqual(ASSET_UPLOAD_APPEND);
+
+    const finishReq = { uploadId: beginLocal.uploadId };
+    const [finishLocal, finishRemote] = await Promise.all([
+      local.assets.uploadFinish(finishReq),
+      remote.assets.uploadFinish(finishReq),
+    ]);
+    // finish answers the SAME DTO assets.put does - one asset contract.
+    expect(finishLocal).toEqual(finishRemote);
+    expect(finishLocal).toEqual(ASSET_PUT);
+
+    const [abortLocal, abortRemote] = await Promise.all([
+      local.assets.uploadAbort(finishReq),
+      remote.assets.uploadAbort(finishReq),
+    ]);
+    expect(abortLocal).toEqual(abortRemote);
+    expect(abortLocal).toEqual(ASSET_UPLOAD_ABORT);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'assets.upload.begin', payload: begin },
+      { operationId: 'assets.upload.append', payload: append },
+      { operationId: 'assets.upload.finish', payload: finishReq },
+      { operationId: 'assets.upload.abort', payload: finishReq },
+    ]);
+  });
   it('plugins.secrets.* forward the scope address and decode value-free DTOs', async () => {
     const kernel = new FakeKernelTransport();
     const local = new LocalBackend({ transport: kernel });

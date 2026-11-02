@@ -32,6 +32,7 @@ use std::time::Duration;
 
 pub mod app_events;
 pub mod assets;
+pub mod assets_upload;
 pub mod backup;
 pub mod blocks;
 pub mod data;
@@ -689,6 +690,11 @@ fn handle_unary(
         }),
         // Этап 4 slice 5 remainder: canonical content-addressed AssetStore.
         "assets.put" => with_db_opt(db, |db| assets::assets_put(db, req)),
+        // ADR-0061: chunked upload for files larger than the assets.put cap.
+        "assets.upload.begin" => with_db_opt(db, |db| assets_upload::upload_begin(db, req)),
+        "assets.upload.append" => with_db_opt(db, |db| assets_upload::upload_append(db, req)),
+        "assets.upload.finish" => with_db_opt(db, |db| assets_upload::upload_finish(db, req)),
+        "assets.upload.abort" => with_db_opt(db, |db| assets_upload::upload_abort(db, req)),
         "assets.get" => with_db_opt(db, |db| assets::assets_get(db, req)),
         "assets.content" => with_db_opt(db, |db| assets::assets_content(db, req)),
         "assets.thumb" => with_db_opt(db, |db| assets::assets_thumb(db, req)),

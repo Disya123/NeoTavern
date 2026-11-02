@@ -2726,6 +2726,110 @@ export const PutAssetResultDtoSchema = Type.Object(
 export type PutAssetResultDto = Static<typeof PutAssetResultDtoSchema>;
 
 /**
+ * Chunked-upload begin request (`wire.request.assets.upload.begin`, ADR-0061).
+ *
+ * Wire requests are JSON, so a file larger than the `assets.put` cap cannot
+ * ride a single operation. A chunked upload stages the bytes in bounded
+ * pieces and publishes them as ONE immutable asset at `finish`, so consumers
+ * keep addressing an `assetId` exactly as before and the digest/dedupe story
+ * is unchanged. `totalBytes` is the client's declared size (the kernel
+ * rejects an upload that exceeds it and only publishes a COMPLETE one);
+ * `kind` follows the same grammar as `assets.put`.
+ */
+export const BeginAssetUploadRequestDtoSchema = Type.Object(
+  {
+    kind: Type.String({ pattern: '^[a-z][a-z0-9.-]*$', minLength: 1, maxLength: 64 }),
+    filename: Type.String({ minLength: 1, maxLength: 255 }),
+    contentType: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    totalBytes: Type.Integer({ minimum: 1, maximum: 4294967296 }),
+  },
+  { $id: 'wire.request.assets.upload.begin', additionalProperties: false },
+);
+export type BeginAssetUploadRequestDto = Static<typeof BeginAssetUploadRequestDtoSchema>;
+
+/**
+ * Chunked-upload begin result (`wire.result.assets.upload.begin`).
+ * `chunkSizeBytes` is the maximum RAW chunk `append` accepts (each chunk is
+ * base64 on the wire); `expiresAt` is the TTL after which the staged bytes are
+ * swept and the upload id answers `UPLOAD_EXPIRED`.
+ */
+export const BeginAssetUploadResultDtoSchema = Type.Object(
+  {
+    uploadId: Type.String({ format: 'uuid' }),
+    chunkSizeBytes: Type.Integer({ minimum: 1 }),
+    expiresAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.result.assets.upload.begin', additionalProperties: false },
+);
+export type BeginAssetUploadResultDto = Static<typeof BeginAssetUploadResultDtoSchema>;
+
+/**
+ * Chunked-upload append request (`wire.request.assets.upload.append`).
+ * `index` must equal the upload's `nextIndex`: sequential staging keeps the
+ * assembled order deterministic and turns a lost chunk into a stable error
+ * instead of a silently corrupt file.
+ */
+export const AppendAssetUploadRequestDtoSchema = Type.Object(
+  {
+    uploadId: Type.String({ format: 'uuid' }),
+    index: Type.Integer({ minimum: 0 }),
+    contentBase64: Type.String({
+      pattern: '^[A-Za-z0-9+/]*={0,2}$',
+      minLength: 1,
+    }),
+  },
+  { $id: 'wire.request.assets.upload.append', additionalProperties: false },
+);
+export type AppendAssetUploadRequestDto = Static<typeof AppendAssetUploadRequestDtoSchema>;
+
+/** Chunked-upload append result (`wire.result.assets.upload.append`). */
+export const AppendAssetUploadResultDtoSchema = Type.Object(
+  {
+    uploadId: Type.String({ format: 'uuid' }),
+    receivedBytes: Type.Integer({ minimum: 0 }),
+    nextIndex: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.result.assets.upload.append', additionalProperties: false },
+);
+export type AppendAssetUploadResultDto = Static<typeof AppendAssetUploadResultDtoSchema>;
+
+/**
+ * Chunked-upload finish request (`wire.request.assets.upload.finish`) —
+ * assembles the staged chunks into one content-addressed asset. The result is
+ * the same DTO `assets.put` returns (`wire.result.assets.put`), so a caller
+ * cannot tell a chunked publish from a single-shot one.
+ */
+export const FinishAssetUploadRequestDtoSchema = Type.Object(
+  {
+    uploadId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.assets.upload.finish', additionalProperties: false },
+);
+export type FinishAssetUploadRequestDto = Static<typeof FinishAssetUploadRequestDtoSchema>;
+
+/** Chunked-upload abort request (`wire.request.assets.upload.abort`). */
+export const AbortAssetUploadRequestDtoSchema = Type.Object(
+  {
+    uploadId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.assets.upload.abort', additionalProperties: false },
+);
+export type AbortAssetUploadRequestDto = Static<typeof AbortAssetUploadRequestDtoSchema>;
+
+/**
+ * Chunked-upload abort result (`wire.result.assets.upload.abort`).
+ * `deleted` is false when the upload id was already gone or had expired —
+ * abort is idempotent and never resurrects staged bytes.
+ */
+export const AbortAssetUploadResultDtoSchema = Type.Object(
+  {
+    deleted: Type.Boolean(),
+  },
+  { $id: 'wire.result.assets.upload.abort', additionalProperties: false },
+);
+export type AbortAssetUploadResultDto = Static<typeof AbortAssetUploadResultDtoSchema>;
+
+/**
  * Character-gallery item DTO (`wire.characters.gallery.item`) — one entry of
  * a character's gallery: the link id plus the joined asset metadata needed
  * to render and serve it. The bytes themselves are never embedded — they are
@@ -3645,6 +3749,13 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.assets.item': AssetDtoSchema,
   'wire.request.assets.put': PutAssetRequestDtoSchema,
   'wire.result.assets.put': PutAssetResultDtoSchema,
+  'wire.request.assets.upload.begin': BeginAssetUploadRequestDtoSchema,
+  'wire.result.assets.upload.begin': BeginAssetUploadResultDtoSchema,
+  'wire.request.assets.upload.append': AppendAssetUploadRequestDtoSchema,
+  'wire.result.assets.upload.append': AppendAssetUploadResultDtoSchema,
+  'wire.request.assets.upload.finish': FinishAssetUploadRequestDtoSchema,
+  'wire.request.assets.upload.abort': AbortAssetUploadRequestDtoSchema,
+  'wire.result.assets.upload.abort': AbortAssetUploadResultDtoSchema,
   'wire.characters.gallery.item': GalleryItemDtoSchema,
   'wire.request.characters-gallery-list': GalleryListRequestDtoSchema,
   'wire.result.characters-gallery-list': GalleryListResultDtoSchema,

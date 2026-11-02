@@ -1,5 +1,23 @@
 # Architecture Decision Records
 
+## ADR-0061: Large files enter through chunked upload on Product Wire
+
+**Proposed (kernel plane implemented, 2026-11-02).** Wire requests are JSON and
+the contract compiler caps `requestLimitBytes` at 1 MiB, but character cards,
+wallpapers, audio inputs and a SillyTavern backup (up to 4 GiB) cannot fit — the
+22 legacy routes still marked "transport-blocked" in the cutover registry. Two
+candidates were weighed: a host-staged path (the host streams the file into the
+data root and passes an id) and a chunked-upload family on Product Wire. The
+owner-facing constraint decides it: the remote Web Client's only channel is
+Product Wire, so a host-staged path would force a second, non-canonical upload
+endpoint. `assets.upload.begin|append|finish|abort` stages bounded chunks
+(512 KiB) under `<data_root>/staged/<uploadId>/`, never in SQLite (AGENTS.md
+§11), keeps the declared length authoritative (a truncated transfer is refused,
+not published), and `finish` answers the SAME DTO as `assets.put` — one asset
+contract, unchanged dedupe by `(kind, sha256)`. Staged bytes expire after 24 h
+and are swept on `begin`. Full decision:
+[ADR-0061](0061-large-file-ingestion.md).
+
 ## ADR-0060: App events are a durable cursor, not an SSE relay
 
 **Accepted (2026-11-09).** The canonical plane replaces the legacy

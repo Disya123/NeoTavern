@@ -363,6 +363,10 @@ export class LegacyBackend implements NeoBackend {
     get: () => this.unsupported('assets.get'),
     content: () => this.unsupported('assets.content'),
     put: () => this.unsupported('assets.put'),
+    uploadBegin: () => this.unsupported('assets.upload.begin'),
+    uploadAppend: () => this.unsupported('assets.upload.append'),
+    uploadFinish: () => this.unsupported('assets.upload.finish'),
+    uploadAbort: () => this.unsupported('assets.upload.abort'),
     del: () => this.unsupported('assets.delete'),
   };
 

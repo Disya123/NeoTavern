@@ -68,6 +68,32 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     out
 }
 
+/// Stream a file through sha256 without loading it into memory, returning the
+/// lowercase hex digest and the byte length that was hashed (ADR-0061: a
+/// chunked upload may be gigabytes, so the digest is computed while reading).
+pub fn sha256_file_hex(path: &Path) -> Result<(String, i64)> {
+    let mut file = fs::File::open(path).map_err(|e| io_err(e, "open file for hashing"))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0u8; 64 * 1024];
+    let mut total: i64 = 0;
+    loop {
+        let read = std::io::Read::read(&mut file, &mut buffer)
+            .map_err(|e| io_err(e, "read file for hashing"))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+        total += read as i64;
+    }
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(64);
+    for b in digest {
+        out.push(HEX_DIGITS[(b >> 4) as usize] as char);
+        out.push(HEX_DIGITS[(b & 0x0f) as usize] as char);
+    }
+    Ok((out, total))
+}
+
 /// Publish an immutable asset (ТЗ §25).
 ///
 /// `id` becomes the registry primary key, `kind` must be `1..=64` chars
@@ -159,6 +185,126 @@ pub fn publish_asset_in_tx(
         relative_key: relative_key.to_string(),
         checksum_sha256: checksum,
         size_bytes: content.len() as i64,
+        metadata_json: "{}".to_string(),
+        created_at,
+    })
+}
+
+/// Publish an immutable asset whose bytes already live in a file (ADR-0061
+/// chunked upload). Same guarantees as [`publish_asset`] — validated id, kind
+/// and managed key, content-addressed key, atomic visibility — but the bytes
+/// are never held in memory: the prepared file is moved into the assets
+/// directory with a rename (same filesystem), and when the target already
+/// exists the identical content is kept and the source file is dropped
+/// (content addressing makes the two files interchangeable).
+///
+/// `checksum_sha256` and `size_bytes` are supplied by the caller, which
+/// computed them while streaming the upload; they are validated against the
+/// file's length so a truncated staged file can never be registered as a
+/// complete asset.
+pub fn publish_asset_from_file(
+    db: &mut Database,
+    id: &str,
+    kind: &str,
+    relative_key: &str,
+    source: &Path,
+    checksum_sha256: &str,
+    size_bytes: i64,
+) -> Result<AssetRecord> {
+    validate_asset_id(id)?;
+    validate_relative_key(relative_key)?;
+    validate_kind(kind)?;
+    if checksum_sha256.len() != 64
+        || !checksum_sha256
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err(StorageError::with(
+            StorageErrorCode::InvalidAssetKey,
+            "checksum must be 64 lowercase hex chars",
+            vec![("checksum".to_string(), checksum_sha256.to_string())],
+        ));
+    }
+    if size_bytes < 0 {
+        return Err(StorageError::with(
+            StorageErrorCode::InvalidAssetKey,
+            "asset size must not be negative",
+            vec![("sizeBytes".to_string(), size_bytes.to_string())],
+        ));
+    }
+
+    let staged_len = fs::metadata(source)
+        .map_err(|e| io_err(e, "stat staged asset file"))?
+        .len() as i64;
+    if staged_len != size_bytes {
+        return Err(StorageError::with(
+            StorageErrorCode::InvalidAssetKey,
+            "staged file length does not match the declared size",
+            vec![
+                ("stagedBytes".to_string(), staged_len.to_string()),
+                ("sizeBytes".to_string(), size_bytes.to_string()),
+            ],
+        ));
+    }
+
+    let assets = assets_dir(db.root());
+    fs::create_dir_all(&assets).map_err(|e| io_err(e, "create assets dir"))?;
+    let target = join_checked(&assets, relative_key)?;
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| io_err(e, "create asset parent dirs"))?;
+    }
+
+    let moved_in = if target.exists() {
+        fs::remove_file(source).map_err(|e| io_err(e, "drop duplicate staged asset"))?;
+        false
+    } else {
+        match fs::rename(source, &target) {
+            Ok(()) => true,
+            Err(rename_err) => {
+                // Cross-device rename (a data root with a staged dir on another
+                // volume) falls back to a streaming copy; both files are ours.
+                if rename_err.kind() == ErrorKind::CrossesDevices {
+                    fs::copy(source, &target).map_err(|e| io_err(e, "copy staged asset"))?;
+                    fs::remove_file(source).map_err(|e| io_err(e, "drop staged asset"))?;
+                    true
+                } else {
+                    return Err(io_err(rename_err, "rename staged asset into place"));
+                }
+            }
+        }
+    };
+
+    let created_at = now_utc_rfc3339();
+    let inserted = db.transaction(|tx| {
+        tx.execute(
+            "INSERT INTO __neotavern_assets \
+             (id, type, relative_key, checksum_sha256, size_bytes, metadata_json, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6)",
+            rusqlite::params![
+                id,
+                kind,
+                relative_key,
+                checksum_sha256,
+                size_bytes,
+                created_at
+            ],
+        )
+        .map(|_| ())
+        .map_err(|e| sqlite_error(e, "insert asset row"))
+    });
+    if let Err(err) = inserted {
+        if moved_in {
+            let _ = fs::remove_file(&target);
+        }
+        return Err(err);
+    }
+
+    Ok(AssetRecord {
+        id: id.to_string(),
+        kind: kind.to_string(),
+        relative_key: relative_key.to_string(),
+        checksum_sha256: checksum_sha256.to_string(),
+        size_bytes,
         metadata_json: "{}".to_string(),
         created_at,
     })

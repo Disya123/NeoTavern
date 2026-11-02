@@ -567,7 +567,7 @@ fn map_asset_error(err: StorageError, context: &str, id: &str, key: &str) -> Ker
 
 /// Lowercase-safe extension of `filename` (including the leading dot,
 /// truncated to [`MAX_EXT_LEN`]), or an empty string when there is none.
-fn extension_of(filename: &str) -> String {
+pub(crate) fn extension_of(filename: &str) -> String {
     match filename.rsplit_once('.') {
         Some((_, ext)) if !ext.is_empty() => {
             let mut out = String::with_capacity(ext.len() + 1);

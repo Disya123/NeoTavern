@@ -226,7 +226,7 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
 `(kind,name)`). All slice-3 additions are `transactional`, strict
 `additionalProperties: false`, ARC-07. The M7 Этап-4 clusters then grew the
-registry to **138 ops** (the latest additions are the cluster-8 provider-access
+registry to **142 ops** (the latest additions are the cluster-8 provider-access
 pair `providers.models` / `providers.test`, the cluster-23 maintenance op
 `diagnostics.cache.clear`, the cluster-17 audit op `chats.context.audit`
 — the chat's latest durable `wire.prompt.plan`, after the provider catalog +
@@ -244,7 +244,7 @@ resumable replacement for the legacy SSE relay, see
 [ADR-0060](../adr/0060-app-event-cursor-not-sse.md), and the cluster-21
 plugin KV family `plugins.state.get` / `plugins.state.set` /
 `plugins.state.delete`, whose scope doubles as the `storage.<scope>`
-capability and whose write is a CAS transition over `expectedRevision`);
+capability and whose write is a CAS transition over `expectedRevision`, the cluster-21 plugin secret family `plugins.secrets.list|set|delete|reveal` (values live in the SecretStore, never in the database row), and � after the ingestion decision [ADR-0061](../adr/0061-large-file-ingestion.md) � the chunked-upload family `assets.upload.begin|append|finish|abort` for files above the 1 MiB request cap: chunks stage under `<data_root>/staged/`, `finish` answers the same `wire.result.assets.put` DTO as a single-shot publish);
 the authoritative live list with per-op
 metadata is the generated `packages/contracts/generated/contract-manifest.json`.
 
@@ -267,6 +267,10 @@ metadata is the generated `packages/contracts/generated/contract-manifest.json`.
 | `memories.create`                  | transactional | non-idempotent | none  | app.write | 65536   | 262144 | –      |
 | `memories.update`                  | transactional | non-idempotent | none  | app.write | 65536   | 262144 | –      |
 | `memories.delete`                  | transactional | non-idempotent | none  | app.write | 2048    | 1024   | –      |
+| `assets.upload.begin`              | transactional | non-idempotent | safe  | app.write | 2048    | 1024   | –      |
+| `assets.upload.append`             | transactional | non-idempotent | none  | app.write | 1048576 | 1024   | –      |
+| `assets.upload.finish`             | transactional | non-idempotent | none  | app.write | 1024    | 4096   | –      |
+| `assets.upload.abort`              | transactional | idempotent     | safe  | app.write | 1024    | 1024   | –      |
 
 The user-persona application slice (ADR-0047 waiver 3, closed in slice 3)
 adds **no new operations** — only additive optional fields on the existing
@@ -402,6 +406,32 @@ the documented product codes (`PROVIDER_TIMEOUT`, `PROVIDER_NETWORK_FAULT`,
 the adapter message stays in the kernel log and no key material reaches any
 DTO. Speech/images/transcribe have no wire operations: their payloads are
 binary or multipart and require a media transport contract first.
+
+### Large-file ingestion: chunked upload (`assets.upload.*`)
+
+The request envelope caps a body at 1 MiB, so a character card, a wallpaper, an
+audio input or a SillyTavern backup (up to 4 GiB) cannot ride a single
+operation. [ADR-0061](../adr/0061-large-file-ingestion.md) resolves this with a
+four-operation family instead of a second transport:
+
+| operation | request | result | notes |
+| --- | --- | --- | --- |
+| `assets.upload.begin` | `kind`, `filename`, `contentType?`, `totalBytes` (≤ 4 GiB) | `uploadId`, `chunkSizeBytes` (512 KiB raw), `expiresAt` | sweeps expired uploads before reserving a new one |
+| `assets.upload.append` | `uploadId`, `index`, `contentBase64` | `uploadId`, `receivedBytes`, `nextIndex` | `index` must equal `nextIndex`; the chunk may not exceed `chunkSizeBytes` or the declared length |
+| `assets.upload.finish` | `uploadId` | **the same DTO as `assets.put`** | refuses a length mismatch (`ASSET_UPLOAD_INCOMPLETE`) |
+| `assets.upload.abort` | `uploadId` | `deleted` | idempotent; reclaims the staged bytes |
+
+Bytes are staged in `<data_root>/staged/<uploadId>/data.part` and never enter
+SQLite (`asset_uploads`, schema v29, is bookkeeping only — AGENTS.md §11). The
+declared length is authoritative in both directions: an over-size chunk is
+refused on `append`, and `finish` (plus the storage insert) re-checks the staged
+length, so a truncated transfer can never be published as a complete asset.
+`finish` streams the file through sha256, dedupes by `(kind, sha256)` exactly
+like `assets.put`, and returns an immutable content-addressed asset, which keeps
+one asset contract for every consumer. Uploads expire after 24 h; `begin` sweeps
+expired rows with their bytes. Product codes: `ASSET_UPLOAD_NOT_FOUND`,
+`ASSET_UPLOAD_EXPIRED`, `ASSET_UPLOAD_OUT_OF_ORDER`,
+`ASSET_UPLOAD_SIZE_EXCEEDED`, `ASSET_UPLOAD_INCOMPLETE`.
 
 ## 6. Handshake and negotiation (§6.5)
 
