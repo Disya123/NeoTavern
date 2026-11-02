@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Changed
+
+- **Etap-4 cutover registry: every remaining plugin/theme runtime route now
+  carries a recorded verdict** (`docs/architecture/etap4-ui-cutover-registry.md`
+  rows 14, 19, 20). Cluster 20's eight runtime-surface routes are classified
+  as HTTP/host surface with a per-route reason instead of a bare "missing":
+  git install needs the host package verifier (the same boundary that keeps
+  `plugins.install` partial), the legacy safe-mode flag is a boot-time file
+  whose kernel-plane equivalent is the per-plugin `enabled` flag, the
+  capability query/write routes are redundant (and the write would widen
+  rights outside a consent moment — the wire must not allow it), and the
+  sandbox bootstrap plus package assets are static delivery for the iframe.
+  `themes/boot` is documented as a first-paint boundary: a pre-hydration
+  bootstrap fetch has no wire transport alive yet, so kernel mode paints
+  default tokens and applies the active theme once the app resolves it.
+  Row 19's status now reflects the four wired lifecycle ops.
+
 ### Added
 
 - **Plugin KV state on the kernel plane (M7 Etap-4 slice; cluster 21 part 1).**
