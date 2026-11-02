@@ -305,7 +305,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "ba680fd96941022f6857b56b9a6f943d9f13440fa15965ecaeee0257f13d7fbc"
+      "sha256": "0adf102f77c9022091872473d72fad9b80069aaf544b1696623f52d192bae84a"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -371,6 +371,11 @@
       "source": "architecture/providers.md",
       "target": "architecture/providers.md",
       "sha256": "554d97277e909772601403565e66c2043b25c7768c87e8512d5c5f918f964eea"
+    },
+    {
+      "source": "architecture/release-gate-status.md",
+      "target": "architecture/release-gate-status.md",
+      "sha256": "dcbfd474a3e940fb5efd2d9bc4c20f154043ba84120841b7ec8900f27b08f575"
     },
     {
       "source": "architecture/resource-containment.md",

@@ -4,6 +4,16 @@
 
 ### Added
 
+- **Release gate status page (round 10/40).** The Kernel default switch has
+  five verified rows — clippy `-D warnings`, `pnpm format:check`, the
+  no-silent-fallbacks gate, the 51-site legacy audit and wire codegen — and
+  five that cannot pass here: zero of 43 Desktop capabilities are `Packaged`,
+  no `app.db` → `database.sqlite` importer exists, rollback therefore cannot be
+  verified, and Playwright E2E plus a11y/visual gates were never run in this
+  program. Recorded in
+  [release-gate-status.md](docs/architecture/release-gate-status.md) so the
+  remaining work is a checklist with commands, not an intention.
+
 - **"No silent fallbacks" gate for the kernel plane (round 6/40 of the
   legacy-removal goal).** Release-gate item 4 asks for the absence of silent
   fallbacks; until now it was a review habit, not a check. `pnpm ui:fallback:check`

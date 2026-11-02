@@ -263,6 +263,10 @@ gate passes.
   connection sessions) that Product Wire deliberately does not model.
 - [Kernel-plane empty branches](kernel-empty-branches.md) — the
   "no silent fallbacks" gate: every kernel-mode branch calls the backend, throws,
+- [Release gate status](release-gate-status.md) — which gate rows are
+  verified (clippy, format, silent fallbacks, legacy audit, wire codegen) and
+  which still block the Kernel default switch (Packaged matrix, app.db
+  migration, rollback, Playwright E2E, a11y/visual).
   or carries a justified `kernel-empty:` marker.
   wire-safe rules, handshake, versioning, deterministic codegen and the
   cross-language corpus.
