@@ -4,6 +4,14 @@
 
 ### Added
 
+- **The two largest CRUD families reach Packaged on desktop (round 26/40).**
+  The packaged golden smoke walks the full 10-op asset family (put, get,
+  content, thumbnail from a real 1x1 PNG, list, delete) and the full 13-op
+  characters family (get, card get/update, update, gallery add/list/delete,
+  soft delete + restore, versions list/restore) on the portable artifact —
+  `library.assets` and `characters.crud` are promoted to Packaged. Desktop
+  capability score: 15/43 Packaged.
+
 - **Three more Packaged rows: variants/revisions/drafts, snapshots, app events
   (round 25/40).** The packaged golden smoke now exercises the full message
   variants lifecycle (create/list/activate/revisions.list/delete), the plugin

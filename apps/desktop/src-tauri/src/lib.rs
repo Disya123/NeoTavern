@@ -1210,6 +1210,110 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
 
     dispatch_ok(&host, "events.poll", serde_json::json!({}))?;
     eprintln!("[smoke] golden: variants/drafts/snapshots/events walk ok");
+
+    // 7. library.assets + characters.crud full walks (G6 evidence, round 26).
+    //    A real 1x1 PNG keeps the thumbnail path honest.
+    const TINY_PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let asset = dispatch_ok(
+        &host,
+        "assets.put",
+        serde_json::json!({
+            "kind": "avatar",
+            "filename": "smoke.png",
+            "contentType": "image/png",
+            "contentBase64": TINY_PNG,
+        }),
+    )?;
+    let asset_id = asset["asset"]["id"]
+        .as_str()
+        .ok_or_else(|| "asset carried no id".to_string())?
+        .to_string();
+    dispatch_ok(&host, "assets.get", serde_json::json!({ "assetId": asset_id }))?;
+    dispatch_ok(&host, "assets.content", serde_json::json!({ "assetId": asset_id }))?;
+    dispatch_ok(
+        &host,
+        "assets.thumb",
+        serde_json::json!({ "assetId": asset_id, "maxPx": 64 }),
+    )?;
+    dispatch_ok(&host, "assets.list", serde_json::json!({ "kind": "avatar", "limit": 50 }))?;
+    dispatch_ok(&host, "assets.delete", serde_json::json!({ "assetId": asset_id }))?;
+
+    dispatch_ok(&host, "characters.get", serde_json::json!({ "characterId": character_id }))?;
+    dispatch_ok(&host, "characters.card.get", serde_json::json!({ "characterId": character_id }))?;
+    dispatch_ok(
+        &host,
+        "characters.card.update",
+        serde_json::json!({
+            "characterId": character_id,
+            "card": {
+                "name": "Aria",
+                "description": "Golden slice character, card-edited",
+                "first_mes": "Hello from the card walk.",
+                "creator_notes": "Packaged smoke.",
+            },
+        }),
+    )?;
+    dispatch_ok(
+        &host,
+        "characters.update",
+        serde_json::json!({ "characterId": character_id, "name": "Aria renamed" }),
+    )?;
+    let gallery_item = dispatch_ok(
+        &host,
+        "characters.gallery.add",
+        serde_json::json!({
+            "characterId": character_id,
+            "filename": "smoke-gallery.png",
+            "contentType": "image/png",
+            "contentBase64": TINY_PNG,
+        }),
+    )?;
+    let gallery_id = gallery_item["item"]["id"]
+        .as_str()
+        .ok_or_else(|| "gallery item carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "characters.gallery.list",
+        serde_json::json!({ "characterId": character_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "characters.gallery.delete",
+        serde_json::json!({ "characterId": character_id, "imageId": gallery_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "characters.delete",
+        serde_json::json!({ "characterId": character_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "characters.restore",
+        serde_json::json!({ "characterId": character_id }),
+    )?;
+    let versions = dispatch_ok(
+        &host,
+        "characters.versions.list",
+        serde_json::json!({ "characterId": character_id }),
+    )?;
+    let version_id = versions["items"]
+        .as_array()
+        .and_then(|items| items.first())
+        .and_then(|v| v["id"].as_str())
+        .ok_or_else(|| "character has no versions".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "characters.versions.restore",
+        serde_json::json!({ "characterId": character_id, "versionId": version_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "characters.list",
+        serde_json::json!({ "includeDeleted": true }),
+    )?;
+    eprintln!("[smoke] golden: assets/characters full walk ok");
     Ok(())
 }
 
