@@ -21,6 +21,26 @@
 
 ### Added
 
+- **Plugin secret store on the kernel plane (M7 Etap-4 slice; cluster 21 part 2).**
+  Four wire ops give a plugin its own secret store: `plugins.secrets.list`,
+  `plugins.secrets.set`, `plugins.secrets.delete` and `plugins.secrets.reveal`,
+  backed by schema v28 STRICT `plugin_secrets`. The security model is the one
+  already approved for provider keys (SEC-01), not a second one: rows carry only
+  the opaque `SecretStore` reference (namespace `plugin-secret:<pluginId>`,
+  deterministic entry id per `(scope, owner, key)` so re-setting a key cannot
+  orphan a value), every DTO is value-free with `masked` derived from the
+  reference, and the plaintext crosses the wire through exactly one op behind the
+  host exposure policy plus the `secrets.reveal` grant (`secrets.manageOwn`
+  covers list/set/delete). Scope/owner addressing follows the plugin KV store
+  (`chat` requires an explicit ownerId), `plugins.uninstall` revokes the stored
+  values before the rows cascade, and a host without a wired store fails writes
+  closed with `SECRET_UNAVAILABLE`. Facade:
+  `backend.plugins.secretsList/secretSet/secretsDelete/secretReveal` (local and
+  remote implemented, legacy facade keeps `UnsupportedError`). Honest boundary:
+  the React plugin sandbox has no secrets host handler today (the legacy routes
+  served the legacy server-side plugin host), so the family is reachable through
+  the Product Wire on every host without a UI consumer yet. Contract hash
+  `5e272e18...`; registry 138 ops.
 - **Plugin KV state on the kernel plane (M7 Etap-4 slice; cluster 21 part 1).**
   Three new wire ops move the plugin KV store off the legacy
   `/api/v2/plugins/:id/state` route: `plugins.state.get`,

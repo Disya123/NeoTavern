@@ -3149,6 +3149,124 @@ export const DeletePluginStateResultDtoSchema = Type.Object(
 export type DeletePluginStateResultDto = Static<typeof DeletePluginStateResultDtoSchema>;
 
 /**
+ * Plugin secret DTO (`wire.plugin-secret`, ТЗ §54 / SEC-01) — one secret the
+ * plugin itself owns (`/api/v2/plugins/:id/secrets`). The value is WRITE-ONLY:
+ * the kernel stores it in the host `SecretStore` and this DTO carries only the
+ * `masked` display hint derived from the opaque storage reference (never from
+ * the key material), so even the mask cannot leak the plaintext. The plaintext
+ * is reachable exclusively through `plugins.secrets.reveal`, under the host
+ * exposure policy (`secrets.exposure`, default off) plus the plugin's own
+ * `secrets.reveal` grant.
+ */
+export const PluginSecretDtoSchema = Type.Object(
+  {
+    key: Type.String({ minLength: 1, maxLength: 200 }),
+    scope: PluginStateScopeSchema,
+    /** Masked preview for display; never the full value. */
+    masked: Type.String({ maxLength: 64 }),
+    createdAt: Type.String({ minLength: 20, maxLength: 40 }),
+    updatedAt: Type.String({ minLength: 20, maxLength: 40 }),
+  },
+  { $id: 'wire.plugin-secret', additionalProperties: false },
+);
+export type PluginSecretDto = Static<typeof PluginSecretDtoSchema>;
+
+/**
+ * Plugin secret list result (`wire.result.plugin-secrets`): every key the
+ * plugin stored in the addressed scope, ordered by key. Value-free by
+ * construction — that is the whole point of the masked projection.
+ */
+export const ListPluginSecretsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(PluginSecretDtoSchema, { maxItems: 256 }),
+  },
+  { $id: 'wire.result.plugin-secrets', additionalProperties: false },
+);
+export type ListPluginSecretsResultDto = Static<typeof ListPluginSecretsResultDtoSchema>;
+
+/**
+ * Plugin secret address (`wire.request.plugins.secrets.list`): the plugin and
+ * the scope whose secrets are addressed. `ownerId` follows the same rule as
+ * the KV state store — required for `chat`, forbidden for the singleton scopes.
+ */
+export const ListPluginSecretsRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    scope: PluginStateScopeSchema,
+    ownerId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  },
+  { $id: 'wire.request.plugins.secrets.list', additionalProperties: false },
+);
+export type ListPluginSecretsRequestDto = Static<typeof ListPluginSecretsRequestDtoSchema>;
+
+/**
+ * Plugin secret write (`wire.request.plugins.secrets.set`): upsert one key in
+ * the addressed scope. `value` is the plaintext, capped like the legacy
+ * `MAX_SECRET_VALUE_LENGTH` (8192); it never travels back through any DTO.
+ */
+export const SetPluginSecretRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    scope: PluginStateScopeSchema,
+    ownerId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+    key: Type.String({ minLength: 1, maxLength: 200 }),
+    value: Type.String({ minLength: 1, maxLength: 8192 }),
+  },
+  { $id: 'wire.request.plugins.secrets.set', additionalProperties: false },
+);
+export type SetPluginSecretRequestDto = Static<typeof SetPluginSecretRequestDtoSchema>;
+
+/**
+ * Plugin secret delete (`wire.request.plugins.secrets.delete`): addresses one
+ * key; deleting a key that does not exist is not an error (`deleted: false`).
+ */
+export const DeletePluginSecretRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    scope: PluginStateScopeSchema,
+    ownerId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+    key: Type.String({ minLength: 1, maxLength: 200 }),
+  },
+  { $id: 'wire.request.plugins.secrets.delete', additionalProperties: false },
+);
+export type DeletePluginSecretRequestDto = Static<typeof DeletePluginSecretRequestDtoSchema>;
+
+/** Plugin secret delete result (`wire.result.plugins.secrets.delete`). */
+export const DeletePluginSecretResultDtoSchema = Type.Object(
+  {
+    deleted: Type.Boolean(),
+  },
+  { $id: 'wire.result.plugins.secrets.delete', additionalProperties: false },
+);
+export type DeletePluginSecretResultDto = Static<typeof DeletePluginSecretResultDtoSchema>;
+
+/** Plugin secret reveal request (`wire.request.plugins.secrets.reveal`). */
+export const RevealPluginSecretRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    scope: PluginStateScopeSchema,
+    ownerId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+    key: Type.String({ minLength: 1, maxLength: 200 }),
+  },
+  { $id: 'wire.request.plugins.secrets.reveal', additionalProperties: false },
+);
+export type RevealPluginSecretRequestDto = Static<typeof RevealPluginSecretRequestDtoSchema>;
+
+/**
+ * Plugin secret reveal result (`wire.result.plugins.secrets.reveal`) — the
+ * ONLY shape in the plugin secret family that carries a plaintext. Served only
+ * while the host exposure policy is on AND the plugin holds `secrets.reveal`;
+ * otherwise the op fails with `SECRETS_EXPOSURE_DISABLED`.
+ */
+export const RevealPluginSecretResultDtoSchema = Type.Object(
+  {
+    value: Type.String({ maxLength: 8192 }),
+  },
+  { $id: 'wire.result.plugins.secrets.reveal', additionalProperties: false },
+);
+export type RevealPluginSecretResultDto = Static<typeof RevealPluginSecretResultDtoSchema>;
+
+/**
  * Message block attachment DTO (`wire.message-block.item`) — one durable
  * plugin→message binding (rev4 stage 4, M7 cluster 15): the kernel-plane
  * replacement for the legacy `message_block_attachments` row. The attachment
@@ -3570,6 +3688,14 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.plugins.state.set': SetPluginStateRequestDtoSchema,
   'wire.result.plugins.state.set': SetPluginStateResultDtoSchema,
   'wire.result.plugins.state.delete': DeletePluginStateResultDtoSchema,
+  'wire.plugin-secret': PluginSecretDtoSchema,
+  'wire.request.plugins.secrets.list': ListPluginSecretsRequestDtoSchema,
+  'wire.result.plugin-secrets': ListPluginSecretsResultDtoSchema,
+  'wire.request.plugins.secrets.set': SetPluginSecretRequestDtoSchema,
+  'wire.request.plugins.secrets.delete': DeletePluginSecretRequestDtoSchema,
+  'wire.result.plugins.secrets.delete': DeletePluginSecretResultDtoSchema,
+  'wire.request.plugins.secrets.reveal': RevealPluginSecretRequestDtoSchema,
+  'wire.result.plugins.secrets.reveal': RevealPluginSecretResultDtoSchema,
   'wire.themes.item': ThemeDtoSchema,
   'wire.result.themes.list': ListThemesResultDtoSchema,
   'wire.request.themes.install': InstallThemeRequestDtoSchema,

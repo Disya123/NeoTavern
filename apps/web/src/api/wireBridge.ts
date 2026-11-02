@@ -1344,7 +1344,7 @@ export async function getChatPromptPreview(
  * One plugin KV state row (wire `plugins.state.get`, M7 Etap-4 cluster 21
  * part 1): `null` when that scope/owner was never written (the kernel's
  * `PLUGIN_STATE_NOT_FOUND`), so the sandbox distinguishes "empty store" from
- * a real failure. Kernel plane only — the legacy plane keeps its own
+ * a real failure. Kernel plane only â€” the legacy plane keeps its own
  * `/plugins/:id/state` fetch in the plugin host.
  */
 export async function readPluginState(

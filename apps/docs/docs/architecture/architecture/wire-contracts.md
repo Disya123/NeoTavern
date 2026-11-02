@@ -198,6 +198,10 @@ ops (eventSchemaId) carrying a response schema; empty/unknown
 | `plugins.state.get`       | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
 | `plugins.state.set`       | transactional | non-idempotent | none  | app.write | 262144  | 2048   | –      |
 | `plugins.state.delete`    | transactional | idempotent     | safe  | app.write | 2048    | 1024   | –      |
+| `plugins.secrets.list`    | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
+| `plugins.secrets.set`     | transactional | idempotent     | none  | app.write | 131072  | 2048   | –      |
+| `plugins.secrets.delete`  | transactional | idempotent     | safe  | app.write | 2048    | 1024   | –      |
+| `plugins.secrets.reveal`  | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
 | `generation.retry`        | workflow      | non-idempotent | none  | app.write | 2048    | –      | 65536  |
 | `generation.keep`         | transactional | idempotent     | safe  | app.write | 2048    | 65536  | –      |
 | `generation.discard`      | transactional | idempotent     | safe  | app.write | 2048    | 65536  | –      |
@@ -222,7 +226,7 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
 `(kind,name)`). All slice-3 additions are `transactional`, strict
 `additionalProperties: false`, ARC-07. The M7 Этап-4 clusters then grew the
-registry to **134 ops** (the latest additions are the cluster-8 provider-access
+registry to **138 ops** (the latest additions are the cluster-8 provider-access
 pair `providers.models` / `providers.test`, the cluster-23 maintenance op
 `diagnostics.cache.clear`, the cluster-17 audit op `chats.context.audit`
 — the chat's latest durable `wire.prompt.plan`, after the provider catalog +
@@ -325,6 +329,22 @@ the caller observed (`0` = expect an empty store): a stale value is
 the installation never consented to `PLUGIN_PERMISSION_DENIED`. Binary blob
 storage (`/plugins/:id/blobs*`) is NOT part of this family: the wire v1 has no
 binary body, so it stays a documented transport boundary.
+
+`plugins.secrets.list` / `plugins.secrets.set` / `plugins.secrets.delete` /
+`plugins.secrets.reveal` are the plugin's own secret store (M7 cluster 21
+part 2; schema v28 `plugin_secrets`), and they deliberately reuse the approved
+provider-key model (SEC-01) instead of inventing a second one: a row carries
+only the opaque `SecretStore` reference (namespace `plugin-secret:<pluginId>`,
+deterministic entry id per `(scope, owner, key)` so re-setting a key can never
+orphan a value), every DTO is value-free with `masked` derived from the
+REFERENCE — never from key material — and the plaintext crosses the wire
+through exactly one operation, `plugins.secrets.reveal`, gated by the host
+exposure policy (`secrets.exposure`, default OFF) and the plugin's own
+`secrets.reveal` grant on top of `secrets.manageOwn` for list/set/delete. The
+address rules are the KV state rules (scope → owner and capability, `chat`
+requires an explicit `ownerId`), `plugins.uninstall` revokes the stored values
+before the reference rows cascade, and a host without a wired store answers
+`SECRET_UNAVAILABLE` on writes while list/delete keep working on the rows.
 
 `providers.list` reports the registered provider adapters (ТЗ §55/§60):
 `wire.result.list-providers` items carry id/name/builtin, the

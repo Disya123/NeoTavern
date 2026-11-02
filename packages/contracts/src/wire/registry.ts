@@ -1664,6 +1664,82 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     1024,
     undefined,
   ),
+  // M7 Etap-4 (cluster 21 part 2): the plugin's own secret store. Rows carry
+  // only the opaque SecretStore reference; `masked` is derived from that
+  // reference, and the plaintext crosses the wire through exactly one op
+  // (`plugins.secrets.reveal`) under the host exposure policy.
+  op(
+    'plugins.secrets.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.plugins.secrets.list',
+    'wire.result.plugin-secrets',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'plugins.secrets.set',
+    'transactional',
+    'idempotent',
+    'none',
+    'app.write',
+    'wire.request.plugins.secrets.set',
+    'wire.plugin-secret',
+    undefined,
+    [
+      'INTERNAL',
+      'VALIDATION',
+      'NOT_FOUND',
+      'CONFLICT',
+      'CAPABILITY_UNAVAILABLE',
+      'CONTRACT_VIOLATION',
+      'OUTCOME_UNKNOWN',
+    ],
+    131072,
+    2048,
+    undefined,
+  ),
+  op(
+    'plugins.secrets.delete',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.plugins.secrets.delete',
+    'wire.result.plugins.secrets.delete',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
+  op(
+    'plugins.secrets.reveal',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.plugins.secrets.reveal',
+    'wire.result.plugins.secrets.reveal',
+    undefined,
+    [
+      'INTERNAL',
+      'VALIDATION',
+      'NOT_FOUND',
+      'CONFLICT',
+      'CAPABILITY_UNAVAILABLE',
+      'CONTRACT_VIOLATION',
+      'OUTCOME_UNKNOWN',
+    ],
+    2048,
+    262144,
+    undefined,
+  ),
   op(
     'themes.list',
     'transactional',
@@ -3629,6 +3705,61 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('plugins-state-delete-response', 'plugins.state.delete', 'response', true, {
     deleted: true,
+  }),
+  fx('plugins-secrets-list-request', 'plugins.secrets.list', 'request', true, {
+    pluginId: 'lorebook-searcher',
+    scope: 'user',
+  }),
+  fx('plugins-secrets-set-request', 'plugins.secrets.set', 'request', true, {
+    pluginId: 'lorebook-searcher',
+    scope: 'chat',
+    ownerId: 'chat-42',
+    key: 'apiKey',
+    value: 'sk-live-123456',
+  }),
+  fx('plugins-secrets-delete-request', 'plugins.secrets.delete', 'request', true, {
+    pluginId: 'lorebook-searcher',
+    scope: 'user',
+    key: 'apiKey',
+  }),
+  // Masked projections are ASCII in the fixtures ("********1234"): the kernel
+  // derives the real hint from the opaque store reference (bullets plus the
+  // last visible characters), but a corpus fixture only has to be a valid
+  // `wire.plugin-secret` value.
+  fx('plugins-secrets-list-response', 'plugins.secrets.list', 'response', true, {
+    items: [
+      {
+        key: 'apiKey',
+        scope: 'user',
+        masked: '********1234',
+        createdAt: '2026-06-01T12:00:00.000Z',
+        updatedAt: '2026-06-01T12:00:00.000Z',
+      },
+    ],
+  }),
+  fx('plugins-secrets-set-response', 'plugins.secrets.set', 'response', true, {
+    key: 'apiKey',
+    scope: 'chat',
+    masked: '********3456',
+    createdAt: '2026-06-01T12:00:00.000Z',
+    updatedAt: '2026-06-01T12:05:00.000Z',
+  }),
+  fx('plugins-secrets-delete-response', 'plugins.secrets.delete', 'response', true, {
+    deleted: true,
+  }),
+  fx('plugins-secrets-reveal-response', 'plugins.secrets.reveal', 'response', true, {
+    value: 'sk-live-123456',
+  }),
+  fx('plugins-secrets-reveal-request', 'plugins.secrets.reveal', 'request', true, {
+    pluginId: 'lorebook-searcher',
+    scope: 'user',
+    key: 'apiKey',
+  }),
+  fx('neg-plugins-secrets-set-empty-key', 'plugins.secrets.set', 'request', false, {
+    pluginId: 'lorebook-searcher',
+    scope: 'user',
+    key: '',
+    value: 'sk-live-123456',
   }),
   fx('neg-plugins-state-get-unknown-scope', 'plugins.state.get', 'request', false, {
     pluginId: 'lorebook-searcher',

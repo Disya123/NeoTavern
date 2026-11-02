@@ -1147,6 +1147,49 @@ pub const MIGRATION_27_SQL: &str = migration_27_sql!();
 pub const MIGRATION_27_CHECKSUM: &str =
     "67309f821bab10f60692532981898308e8f297a6713f88c5625e0e9b11e72863";
 
+/// `plugin_secrets` table (TZ 54, SEC-01; M7 Etap-4 cluster 21 part 2). One row
+/// per `(plugin, scope, owner, key)` where `key` is the plugin's OWN secret
+/// name. Like `provider_secrets`, the row carries only the opaque SecretStore
+/// reference (`secret_ref`) — the plaintext never enters the database, and the
+/// wire DTO projects `masked` from that reference, never from key material.
+///
+/// `owner_key` follows the KV state convention (SQLite does not make PRIMARY
+/// KEY columns implicitly NOT NULL on rowid tables, so `''` is the explicit
+/// singleton marker): `installation`/`user` store `''`, `workspace` stores
+/// `workspace`, `chat` stores the chat id — a plugin can never address another
+/// chat's secret. Rows cascade-delete with the plugin; uninstall therefore
+/// drops the references, and the plugin delete path revokes the store values
+/// before the cascade (same rule as provider configs).
+/// Additive; rollback is the pre-migration backup restore (TZ 10.4).
+macro_rules! migration_28_sql {
+    () => {
+        r#"CREATE TABLE plugin_secrets (
+  plugin_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  owner_key TEXT NOT NULL DEFAULT '',
+  key TEXT NOT NULL,
+  secret_ref TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (plugin_id, scope, owner_key, key),
+  FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX idx_plugin_secrets_plugin ON plugin_secrets(plugin_id);"#
+    };
+}
+
+/// Name of the plugin secret store (v28) schema migration.
+pub const MIGRATION_28_NAME: &str = "028_plugin_secrets";
+
+/// Exact SQL of the plugin secret store schema migration (v28) — the
+/// `migration_28_sql!()` literal.
+pub const MIGRATION_28_SQL: &str = migration_28_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_28_SQL` string bytes (same
+/// computation as `MIGRATION_27_CHECKSUM`).
+pub const MIGRATION_28_CHECKSUM: &str =
+    "1e0d384580c24177baf1d0697a496a2be0bea214fd19c6f20a2e350aee6fec72";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1207,7 +1250,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_26_sql!(),
     "\n",
-    migration_27_sql!()
+    migration_27_sql!(),
+    "\n",
+    migration_28_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

@@ -15,7 +15,11 @@ import {
   type GenerationRunDto,
   type GetAssetContentResultDto,
   type GetAssetResultDto,
+  type DeletePluginSecretResultDto,
   type DeletePluginStateResultDto,
+  type ListPluginSecretsResultDto,
+  type PluginSecretDto,
+  type RevealPluginSecretResultDto,
   type InstallPluginResultDto,
   type PluginStateDto,
   type SetPluginStateResultDto,
@@ -267,6 +271,16 @@ const PLUGIN_STATE: PluginStateDto = {
 };
 const PLUGIN_STATE_SET: SetPluginStateResultDto = { revision: 4, updatedAt: TIMESTAMP };
 const PLUGIN_STATE_DELETE: DeletePluginStateResultDto = { deleted: true };
+const PLUGIN_SECRET: PluginSecretDto = {
+  key: 'apiKey',
+  scope: 'user',
+  masked: '********1234',
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+const PLUGIN_SECRET_LIST: ListPluginSecretsResultDto = { items: [PLUGIN_SECRET] };
+const PLUGIN_SECRET_DELETE: DeletePluginSecretResultDto = { deleted: true };
+const PLUGIN_SECRET_REVEAL: RevealPluginSecretResultDto = { value: 'sk-live-123456' };
 const ENABLED_PLUGIN: PluginDto = { ...PLUGIN, enabled: true };
 
 const THEME: ThemeDto = {
@@ -764,6 +778,14 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: PLUGIN_STATE_SET };
       case 'plugins.state.delete':
         return { ok: true, value: PLUGIN_STATE_DELETE };
+      case 'plugins.secrets.list':
+        return { ok: true, value: PLUGIN_SECRET_LIST };
+      case 'plugins.secrets.set':
+        return { ok: true, value: PLUGIN_SECRET };
+      case 'plugins.secrets.delete':
+        return { ok: true, value: PLUGIN_SECRET_DELETE };
+      case 'plugins.secrets.reveal':
+        return { ok: true, value: PLUGIN_SECRET_REVEAL };
       case 'themes.list':
         return { ok: true, value: THEME_LIST };
       case 'themes.install':
@@ -966,6 +988,14 @@ function rpcResult(operationId: string | undefined): unknown {
       return THEME_LIST;
     case 'themes.install':
       return THEME_INSTALL;
+    case 'plugins.secrets.list':
+      return PLUGIN_SECRET_LIST;
+    case 'plugins.secrets.set':
+      return PLUGIN_SECRET;
+    case 'plugins.secrets.delete':
+      return PLUGIN_SECRET_DELETE;
+    case 'plugins.secrets.reveal':
+      return PLUGIN_SECRET_REVEAL;
     case 'themes.activate':
       return ACTIVE_THEME;
     case 'themes.uninstall':
@@ -2376,6 +2406,67 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(() => legacy.plugins.stateDelete({ pluginId: PLUGIN.id, scope: 'user' })).toThrow(
       UnsupportedError,
     );
+  });
+
+  it('plugins.secrets.* forward the scope address and decode value-free DTOs', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const address = { pluginId: PLUGIN.id, scope: 'user' as const };
+    const [listLocal, listRemote] = await Promise.all([
+      local.plugins.secretsList(address),
+      remote.plugins.secretsList(address),
+    ]);
+    expect(listLocal).toEqual(listRemote);
+    expect(listLocal).toEqual(PLUGIN_SECRET_LIST);
+
+    const write = { ...address, key: 'apiKey', value: 'sk-live-123456' };
+    const [setLocal, setRemote] = await Promise.all([
+      local.plugins.secretSet(write),
+      remote.plugins.secretSet(write),
+    ]);
+    expect(setLocal).toEqual(setRemote);
+    expect(setLocal).toEqual(PLUGIN_SECRET);
+    // The value is forwarded verbatim and never echoed by the result DTO.
+    expect(JSON.stringify(setLocal)).not.toContain('sk-live-123456');
+
+    const [revealLocal, revealRemote] = await Promise.all([
+      local.plugins.secretReveal({ ...address, key: 'apiKey' }),
+      remote.plugins.secretReveal({ ...address, key: 'apiKey' }),
+    ]);
+    expect(revealLocal).toEqual(revealRemote);
+    expect(revealLocal).toEqual(PLUGIN_SECRET_REVEAL);
+
+    const [deleteLocal, deleteRemote] = await Promise.all([
+      local.plugins.secretsDelete({ ...address, key: 'apiKey' }),
+      remote.plugins.secretsDelete({ ...address, key: 'apiKey' }),
+    ]);
+    expect(deleteLocal).toEqual(deleteRemote);
+    expect(deleteLocal).toEqual(PLUGIN_SECRET_DELETE);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'plugins.secrets.list', payload: address },
+      { operationId: 'plugins.secrets.set', payload: write },
+      { operationId: 'plugins.secrets.reveal', payload: { ...address, key: 'apiKey' } },
+      { operationId: 'plugins.secrets.delete', payload: { ...address, key: 'apiKey' } },
+    ]);
+  });
+
+  it('plugins.secrets.* is an honest refusal on the legacy facade', () => {
+    const legacy = new LegacyBackend({
+      baseUrl: 'http://legacy.local',
+      fetchImpl: async () => {
+        throw new Error('the legacy facade must refuse before any request');
+      },
+    });
+    const address = { pluginId: PLUGIN.id, scope: 'user' as const };
+    expect(() => legacy.plugins.secretsList(address)).toThrow(UnsupportedError);
+    expect(() => legacy.plugins.secretSet({ ...address, key: 'a', value: 'b' })).toThrow(
+      UnsupportedError,
+    );
+    expect(() => legacy.plugins.secretsDelete({ ...address, key: 'a' })).toThrow(UnsupportedError);
+    expect(() => legacy.plugins.secretReveal({ ...address, key: 'a' })).toThrow(UnsupportedError);
   });
 
   it('themes.list/install/activate/uninstall forward payloads and decode canonical DTOs', async () => {

@@ -47,7 +47,7 @@ pub(crate) const MAX_STATE_KEYS: usize = 64;
 pub(crate) const MAX_STATE_BYTES: usize = 65536;
 
 /// `VALIDATION` refusal for a semantic rule the wire schema cannot express.
-fn validation(detail: &str) -> KernelError {
+pub(crate) fn validation(detail: &str) -> KernelError {
     KernelError::new(
         KernelErrorCode::ContractViolation,
         format!("plugin state: {detail}"),
@@ -55,7 +55,10 @@ fn validation(detail: &str) -> KernelError {
 }
 
 /// The persisted `owner_key` for a scope (see the module docs).
-fn resolve_owner(scope: &PluginStateScope, owner_id: Option<&str>) -> Result<String, KernelError> {
+pub(crate) fn resolve_owner(
+    scope: &PluginStateScope,
+    owner_id: Option<&str>,
+) -> Result<String, KernelError> {
     match scope {
         PluginStateScope::Installation | PluginStateScope::User => {
             // A supplied owner for a singleton scope is a caller bug: refuse
@@ -84,7 +87,7 @@ fn scope_capability(scope: &PluginStateScope) -> &'static str {
 }
 
 /// Scope as it is persisted (the DTO enum's wire name).
-fn scope_name(scope: &PluginStateScope) -> &'static str {
+pub(crate) fn scope_name(scope: &PluginStateScope) -> &'static str {
     match scope {
         PluginStateScope::Installation => "installation",
         PluginStateScope::User => "user",
@@ -93,11 +96,16 @@ fn scope_name(scope: &PluginStateScope) -> &'static str {
     }
 }
 
-/// Prove the plugin exists and consented to `storage.<scope>`.
-fn require_access(
+/// Prove the plugin exists and holds `capability` in its recorded grant set.
+///
+/// The recorded set is what the user consented to at install (ARC-08), so this
+/// is the single gate every plugin-scoped family (KV state, secrets, …) shares:
+/// a plugin that never asked for the capability is refused instead of being
+/// silently served, and an uninstalled plugin is `PLUGIN_NOT_FOUND`.
+pub(crate) fn require_capability(
     conn: &Connection,
     plugin_id: &str,
-    scope: &PluginStateScope,
+    capability: &str,
 ) -> Result<(), KernelError> {
     let permissions: Option<String> = conn
         .query_row(
@@ -106,12 +114,11 @@ fn require_access(
             |row| row.get(0),
         )
         .optional()
-        .map_err(|e| product::sqlite(e, "plugin_state: select plugin"))?;
+        .map_err(|e| product::sqlite(e, "plugin: select permissions"))?;
     let Some(permissions) = permissions else {
         return Err(product::not_found("PLUGIN", plugin_id));
     };
     let granted: Vec<String> = serde_json::from_str(&permissions).unwrap_or_default();
-    let capability = scope_capability(scope);
     if !granted.iter().any(|permission| permission == capability) {
         return Err(KernelError::product(
             "PLUGIN_PERMISSION_DENIED",
@@ -122,6 +129,15 @@ fn require_access(
         ));
     }
     Ok(())
+}
+
+/// Prove the plugin exists and consented to `storage.<scope>`.
+fn require_access(
+    conn: &Connection,
+    plugin_id: &str,
+    scope: &PluginStateScope,
+) -> Result<(), KernelError> {
+    require_capability(conn, plugin_id, scope_capability(scope))
 }
 
 struct StoredRow {

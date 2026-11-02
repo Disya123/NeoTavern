@@ -24,7 +24,11 @@ import {
   type GenerationRunDto,
   type GetAssetContentResultDto,
   type GetAssetResultDto,
+  type DeletePluginSecretResultDto,
   type DeletePluginStateResultDto,
+  type ListPluginSecretsResultDto,
+  type PluginSecretDto,
+  type RevealPluginSecretResultDto,
   type InstallPluginResultDto,
   type PluginStateDto,
   type SetPluginStateResultDto,
@@ -480,6 +484,13 @@ export class LocalBackend implements NeoBackend {
       stateSet: (req, opts) => this.invoke<SetPluginStateResultDto>('plugins.state.set', req, opts),
       stateDelete: (req, opts) =>
         this.invoke<DeletePluginStateResultDto>('plugins.state.delete', req, opts),
+      secretsList: (req, opts) =>
+        this.invoke<ListPluginSecretsResultDto>('plugins.secrets.list', req, opts),
+      secretSet: (req, opts) => this.invoke<PluginSecretDto>('plugins.secrets.set', req, opts),
+      secretsDelete: (req, opts) =>
+        this.invoke<DeletePluginSecretResultDto>('plugins.secrets.delete', req, opts),
+      secretReveal: (req, opts) =>
+        this.invoke<RevealPluginSecretResultDto>('plugins.secrets.reveal', req, opts),
     };
     this.themes = {
       list: (opts) => this.invoke<ListThemesResultDto>('themes.list', {}, opts),

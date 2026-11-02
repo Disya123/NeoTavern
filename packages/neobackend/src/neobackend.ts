@@ -115,6 +115,14 @@ import type {
   SetPluginStateRequestDto,
   SetPluginStateResultDto,
   DeletePluginStateResultDto,
+  PluginSecretDto,
+  ListPluginSecretsRequestDto,
+  ListPluginSecretsResultDto,
+  SetPluginSecretRequestDto,
+  DeletePluginSecretRequestDto,
+  DeletePluginSecretResultDto,
+  RevealPluginSecretRequestDto,
+  RevealPluginSecretResultDto,
   ListPresetsRequestDto,
   ListPresetsResultDto,
   ListProfilesResultDto,
@@ -561,6 +569,37 @@ export interface PluginsApi {
     req: PluginStateRequestDto,
     opts?: BackendCallOptions,
   ): Promise<DeletePluginStateResultDto>;
+  /**
+   * List the plugin's own secret keys in one scope (wire
+   * plugins.secrets.list, M7 cluster 21 part 2). Value-free by construction:
+   * every item carries only a `masked` hint derived from the opaque store
+   * reference. Requires the `secrets.manageOwn` grant.
+   */
+  secretsList(
+    req: ListPluginSecretsRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ListPluginSecretsResultDto>;
+  /**
+   * Store (upsert) one plugin secret (plugins.secrets.set). The value is
+   * write-only: it goes into the host SecretStore and never comes back through
+   * any DTO; SECRET_UNAVAILABLE when no store is wired (fail-closed).
+   */
+  secretSet(req: SetPluginSecretRequestDto, opts?: BackendCallOptions): Promise<PluginSecretDto>;
+  /** Remove one plugin secret (plugins.secrets.delete); idempotent. */
+  secretsDelete(
+    req: DeletePluginSecretRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<DeletePluginSecretResultDto>;
+  /**
+   * Reveal one plugin secret in plaintext (plugins.secrets.reveal) — the only
+   * operation that returns a value. Refused with SECRETS_EXPOSURE_DISABLED
+   * unless the host enabled the exposure policy, and with
+   * PLUGIN_PERMISSION_DENIED without the `secrets.reveal` grant.
+   */
+  secretReveal(
+    req: RevealPluginSecretRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<RevealPluginSecretResultDto>;
 }
 
 /**

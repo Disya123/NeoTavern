@@ -317,6 +317,10 @@ export class LegacyBackend implements NeoBackend {
     stateGet: () => this.unsupported('plugins.state.get'),
     stateSet: () => this.unsupported('plugins.state.set'),
     stateDelete: () => this.unsupported('plugins.state.delete'),
+    secretsList: () => this.unsupported('plugins.secrets.list'),
+    secretSet: () => this.unsupported('plugins.secrets.set'),
+    secretsDelete: () => this.unsupported('plugins.secrets.delete'),
+    secretReveal: () => this.unsupported('plugins.secrets.reveal'),
   };
 
   readonly themes: ThemesApi = {

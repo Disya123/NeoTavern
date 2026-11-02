@@ -34,6 +34,7 @@ use neotavern_storage::open::Database;
 use neotavern_storage::StorageError;
 use rusqlite::OptionalExtension;
 
+use crate::plugin_secrets;
 use crate::product::now;
 use crate::{app_events, KernelError, KernelErrorCode};
 
@@ -179,8 +180,17 @@ pub(crate) fn plugins_disable(db: &mut Database, request: &[u8]) -> Result<Vec<u
 }
 
 /// `plugins.uninstall` — durable row removal.
-pub(crate) fn plugins_uninstall(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+pub(crate) fn plugins_uninstall(
+    db: &mut Database,
+    store: Option<&std::sync::Arc<dyn secret_store::SecretStore>>,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
     let req: RequestPluginsUninstall = generated::decode_request_plugins_uninstall(request)?;
+    // Revoke every stored plugin secret BEFORE the rows cascade away: a
+    // database copy must never keep a reference to a live ciphertext, and the
+    // value has no owner once the plugin is gone (provider configs follow the
+    // same rule).
+    plugin_secrets::revoke_values(store, db.conn(), &req.id);
     let changed = db.transaction(|tx| {
         let changed = tx
             .execute(

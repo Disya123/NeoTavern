@@ -80,8 +80,18 @@ KEY columns implicitly NOT NULL on rowid tables), `workspace` for a workspace
 row or the owning chat id for a chat row; `revision` is the CAS counter
 (`expectedRevision` on write, CONFLICT on a stale value), `schema_version` the
 plugin's own data format, `data_json` the opaque plugin object, the FK CASCADE
-on uninstall. Rollback for any kernel migration is the pre-migration
-backup restore (ТЗ §10.4); v20–v27 are additive.
+on uninstall. v28 (`028_plugin_secrets`, M7 cluster 21 part 2) adds
+`plugin_secrets`, the plugin's own secret store: one STRICT row per
+`(plugin_id, scope, owner_key, key)` carrying the plugin's secret NAME and only
+the OPAQUE SecretStore reference (`secret_ref`) — the plaintext never enters the
+database, a backup, an export or a diagnostic dump, exactly like
+`provider_secrets` (v24). `scope`/`owner_key` follow the KV state rules, the
+store namespace is `plugin-secret:<pluginId>` with a deterministic entry id per
+`(scope, owner_key, key)` so re-setting a key overwrites instead of orphaning,
+and `plugins.uninstall` revokes the stored values BEFORE the rows cascade. The
+legacy `app.db` `plugin_secrets` table is a different database and stays
+untouched: the kernel table is the canonical one. Rollback for any kernel
+migration is the pre-migration backup restore (ТЗ §10.4); v20–v28 are additive.
 
 ### Plugin state and grants
 

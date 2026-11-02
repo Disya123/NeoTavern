@@ -310,7 +310,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "b65c3199eac1e991fd995c58c919c28bca722a7f9d9c93c43c33b63ac8c57d5a"
+      "sha256": "728ca30a99f6d14bf0f3b326de0908ca3eeb1faec2e1450d2940eb7d08c49810"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -375,7 +375,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "94263393fd266ddbf8e957efe9843c7c1f16e6f66a3b1f6ec416f71edac4f6cb"
+      "sha256": "1fd1ce886ce21ef6af71ef899b9405c9a331a81353c92bd49ed7b80b41aeb4a5"
     },
     {
       "source": "audits/rust-app/INVENTORY.md",
@@ -410,12 +410,12 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "0f4a38da8f7edf86c0b316f206407d7efd75c3d829190cb58706b2ec6e7ee02f"
+      "sha256": "6941df8579c9f81fb800bf494221ad13bd8acd73c2e7451f3334c874a33023a3"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "eb90a4138f98c4103a8be9f8b1692b1ded95dc72d4364a41dcdb4ceafa92d1fe"
+      "sha256": "1b5a57f53fe715c52703902f4682da2e61c1bb57299474fcf7a1c183f9265858"
     },
     {
       "source": "desktop/README.md",

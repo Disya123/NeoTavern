@@ -16,7 +16,11 @@ import type {
   SearchResultDto,
   AppEventsPageDto,
   GenerationRunDto,
+  DeletePluginSecretResultDto,
   DeletePluginStateResultDto,
+  ListPluginSecretsResultDto,
+  PluginSecretDto,
+  RevealPluginSecretResultDto,
   InstallPluginResultDto,
   PluginStateDto,
   SetPluginStateResultDto,
@@ -398,6 +402,20 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<SetPluginStateResultDto>('plugins.state.set', req, { signal: opts?.signal }),
     stateDelete: (req, opts) =>
       this.sdk.call<DeletePluginStateResultDto>('plugins.state.delete', req, {
+        signal: opts?.signal,
+      }),
+    secretsList: (req, opts) =>
+      this.sdk.call<ListPluginSecretsResultDto>('plugins.secrets.list', req, {
+        signal: opts?.signal,
+      }),
+    secretSet: (req, opts) =>
+      this.sdk.call<PluginSecretDto>('plugins.secrets.set', req, { signal: opts?.signal }),
+    secretsDelete: (req, opts) =>
+      this.sdk.call<DeletePluginSecretResultDto>('plugins.secrets.delete', req, {
+        signal: opts?.signal,
+      }),
+    secretReveal: (req, opts) =>
+      this.sdk.call<RevealPluginSecretResultDto>('plugins.secrets.reveal', req, {
         signal: opts?.signal,
       }),
   };

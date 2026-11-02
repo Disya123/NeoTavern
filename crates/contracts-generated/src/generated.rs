@@ -111,6 +111,10 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "plugins.state.get" => Some(2048),
         "plugins.state.set" => Some(262144),
         "plugins.state.delete" => Some(2048),
+        "plugins.secrets.list" => Some(2048),
+        "plugins.secrets.set" => Some(131072),
+        "plugins.secrets.delete" => Some(2048),
+        "plugins.secrets.reveal" => Some(2048),
         "themes.list" => Some(1024),
         "themes.install" => Some(65536),
         "themes.uninstall" => Some(1024),
@@ -253,6 +257,10 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "plugins.state.get" => Some(262144),
         "plugins.state.set" => Some(2048),
         "plugins.state.delete" => Some(1024),
+        "plugins.secrets.list" => Some(262144),
+        "plugins.secrets.set" => Some(2048),
+        "plugins.secrets.delete" => Some(1024),
+        "plugins.secrets.reveal" => Some(262144),
         "themes.list" => Some(262144),
         "themes.install" => Some(262144),
         "themes.uninstall" => Some(1024),
@@ -9333,6 +9341,617 @@ pub fn validate_result_plugins_state_delete(value: &Value) -> Result<(), Vec<Iss
 
 pub fn decode_result_plugins_state_delete(bytes: &[u8]) -> Result<ResultPluginsStateDelete, WireError> {
     crate::decode::<ResultPluginsStateDelete>(validate_result_plugins_state_delete, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PluginSecret {
+    pub key: String,
+    pub scope: PluginStateScope,
+    pub masked: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+pub(crate) fn check_plugin_secret(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("key").is_none() {
+            issues.push(Issue::new(join_path(path, "key"), "RequiredProperty"));
+        }
+        if value.get("scope").is_none() {
+            issues.push(Issue::new(join_path(path, "scope"), "RequiredProperty"));
+        }
+        if value.get("masked").is_none() {
+            issues.push(Issue::new(join_path(path, "masked"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("key") {
+            let child_path = join_path(path, "key");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_plugin_state_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("masked") {
+            let child_path = join_path(path, "masked");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 20 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 40 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 20 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 40 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "key" | "scope" | "masked" | "createdAt" | "updatedAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_plugin_secret(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_plugin_secret(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_plugin_secret(bytes: &[u8]) -> Result<PluginSecret, WireError> {
+    crate::decode::<PluginSecret>(validate_plugin_secret, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsSecretsList {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    pub scope: PluginStateScope,
+    #[serde(rename = "ownerId", default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
+}
+
+pub(crate) fn check_request_plugins_secrets_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("scope").is_none() {
+            issues.push(Issue::new(join_path(path, "scope"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_plugin_state_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("ownerId") {
+            let child_path = join_path(path, "ownerId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "scope" | "ownerId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_secrets_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_secrets_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_secrets_list(bytes: &[u8]) -> Result<RequestPluginsSecretsList, WireError> {
+    crate::decode::<RequestPluginsSecretsList>(validate_request_plugins_secrets_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginSecrets {
+    pub items: Vec<PluginSecret>,
+}
+
+pub(crate) fn check_result_plugin_secrets(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 256 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_plugin_secret(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugin_secrets(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugin_secrets(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugin_secrets(bytes: &[u8]) -> Result<ResultPluginSecrets, WireError> {
+    crate::decode::<ResultPluginSecrets>(validate_result_plugin_secrets, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsSecretsSet {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    pub scope: PluginStateScope,
+    #[serde(rename = "ownerId", default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
+    pub key: String,
+    pub value: String,
+}
+
+pub(crate) fn check_request_plugins_secrets_set(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("scope").is_none() {
+            issues.push(Issue::new(join_path(path, "scope"), "RequiredProperty"));
+        }
+        if value.get("key").is_none() {
+            issues.push(Issue::new(join_path(path, "key"), "RequiredProperty"));
+        }
+        if value.get("value").is_none() {
+            issues.push(Issue::new(join_path(path, "value"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_plugin_state_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("ownerId") {
+            let child_path = join_path(path, "ownerId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("key") {
+            let child_path = join_path(path, "key");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("value") {
+            let child_path = join_path(path, "value");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 8192 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "scope" | "ownerId" | "key" | "value") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_secrets_set(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_secrets_set(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_secrets_set(bytes: &[u8]) -> Result<RequestPluginsSecretsSet, WireError> {
+    crate::decode::<RequestPluginsSecretsSet>(validate_request_plugins_secrets_set, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsSecretsDelete {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    pub scope: PluginStateScope,
+    #[serde(rename = "ownerId", default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
+    pub key: String,
+}
+
+pub(crate) fn check_request_plugins_secrets_delete(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("scope").is_none() {
+            issues.push(Issue::new(join_path(path, "scope"), "RequiredProperty"));
+        }
+        if value.get("key").is_none() {
+            issues.push(Issue::new(join_path(path, "key"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_plugin_state_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("ownerId") {
+            let child_path = join_path(path, "ownerId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("key") {
+            let child_path = join_path(path, "key");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "scope" | "ownerId" | "key") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_secrets_delete(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_secrets_delete(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_secrets_delete(bytes: &[u8]) -> Result<RequestPluginsSecretsDelete, WireError> {
+    crate::decode::<RequestPluginsSecretsDelete>(validate_request_plugins_secrets_delete, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsSecretsDelete {
+    pub deleted: bool,
+}
+
+pub(crate) fn check_result_plugins_secrets_delete(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("deleted").is_none() {
+            issues.push(Issue::new(join_path(path, "deleted"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("deleted") {
+            let child_path = join_path(path, "deleted");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "deleted") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_secrets_delete(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_secrets_delete(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_secrets_delete(bytes: &[u8]) -> Result<ResultPluginsSecretsDelete, WireError> {
+    crate::decode::<ResultPluginsSecretsDelete>(validate_result_plugins_secrets_delete, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsSecretsReveal {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    pub scope: PluginStateScope,
+    #[serde(rename = "ownerId", default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
+    pub key: String,
+}
+
+pub(crate) fn check_request_plugins_secrets_reveal(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("scope").is_none() {
+            issues.push(Issue::new(join_path(path, "scope"), "RequiredProperty"));
+        }
+        if value.get("key").is_none() {
+            issues.push(Issue::new(join_path(path, "key"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_plugin_state_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("ownerId") {
+            let child_path = join_path(path, "ownerId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("key") {
+            let child_path = join_path(path, "key");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "scope" | "ownerId" | "key") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_secrets_reveal(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_secrets_reveal(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_secrets_reveal(bytes: &[u8]) -> Result<RequestPluginsSecretsReveal, WireError> {
+    crate::decode::<RequestPluginsSecretsReveal>(validate_request_plugins_secrets_reveal, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsSecretsReveal {
+    pub value: String,
+}
+
+pub(crate) fn check_result_plugins_secrets_reveal(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("value").is_none() {
+            issues.push(Issue::new(join_path(path, "value"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("value") {
+            let child_path = join_path(path, "value");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 8192 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "value") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_secrets_reveal(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_secrets_reveal(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_secrets_reveal(bytes: &[u8]) -> Result<ResultPluginsSecretsReveal, WireError> {
+    crate::decode::<ResultPluginsSecretsReveal>(validate_result_plugins_secrets_reveal, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

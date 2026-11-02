@@ -42,6 +42,7 @@ pub mod generation;
 pub mod headless;
 pub mod imports;
 pub mod local;
+pub mod plugin_secrets;
 pub mod plugin_state;
 pub mod plugins;
 pub mod product;
@@ -697,13 +698,31 @@ fn handle_unary(
         // Этап 4 slice 6: canonical Extensions-context registry (SEC-05).
         "plugins.list" => with_db_opt(db, |db| plugins::plugins_list(db, req)),
         "plugins.install" => with_db_opt(db, |db| plugins::plugins_install(db, req)),
-        "plugins.uninstall" => with_db_opt(db, |db| plugins::plugins_uninstall(db, req)),
+        "plugins.uninstall" => with_db_opt(db, |db| {
+            plugins::plugins_uninstall(db, state.secret_store.as_ref(), req)
+        }),
         "plugins.enable" => with_db_opt(db, |db| plugins::plugins_enable(db, req)),
         "plugins.disable" => with_db_opt(db, |db| plugins::plugins_disable(db, req)),
         // Этап 4 cluster 21 part 1: canonical plugin KV state store.
         "plugins.state.get" => with_db_opt(db, |db| plugin_state::state_get(db, req)),
         "plugins.state.set" => with_db_opt(db, |db| plugin_state::state_set(db, req)),
         "plugins.state.delete" => with_db_opt(db, |db| plugin_state::state_delete(db, req)),
+        // M7 Etap-4 (cluster 21 part 2): the plugin's own secret store. Rows
+        // carry only the opaque store reference; the plaintext is reachable
+        // solely through `plugins.secrets.reveal` under the host exposure
+        // policy.
+        "plugins.secrets.list" => with_db_opt(db, |db| {
+            plugin_secrets::list(db, state.secret_store.as_ref(), req)
+        }),
+        "plugins.secrets.set" => with_db_opt(db, |db| {
+            plugin_secrets::set(db, state.secret_store.as_ref(), req)
+        }),
+        "plugins.secrets.delete" => with_db_opt(db, |db| {
+            plugin_secrets::delete(db, state.secret_store.as_ref(), req)
+        }),
+        "plugins.secrets.reveal" => with_db_opt(db, |db| {
+            plugin_secrets::reveal(db, state.secret_store.as_ref(), state.secrets_exposure, req)
+        }),
         // Этап 4 slice 6 part 2: canonical Theme-SDK registry (SEC-05).
         "themes.list" => with_db_opt(db, |db| themes::themes_list(db, req)),
         "themes.install" => with_db_opt(db, |db| themes::themes_install(db, req)),
