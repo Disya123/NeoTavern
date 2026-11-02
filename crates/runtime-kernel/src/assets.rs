@@ -26,15 +26,15 @@
 use base64::Engine as _;
 use contracts_generated::generated::{
     self, AssetThumbFormat, AssetsItem, RequestAssetsContent, RequestAssetsDelete,
-    RequestAssetsGet, RequestAssetsPut, RequestAssetsThumb, ResultAssetsContent, ResultAssetsGet,
-    ResultAssetsPut, ResultAssetsThumb,
+    RequestAssetsGet, RequestAssetsList, RequestAssetsPut, RequestAssetsThumb, ResultAssetsContent,
+    ResultAssetsGet, ResultAssetsList, ResultAssetsPut, ResultAssetsThumb,
 };
 use neotavern_storage::assets::resolve_asset_path;
 use neotavern_storage::open::Database;
 use neotavern_storage::StorageError;
 use rusqlite::OptionalExtension;
 
-use crate::product::new_id;
+use crate::product::{self, new_id};
 use crate::{KernelError, KernelErrorCode};
 
 /// Max length of the extension derived from the request `filename`
@@ -105,6 +105,85 @@ pub(crate) fn publish_bytes(
     )?;
     persist_content_type(db, &id, content_type)?;
     Ok((id, false))
+}
+
+/// `assets.list` — the canonical asset catalog (ADR-0061 follow-up):
+/// newest first by `(created_at, id)` with an opaque keyset cursor, optionally
+/// narrowed by `kind`. Features enumerate their own assets (wallpapers are
+/// kind `background`, gallery images `gallery`, plugin blobs
+/// `plugin-blob`) instead of owning a second store, so a consumer that already
+/// published through `assets.put`/`assets.upload.*` needs no extra table.
+pub(crate) fn assets_list(db: &Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req: RequestAssetsList = generated::decode_request_assets_list(request)?;
+    let limit = product::page_limit(req.limit);
+    let mut items: Vec<AssetsItem> = Vec::new();
+    let mut next_cursor: Option<String> = None;
+    {
+        let conn = db.conn();
+        let mut sql = String::from(
+            "SELECT id, type, relative_key, checksum_sha256, size_bytes, created_at \
+             FROM __neotavern_assets",
+        );
+        let mut params: Vec<rusqlite::types::Value> = Vec::new();
+        let mut where_clauses: Vec<&str> = Vec::new();
+        if let Some(kind) = &req.kind {
+            where_clauses.push("type = ?");
+            params.push(rusqlite::types::Value::Text(kind.clone()));
+        }
+        if let Some(cursor) = &req.cursor {
+            let (created_at, id) = product::decode_cursor(cursor)?;
+            where_clauses.push("(created_at < ?) OR (created_at = ? AND id < ?)");
+            params.push(rusqlite::types::Value::Text(created_at.clone()));
+            params.push(rusqlite::types::Value::Text(created_at));
+            params.push(rusqlite::types::Value::Text(id));
+        }
+        if !where_clauses.is_empty() {
+            sql.push_str(" WHERE ");
+            sql.push_str(&where_clauses.join(" AND "));
+        }
+        sql.push_str(" ORDER BY created_at DESC, id DESC LIMIT ?");
+        // Probe one row past the page so the last exact page carries no cursor.
+        params.push(rusqlite::types::Value::Integer(limit + 1));
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|err| sqlite(err, "assets_list: prepare"))?;
+        let mut rows = stmt
+            .query(rusqlite::params_from_iter(params))
+            .map_err(|err| sqlite(err, "assets_list: query"))?;
+        while let Some(row) = rows
+            .next()
+            .map_err(|err| sqlite(err, "assets_list: read row"))?
+        {
+            items.push(AssetsItem {
+                id: row
+                    .get(0)
+                    .map_err(|err| sqlite(err, "assets_list: read id"))?,
+                kind: row
+                    .get(1)
+                    .map_err(|err| sqlite(err, "assets_list: read kind"))?,
+                relative_key: row
+                    .get(2)
+                    .map_err(|err| sqlite(err, "assets_list: read relative_key"))?,
+                checksum_sha256: row
+                    .get(3)
+                    .map_err(|err| sqlite(err, "assets_list: read checksum"))?,
+                size_bytes: row
+                    .get(4)
+                    .map_err(|err| sqlite(err, "assets_list: read size"))?,
+                created_at: row
+                    .get(5)
+                    .map_err(|err| sqlite(err, "assets_list: read created_at"))?,
+            });
+        }
+    }
+    if items.len() > limit as usize {
+        let last = &items[limit as usize - 1];
+        next_cursor = Some(product::encode_cursor(&last.created_at, &last.id));
+        items.truncate(limit as usize);
+    }
+    let dto = ResultAssetsList { items, next_cursor };
+    product::validate(&dto, generated::validate_result_assets_list)?;
+    product::encode(&dto)
 }
 
 /// `assets.get` — metadata by id.

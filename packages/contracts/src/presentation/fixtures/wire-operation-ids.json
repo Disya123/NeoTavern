@@ -2,6 +2,7 @@
   "assets.content",
   "assets.delete",
   "assets.get",
+  "assets.list",
   "assets.put",
   "assets.thumb",
   "assets.upload.abort",

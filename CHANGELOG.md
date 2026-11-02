@@ -4,6 +4,28 @@
 
 ### Added
 
+- **Asset catalog on the kernel plane (round 3/40 of the legacy-removal goal).**
+  One new wire op, `assets.list`: newest-first enumeration of the content
+  catalogue with an optional `kind` filter and the shared opaque keyset cursor
+  (`limit` 1–200, default 50). It is the missing half of the ingestion
+  contract from round 2 — `assets.upload.*`/\`assets.put` can now publish a
+  wallpaper or a gallery image AND the UI can enumerate what was published,
+  without a per-feature store. Feature collections become `kind` conventions
+  (`background`, `gallery`, `plugin-blob`), which is what lets clusters 10,
+  13, 20 and 21a drop their legacy file contours in the following rounds.
+  Kernel: `crates/runtime-kernel/src/assets.rs::assets_list` (kind + cursor
+  predicates, one-row probe, malformed cursor → `CONTRACT_VIOLATION`); the
+  shared cursor helpers in `product.rs` became crate-visible instead of being
+  duplicated. Facade: `backend.assets.list` (local and remote implemented,
+  legacy keeps `UnsupportedError`). Contract hash `8e1b5470...`; registry
+  **143 ops**. Tests: 4 new kernel tests
+  (`crates/runtime-kernel/tests/asset_catalog.rs`: kind isolation, ordering,
+  cursor paging without gaps/repeats, malformed cursor, delete leaves the
+  catalog) and a new neobackend parity test.
+  Honest boundary: the consumer flip (wallpaper panel reads the catalog and
+  uploads through `assets.upload.*`) is the next round — the legacy
+  `/backgrounds/*` routes still serve the UI today.
+
 - **Chunked upload as the large-file ingestion contract (M7 Etap-4 slice; round
   2/40 of the legacy-removal goal).** Four wire operations let any client send a
   file larger than the 1 MiB request cap without a second transport:

@@ -1532,6 +1532,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'assets.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.assets-list',
+    'wire.result.assets-list',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
     'assets.upload.abort',
     'transactional',
     'idempotent',
@@ -3303,6 +3317,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     containerPath: 'imports/profile-import-2c2c/',
     policy: 'remap',
   }),
+  fx('assets-list-request', 'assets.list', 'request', true, {
+    kind: 'background',
+    limit: 50,
+  }),
   fx('assets-put-request', 'assets.put', 'request', true, ASSETS_PUT_REQUEST),
   fx('assets-upload-begin-request', 'assets.upload.begin', 'request', true, {
     kind: 'background',
@@ -3732,6 +3750,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     true,
     PROFILE_EXPORT_SCOPED_VALUE,
   ),
+  fx('assets-list-response', 'assets.list', 'response', true, {
+    items: [ASSET_VALUE],
+    nextCursor: 'MjAyNi0wNi0wMVQxMjowMDowMC4wMDBafGFzc2V0LTE=',
+  }),
+  fx('neg-assets-list-bad-kind', 'assets.list', 'request', false, {
+    kind: 'Background',
+  }),
   fx('assets-put-response', 'assets.put', 'response', true, ASSETS_PUT_VALUE),
   fx('assets-upload-begin-response', 'assets.upload.begin', 'response', true, {
     uploadId: UUID_AVATAR,

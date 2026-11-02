@@ -70,6 +70,7 @@ import {
   type ProviderTestResultDto,
   type RevealProviderSecretResultDto,
   type PutAssetResultDto,
+  type PagedAssetsDto,
   type BeginAssetUploadResultDto,
   type AppendAssetUploadResultDto,
   type AbortAssetUploadResultDto,
@@ -425,6 +426,7 @@ const ASSET: AssetDto = {
   createdAt: TIMESTAMP,
 };
 const ASSET_GET: GetAssetResultDto = { asset: ASSET };
+const ASSET_CATALOG: PagedAssetsDto = { items: [ASSET] };
 const ASSET_CONTENT: GetAssetContentResultDto = {
   assetId: ASSET_ID,
   contentType: 'image/png',
@@ -852,6 +854,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: ASSET_GET };
       case 'assets.content':
         return { ok: true, value: ASSET_CONTENT };
+      case 'assets.list':
+        return { ok: true, value: ASSET_CATALOG };
       case 'assets.put':
         return { ok: true, value: ASSET_PUT };
       case 'assets.upload.begin':
@@ -1066,6 +1070,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return ASSET_GET;
     case 'assets.content':
       return ASSET_CONTENT;
+    case 'assets.list':
+      return ASSET_CATALOG;
     case 'assets.put':
       return ASSET_PUT;
     case 'assets.upload.begin':
@@ -2436,6 +2442,26 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(() => legacy.plugins.stateDelete({ pluginId: PLUGIN.id, scope: 'user' })).toThrow(
       UnsupportedError,
     );
+  });
+
+  it('assets.list answers the catalog DTO on both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localPage, remotePage] = await Promise.all([
+      local.assets.list({ kind: 'background', limit: 25 }),
+      remote.assets.list({ kind: 'background', limit: 25 }),
+    ]);
+    expect(localPage).toEqual(remotePage);
+    expect(localPage).toEqual(ASSET_CATALOG);
+    expect(kernel.requests).toEqual([
+      { operationId: 'assets.list', payload: { kind: 'background', limit: 25 } },
+    ]);
+
+    // No request body is a valid catalog query: the facade sends an empty object.
+    await local.assets.list();
+    expect(kernel.requests.at(-1)).toEqual({ operationId: 'assets.list', payload: {} });
   });
 
   it('assets.upload.* stages chunks and publishes the same asset DTO as put', async () => {

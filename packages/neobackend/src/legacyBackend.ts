@@ -360,6 +360,7 @@ export class LegacyBackend implements NeoBackend {
   };
 
   readonly assets: AssetsApi = {
+    list: () => this.unsupported('assets.list'),
     get: () => this.unsupported('assets.get'),
     content: () => this.unsupported('assets.content'),
     put: () => this.unsupported('assets.put'),

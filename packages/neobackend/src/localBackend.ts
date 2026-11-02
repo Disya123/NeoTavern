@@ -82,6 +82,7 @@ import {
   type BeginAssetUploadResultDto,
   type AppendAssetUploadResultDto,
   type AbortAssetUploadResultDto,
+  type PagedAssetsDto,
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
   type SearchResultDto,
@@ -532,6 +533,7 @@ export class LocalBackend implements NeoBackend {
       exposure: (opts) => this.invoke<SecretsExposureResultDto>('secrets.exposure', {}, opts),
     };
     this.assets = {
+      list: (req, opts) => this.invoke<PagedAssetsDto>('assets.list', req ?? {}, opts),
       get: (assetId, opts) => this.invoke<GetAssetResultDto>('assets.get', { assetId }, opts),
       content: (assetId, opts) =>
         this.invoke<GetAssetContentResultDto>('assets.content', { assetId }, opts),

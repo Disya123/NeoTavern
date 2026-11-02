@@ -266,6 +266,7 @@ metadata is the generated `packages/contracts/generated/contract-manifest.json`.
 | `assets.upload.begin`              | transactional | non-idempotent | safe  | app.write | 2048    | 1024   | –      |
 | `assets.upload.append`             | transactional | non-idempotent | none  | app.write | 1048576 | 1024   | –      |
 | `assets.upload.finish`             | transactional | non-idempotent | none  | app.write | 1024    | 4096   | –      |
+| `assets.list`                     | transactional | idempotent     | safe  | app.read  | 1024    | 262144 | –      |
 | `assets.upload.abort`              | transactional | idempotent     | safe  | app.write | 1024    | 1024   | –      |
 
 The user-persona application slice (ADR-0047 waiver 3, closed in slice 3)
@@ -402,6 +403,18 @@ the documented product codes (`PROVIDER_TIMEOUT`, `PROVIDER_NETWORK_FAULT`,
 the adapter message stays in the kernel log and no key material reaches any
 DTO. Speech/images/transcribe have no wire operations: their payloads are
 binary or multipart and require a media transport contract first.
+
+### Asset catalog: `assets.list`
+
+A feature that publishes assets through `assets.put`/`assets.upload.*` does
+not need its own table to enumerate them: `assets.list` reads the content
+catalogue directly, newest first by `(createdAt, id)` with the shared opaque
+keyset cursor (absent on the last page — the kernel probes one row past the
+page instead of returning a cursor that would answer empty), optionally
+narrowed by `kind` (wallpapers are `background`, gallery images `gallery`,
+plugin blobs `plugin-blob`). An unknown kind is not an error — it is simply an
+empty page — and a malformed cursor is `CONTRACT_VIOLATION`, exactly like the
+other paged lists.
 
 ### Large-file ingestion: chunked upload (`assets.upload.*`)
 

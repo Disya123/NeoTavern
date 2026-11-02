@@ -50,7 +50,7 @@ pub(crate) fn new_id() -> String {
 
 /// Encodes an opaque pagination cursor: base64url (no padding) of
 /// `"{created_at}|{id}"`.
-fn encode_cursor(created_at: &str, id: &str) -> String {
+pub(crate) fn encode_cursor(created_at: &str, id: &str) -> String {
     encode_parts(&[created_at, id])
 }
 
@@ -67,7 +67,7 @@ fn encode_parts(parts: &[&str]) -> String {
 
 /// Decodes a `"{created_at}|{id}"` cursor. Malformed input is a
 /// [`KernelErrorCode::ContractViolation`] — never a panic.
-fn decode_cursor(cursor: &str) -> Result<(String, String), KernelError> {
+pub(crate) fn decode_cursor(cursor: &str) -> Result<(String, String), KernelError> {
     let text = decode_cursor_text(cursor)?;
     match text.split_once('|') {
         Some((created_at, id)) if !created_at.is_empty() && !id.is_empty() => {
@@ -97,7 +97,7 @@ fn decode_cursor_text(cursor: &str) -> Result<String, KernelError> {
     String::from_utf8(bytes).map_err(|_| malformed_cursor())
 }
 
-fn malformed_cursor() -> KernelError {
+pub(crate) fn malformed_cursor() -> KernelError {
     KernelError::new(KernelErrorCode::ContractViolation, "malformed cursor")
 }
 

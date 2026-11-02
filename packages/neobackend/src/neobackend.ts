@@ -160,6 +160,8 @@ import type {
   FinishAssetUploadRequestDto,
   AbortAssetUploadRequestDto,
   AbortAssetUploadResultDto,
+  ListAssetsRequestDto,
+  PagedAssetsDto,
   PutAssetResultDto,
   RenameProfileRequestDto,
   InstructFormatsResultDto,
@@ -771,6 +773,13 @@ export interface SecretsApi {
  * assets are addressed by `relativeKey` through host transports.
  */
 export interface AssetsApi {
+  /**
+   * Asset catalog (wire `assets.list`): newest first, optionally narrowed by
+   * `kind`, opaque keyset cursor. Features enumerate their own assets from
+   * here (wallpapers = `background`, gallery = `gallery`) instead of owning
+   * a second store.
+   */
+  list(req?: ListAssetsRequestDto, opts?: BackendCallOptions): Promise<PagedAssetsDto>;
   /** Asset metadata read (wire `assets.get`). */
   get(assetId: string, opts?: BackendCallOptions): Promise<GetAssetResultDto>;
   /** Asset content read (wire `assets.content`, base64 of the originals). */

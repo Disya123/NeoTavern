@@ -695,6 +695,7 @@ fn handle_unary(
         "assets.upload.append" => with_db_opt(db, |db| assets_upload::upload_append(db, req)),
         "assets.upload.finish" => with_db_opt(db, |db| assets_upload::upload_finish(db, req)),
         "assets.upload.abort" => with_db_opt(db, |db| assets_upload::upload_abort(db, req)),
+        "assets.list" => with_db_opt(db, |db| assets::assets_list(db, req)),
         "assets.get" => with_db_opt(db, |db| assets::assets_get(db, req)),
         "assets.content" => with_db_opt(db, |db| assets::assets_content(db, req)),
         "assets.thumb" => with_db_opt(db, |db| assets::assets_thumb(db, req)),

@@ -2830,6 +2830,41 @@ export const AbortAssetUploadResultDtoSchema = Type.Object(
 export type AbortAssetUploadResultDto = Static<typeof AbortAssetUploadResultDtoSchema>;
 
 /**
+ * Asset catalog request DTO (`wire.request.assets-list`).
+ *
+ * The canonical way to enumerate published assets — wallpapers, character
+ * gallery images, plugin blobs — without a per-feature store: assets are
+ * content-addressed by `kind`, so a feature narrows the catalog with `kind`
+ * instead of owning a table. Newest first (`created_at DESC, id DESC`) with an
+ * opaque keyset cursor, like every other paged list on the wire.
+ */
+export const ListAssetsRequestDtoSchema = Type.Object(
+  {
+    kind: Type.Optional(
+      Type.String({ pattern: '^[a-z][a-z0-9.-]*$', minLength: 1, maxLength: 64 }),
+    ),
+    cursor: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+  },
+  { $id: 'wire.request.assets-list', additionalProperties: false },
+);
+export type ListAssetsRequestDto = Static<typeof ListAssetsRequestDtoSchema>;
+
+/**
+ * Asset catalog result DTO (`wire.result.assets-list`). `nextCursor` is
+ * absent on the last page (the kernel probes one row past the page instead of
+ * reporting a cursor that would answer empty).
+ */
+export const PagedAssetsDtoSchema = Type.Object(
+  {
+    items: Type.Array(AssetDtoSchema, { maxItems: 200 }),
+    nextCursor: Type.Optional(Type.String({ minLength: 1 })),
+  },
+  { $id: 'wire.result.assets-list', additionalProperties: false },
+);
+export type PagedAssetsDto = Static<typeof PagedAssetsDtoSchema>;
+
+/**
  * Character-gallery item DTO (`wire.characters.gallery.item`) — one entry of
  * a character's gallery: the link id plus the joined asset metadata needed
  * to render and serve it. The bytes themselves are never embedded — they are
@@ -3756,6 +3791,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.assets.upload.finish': FinishAssetUploadRequestDtoSchema,
   'wire.request.assets.upload.abort': AbortAssetUploadRequestDtoSchema,
   'wire.result.assets.upload.abort': AbortAssetUploadResultDtoSchema,
+  'wire.request.assets-list': ListAssetsRequestDtoSchema,
+  'wire.result.assets-list': PagedAssetsDtoSchema,
   'wire.characters.gallery.item': GalleryItemDtoSchema,
   'wire.request.characters-gallery-list': GalleryListRequestDtoSchema,
   'wire.result.characters-gallery-list': GalleryListResultDtoSchema,

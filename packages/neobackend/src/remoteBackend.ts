@@ -90,6 +90,7 @@ import type {
   BeginAssetUploadResultDto,
   AppendAssetUploadResultDto,
   AbortAssetUploadResultDto,
+  PagedAssetsDto,
   CharacterCardExportResultDto,
   GalleryListResultDto,
   GalleryAddResultDto,
@@ -494,6 +495,8 @@ export class RemoteBackend implements NeoBackend {
   };
 
   readonly assets: AssetsApi = {
+    list: (req, opts) =>
+      this.sdk.call<PagedAssetsDto>('assets.list', req ?? {}, { signal: opts?.signal }),
     get: (assetId, opts) =>
       this.sdk.call<GetAssetResultDto>('assets.get', { assetId }, { signal: opts?.signal }),
     content: (assetId, opts) =>

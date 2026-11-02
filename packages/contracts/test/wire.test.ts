@@ -83,8 +83,9 @@ describe('product wire registry', () => {
     // cluster 17, part 2) adds chats.prompt.preview (130); the app-event slice
     // (M7 cluster 18) adds events.poll, the plugin state KV slice adds three
     // ops (134), the plugin secret slice adds four more (138) and the ingestion
-    // contract (ADR-0061) adds the chunked upload family (142).
-    expect(registry.operations).toHaveLength(142);
+    // contract (ADR-0061) adds the chunked upload family (142), and the asset
+    // catalog adds `assets.list` (143).
+    expect(registry.operations).toHaveLength(143);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -167,6 +168,7 @@ describe('product wire registry', () => {
       'assets.upload.begin',
       'assets.upload.append',
       'assets.upload.finish',
+      'assets.list',
       'assets.upload.abort',
       'assets.get',
       'assets.content',
