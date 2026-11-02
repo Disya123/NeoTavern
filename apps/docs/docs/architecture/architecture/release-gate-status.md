@@ -42,6 +42,26 @@ not the gate. Until G6–G10 pass on packaged artifacts, the sidecar stays the
 public default and the Kernel stays an explicit Preview
 (`NEOTA_KERNEL=1`, conflict policy in `apps/desktop/src-tauri/src/lib.rs`).
 
+## Next step order
+
+G7 is the keystone: it is the only row that unblocks two others (G8 rollback
+needs a migration to roll back from; G6 Packaged needs a dataset that came
+through it). So the next slices, in order:
+
+1. **G7 harness** — a Kernel-side reader for the legacy `app.db` shape
+   (Drizzle tables: characters, chats, messages, presets, lorebooks, personas,
+   settings, plugins, asset metadata) that copies rows into `database.sqlite`
+   inside one transaction per entity family, with a dry-run mode that reports
+   counts and refuses on unknown columns. The source is opened read-only and
+   never written back (ADR-0038: no dual-write).
+2. **G7 verification** — fixtures seeded from a realistic ST-era `app.db`, a
+   re-run test (importing twice creates no duplicates, AGENTS §11) and a
+   rollback test that restores the pre-import `database.sqlite` snapshot.
+3. **G6 evidence** — a packaged desktop build launched on the imported dataset,
+   with capability rows promoted only by observed behaviour.
+4. **G9/G10** — Playwright E2E, a11y and visual gates on that packaged build.
+
+Until then nothing in this list is "done", and the sidecar stays the default.
 Deleting `fastify`/`drizzle`/`api/v2` is the last step of the same gate: it can
 only happen when the legacy plane is provably unnecessary, which is exactly what
 G6–G8 measure.
