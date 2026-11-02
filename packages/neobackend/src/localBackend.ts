@@ -32,6 +32,7 @@ import {
   type ListToolsResultDto,
   type PromptPlanDto,
   type ChatContextAuditResultDto,
+  type ChatPromptPreviewResultDto,
   type ListMessageBlocksResultDto,
   type MessageBlockDto,
   type ThemeSettingsResultDto,
@@ -327,6 +328,8 @@ export class LocalBackend implements NeoBackend {
       get: (chatId, opts) => this.invoke<ChatDto>('chats.get', { chatId }, opts),
       contextAudit: (chatId, opts) =>
         this.invoke<ChatContextAuditResultDto>('chats.context.audit', { chatId }, opts),
+      previewPrompt: (req, opts) =>
+        this.invoke<ChatPromptPreviewResultDto>('chats.prompt.preview', req, opts),
       create: (req, opts) => this.invoke<ChatDto>('chats.create', req, opts),
       update: (req, opts) => this.invoke<ChatDto>('chats.update', req, opts),
       del: (chatId, opts) => this.invoke<EmptyResultDto>('chats.delete', { chatId }, opts),

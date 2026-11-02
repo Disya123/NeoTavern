@@ -290,7 +290,7 @@
     {
       "source": "api/README.md",
       "target": "api/README.md",
-      "sha256": "1aa1ac8c789b7108bc7abd4c0d1bdc119dc333b19d2b8e42c98b96dc18ea4a97"
+      "sha256": "b3034950dfba13cfe294e4d3f97932819fa36b67d41653b18b26b6b667d0646a"
     },
     {
       "source": "architecture/README.md",
@@ -305,7 +305,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "627a2194c4686ff559eff16bda6f3cd66a35d1c8a1fe177817fa2e3b13ed90db"
+      "sha256": "3c80e621ef3fd09b4754f3c481c5d65963fe783b78244e8f7f5ea9241f821481"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -330,7 +330,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "c23b6a1663f4373704ca3b557f75553bc9fa04476b50c922edadae4c2e3f00fa"
+      "sha256": "57dd41e40c5fe115bc0dfa4024991a5b11117c60e4d2ebc7898dc5a7f2683df2"
     },
     {
       "source": "architecture/portable-data.md",
@@ -360,7 +360,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "82af25c795691e40cec22f2f916b3af8c77c16f74a8ec07142216413b7c6511f"
+      "sha256": "b0b0fb74aa394ea82464680b8a20f7e5b9d2911e9398fcee092afe0c2d3b4ff0"
     },
     {
       "source": "architecture/version-axes.md",
@@ -370,7 +370,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "3838fbe745df3b9cabfd9d9a0649c9934fbcf32a0a0d8859c90c98aee2a83f04"
+      "sha256": "4d2bc0c9aee042945bd7d5dd6d1329e3d767a43d11a25b2276c19e0abddae27c"
     },
     {
       "source": "audits/rust-app/INVENTORY.md",
@@ -405,7 +405,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "76516c7e78fa6b1b8c893bda65ea50b1b7dfb1b1da50d1d4cc7adaee78ae3ded"
+      "sha256": "b188146eec3bf4c7d9fa10726517839aa3abd17ae53b2d118d8c450405c3f868"
     },
     {
       "source": "data/README.md",
@@ -470,7 +470,7 @@
     {
       "source": "prompt-pipeline/README.md",
       "target": "prompt-pipeline/README.md",
-      "sha256": "508378f9fbd3fa62c22de2312cf9bb7379c49aa0aaa4435c9433ccac2bc2c04f"
+      "sha256": "52ac1ef2e1856dc05fc6d19ba793227b04c72599ed232c02db7eeb9c4bcc570f"
     },
     {
       "source": "rfc/README.md",

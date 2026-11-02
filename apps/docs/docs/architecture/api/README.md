@@ -469,6 +469,17 @@ remains on the generation route. Stable errors: `CHARACTER_NOT_FOUND`, `CHAT_NOT
 local API session as the other `/api/v2` routes; it has no separate plugin
 permission or new versioning lifecycle.
 
+On the canonical plane the `chatId` branch of this preview is served by the
+Product Wire operation `chats.prompt.preview` (M7 Этап-4 cluster 17 part 2):
+`{ "chatId", "userMessage" }` in, `{ "plan": PromptPreview }` out, where
+`PromptPreview` is the durable `wire.prompt.plan` shape minus the run identity
+— the preview creates no run, no message and no audit, and it answers the same
+tokenizer/budget/blocks/history/excluded data the composer meter needs. The
+`characterId` (not-yet-created conversation) and `providerConfigId` override
+branches stay on the legacy route above. See
+[prompt-pipeline](../prompt-pipeline/README.md) for the pipeline stages and the
+honest boundaries (approximate kernel tokenizer, no frontend interceptors).
+
 ### Providers
 
 - `GET /api/v2/providers/catalog` → built-in catalog of safe public

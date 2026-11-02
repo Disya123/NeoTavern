@@ -1514,6 +1514,45 @@ export const ChatContextAuditResultDtoSchema = Type.Object(
 );
 export type ChatContextAuditResultDto = Static<typeof ChatContextAuditResultDtoSchema>;
 
+/**
+ * Prompt preview DTO (`wire.prompt.preview`): the plan the next turn WOULD
+ * send — the `wire.prompt.plan` shape minus the run identity, because a
+ * preview is never a generation run (nothing is persisted, no provider is
+ * contacted, no message is created). Every field constraint is borrowed from
+ * the durable plan schema, so the two shapes cannot drift apart.
+ */
+export const PromptPreviewDtoSchema = Type.Object(
+  Type.Omit(PromptPlanDtoSchema, ['runId']).properties,
+  { $id: 'wire.prompt.preview', additionalProperties: false },
+);
+export type PromptPreviewDto = Static<typeof PromptPreviewDtoSchema>;
+
+/**
+ * Chat prompt preview request (`wire.request.chat-prompt-preview`): the chat
+ * plus the unsent composer text the preview must budget in.
+ */
+export const ChatPromptPreviewRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    userMessage: Type.String({ minLength: 0, maxLength: 1000000 }),
+  },
+  { $id: 'wire.request.chat-prompt-preview', additionalProperties: false },
+);
+export type ChatPromptPreviewRequestDto = Static<typeof ChatPromptPreviewRequestDtoSchema>;
+
+/**
+ * Chat prompt preview result (`wire.result.chat-prompt-preview`): the preview
+ * plan of one chat. Unlike the context audit, a preview is always produced —
+ * the request either yields a plan or fails with a stable product error.
+ */
+export const ChatPromptPreviewResultDtoSchema = Type.Object(
+  {
+    plan: PromptPreviewDtoSchema,
+  },
+  { $id: 'wire.result.chat-prompt-preview', additionalProperties: false },
+);
+export type ChatPromptPreviewResultDto = Static<typeof ChatPromptPreviewResultDtoSchema>;
+
 /** Get prompt plan request DTO (`wire.request.get-prompt-plan`). */
 export const GetPromptPlanRequestDtoSchema = Type.Object(
   {
@@ -3492,6 +3531,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.prompt.excluded': PromptExcludedDtoSchema,
   'wire.prompt.plan': PromptPlanDtoSchema,
   'wire.result.chat-context-audit': ChatContextAuditResultDtoSchema,
+  'wire.prompt.preview': PromptPreviewDtoSchema,
+  'wire.request.chat-prompt-preview': ChatPromptPreviewRequestDtoSchema,
+  'wire.result.chat-prompt-preview': ChatPromptPreviewResultDtoSchema,
   'wire.request.get-prompt-plan': GetPromptPlanRequestDtoSchema,
   'wire.generation.step': GenerationStepDtoSchema,
   'wire.generation.step.type': WireGenerationStepType,

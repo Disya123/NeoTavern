@@ -189,6 +189,7 @@ export class LegacyBackend implements NeoBackend {
     list: () => this.unsupported('chats.list'),
     get: () => this.unsupported('chats.get'),
     contextAudit: () => this.unsupported('chats.context.audit'),
+    previewPrompt: () => this.unsupported('chats.prompt.preview'),
     create: () => this.unsupported('chats.create'),
     update: () => this.unsupported('chats.update'),
     del: () => this.unsupported('chats.delete'),

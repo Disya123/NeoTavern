@@ -346,8 +346,19 @@ SillyTavern full-backup transfer (two-phase):
   entries — the template editor keeps its local estimates in kernel mode,
   while the PromptPlanPanel falls back to the chat's latest plan when a
   requested run has none.
-- `POST /api/v2/context-preview` — still missing: the kernel counterpart needs
-  a plan-built-without-run path (cluster 17 part 2).
+- `POST /api/v2/context-preview` — covered by `chats.prompt.preview` (M7
+  cluster 17 part 2): the SAME planning pipeline the durable plan records
+  (character/persona/lorebook/memory blocks, bounded history, token budget,
+  context shifting) built WITHOUT a generation run — nothing persisted, no
+  message created, no provider contacted. It answers `wire.prompt.preview`,
+  the plan shape minus the run identity (a preview can never masquerade as a
+  run), with `CHAT_NOT_FOUND` for an unknown chat and
+  `PROVIDER_CONFIG_NOT_FOUND` for a dangling active profile. Honest
+  boundaries: the kernel planner is chat-scoped, so the legacy NEW-chat branch
+  (character + greeting, no chat yet) has no kernel counterpart — the
+  composer meter keeps its labeled local estimate there — and the preview
+  budgets with the kernel's own heuristic tokenizer
+  (`approximateTokens: true`), never the sidecar's model tokenizer.
 - `POST /api/v2/plugin-intercepts/:requestId` — plugin intercept callback
   (`requestId` 16..200 chars); blocked on the kernel plugin host (clusters
   20–21) — nothing runs interceptors on the kernel plane yet.

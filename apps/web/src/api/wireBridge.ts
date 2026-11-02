@@ -85,6 +85,8 @@ import {
   type PresetDto,
   type PromptPlanDto,
   type ChatContextAuditResultDto,
+  type ChatPromptPreviewRequestDto,
+  type ChatPromptPreviewResultDto,
   type MessageBlock,
   type MessageBlockDto,
   type BlockAttach,
@@ -1311,6 +1313,24 @@ export async function getChatContextAudit(chatId: string): Promise<ChatContextAu
     return backend.chats.contextAudit(chatId);
   }
   throw new UnsupportedError('chats.context.audit');
+}
+
+/**
+ * Side-effect-free prompt preview of a chat's next turn (wire
+ * `chats.prompt.preview`, M7 Etap-4 cluster 17 part 2): the plan the next
+ * request WOULD send — system blocks, selected history, token budget and the
+ * excluded messages — built without a generation run (nothing persisted, no
+ * provider contacted). The payload is `wire.prompt.preview`: the durable plan
+ * shape minus the run identity. Kernel plane only; the legacy live preview is
+ * a different pipeline and stays on `usePromptContextPreview`.
+ */
+export async function getChatPromptPreview(
+  request: ChatPromptPreviewRequestDto,
+): Promise<ChatPromptPreviewResultDto> {
+  if (isKernelMode()) {
+    return backend.chats.previewPrompt(request);
+  }
+  throw new UnsupportedError('chats.prompt.preview');
 }
 
 /** One durable generation step rendered in the run transcript (ТЗ §8.3). */

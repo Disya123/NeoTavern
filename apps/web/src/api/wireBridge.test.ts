@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => {
     list: vi.fn(),
     get: vi.fn(),
     contextAudit: vi.fn(),
+    previewPrompt: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     del: vi.fn(),
@@ -278,6 +279,7 @@ import {
   exportChat,
   getPromptPlan,
   getChatContextAudit,
+  getChatPromptPreview,
   getDataActivationStatus,
   importCharacter,
   warmProviderModels,
@@ -1791,6 +1793,43 @@ describe('imports/exports (kernel plane wire flow)', () => {
     mocks.isKernelMode.mockReturnValueOnce(false);
     await expect(
       getChatContextAudit('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
+    ).rejects.toBeInstanceOf(UnsupportedError);
+  });
+
+  it('previews the next prompt through chats.prompt.preview (no run identity)', async () => {
+    const plan = {
+      chatId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      provider: 'fake',
+      model: 'fake-1',
+      instructFormat: 'plain-messages-v1',
+      tokenizerProfile: 'heuristic-v1',
+      approximateTokens: true,
+      contextLimit: 8192,
+      responseReserved: 2048,
+      inputTokens: 96,
+      overBudget: false,
+      systemBlocks: [{ source: 'character', text: 'Aria is a cheerful guide.' }],
+      messages: [{ role: 'user' as const, content: 'Draft question' }],
+      excluded: [],
+      createdAt: NOW,
+    };
+    mocks.chats.previewPrompt.mockResolvedValueOnce({ plan });
+    const request = {
+      chatId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      userMessage: 'Draft question',
+    };
+
+    const result = await getChatPromptPreview(request);
+
+    expect(mocks.chats.previewPrompt).toHaveBeenCalledWith(request);
+    expect(result.plan.inputTokens).toBe(96);
+    expect(result.plan).not.toHaveProperty('runId');
+  });
+
+  it('refuses the prompt preview on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValueOnce(false);
+    await expect(
+      getChatPromptPreview({ chatId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', userMessage: 'hi' }),
     ).rejects.toBeInstanceOf(UnsupportedError);
   });
 

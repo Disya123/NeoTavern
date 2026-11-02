@@ -46,6 +46,7 @@
   "chats.messages.variants.create",
   "chats.messages.variants.delete",
   "chats.messages.variants.list",
+  "chats.prompt.preview",
   "chats.reorder",
   "chats.snapshots.create",
   "chats.snapshots.list",

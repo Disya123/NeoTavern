@@ -46,6 +46,7 @@ import {
   type ChatsExportResultDto,
   type PromptPlanDto,
   type ChatContextAuditResultDto,
+  type ChatPromptPreviewResultDto,
   type ListMessageBlocksResultDto,
   type MessageBlockDto,
   type BackupsRestoreResultDto,
@@ -458,6 +459,11 @@ const PROMPT_PLAN: PromptPlanDto = {
  * latest durable plan wrapped in the audit result. */
 const CHAT_CONTEXT_AUDIT: ChatContextAuditResultDto = { plan: PROMPT_PLAN };
 
+/** chats.prompt.preview response (M7 Etap-4 cluster 17 part 2): the
+ * next-turn plan WITHOUT the run identity � a preview is not a run. */
+const { runId: _previewRunId, ...CHAT_PROMPT_PREVIEW_PLAN } = PROMPT_PLAN;
+const CHAT_PROMPT_PREVIEW: ChatPromptPreviewResultDto = { plan: CHAT_PROMPT_PREVIEW_PLAN };
+
 /** One durable plugin→message attachment (M7 Etap-4 cluster 15). */
 const MESSAGE_BLOCK: MessageBlockDto = {
   id: 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
@@ -787,6 +793,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: PROMPT_PLAN };
       case 'chats.context.audit':
         return { ok: true, value: CHAT_CONTEXT_AUDIT };
+      case 'chats.prompt.preview':
+        return { ok: true, value: CHAT_PROMPT_PREVIEW };
       case 'chats.blocks.list':
         return { ok: true, value: MESSAGE_BLOCK_LIST };
       case 'chats.blocks.attach':
@@ -975,6 +983,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return PROMPT_PLAN;
     case 'chats.context.audit':
       return CHAT_CONTEXT_AUDIT;
+    case 'chats.prompt.preview':
+      return CHAT_PROMPT_PREVIEW;
     case 'chats.blocks.list':
       return MESSAGE_BLOCK_LIST;
     case 'chats.blocks.attach':
@@ -1804,6 +1814,13 @@ describe('LegacyBackend', () => {
   it('chats.context.audit throws UnsupportedError (the legacy audit is a different contract)', () => {
     const backend = makeLegacyBackend(new Map());
     expect(() => backend.chats.contextAudit(CHAT_ID)).toThrow(UnsupportedError);
+  });
+
+  it('chats.prompt.preview throws UnsupportedError (the legacy preview is a different pipeline)', () => {
+    const backend = makeLegacyBackend(new Map());
+    expect(() => backend.chats.previewPrompt({ chatId: CHAT_ID, userMessage: 'hello' })).toThrow(
+      UnsupportedError,
+    );
   });
 
   it('the four block operations throw UnsupportedError on the legacy backend', () => {
@@ -2808,6 +2825,51 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     const backend = new LocalBackend({ transport: kernel });
 
     await expect(backend.chats.contextAudit('nope')).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
+  });
+
+  it('chats.prompt.preview is routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+    const request = { chatId: CHAT_ID, userMessage: 'Draft question' };
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.chats.previewPrompt(request),
+      remote.chats.previewPrompt(request),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(CHAT_PROMPT_PREVIEW);
+    expect(localResult.plan).not.toHaveProperty('runId');
+    expect(kernel.requests).toEqual([
+      {
+        operationId: 'chats.prompt.preview',
+        payload: request,
+      },
+    ]);
+  });
+
+  it('chats.prompt.preview with a non-uuid chat id throws ValidationError before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(
+      backend.chats.previewPrompt({ chatId: 'nope', userMessage: 'hello' }),
+    ).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
+  });
+
+  it('chats.prompt.preview rejects a payload with an extra field before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(
+      backend.chats.previewPrompt({
+        chatId: CHAT_ID,
+        userMessage: 'hello',
+        persist: true,
+      } as unknown as Parameters<typeof backend.chats.previewPrompt>[0]),
+    ).rejects.toThrow(ValidationError);
     expect(kernel.calls).toBe(0);
   });
 

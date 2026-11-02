@@ -538,10 +538,18 @@ pub fn build_prompt_plan(db: &Database, input: &PlanInput<'_>) -> Result<PromptP
             content: apply_user_macro(&message.content, user_name.as_deref()),
         });
     }
-    messages.push(PromptMessage {
-        role: "user".to_string(),
-        content: apply_user_macro(input.message, user_name.as_deref()),
-    });
+    // The trailing user message is pinned. A preview of an empty composer
+    // draft budgets the history only — mirroring the legacy preview, which
+    // appends the draft only when it is non-blank. Real runs always carry a
+    // non-empty message (`wire.request.start-generation`, minLength 1), so
+    // their durable plans are unchanged.
+    let has_pinned_user = !input.message.trim().is_empty();
+    if has_pinned_user {
+        messages.push(PromptMessage {
+            role: "user".to_string(),
+            content: apply_user_macro(input.message, user_name.as_deref()),
+        });
+    }
 
     // Token budget (heuristic): reserve response room, then drop the oldest
     // unpinned history messages until the input fits.
@@ -572,7 +580,10 @@ pub fn build_prompt_plan(db: &Database, input: &PlanInput<'_>) -> Result<PromptP
     let has_system = messages.first().is_some_and(|m| m.role == "system");
     let history_start = usize::from(has_system);
     while tokens_of(&messages) > available && messages.len() > history_start + 1 {
-        debug_assert_eq!(history_ids.len(), messages.len() - history_start - 1);
+        debug_assert_eq!(
+            history_ids.len(),
+            messages.len() - history_start - usize::from(has_pinned_user)
+        );
         messages.remove(history_start);
         excluded.push(PromptExcluded {
             message_id: history_ids.remove(0),

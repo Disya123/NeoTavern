@@ -86,6 +86,8 @@ import type {
   ListToolsResultDto,
   PromptPlanDto,
   ChatContextAuditResultDto,
+  ChatPromptPreviewRequestDto,
+  ChatPromptPreviewResultDto,
   WireGenerationEvent,
   BackupsRestoreResultDto,
   BackupsDeleteResultDto,
@@ -234,6 +236,17 @@ export interface ChatsApi {
    * provider request. `plan` is omitted when the chat has no generation yet.
    */
   contextAudit(chatId: string, opts?: BackendCallOptions): Promise<ChatContextAuditResultDto>;
+  /**
+   * Side-effect-free prompt preview of a chat's next turn (wire
+   * `chats.prompt.preview`, M7 Etap-4 cluster 17 part 2): the plan the next
+   * request WOULD send, built without a generation run — nothing persisted,
+   * no provider contacted. The payload is the prompt-plan shape minus the run
+   * identity (`wire.prompt.preview`).
+   */
+  previewPrompt(
+    req: ChatPromptPreviewRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ChatPromptPreviewResultDto>;
   /** Create a chat for an existing character. */
   create(req: CreateChatRequestDto, opts?: BackendCallOptions): Promise<ChatDto>;
   /** Rename a chat. */

@@ -742,6 +742,10 @@ fn handle_unary(
             with_db_opt(db, |db| generation::generation_prompt_plan(db, req))
         }
         "chats.context.audit" => with_db_opt(db, |db| generation::chats_context_audit(db, req)),
+        // M7 Etap-4 (cluster 17, part 2): side-effect-free prompt preview.
+        "chats.prompt.preview" => with_db_opt(db, |db| {
+            generation::chats_prompt_preview(db, req, &state.registry)
+        }),
         // Этап 2.7: submit a tool result and resume a waiting-for-tool run.
         "generation.tool.result" => with_db_opt(db, |db| {
             generation::generation_tool_result(

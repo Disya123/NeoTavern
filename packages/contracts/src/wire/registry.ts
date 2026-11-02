@@ -1065,6 +1065,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'chats.prompt.preview',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.chat-prompt-preview',
+    'wire.result.chat-prompt-preview',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1048576,
+    262144,
+    undefined,
+  ),
+  op(
     'generation.tools.list',
     'transactional',
     'idempotent',
@@ -2697,6 +2711,13 @@ const PROMPT_PLAN_VALUE = {
   createdAt: TIMESTAMP,
 };
 
+/**
+ * `wire.prompt.preview` is the plan shape without the run identity: a preview
+ * is not a generation run. Derived from the plan fixture so the two can never
+ * drift.
+ */
+const { runId: _previewPlanRunId, ...PROMPT_PREVIEW_VALUE } = PROMPT_PLAN_VALUE;
+
 function fx(
   id: string,
   operationId: string,
@@ -3387,6 +3408,17 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     plan: PROMPT_PLAN_VALUE,
   }),
   fx('chats-context-audit-response-empty', 'chats.context.audit', 'response', true, {}),
+  fx('chats-prompt-preview-request', 'chats.prompt.preview', 'request', true, {
+    chatId: UUID_CHAT,
+    userMessage: 'Hello there',
+  }),
+  fx('chats-prompt-preview-request-empty-message', 'chats.prompt.preview', 'request', true, {
+    chatId: UUID_CHAT,
+    userMessage: '',
+  }),
+  fx('chats-prompt-preview-response', 'chats.prompt.preview', 'response', true, {
+    plan: PROMPT_PREVIEW_VALUE,
+  }),
   fx('generation-tools-list-response', 'generation.tools.list', 'response', true, {
     items: [TOOL_SPEC_VALUE],
   }),
@@ -3810,6 +3842,27 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-chats-context-audit-wrong-plan-type', 'chats.context.audit', 'response', false, {
     plan: 42,
   }),
+  fx('neg-chats-prompt-preview-bad-chat-id', 'chats.prompt.preview', 'request', false, {
+    chatId: 'not-a-uuid',
+    userMessage: 'hello',
+  }),
+  fx('neg-chats-prompt-preview-extra-field', 'chats.prompt.preview', 'request', false, {
+    chatId: UUID_CHAT,
+    userMessage: 'hello',
+    persist: true,
+  }),
+  // A preview must never masquerade as a run: the run identity is not part
+  // of `wire.prompt.preview`.
+  fx('neg-chats-prompt-preview-response-with-run-id', 'chats.prompt.preview', 'response', false, {
+    plan: PROMPT_PLAN_VALUE,
+  }),
+  fx(
+    'neg-chats-prompt-preview-response-missing-messages',
+    'chats.prompt.preview',
+    'response',
+    false,
+    { plan: { ...PROMPT_PREVIEW_VALUE, messages: undefined } },
+  ),
   fx('neg-persona-get-missing-field', 'personas.get', 'request', false, {}),
   fx('neg-persona-get-wrong-type', 'personas.get', 'request', false, { personaId: 42 }),
   fx('neg-persona-create-extra-field', 'personas.create', 'request', false, {

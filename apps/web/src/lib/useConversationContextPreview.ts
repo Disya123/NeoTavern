@@ -5,8 +5,9 @@ import {
   type PromptContextPreviewRequest,
 } from '@neotavern/contracts';
 import { estimateTokens } from '@neotavern/shared';
-import { usePromptContextPreview, useSettings } from '../api/hooks.js';
-import { summarizeContextUsage } from './contextUsage.js';
+import { isKernelMode } from '../api/backend.js';
+import { useChatPromptPreview, usePromptContextPreview, useSettings } from '../api/hooks.js';
+import { summarizeContextUsage, summarizePlanUsage } from './contextUsage.js';
 
 const CONTEXT_PREVIEW_DEBOUNCE_MS = 500;
 
@@ -22,12 +23,35 @@ export type ConversationContextPreviewSource =
       historyVersion: number;
     };
 
+/**
+ * Tokenizer provenance shown next to the context meter. Both planes report the
+ * same pair: which tokenizer profile produced the numbers and whether it is a
+ * local heuristic rather than a model-specific tokenizer.
+ */
+export interface ConversationContextPreviewInfo {
+  tokenizer: {
+    profile: string;
+    approximate: boolean;
+  };
+}
+
 interface ConversationContextPreviewInput {
   source: ConversationContextPreviewSource | undefined;
   draft: string;
 }
 
-/** Shared live context preview used by both Home and existing chats. */
+/**
+ * Shared live context preview used by both Home and existing chats.
+ *
+ * Two planes, two honest contracts (ARC-02):
+ * - legacy sidecar: `POST /context-preview`, the sidecar pipeline's own
+ *   preview shape (summarized by `summarizeContextUsage`);
+ * - kernel: wire `chats.prompt.preview` for an EXISTING chat — the same
+ *   planning pipeline that produces the durable prompt plan, built without a
+ *   generation run (`summarizePlanUsage`). A new-chat preview has no kernel
+ *   counterpart (the kernel planner is chat-scoped), so the meter falls back
+ *   to the labeled local estimate instead of failing.
+ */
 export function useConversationContextPreview({ source, draft }: ConversationContextPreviewInput) {
   const settings = useSettings();
   const [previewDraft, setPreviewDraft] = useState(draft);
@@ -38,7 +62,7 @@ export function useConversationContextPreview({ source, draft }: ConversationCon
   }, [draft]);
 
   const providerConfigId = settings.data?.activeProviderConfigId;
-  const request: PromptContextPreviewRequest | undefined =
+  const legacyRequest: PromptContextPreviewRequest | undefined =
     source && settings.data
       ? 'chatId' in source
         ? {
@@ -58,30 +82,50 @@ export function useConversationContextPreview({ source, draft }: ConversationCon
       ? source.historyVersion
       : source.greeting
     : null;
-  const contextPreview = usePromptContextPreview(request, previewDraft === draft, {
-    settings: settings.data,
-    sourceVersion,
-  });
-  const preview = contextPreview.data?.preview ?? null;
+  const settled = previewDraft === draft;
+  const cacheKey = { settings: settings.data, sourceVersion };
+
+  const kernelMode = isKernelMode();
+  const kernelChatId = source && 'chatId' in source ? source.chatId : undefined;
+  const kernelRequest =
+    kernelMode && kernelChatId !== undefined && settings.data
+      ? { chatId: kernelChatId, userMessage: previewDraft }
+      : undefined;
+  const kernelPreview = useChatPromptPreview(kernelRequest, settled, cacheKey);
+  const legacyPreview = usePromptContextPreview(
+    kernelMode ? undefined : legacyRequest,
+    settled,
+    cacheKey,
+  );
+
+  const plan = kernelPreview.data?.plan ?? null;
+  const legacy = legacyPreview.data?.preview ?? null;
   const outputLimit = settings.data?.generationDefaults?.maxTokens;
-  const contextUsage = summarizeContextUsage(preview, {
-    contextLimit: settings.data?.maxContextTokens ?? CONTEXT_TOKEN_DEFAULT,
-    reservedForReply: outputLimit ?? 4_000,
-    historyTokens: estimateHistoryTokens(source),
-    draftTokens: estimateTokens(draft),
-  });
+  const contextUsage = plan
+    ? summarizePlanUsage(plan)
+    : summarizeContextUsage(legacy, {
+        contextLimit: settings.data?.maxContextTokens ?? CONTEXT_TOKEN_DEFAULT,
+        reservedForReply: outputLimit ?? 4_000,
+        historyTokens: estimateHistoryTokens(source),
+        draftTokens: estimateTokens(draft),
+      });
+  const preview: ConversationContextPreviewInfo | null = plan
+    ? { tokenizer: { profile: plan.tokenizerProfile, approximate: plan.approximateTokens } }
+    : legacy
+      ? { tokenizer: legacy.tokenizer }
+      : null;
+  const isFetching = kernelMode ? kernelPreview.isFetching : legacyPreview.isFetching;
+  const isError = kernelMode ? kernelPreview.isError : legacyPreview.isError;
   const isLoading =
-    preview === null && (previewDraft !== draft || contextPreview.isFetching || settings.isLoading);
+    preview === null && (previewDraft !== draft || isFetching || settings.isLoading);
   const triggerPending =
-    preview === null &&
-    !contextPreview.isError &&
-    (settings.data === undefined || contextPreview.isFetching);
+    preview === null && !isError && (settings.data === undefined || isFetching);
 
   return {
     contextUsage,
     preview,
     isLoading,
-    isError: contextPreview.isError,
+    isError,
     triggerPending,
   };
 }

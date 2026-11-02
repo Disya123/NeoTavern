@@ -4,6 +4,29 @@
 
 ### Added
 
+- **Side-effect-free prompt preview on the kernel plane (M7 Etap-4 slice;
+  cluster 17 part 2).** One new wire op: `chats.prompt.preview` — the plan the
+  next turn WOULD send, built by exactly the pipeline that produces the
+  durable `wire.prompt.plan` (character/persona/lorebook/memory system blocks,
+  bounded history, the `{{user}}` macro, token budget, oldest-first context
+  shifting) but WITHOUT a generation run: nothing is persisted, no message is
+  created, no provider is contacted. It answers `wire.prompt.preview` — the
+  plan shape minus the run identity, borrowed field-by-field from the durable
+  plan schema so the two cannot drift — with `CHAT_NOT_FOUND` for an unknown
+  chat and `PROVIDER_CONFIG_NOT_FOUND` for a dangling active profile; the
+  provider/model context window comes from the adapter's own model list, else
+  the planner's documented default budget. An empty composer draft is a
+  legitimate request and budgets the history only (the legacy preview's rule;
+  real runs always carry a non-empty message, so their durable plans are
+  unchanged). Facade: `backend.chats.previewPrompt()` (local/remote implemented;
+  the legacy facade keeps `UnsupportedError`). Web: the composer context meter
+  now meters an EXISTING chat from the preview in kernel mode (it previously
+  rejected with a typed `UnsupportedError`, so kernel mode showed an error
+  banner); the new `summarizePlanUsage` splits the kernel plan by block source
+  and keeps the pipeline's own token budget authoritative. Honest boundary: the
+  kernel planner is chat-scoped, so the legacy NEW-chat preview branch
+  (character + greeting, no chat yet) keeps the labeled local estimate instead
+  of an error. Contract hash `51fb9be7…`; registry 130 ops.
 - **Theme-owned settings on the kernel plane (M7 Etap-4 slice; cluster 14).**
   Two new wire ops: `themes.settings.get` (the manifest-merged view for one
   theme — every manifest-declared setting id resolved to its persisted value

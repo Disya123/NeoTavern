@@ -218,16 +218,19 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
 `(kind,name)`). All slice-3 additions are `transactional`, strict
 `additionalProperties: false`, ARC-07. The M7 Этап-4 clusters then grew the
-registry to **129 ops** (the latest additions are the cluster-8 provider-access
+registry to **130 ops** (the latest additions are the cluster-8 provider-access
 pair `providers.models` / `providers.test`, the cluster-23 maintenance op
 `diagnostics.cache.clear`, the cluster-17 audit op `chats.context.audit`
 — the chat's latest durable `wire.prompt.plan`, after the provider catalog +
 named-key set described in §5 — the cluster-15 block-attachment family
 `chats.blocks.list` / `chats.blocks.attach` / `blocks.update` /
 `blocks.delete`, whose `descriptor`/`serializedState` fields are free-form
-JSON objects via `wire.free-object`, and the cluster-14 theme-settings pair
+JSON objects via `wire.free-object`, the cluster-14 theme-settings pair
 `themes.settings.get` / `themes.settings.update`, whose `values` map is the
-same `wire.free-object` shape); the authoritative live list with per-op
+same `wire.free-object` shape, and the cluster-17 preview op
+`chats.prompt.preview`, which answers `wire.prompt.preview` — the one-plan
+shape minus the run identity, because a preview is not a generation run);
+the authoritative live list with per-op
 metadata is the generated `packages/contracts/generated/contract-manifest.json`.
 
 | operationId                        | class         | idempotency    | retry | auth      | reqB    | respB  | eventB |

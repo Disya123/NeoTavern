@@ -222,6 +222,70 @@ pub(crate) fn chats_context_audit(
     encode(&value)
 }
 
+/// `chats.prompt.preview` — the plan the next turn WOULD send (Этап-4
+/// registry cluster 17, part 2): the same pipeline stage set the durable
+/// `wire.prompt.plan` records, built WITHOUT a generation run. Nothing is
+/// persisted, no message is created and no provider is contacted, so the
+/// response is `wire.prompt.preview` — the one-plan shape minus the run
+/// identity. A preview can never masquerade as a run.
+///
+/// Provider and model resolve through the same durable selection chain as
+/// `generation.start` (settings `activeproviderconfigid` → provider profile),
+/// so the preview budgets against the model generation would actually use.
+/// The context window comes from the adapter's model list; an unknown
+/// provider or model keeps the planner's documented default budget instead of
+/// inventing a number. Read-only, `app.read`.
+pub(crate) fn chats_prompt_preview(
+    db: &mut Database,
+    request: &[u8],
+    registry: &ProviderRegistry,
+) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_chat_prompt_preview(request)?;
+    if !product::chat_exists(db.conn(), &req.chat_id)? {
+        return Err(chat_not_found(&req.chat_id));
+    }
+    let (provider_kind, model) = resolve_active_provider(db, None)?;
+    let provider = provider_kind.unwrap_or_else(|| "fake".to_string());
+    let context_limit = registry
+        .find(&provider)
+        .map(|adapter| match &model {
+            Some(id) => adapter
+                .models()
+                .iter()
+                .find(|m| &m.id == id)
+                .and_then(|m| m.context_limit)
+                .unwrap_or(0),
+            None => 0,
+        })
+        .unwrap_or(0);
+    // Without a configured model the plan names the provider kind, mirroring
+    // the legacy preview's visible fallback (the plan then reports the
+    // heuristic tokenizer and default budget honestly).
+    let model = model.unwrap_or_else(|| provider.clone());
+    let plan = crate::prompt::build_prompt_plan(
+        db,
+        &crate::prompt::PlanInput {
+            // A preview is not a run: the id exists only because the plan
+            // struct is the shared one, and it is dropped from the payload.
+            run_id: new_id(),
+            chat_id: req.chat_id.clone(),
+            message: &req.user_message,
+            provider: &provider,
+            model: &model,
+            context_limit,
+            response_reserved: 0,
+        },
+    )?;
+    let mut plan_value = serde_json::to_value(&plan)
+        .map_err(|e| internal(format!("prompt preview: serialize: {e}")))?;
+    if let Some(object) = plan_value.as_object_mut() {
+        object.remove("runId");
+    }
+    let value = serde_json::json!({ "plan": plan_value });
+    validate(&value, generated::validate_result_chat_prompt_preview)?;
+    encode(&value)
+}
+
 /// `GENERATION_RUN_STATE_CONFLICT` product error (`runId`, `status` params).
 fn state_conflict(run_id: &str, status: &str) -> KernelError {
     KernelError::product(

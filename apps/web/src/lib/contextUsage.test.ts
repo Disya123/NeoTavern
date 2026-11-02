@@ -1,6 +1,7 @@
-import type { PromptContextAudit } from '@neotavern/contracts';
+import type { PromptContextAudit, PromptPreviewDto } from '@neotavern/contracts';
+import { estimateTokens } from '@neotavern/shared';
 import { describe, expect, it } from 'vitest';
-import { summarizeContextUsage } from './contextUsage.js';
+import { summarizeContextUsage, summarizePlanUsage } from './contextUsage.js';
 
 function audit(entries: PromptContextAudit['entries']): PromptContextAudit {
   return {
@@ -100,3 +101,80 @@ function entry(
     order: 0,
   };
 }
+
+describe('summarizePlanUsage', () => {
+  const characterText = 'Aria is a cheerful guide.';
+  const loreText = 'Sword lore.';
+  const personaText = 'The user is Ada.';
+  const userText = 'Hello there';
+
+  function plan(overrides: Partial<PromptPreviewDto> = {}): PromptPreviewDto {
+    return {
+      chatId: '018f0000-0000-7000-8000-000000000212',
+      provider: 'fake',
+      model: 'fake-1',
+      instructFormat: 'plain-messages-v1',
+      tokenizerProfile: 'heuristic-v1',
+      approximateTokens: true,
+      contextLimit: 4096,
+      responseReserved: 1024,
+      inputTokens: 100,
+      overBudget: false,
+      systemBlocks: [
+        { source: 'character', text: characterText },
+        { source: 'lorebook', text: loreText },
+        { source: 'persona', text: personaText },
+        { source: 'memory', text: 'The city sleeps.' },
+      ],
+      messages: [
+        { role: 'system', content: `${characterText}\n\n${loreText}` },
+        { role: 'user', content: 'Earlier question' },
+        { role: 'user', content: userText },
+      ],
+      excluded: [{ messageId: '018f0000-0000-7000-8000-000000000213', reason: 'token_budget' }],
+      createdAt: '2026-08-13T00:00:00Z',
+      ...overrides,
+    };
+  }
+
+  it('splits the kernel plan by block source and keeps the budget authoritative', () => {
+    const source = plan();
+    const summary = summarizePlanUsage(source);
+
+    const attributed =
+      estimateTokens(characterText) +
+      estimateTokens(loreText) +
+      estimateTokens(personaText) +
+      estimateTokens('The city sleeps.') +
+      estimateTokens('Earlier question') +
+      estimateTokens(userText);
+
+    expect(summary).toMatchObject({
+      isExact: true,
+      promptTokens: source.inputTokens,
+      contextLimit: source.contextLimit,
+      reservedForReply: source.responseReserved,
+      breakdown: {
+        character: estimateTokens(characterText),
+        worldInfo: estimateTokens(loreText),
+        persona: estimateTokens(personaText),
+        chatHistory: estimateTokens('Earlier question') + estimateTokens(userText),
+        // Memory blocks and the estimator's per-message overhead stay visible
+        // under `other`; the parts always add up to the pipeline's own budget.
+        other: Math.max(0, source.inputTokens - attributed) + estimateTokens('The city sleeps.'),
+      },
+    });
+    const parts = Object.values(summary.breakdown).reduce((sum, tokens) => sum + tokens, 0);
+    expect(parts).toBe(source.inputTokens);
+  });
+
+  it('reports an over-budget preview without inventing free space', () => {
+    const summary = summarizePlanUsage(
+      plan({ contextLimit: 512, responseReserved: 128, inputTokens: 900, overBudget: true }),
+    );
+
+    expect(summary.promptTokens).toBe(900);
+    expect(summary.availableTokens).toBe(0);
+    expect(summary.usagePercent).toBe(100);
+  });
+});

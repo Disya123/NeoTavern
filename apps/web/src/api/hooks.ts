@@ -35,6 +35,7 @@ import type {
   PromptContextAuditResponse,
   PromptContextPreviewRequest,
   PromptContextPreviewResponse,
+  ChatPromptPreviewRequestDto,
   SillyTavernImportAnalysis,
   SillyTavernImportExecute,
   SillyTavernImportResult,
@@ -112,6 +113,7 @@ import {
   importCharacter,
   getPromptPlan,
   getChatContextAudit,
+  getChatPromptPreview,
   listGenerationSteps,
   getDataActivationStatus,
   type ContinueCharacterChatInput,
@@ -578,15 +580,38 @@ export function usePromptContextPreview(
     queryKey: ['prompt-context-preview', input, cacheKey],
     queryFn: ({ signal }) => {
       if (!input) throw new Error('PROMPT_CONTEXT_PREVIEW_INPUT_REQUIRED');
-      // Kernel plane: the live context preview is the legacy sidecar
-      // pipeline's output (`/context-preview`); the kernel exposes
-      // `generation.prompt.plan` with a different contract — honest
-      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy request
-      // (ARC-02).
+      // Legacy plane only: the live context preview here is the legacy
+      // sidecar pipeline's output (`/context-preview`). Kernel mode uses
+      // `useChatPromptPreview` (wire `chats.prompt.preview`) instead —
+      // honest CAPABILITY_UNAVAILABLE if this ever runs there, never a
+      // silent legacy request (ARC-02).
       if (isKernelMode()) {
         return Promise.reject(new UnsupportedError('prompt.context-preview'));
       }
       return api.post<PromptContextPreviewResponse>('/context-preview', input, signal);
+    },
+    enabled: input !== undefined && enabled,
+    placeholderData: (previousData) => previousData,
+    staleTime: 0,
+  });
+}
+
+/**
+ * Side-effect-free kernel prompt preview of an existing chat's next turn
+ * (wire `chats.prompt.preview`, M7 Etap-4 cluster 17 part 2): the plan the
+ * next request WOULD send, built without a generation run. Kernel plane only —
+ * the legacy live preview keeps `usePromptContextPreview`.
+ */
+export function useChatPromptPreview(
+  input: ChatPromptPreviewRequestDto | undefined,
+  enabled = true,
+  cacheKey?: unknown,
+) {
+  return useQuery({
+    queryKey: ['chat-prompt-preview', input, cacheKey],
+    queryFn: () => {
+      if (!input) throw new Error('CHAT_PROMPT_PREVIEW_INPUT_REQUIRED');
+      return getChatPromptPreview(input);
     },
     enabled: input !== undefined && enabled,
     placeholderData: (previousData) => previousData,

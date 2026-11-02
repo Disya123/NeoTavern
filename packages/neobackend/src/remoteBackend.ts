@@ -23,6 +23,7 @@ import type {
   ListToolsResultDto,
   PromptPlanDto,
   ChatContextAuditResultDto,
+  ChatPromptPreviewResultDto,
   ListMessageBlocksResultDto,
   MessageBlockDto,
   WireGenerationEvent,
@@ -186,6 +187,7 @@ export class RemoteBackend implements NeoBackend {
     get: (chatId) => this.sdk.call<ChatDto>('chats.get', { chatId }),
     contextAudit: (chatId) =>
       this.sdk.call<ChatContextAuditResultDto>('chats.context.audit', { chatId }),
+    previewPrompt: (req) => this.sdk.call<ChatPromptPreviewResultDto>('chats.prompt.preview', req),
     create: (req) => this.sdk.call<ChatDto>('chats.create', req),
     update: (req) => this.sdk.call<ChatDto>('chats.update', req),
     del: (chatId) => this.sdk.call<EmptyResultDto>('chats.delete', { chatId }),

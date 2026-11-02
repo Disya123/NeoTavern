@@ -325,6 +325,28 @@ request. Until a new preview is ready, both surfaces equally show an
 explicitly marked local estimate rather than passing off an old budget as
 current.
 
+### Kernel-plane preview (wire `chats.prompt.preview`)
+
+The canonical plane has its own side-effect-free preview (M7 Этап-4 cluster
+17 part 2). It runs exactly the pipeline that produces the durable
+`wire.prompt.plan` — character/persona system blocks, Lorebook keyword
+activation, Memory retrieval, bounded history, the `{{user}}` macro, the
+`heuristic-v1` token budget and oldest-first context shifting — but it creates
+no generation run, no message and no audit row, and it never contacts a
+provider. It answers `wire.prompt.preview`: the plan shape minus the run
+identity, so a preview can never be mistaken for an executed generation.
+Provider and model resolve through the same durable selection chain as
+`generation.start` (the adapter's declared context window when known, the
+planner's documented default budget otherwise).
+
+Honest boundaries: the kernel planner is chat-scoped, so only the `chatId`
+branch of the legacy preview has a kernel counterpart — the `characterId`
+(not-yet-created conversation) and `providerConfigId` override branches stay
+on the legacy sidecar contour, and the composer keeps its labeled local
+estimate for a new chat. The tokenizer is the kernel's approximate heuristic
+(`approximateTokens: true`); the legacy preview's model-specific tokenizer
+remains a sidecar capability.
+
 ## Plugin interceptors
 
 Each hook has a priority, a timeout, and error isolation: a broken interceptor
