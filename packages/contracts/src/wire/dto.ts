@@ -3174,6 +3174,48 @@ export const ActivateThemeRequestDtoSchema = Type.Object(
 export type ActivateThemeRequestDto = Static<typeof ActivateThemeRequestDtoSchema>;
 
 /**
+ * Theme settings read request (`wire.request.themes.settings.get`) — М7
+ * Этап-4 cluster 14 (ТЗ §6.5: a theme may own settings). The response is the
+ * manifest-merged values map: every manifest-declared setting id resolved to
+ * its stored (validated) value or the manifest default — never a raw store
+ * dump.
+ */
+export const ThemeSettingsGetRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+  },
+  { $id: 'wire.request.themes.settings.get', additionalProperties: false },
+);
+export type ThemeSettingsGetRequestDto = Static<typeof ThemeSettingsGetRequestDtoSchema>;
+
+/**
+ * Theme settings update request (`wire.request.themes.settings.update`) — a
+ * PARTIAL merge, like the legacy PATCH: only the supplied keys change, and
+ * the kernel validates every value against the theme's manifest definition
+ * (unknown keys and CSS-smuggling values are a `VALIDATION`, never stored).
+ */
+export const ThemeSettingsUpdateRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    values: WireFreeObjectSchema,
+  },
+  { $id: 'wire.request.themes.settings.update', additionalProperties: false },
+);
+export type ThemeSettingsUpdateRequestDto = Static<typeof ThemeSettingsUpdateRequestDtoSchema>;
+
+/**
+ * Theme settings result (`wire.result.themes.settings`) — the merged values
+ * map (free-form JSON object keyed by manifest setting id).
+ */
+export const ThemeSettingsResultDtoSchema = Type.Object(
+  {
+    values: WireFreeObjectSchema,
+  },
+  { $id: 'wire.result.themes.settings', additionalProperties: false },
+);
+export type ThemeSettingsResultDto = Static<typeof ThemeSettingsResultDtoSchema>;
+
+/**
  * Profile DTO (`wire.profiles.item`) — one named user context of the
  * canonical Configuration bounded context (ТЗ §8.1 Configuration, Этап 4
  * slice 5 remainder part 2). Mirrors the legacy minimal shape
@@ -3352,6 +3394,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.themes.install': InstallThemeResultDtoSchema,
   'wire.request.themes.uninstall': UninstallThemeRequestDtoSchema,
   'wire.request.themes.activate': ActivateThemeRequestDtoSchema,
+  'wire.request.themes.settings.get': ThemeSettingsGetRequestDtoSchema,
+  'wire.request.themes.settings.update': ThemeSettingsUpdateRequestDtoSchema,
+  'wire.result.themes.settings': ThemeSettingsResultDtoSchema,
   'wire.profiles.item': ProfileDtoSchema,
   'wire.result.profiles.list': ListProfilesResultDtoSchema,
   'wire.request.profiles.create': CreateProfileRequestDtoSchema,

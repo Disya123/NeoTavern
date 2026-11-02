@@ -125,5 +125,7 @@
   "themes.deactivate",
   "themes.install",
   "themes.list",
+  "themes.settings.get",
+  "themes.settings.update",
   "themes.uninstall"
 ]

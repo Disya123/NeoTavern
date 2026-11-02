@@ -74,6 +74,7 @@ import type {
   SecretsStatusResultDto,
   SecretsLockResultDto,
   ThemeDto,
+  ThemeSettingsResultDto,
   GetAssetContentResultDto,
   GetAssetResultDto,
   PutAssetResultDto,
@@ -396,6 +397,16 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<ThemeDto>('themes.activate', { id: themeId }, { signal: opts?.signal }),
     deactivate: (opts) =>
       this.sdk.call<EmptyResultDto>('themes.deactivate', {}, { signal: opts?.signal }),
+    getSettings: (themeId, opts) =>
+      this.sdk.call<ThemeSettingsResultDto>(
+        'themes.settings.get',
+        { id: themeId },
+        { signal: opts?.signal },
+      ),
+    updateSettings: (req, opts) =>
+      this.sdk.call<ThemeSettingsResultDto>('themes.settings.update', req, {
+        signal: opts?.signal,
+      }),
   };
 
   readonly profiles: ProfilesApi = {

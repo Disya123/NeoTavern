@@ -119,6 +119,8 @@ import type {
   MessageDto,
   MessageDraftDto,
   MessageVariantDto,
+  ThemeSettingsResultDto,
+  ThemeSettingsUpdateRequestDto,
   MetaDto,
   PagedCharactersDto,
   PagedChatsDto,
@@ -546,6 +548,21 @@ export interface ThemesApi {
    * the row.
    */
   deactivate(opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /**
+   * Read one theme's manifest-merged settings (wire `themes.settings.get`,
+   * М7 Этап-4 cluster 14): every manifest-declared setting id resolved to
+   * its persisted value or the manifest default. Unknown id → NOT_FOUND.
+   */
+  getSettings(themeId: string, opts?: BackendCallOptions): Promise<ThemeSettingsResultDto>;
+  /**
+   * Partially merge persisted theme settings (wire `themes.settings.update`):
+   * every supplied key is validated against the theme manifest definition —
+   * one unknown key or type-violating value refuses the whole update.
+   */
+  updateSettings(
+    req: ThemeSettingsUpdateRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ThemeSettingsResultDto>;
 }
 
 /**

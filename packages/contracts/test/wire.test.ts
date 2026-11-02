@@ -77,8 +77,10 @@ describe('product wire registry', () => {
     // providers.test (121); the diagnostics-cache slice (M7 cluster 23) adds
     // diagnostics.cache.clear (122); the context-audit slice (M7 cluster 17,
     // part 1) adds chats.context.audit (123); the message-blocks slice (M7
-    // cluster 15) adds chats.blocks.{list,attach} + blocks.{update,delete} (127).
-    expect(registry.operations).toHaveLength(127);
+    // cluster 15) adds chats.blocks.{list,attach} + blocks.{update,delete}
+    // (127); the theme-settings slice (M7 cluster 14) adds
+    // themes.settings.{get,update} (129).
+    expect(registry.operations).toHaveLength(129);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -171,6 +173,8 @@ describe('product wire registry', () => {
       'themes.uninstall',
       'themes.activate',
       'themes.deactivate',
+      'themes.settings.get',
+      'themes.settings.update',
       'profiles.list',
       'profiles.create',
       'profiles.rename',

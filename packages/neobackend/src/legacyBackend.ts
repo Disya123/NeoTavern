@@ -320,6 +320,8 @@ export class LegacyBackend implements NeoBackend {
     uninstall: () => this.unsupported('themes.uninstall'),
     activate: () => this.unsupported('themes.activate'),
     deactivate: () => this.unsupported('themes.deactivate'),
+    getSettings: () => this.unsupported('themes.settings.get'),
+    updateSettings: () => this.unsupported('themes.settings.update'),
   };
 
   readonly profiles: ProfilesApi = {

@@ -34,6 +34,7 @@ import {
   type ChatContextAuditResultDto,
   type ListMessageBlocksResultDto,
   type MessageBlockDto,
+  type ThemeSettingsResultDto,
   type WireGenerationEvent,
   type BackupsRestoreResultDto,
   type BackupsDeleteResultDto,
@@ -474,6 +475,10 @@ export class LocalBackend implements NeoBackend {
         this.invoke<EmptyResultDto>('themes.uninstall', { id: themeId }, opts),
       activate: (themeId, opts) => this.invoke<ThemeDto>('themes.activate', { id: themeId }, opts),
       deactivate: (opts) => this.invoke<EmptyResultDto>('themes.deactivate', {}, opts),
+      getSettings: (themeId, opts) =>
+        this.invoke<ThemeSettingsResultDto>('themes.settings.get', { id: themeId }, opts),
+      updateSettings: (req, opts) =>
+        this.invoke<ThemeSettingsResultDto>('themes.settings.update', req, opts),
     };
     this.profiles = {
       list: (opts) => this.invoke<ListProfilesResultDto>('profiles.list', {}, opts),

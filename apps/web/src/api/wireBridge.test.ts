@@ -115,6 +115,8 @@ const mocks = vi.hoisted(() => {
     uninstall: vi.fn(),
     activate: vi.fn(),
     deactivate: vi.fn(),
+    getSettings: vi.fn(),
+    updateSettings: vi.fn(),
   };
   const plugins = {
     list: vi.fn(),
@@ -254,6 +256,7 @@ import {
   deleteTheme,
   installTheme,
   readThemeSettings,
+  updateThemeSettings,
   userCssUrl,
   readPlugins,
   activatePlugin,
@@ -1409,8 +1412,70 @@ describe('themes (Этап 4 context 6 part 3, wire themes.*)', () => {
     expect(result.activeThemeId).toBeNull();
   });
 
-  it('reports no theme settings and no user css on the kernel plane', async () => {
-    expect(await readThemeSettings('wii-u-dark')).toBeUndefined();
+  it('reads theme settings as the manifest-merged map on the kernel plane (cluster 14)', async () => {
+    mocks.themes.getSettings.mockResolvedValue({
+      values: { accent: '#00c853', compact: false },
+    });
+    await expect(readThemeSettings('wii-u-dark')).resolves.toEqual({
+      accent: '#00c853',
+      compact: false,
+    });
+    expect(mocks.themes.getSettings).toHaveBeenCalledWith('wii-u-dark');
+  });
+
+  it('persists a partial settings patch through themes.settings.update on the kernel plane', async () => {
+    mocks.themes.updateSettings.mockResolvedValue({
+      values: { accent: '#00c853', compact: false, density: 'cozy' },
+    });
+    await expect(updateThemeSettings('wii-u-dark', { density: 'cozy' })).resolves.toEqual({
+      accent: '#00c853',
+      compact: false,
+      density: 'cozy',
+    });
+    expect(mocks.themes.updateSettings).toHaveBeenCalledWith({
+      id: 'wii-u-dark',
+      values: { density: 'cozy' },
+    });
+  });
+
+  it('keeps the legacy GET settings route on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ values: { accent: '#7c4dff' } }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(readThemeSettings('wii-u-dark')).resolves.toEqual({ accent: '#7c4dff' });
+      expect(fetchMock).toHaveBeenCalledWith('/api/v2/themes/wii-u-dark/settings');
+      expect(mocks.themes.getSettings).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+      mocks.isKernelMode.mockReturnValue(true);
+    }
+  });
+
+  it('PATCHes the bare record on the legacy settings route', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+      return new Response(JSON.stringify({ values: { density: 'cozy' } }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(updateThemeSettings('wii-u-dark', { density: 'cozy' })).resolves.toEqual({
+        density: 'cozy',
+      });
+      const [url, init] = fetchMock.mock.calls[0] ?? [];
+      expect(String(url)).toBe('/api/v2/themes/wii-u-dark/settings');
+      expect(init).toMatchObject({ method: 'PATCH' });
+      expect(JSON.parse(String(init?.body))).toEqual({ density: 'cozy' });
+      expect(mocks.themes.updateSettings).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+      mocks.isKernelMode.mockReturnValue(true);
+    }
+  });
+
+  it('reports no user css on the kernel plane', () => {
     expect(userCssUrl()).toBeNull();
   });
 });

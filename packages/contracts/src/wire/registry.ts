@@ -1657,6 +1657,34 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'themes.settings.get',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.themes.settings.get',
+    'wire.result.themes.settings',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
+    'themes.settings.update',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.themes.settings.update',
+    'wire.result.themes.settings',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    65536,
+    262144,
+    undefined,
+  ),
+  op(
     'profiles.list',
     'transactional',
     'idempotent',
@@ -2626,6 +2654,13 @@ const THEME_INSTALL_REQUEST = {
   manifest: { id: 'wii-u-dark', level: 'shell' },
 };
 
+/** Manifest-merged theme settings values (ТЗ §6.5; cluster 14). */
+const THEME_SETTINGS_VALUE = {
+  accent: '#7c4dff',
+  compact: false,
+  density: 'comfortable',
+};
+
 const PROFILE_VALUE = {
   id: UUID_PRESET,
   name: 'Main',
@@ -3055,6 +3090,11 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('themes-uninstall-request', 'themes.uninstall', 'request', true, { id: 'wii-u-dark' }),
   fx('themes-activate-request', 'themes.activate', 'request', true, { id: 'wii-u-dark' }),
   fx('themes-deactivate-request', 'themes.deactivate', 'request', true, {}),
+  fx('themes-settings-get-request', 'themes.settings.get', 'request', true, { id: 'wii-u-dark' }),
+  fx('themes-settings-update-request', 'themes.settings.update', 'request', true, {
+    id: 'wii-u-dark',
+    values: { accent: '#00c853' },
+  }),
   fx('themes-deactivate-response', 'themes.deactivate', 'response', true, {}),
   fx('profiles-list-request', 'profiles.list', 'request', true, {}),
   fx('profiles-create-request', 'profiles.create', 'request', true, PROFILE_CREATE_REQUEST),
@@ -3429,6 +3469,12 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('themes-activate-response', 'themes.activate', 'response', true, {
     ...THEME_VALUE,
     active: true,
+  }),
+  fx('themes-settings-get-response', 'themes.settings.get', 'response', true, {
+    values: THEME_SETTINGS_VALUE,
+  }),
+  fx('themes-settings-update-response', 'themes.settings.update', 'response', true, {
+    values: { ...THEME_SETTINGS_VALUE, accent: '#00c853' },
   }),
   fx('profiles-list-response', 'profiles.list', 'response', true, { items: [PROFILE_VALUE] }),
   fx('profiles-create-response', 'profiles.create', 'response', true, { profile: PROFILE_VALUE }),
@@ -3895,6 +3941,16 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('neg-themes-item-bad-active', 'themes.list', 'response', false, {
     items: [{ ...THEME_VALUE, active: 'yes' }],
+  }),
+  fx('neg-themes-settings-values-not-object', 'themes.settings.update', 'request', false, {
+    id: 'wii-u-dark',
+    values: 'dark',
+  }),
+  fx('neg-themes-settings-get-bad-id', 'themes.settings.get', 'request', false, {
+    id: 'Wii U Dark',
+  }),
+  fx('neg-themes-settings-response-scalar', 'themes.settings.get', 'response', false, {
+    values: 42,
   }),
   fx('neg-profiles-create-bad-name', 'profiles.create', 'request', false, { name: '' }),
   fx('neg-profiles-rename-bad-id', 'profiles.rename', 'request', false, {

@@ -25,10 +25,27 @@
 //!   theme clears the flag so the shell falls back to the default
 //!   (AGENTS.md §19: a broken theme must never block the interface reset).
 //! - `themes.list` — the full registry snapshot.
+//!
+//! Theme-owned settings (М7 Этап-4 cluster 14, ТЗ §6.5):
+//!
+//! - `themes.settings.get` — the manifest-merged values view for one theme:
+//!   every manifest-declared setting id resolves to its persisted value when
+//!   that value still validates against the declared type, else the manifest
+//!   default (or null). Undeclared stored keys are never surfaced.
+//! - `themes.settings.update` — a PARTIAL merge (the legacy PATCH shape):
+//!   every supplied key must be declared in the theme manifest and pass its
+//!   type validation (color strings are bounded and must not smuggle CSS
+//!   constructs — THEME-45; booleans, finite numbers and select options
+//!   pass) — one bad key refuses the WHOLE update before any write.
+//!
+//! Persisted values live in the shared non-secret `settings` table under the
+//! legacy `theme.settings.<id>` key, so a future legacy import maps 1:1; the
+//! row stores plain values, never CSS bytes and never secrets.
 
 use contracts_generated::generated::{
-    self, RequestThemesActivate, RequestThemesInstall, RequestThemesUninstall, ResultThemesInstall,
-    ResultThemesList, ThemesItem,
+    self, FreeObject, RequestThemesActivate, RequestThemesInstall, RequestThemesSettingsGet,
+    RequestThemesSettingsUpdate, RequestThemesUninstall, ResultThemesInstall, ResultThemesList,
+    ResultThemesSettings, ThemesItem,
 };
 use neotavern_storage::open::Database;
 use rusqlite::OptionalExtension;
@@ -206,6 +223,68 @@ pub(crate) fn themes_uninstall(db: &mut Database, request: &[u8]) -> Result<Vec<
     encode_empty(&generated::ResultEmpty {})
 }
 
+/// `themes.settings.get` — the manifest-merged settings view for one theme.
+pub(crate) fn themes_settings_get(db: &Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req: RequestThemesSettingsGet = generated::decode_request_themes_settings_get(request)?;
+    let definitions = theme_setting_definitions(db, &req.id)?;
+    let stored = read_stored_settings(db.conn(), &theme_settings_key(&req.id))?;
+    encode_settings(&ResultThemesSettings {
+        values: FreeObject {
+            payload: merged_theme_values(&definitions, &stored),
+        },
+    })
+}
+
+/// `themes.settings.update` — validated partial merge of the persisted
+/// values, answered with the post-update merged view.
+pub(crate) fn themes_settings_update(
+    db: &mut Database,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
+    let req: RequestThemesSettingsUpdate =
+        generated::decode_request_themes_settings_update(request)?;
+    let definitions = theme_setting_definitions(db, &req.id)?;
+    // Validate the WHOLE patch against the manifest before touching the
+    // store: one unknown key or one type-violating value refuses the entire
+    // update (the legacy boundary; never a silent partial apply).
+    let patch = req.values.payload.as_object().cloned().unwrap_or_default();
+    for (setting_id, value) in &patch {
+        let valid = definitions
+            .get(setting_id)
+            .is_some_and(|definition| is_setting_value_valid(definition, value));
+        if !valid {
+            return Err(invalid_setting(setting_id));
+        }
+    }
+
+    let key = theme_settings_key(&req.id);
+    let conn = db.conn();
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|err| sqlite(err, "themes.settings.update: begin"))?;
+    let mut stored = read_stored_settings(&tx, &key)?;
+    for (setting_id, value) in &patch {
+        stored.insert(setting_id.clone(), value.clone());
+    }
+    let value_json = serde_json::to_string(&serde_json::Value::Object(stored.clone()))
+        .map_err(serialize_error)?;
+    tx.execute(
+        "INSERT INTO settings (key, value_json, updated_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json,
+                                         updated_at = excluded.updated_at",
+        rusqlite::params![key, value_json, now()],
+    )
+    .map_err(|err| sqlite(err, "themes.settings.update: upsert"))?;
+    tx.commit()
+        .map_err(|err| sqlite(err, "themes.settings.update: commit"))?;
+
+    encode_settings(&ResultThemesSettings {
+        values: FreeObject {
+            payload: merged_theme_values(&definitions, &stored),
+        },
+    })
+}
+
 // --- helpers --------------------------------------------------------------
 
 fn theme_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ThemesItem> {
@@ -261,6 +340,146 @@ fn theme_by_id(db: &Database, id: &str) -> Result<ThemesItem, KernelError> {
         .ok_or_else(|| theme_not_found(id))
 }
 
+/// Settings-table key for one theme's persisted values (the legacy
+/// `repos.settings` spelling, reused verbatim).
+fn theme_settings_key(theme_id: &str) -> String {
+    format!("theme.settings.{theme_id}")
+}
+
+/// Loads the theme row's raw manifest and extracts the `settings` definitions
+/// map (`{ settingId: { type, options?, default?, variable? } }`). An unknown
+/// theme is `THEME_NOT_FOUND`; a corrupted stored manifest is an internal
+/// storage failure (the kernel wrote that JSON) — never a silent "no
+/// settings" that would fabricate defaults for a broken package. A manifest
+/// without a settings section is a theme without settings.
+fn theme_setting_definitions(
+    db: &Database,
+    theme_id: &str,
+) -> Result<serde_json::Map<String, serde_json::Value>, KernelError> {
+    let manifest_json: String = db
+        .conn()
+        .query_row(
+            "SELECT manifest_json FROM themes WHERE id = ?1",
+            rusqlite::params![theme_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|err| sqlite(err, "theme settings: manifest lookup"))?
+        .ok_or_else(|| theme_not_found(theme_id))?;
+    let manifest: serde_json::Value = serde_json::from_str(&manifest_json).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("theme settings: stored manifest is not valid JSON: {err}"),
+        )
+    })?;
+    Ok(manifest
+        .get("settings")
+        .and_then(serde_json::Value::as_object)
+        .cloned()
+        .unwrap_or_default())
+}
+
+/// Reads the persisted settings object for one key; an absent row is an
+/// empty map. The kernel writes this row itself, so a corrupted value is an
+/// internal storage failure, never a silent reset.
+fn read_stored_settings(
+    conn: &rusqlite::Connection,
+    key: &str,
+) -> Result<serde_json::Map<String, serde_json::Value>, KernelError> {
+    let value_json: Option<String> = conn
+        .query_row(
+            "SELECT value_json FROM settings WHERE key = ?1",
+            rusqlite::params![key],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|err| sqlite(err, "theme settings: read"))?;
+    let Some(value_json) = value_json else {
+        return Ok(serde_json::Map::new());
+    };
+    let value: serde_json::Value = serde_json::from_str(&value_json).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("theme settings: stored value is not valid JSON: {err}"),
+        )
+    })?;
+    match value {
+        serde_json::Value::Object(map) => Ok(map),
+        _ => Err(KernelError::new(
+            KernelErrorCode::Internal,
+            "theme settings: stored value is not a JSON object".to_string(),
+        )),
+    }
+}
+
+/// String setting values must not smuggle CSS constructs: a "color" value is
+/// interpolated into a custom property that feeds e.g. `background-image`, so
+/// `red url(https://evil)` must not pass (THEME-45 L7 — validation is the
+/// boundary; the legacy regex allowed whitespace before the paren).
+fn contains_unsafe_css(value: &str) -> bool {
+    let lower = value.to_lowercase();
+    if lower.contains([';', '{', '}', '<', '>']) {
+        return true;
+    }
+    let function_marker = ["url", "expression"].iter().any(|name| {
+        let mut from = 0;
+        while let Some(at) = lower[from..].find(name) {
+            let after = from + at + name.len();
+            if lower[after..].trim_start().starts_with('(') {
+                return true;
+            }
+            from = after;
+        }
+        false
+    });
+    function_marker || lower.contains("javascript:")
+}
+
+/// Ports the legacy per-definition value validation (THEME-45): a color is a
+/// short string without CSS constructs, booleans and finite numbers pass, a
+/// select must be one of the declared options; an unknown definition type
+/// fails closed.
+fn is_setting_value_valid(definition: &serde_json::Value, value: &serde_json::Value) -> bool {
+    let Some(definition_type) = definition.get("type").and_then(serde_json::Value::as_str) else {
+        return false;
+    };
+    match definition_type {
+        "color" => value
+            .as_str()
+            .is_some_and(|text| text.len() <= 100 && !contains_unsafe_css(text)),
+        "boolean" => value.is_boolean(),
+        "number" => value.as_f64().is_some_and(f64::is_finite),
+        "select" => value.as_str().is_some_and(|text| {
+            definition
+                .get("options")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|options| options.iter().any(|option| option.as_str() == Some(text)))
+        }),
+        _ => false,
+    }
+}
+
+/// Manifest-merged values view: every declared setting resolves to its
+/// persisted value when that value still validates, else the manifest
+/// default (or null). Undeclared stored keys are never surfaced.
+fn merged_theme_values(
+    definitions: &serde_json::Map<String, serde_json::Value>,
+    stored: &serde_json::Map<String, serde_json::Value>,
+) -> serde_json::Value {
+    let mut values = serde_json::Map::new();
+    for (setting_id, definition) in definitions {
+        let resolved = match stored.get(setting_id) {
+            Some(value) if is_setting_value_valid(definition, value) => value.clone(),
+            _ => definition
+                .get("default")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null),
+        };
+        values.insert(setting_id.clone(), resolved);
+    }
+    serde_json::Value::Object(values)
+}
+
 fn sqlite(err: rusqlite::Error, context: &str) -> KernelError {
     KernelError::new(KernelErrorCode::StorageFailure, format!("{context}: {err}"))
 }
@@ -277,6 +496,23 @@ fn theme_not_found(id: &str) -> KernelError {
     KernelError::product(
         "THEME_NOT_FOUND".to_string(),
         vec![("themeId".to_string(), id.to_string())],
+    )
+}
+
+/// Stable `VALIDATION` product error for a setting that is unknown to the
+/// theme manifest or fails its declared type validation (`path` param
+/// mirrors the legacy envelope; the raw value is intentionally NOT echoed
+/// back — it may itself carry the refused CSS payload).
+fn invalid_setting(path: &str) -> KernelError {
+    KernelError::product(
+        "VALIDATION".to_string(),
+        vec![
+            ("path".to_string(), path.to_string()),
+            (
+                "reason".to_string(),
+                "invalid theme setting value".to_string(),
+            ),
+        ],
     )
 }
 
@@ -303,6 +539,10 @@ fn encode_install(dto: &ResultThemesInstall) -> Result<Vec<u8>, KernelError> {
 
 fn encode_theme(dto: &ThemesItem) -> Result<Vec<u8>, KernelError> {
     encode_checked(dto, generated::validate_themes_item)
+}
+
+fn encode_settings(dto: &ResultThemesSettings) -> Result<Vec<u8>, KernelError> {
+    encode_checked(dto, generated::validate_result_themes_settings)
 }
 
 fn encode_empty(dto: &generated::ResultEmpty) -> Result<Vec<u8>, KernelError> {

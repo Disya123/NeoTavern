@@ -111,6 +111,8 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "themes.uninstall" => Some(1024),
         "themes.activate" => Some(1024),
         "themes.deactivate" => Some(1024),
+        "themes.settings.get" => Some(1024),
+        "themes.settings.update" => Some(65536),
         "profiles.list" => Some(1024),
         "profiles.create" => Some(4096),
         "profiles.rename" => Some(4096),
@@ -246,6 +248,8 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "themes.uninstall" => Some(1024),
         "themes.activate" => Some(262144),
         "themes.deactivate" => Some(1024),
+        "themes.settings.get" => Some(262144),
+        "themes.settings.update" => Some(262144),
         "profiles.list" => Some(262144),
         "profiles.create" => Some(262144),
         "profiles.rename" => Some(262144),
@@ -9391,6 +9395,144 @@ pub fn validate_request_themes_activate(value: &Value) -> Result<(), Vec<Issue>>
 
 pub fn decode_request_themes_activate(bytes: &[u8]) -> Result<RequestThemesActivate, WireError> {
     crate::decode::<RequestThemesActivate>(validate_request_themes_activate, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestThemesSettingsGet {
+    pub id: String,
+}
+
+pub(crate) fn check_request_themes_settings_get(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_themes_settings_get(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_themes_settings_get(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_themes_settings_get(bytes: &[u8]) -> Result<RequestThemesSettingsGet, WireError> {
+    crate::decode::<RequestThemesSettingsGet>(validate_request_themes_settings_get, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestThemesSettingsUpdate {
+    pub id: String,
+    pub values: FreeObject,
+}
+
+pub(crate) fn check_request_themes_settings_update(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("values").is_none() {
+            issues.push(Issue::new(join_path(path, "values"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("values") {
+            let child_path = join_path(path, "values");
+            check_free_object(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "values") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_themes_settings_update(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_themes_settings_update(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_themes_settings_update(bytes: &[u8]) -> Result<RequestThemesSettingsUpdate, WireError> {
+    crate::decode::<RequestThemesSettingsUpdate>(validate_request_themes_settings_update, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultThemesSettings {
+    pub values: FreeObject,
+}
+
+pub(crate) fn check_result_themes_settings(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("values").is_none() {
+            issues.push(Issue::new(join_path(path, "values"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("values") {
+            let child_path = join_path(path, "values");
+            check_free_object(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "values") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_themes_settings(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_themes_settings(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_themes_settings(bytes: &[u8]) -> Result<ResultThemesSettings, WireError> {
+    crate::decode::<ResultThemesSettings>(validate_result_themes_settings, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

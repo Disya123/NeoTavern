@@ -31,6 +31,8 @@ import {
   type ListMessageVariantsResultDto,
   type ListProviderSecretsResultDto,
   type EmptyResultDto,
+  type ThemeSettingsResultDto,
+  type ThemeSettingsUpdateRequestDto,
   type MemoryDto,
   type MessageDraftDto,
   type MessageRevisionDto,
@@ -266,6 +268,9 @@ const THEME: ThemeDto = {
 const THEME_LIST: ListThemesResultDto = { items: [THEME] };
 const THEME_INSTALL: InstallThemeResultDto = { theme: THEME };
 const ACTIVE_THEME: ThemeDto = { ...THEME, active: true };
+const THEME_SETTINGS: ThemeSettingsResultDto = {
+  values: { accent: '#00c853', compact: false, density: 'comfortable' },
+};
 
 const PROFILE_ID = 'aaaaaaa4-4444-4444-8444-444444444444';
 const PROFILE: ProfileDto = {
@@ -726,6 +731,9 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: ACTIVE_THEME };
       case 'themes.uninstall':
         return { ok: true, value: EMPTY_RESULT };
+      case 'themes.settings.get':
+      case 'themes.settings.update':
+        return { ok: true, value: THEME_SETTINGS };
       case 'profiles.list':
         return { ok: true, value: PROFILE_LIST };
       case 'profiles.create':
@@ -911,6 +919,9 @@ function rpcResult(operationId: string | undefined): unknown {
       return ACTIVE_THEME;
     case 'themes.uninstall':
       return EMPTY_RESULT;
+    case 'themes.settings.get':
+    case 'themes.settings.update':
+      return THEME_SETTINGS;
     case 'profiles.list':
       return PROFILE_LIST;
     case 'profiles.create':
@@ -2289,6 +2300,50 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     ]);
   });
 
+  it('themes.settings get/update forward payloads and decode canonical DTOs (cluster 14)', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [getLocal, getRemote] = await Promise.all([
+      local.themes.getSettings(THEME.id),
+      remote.themes.getSettings(THEME.id),
+    ]);
+    expect(getLocal).toEqual(getRemote);
+    expect(getLocal).toEqual(THEME_SETTINGS);
+
+    const updateReq: ThemeSettingsUpdateRequestDto = {
+      id: THEME.id,
+      values: { accent: '#00c853' },
+    };
+    const [updateLocal, updateRemote] = await Promise.all([
+      local.themes.updateSettings(updateReq),
+      remote.themes.updateSettings(updateReq),
+    ]);
+    expect(updateLocal).toEqual(updateRemote);
+    expect(updateLocal).toEqual(THEME_SETTINGS);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'themes.settings.get', payload: { id: THEME.id } },
+      { operationId: 'themes.settings.update', payload: updateReq },
+    ]);
+  });
+
+  it('themes.settings.* with a non-object values map or a bad theme id throw ValidationError before any transport call (cluster 14)', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(
+      backend.themes.updateSettings({
+        id: THEME.id,
+        // @ts-expect-error deliberate invalid values shape at the facade boundary
+        values: 'dark',
+      }),
+    ).rejects.toThrow(ValidationError);
+    await expect(backend.themes.getSettings('Wii U Dark')).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
+  });
+
   it('profiles.list/create/rename/del forward payloads and decode canonical DTOs', async () => {
     const kernel = new FakeKernelTransport();
     const local = new LocalBackend({ transport: kernel });
@@ -2931,6 +2986,10 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     const backend = new LegacyBackend({ baseUrl: 'http://legacy.local' });
     expect(() => backend.plugins.list()).toThrow(UnsupportedError);
     expect(() => backend.themes.activate('wii-u-dark')).toThrow(UnsupportedError);
+    expect(() => backend.themes.getSettings('wii-u-dark')).toThrow(UnsupportedError);
+    expect(() =>
+      backend.themes.updateSettings({ id: 'wii-u-dark', values: { accent: '#fff' } }),
+    ).toThrow(UnsupportedError);
     expect(() => backend.profiles.create({ name: 'Main' })).toThrow(UnsupportedError);
     expect(() => backend.profiles.export({ profileId: PROFILE_ID })).toThrow(UnsupportedError);
     expect(() =>

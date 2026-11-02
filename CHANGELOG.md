@@ -4,6 +4,34 @@
 
 ### Added
 
+- **Theme-owned settings on the kernel plane (M7 Etap-4 slice; cluster 14).**
+  Two new wire ops: `themes.settings.get` (the manifest-merged view for one
+  theme — every manifest-declared setting id resolved to its persisted value
+  when that value still validates against the declared type, else the
+  manifest default or null; undeclared stored keys are never surfaced) and
+  `themes.settings.update` (a validated PARTIAL merge, the legacy PATCH
+  shape: every supplied key must be declared in the theme manifest and pass
+  its type validation — a color is a ≤100-char string without CSS
+  constructs (THEME-45), booleans, finite numbers and declared select
+  options pass — and one bad key refuses the whole patch with `VALIDATION`
+  before any write). The persisted values live in the kernel's shared
+  non-secret `settings` table under the legacy `theme.settings.<id>` key —
+  no schema change, and a future legacy import maps 1:1. Facade:
+  `backend.themes.getSettings()` / `backend.themes.updateSettings()`
+  (local/remote implemented; the legacy facade keeps `UnsupportedError`).
+  Web: `readThemeSettings` now returns the real merged map in kernel mode
+  (it reported an honest `undefined` before) and the new `updateThemeSettings`
+  persists patches on both planes; `ThemeSync` keeps applying the merged
+  values as the manifest-declared CSS custom properties. Honest verdicts for
+  the rest of the cluster-14 tail: `themes/boot` stays transport-blocked
+  (a pre-hydration inline `index.html` fetch that cannot ride the app-bundle
+  wire bridge — it needs a host-native kernel HTTP route, the same family as
+  the cluster-18 events SSE), `themes/:id/assets/*` is N/A (the wire theme
+  model carries exactly one content-addressed CSS asset through
+  `assets.put`/`assets.content`; the legacy per-theme file tree has no
+  kernel counterpart) and `user.css` stays transport-blocked (a data-root
+  file the kernel does not own; kernel mode loads none). Contract hash
+  `ddf931a2…`; registry 129 ops.
 - **Durable plugin message blocks on the kernel plane (M7 Etap-4 slice;
   cluster 15).** Schema v25 (`025_message_blocks`): the STRICT
   `message_blocks` table — one plugin→message attachment per row (block type,

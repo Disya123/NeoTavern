@@ -2234,14 +2234,21 @@ export async function installTheme(file: File): Promise<ThemeInstallResult> {
   return api.upload<ThemeInstallResult>('/themes/install', file);
 }
 
-/** Persisted theme-owned settings values (ТЗ §6.5). The wire contract does
- * not model theme settings yet; the kernel plane honestly reports none
- * (`undefined` → the theme applies its manifest defaults). */
+/**
+ * Persisted theme-owned settings values (ТЗ §6.5, М7 Этап-4 cluster 14).
+ * Kernel plane: the manifest-merged view over `themes.settings.get` — every
+ * manifest-declared setting id resolved to its persisted value or the
+ * manifest default (an empty map for a theme without declared settings).
+ * Legacy plane: the same route shape (`{ values }`). `undefined` is only
+ * produced by the legacy plane for a non-OK response (the caller applies
+ * manifest defaults).
+ */
 export async function readThemeSettings(
   themeId: string,
 ): Promise<Record<string, unknown> | undefined> {
   if (isKernelMode()) {
-    return undefined;
+    const result = await backend.themes.getSettings(themeId);
+    return result.values;
   }
   const response = await fetch(
     // eslint-disable-next-line @neotavern/no-legacy-api-surface
@@ -2250,6 +2257,29 @@ export async function readThemeSettings(
   if (!response.ok) return undefined;
   const data = (await response.json()) as { values?: Record<string, unknown> };
   return data.values;
+}
+
+/**
+ * Persist a PARTIAL settings patch for one theme (wire
+ * `themes.settings.update`, М7 Этап-4 cluster 14). The kernel validates
+ * every key against the theme manifest (THEME-45): one unknown key or one
+ * type-violating value refuses the whole patch with `VALIDATION` — never a
+ * silent partial apply. The legacy plane PATCHes the bare record and
+ * answers with the merged `{ values }` view.
+ */
+export async function updateThemeSettings(
+  themeId: string,
+  values: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (isKernelMode()) {
+    const result = await backend.themes.updateSettings({ id: themeId, values });
+    return result.values;
+  }
+  const response = await api.patch<{ values: Record<string, unknown> }>(
+    `/themes/${encodeURIComponent(themeId)}/settings`,
+    values,
+  );
+  return response.values;
 }
 
 /** Optional local user stylesheet (data/user.css, loaded last in the `user`
