@@ -83,12 +83,31 @@ Three forces constrain the design:
 - Cost: two extra passes (plan, then commit) and a snapshot copy for large
   libraries — accepted, because the alternative is unrecoverable data loss.
 
-## Open questions (must be answered before implementation)
+## Resolved questions (round 13)
 
-1. Which entity families are mandatory for a first run versus deferrable? A
-   partial import that leaves chats behind while characters exist may be worse
-   than refusing the whole run for small libraries.
-2. How are legacy asset files located when the source database references paths
-   that no longer exist on disk? Skip-and-report is proposed.
-3. Does the desktop host own the snapshot directory (data dir) or does the
-   Kernel? The Kernel should, so the CLI and the desktop behave identically.
+1. **Mandatory families for a first run.** Characters, chats with their
+   messages, presets, lorebooks, personas and settings are mandatory and import
+   as one **run group**: if any of them refuses, the run refuses as a whole
+   (before any commit) — a half-imported library where chats exist without their
+   characters is worse than no import. Plugin state blobs and asset metadata are
+   a second group that may be deferred to a follow-up run; the plan reports them
+   as `deferred`, never as `skipped`.
+2. **Asset paths that no longer exist on disk.** Skip and report. The plan lists
+   every missing path with its referencing entity, the run continues, and the
+   receipt records `asset_missing` so a later run can retry without touching the
+   rows that did import. A missing original is a user-visible data gap, not an
+   error that should abort a whole library.
+3. **Snapshot ownership.** The Kernel owns the snapshot directory (under the
+   Kernel data dir), not the desktop host, so the CLI and the desktop behave
+   identically and the receipt path is portable across hosts. The host only
+   supplies the data dir.
+
+## Remaining question
+
+One question stays open and is deliberately **not** answered by the importer:
+how the legacy _plugin state_ blob is validated before it is stored in
+`plugins.state`. Storing it opaquely is right (it is user data), but a plugin
+that later becomes active under the Kernel executor must not receive a blob it
+misreads. That answer belongs to the plugin executor work (program item 3,
+clusters 19/20/21a), not to the migration — and it does not block the import
+because the blobs are inert until an executor exists.

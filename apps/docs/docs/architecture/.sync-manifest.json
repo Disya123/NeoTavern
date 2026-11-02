@@ -290,7 +290,7 @@
     {
       "source": "adr/0062-legacy-app-db-import-contract.md",
       "target": "adr/0062-legacy-app-db-import-contract.md",
-      "sha256": "39ca731366a53619ca9a2c2c17c5b3612a797a26202eeb4d7ad954d5cf6ef5a5"
+      "sha256": "db1455d018076d61067b6f43ef332e75ece775bfc0ad8adc17dbfdde195a7366"
     },
     {
       "source": "adr/README.md",
