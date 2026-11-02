@@ -20,6 +20,7 @@ import {
   useRowGestures,
 } from '@neotavern/ui';
 import {
+  useBackgroundThumbUrl,
   useBackgrounds,
   useChat,
   useDeleteBackground,
@@ -41,6 +42,22 @@ function readChatId(pathname: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+/**
+ * One catalog preview. Kernel mode resolves a bounded `assets.thumb` derivative
+ * to a data URL (the kernel has no URL surface); the legacy plane keeps its
+ * sidecar `thumbnailUrl`. Both end up as a plain `<img src>`.
+ */
+function BackgroundPreview({ background }: { background: BackgroundItem }) {
+  const thumbUrl = useBackgroundThumbUrl(background.id);
+  const src = background.thumbnailUrl || thumbUrl;
+  return src ? (
+    <img src={src} alt={background.name} loading="lazy" decoding="async" />
+  ) : (
+    <span className={styles.previewFallback} aria-hidden="true">
+      <ImageSquare size={22} />
+    </span>
+  );
+}
 export function BackgroundsPanel({ onClose }: BackgroundsPanelProps) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -231,18 +248,7 @@ export function BackgroundsPanel({ onClose }: BackgroundsPanelProps) {
                         {...handlers(background.id, index)}
                       >
                         <div className={styles.preview}>
-                          {background.thumbnailUrl ? (
-                            <img
-                              src={background.thumbnailUrl}
-                              alt={background.name}
-                              loading="lazy"
-                              decoding="async"
-                            />
-                          ) : (
-                            <span className={styles.previewFallback} aria-hidden="true">
-                              <ImageSquare size={22} />
-                            </span>
-                          )}
+                          <BackgroundPreview background={background} />
                           {applied ? (
                             <Badge
                               tone="accent"

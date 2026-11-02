@@ -432,6 +432,13 @@ const ASSET_CONTENT: GetAssetContentResultDto = {
   contentType: 'image/png',
   contentBase64: 'iVBORw0KGgoAAAANSUhEUg==',
 };
+const ASSET_THUMB: GetAssetThumbResultDto = {
+  assetId: ASSET_ID,
+  format: 'png',
+  width: 256,
+  height: 256,
+  contentBase64: 'iVBORw0KGgoAAAANSUhEUg==',
+};
 const ASSET_PUT: PutAssetResultDto = { asset: ASSET, deduplicated: false };
 const ASSET_UPLOAD_BEGIN: BeginAssetUploadResultDto = {
   uploadId: '00000000-0000-4000-8000-0000000000a1',
@@ -854,6 +861,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: ASSET_GET };
       case 'assets.content':
         return { ok: true, value: ASSET_CONTENT };
+      case 'assets.thumb':
+        return { ok: true, value: ASSET_THUMB };
       case 'assets.list':
         return { ok: true, value: ASSET_CATALOG };
       case 'assets.put':
@@ -1070,6 +1079,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return ASSET_GET;
     case 'assets.content':
       return ASSET_CONTENT;
+    case 'assets.thumb':
+      return ASSET_THUMB;
     case 'assets.list':
       return ASSET_CATALOG;
     case 'assets.put':

@@ -4,6 +4,31 @@
 
 ### Added
 
+- **Chat wallpapers on the kernel plane (round 4/40 of the legacy-removal
+  goal).** The backgrounds cluster is flipped from the sidecar filesystem
+  contour to the canonical asset plane, and the wallpaper becomes product data:
+  `wire.chat.dto` carries an optional `backgroundAssetId` and `chats.update`
+  accepts it together with the explicit `clearBackground` flag (the wire has no
+  nullable fields, so `null` cannot mean "unset"; setting and clearing at once
+  is `CONTRACT_VIOLATION`). The kernel validates the reference —
+  `ASSET_NOT_FOUND` for an unknown id, `CONTRACT_VIOLATION` when the asset is
+  not kind `background` — so the panel catalog and the chat field cannot
+  disagree. New schema migration **v30** adds nullable
+  `chats.background_asset_id` with no foreign key; `assets.delete` detaches
+  every chat reference itself, so deleting an asset never fails on a reference.
+  UI: `useBackgrounds` lists `assets.list({kind:"background"})`,
+  `useUploadBackground` stages `assets.upload.begin`/`append`/`finish` in
+  bounded chunks (the legacy 25 MiB multipart cap is gone),
+  `useDeleteBackground` calls `assets.delete`, the wallpaper renders from
+  `assets.content` as a data URL, grid previews come from `assets.thumb` (now
+  also on the facade: `backend.assets.thumb(assetId, maxPx)`), and the panel
+  preview became a per-card component so a catalog never pulls originals.
+  Tests: 4 new kernel tests (`crates/runtime-kernel/tests/chat_background.rs`:
+  attach/round-trip, clear-only unset + conflict, kind validation + unknown
+  asset, delete detaches) and the fixture-less hooks suite grew kernel cases for
+  catalog/upload/delete/wallpaper URL. Contract hash `92ed6a1c...`; registry
+  stays **143 ops** (additive fields and one facade method on existing ops).
+
 - **Asset catalog on the kernel plane (round 3/40 of the legacy-removal goal).**
   One new wire op, `assets.list`: newest-first enumeration of the content
   catalogue with an optional `kind` filter and the shared opaque keyset cursor

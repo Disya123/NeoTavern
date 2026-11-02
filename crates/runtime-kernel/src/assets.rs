@@ -503,6 +503,15 @@ fn encode_thumb_response(
 /// `assets.delete` — registry row first, file best-effort (orphan GC covers).
 pub(crate) fn assets_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req: RequestAssetsDelete = generated::decode_request_assets_delete(request)?;
+    // Detach chat wallpapers first: the column has no FK (asset rows are
+    // content-addressed and delete must never fail on a reference), so a
+    // dangling id would otherwise stay behind and render an empty wallpaper.
+    db.conn()
+        .execute(
+            "UPDATE chats SET background_asset_id = NULL WHERE background_asset_id = ?1",
+            rusqlite::params![&req.asset_id],
+        )
+        .map_err(|err| sqlite(err, "assets.delete: detach chat wallpapers"))?;
     neotavern_storage::assets::delete_asset(db, &req.asset_id)
         .map_err(|err| map_asset_error(err, "assets.delete failed", &req.asset_id, ""))?;
     encode_result_empty(&generated::ResultEmpty {})

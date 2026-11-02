@@ -332,6 +332,15 @@ A foreign `messageId` returns `MESSAGE_NOT_FOUND`, a foreign `activeBranchId` �
 
 ### Chat backgrounds (wallpapers)
 
+**Kernel plane (since round 4):** the same feature is served by the Product
+Wire — `assets.list({kind:"background"})` lists,
+`assets.upload.begin`/`append`/`finish` stages (no 25 MiB cap),
+`assets.thumb` previews, `assets.content` renders and `assets.delete`
+removes; the chat reference is `chats.backgroundAssetId` with
+`clearBackground` to unset (ADR-0061). The routes below describe the
+legacy/migration contour, which stays the public default until the release
+gate. Kernel mode renders wallpapers as data URLs, because the kernel has no
+URL surface.
 `PATCH /api/v2/chats/:id` accepts `backgroundId` — a background file name from the catalog
 below (or `null` to reset to the theme). The frontend applies the selected background to
 the chat via the CSS variable `--st-chat-wallpaper-image` (see `docs/theme-sdk/`).

@@ -23,6 +23,7 @@ import {
   type EmptyResultDto,
   type GenerationRunDto,
   type GetAssetContentResultDto,
+  type GetAssetThumbResultDto,
   type GetAssetResultDto,
   type DeletePluginSecretResultDto,
   type DeletePluginStateResultDto,
@@ -537,6 +538,8 @@ export class LocalBackend implements NeoBackend {
       get: (assetId, opts) => this.invoke<GetAssetResultDto>('assets.get', { assetId }, opts),
       content: (assetId, opts) =>
         this.invoke<GetAssetContentResultDto>('assets.content', { assetId }, opts),
+      thumb: (assetId, maxPx, opts) =>
+        this.invoke<GetAssetThumbResultDto>('assets.thumb', { assetId, maxPx }, opts),
       put: (req, opts) => this.invoke<PutAssetResultDto>('assets.put', req, opts),
       uploadBegin: (req, opts) =>
         this.invoke<BeginAssetUploadResultDto>('assets.upload.begin', req, opts),

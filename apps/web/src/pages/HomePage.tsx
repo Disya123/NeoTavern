@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   BookOpenText,
@@ -16,6 +16,7 @@ import { Button, ErrorBoundary, Skeleton } from '@neotavern/ui';
 import { SUPPORTED_LANGUAGES } from '@neotavern/i18n';
 import {
   useAppVersion,
+  useBackgroundImageUrl,
   useCharacter,
   useCharacters,
   useCreateChat,
@@ -28,7 +29,6 @@ import { expandDisplayMacros, useMacroContext } from '../lib/macros.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import { setDocumentLanguage } from '../lib/lang.js';
 import { useConversationContextPreview } from '../lib/useConversationContextPreview.js';
-import { wallpaperBackgroundUrl } from '../api/wireBridge.js';
 import { canChangeHost, openHostConnect } from '../api/hostSession.js';
 import { useAvatarDataUrl } from '../api/avatarHooks.js';
 import { useUiStore } from '../state/ui.js';
@@ -143,10 +143,9 @@ export function HomePage() {
   };
 
   const globalBackgroundId = useUiStore((state) => state.globalBackgroundId);
-  const wallpaperUrl = useMemo(
-    () => wallpaperBackgroundUrl(globalBackgroundId),
-    [globalBackgroundId],
-  );
+  // Kernel mode resolves the wallpaper to a data URL (assets.content); the
+  // legacy plane keeps its sidecar URL. One hook, no branch in the JSX.
+  const wallpaperUrl = useBackgroundImageUrl(globalBackgroundId);
   const avatarDataUrl = useAvatarDataUrl(character?.avatarAssetId);
 
   if (!character && recentCharacters.isError) {

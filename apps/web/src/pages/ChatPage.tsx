@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, ErrorBoundary, Skeleton } from '@neotavern/ui';
 import type { ChatSnapshotResult, Message } from '@neotavern/contracts';
 import {
+  useBackgroundImageUrl,
   useCharacter,
   useChat,
   useMessages,
@@ -25,7 +26,6 @@ import {
   rollbackChatToMessage,
   swipeMessageToPosition,
   updateChatMessage,
-  wallpaperBackgroundUrl,
 } from '../api/wireBridge.js';
 import { clampSwipeIndex, readGreetingSwipes } from '@neotavern/shared';
 import { expandDisplayMacros, useMacroContext, type MacroContext } from '../lib/macros.js';
@@ -694,10 +694,10 @@ export function ChatPage() {
 
   const globalBackgroundId = useUiStore((state) => state.globalBackgroundId);
 
-  const wallpaperUrl = useMemo(() => {
-    const backgroundId = chat.data?.backgroundId ?? globalBackgroundId;
-    return wallpaperBackgroundUrl(backgroundId);
-  }, [chat.data?.backgroundId, globalBackgroundId]);
+  const wallpaperId = chat.data?.backgroundId ?? globalBackgroundId;
+  // Kernel mode resolves the wallpaper to a data URL (assets.content); the
+  // legacy plane keeps its sidecar URL. One hook, no branch in the JSX.
+  const wallpaperUrl = useBackgroundImageUrl(wallpaperId);
 
   useEffect(() => {
     const state = location.state as { initialMessage?: unknown } | null;

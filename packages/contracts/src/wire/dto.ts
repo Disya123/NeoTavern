@@ -224,7 +224,10 @@ export type WireSnapshotOrigin = Static<typeof WireSnapshotOrigin>;
 /** Chat DTO (`wire.chat.dto`). `personaId` (optional) is the user persona
  * applied by the prompt pipeline (ADR-0047 waiver 5, Этап 4 slice 3); the
  * snapshot trio (`parentChatId`/`origin`/`sourceMessageId`) marks child chats
- * created by `chats.snapshots.create`. */
+ * created by `chats.snapshots.create`. `backgroundAssetId` (optional) is the
+ * chat's wallpaper — a `background` asset published through `assets.put` or
+ * `assets.upload.*`, which replaced the legacy sidecar's filesystem catalog
+ * (ADR-0061 / `assets.list`). */
 export const ChatDtoSchema = Type.Object(
   {
     id: Type.String({ format: 'uuid' }),
@@ -240,6 +243,8 @@ export const ChatDtoSchema = Type.Object(
     origin: Type.Optional(WireSnapshotOrigin),
     /** Source message the snapshot was taken from (child chats only). */
     sourceMessageId: Type.Optional(Type.String({ format: 'uuid' })),
+    /** Chat wallpaper: an asset of kind `background` (ADR-0061). */
+    backgroundAssetId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.chat.dto', additionalProperties: false },
 );
@@ -1086,12 +1091,17 @@ export type CreateChatRequestDto = Static<typeof CreateChatRequestDtoSchema>;
 
 /** Update chat request DTO (`wire.request.update-chat`). At least one of the
  * optional fields must be present (kernel no-op guards); `personaId` sets or
- * changes the user persona, `title` renames. */
+ * changes the user persona, `title` renames, `backgroundAssetId` applies a
+ * `background` asset as the chat wallpaper. The wire has no nullable fields, so
+ * clearing a wallpaper is the explicit `clearBackground: true` flag (the same
+ * spelling pattern as `clearCheckpointChatId`) rather than a `null`. */
 export const UpdateChatRequestDtoSchema = Type.Object(
   {
     chatId: Type.String({ format: 'uuid' }),
     title: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
     personaId: Type.Optional(Type.String({ format: 'uuid' })),
+    backgroundAssetId: Type.Optional(Type.String({ format: 'uuid' })),
+    clearBackground: Type.Optional(Type.Boolean()),
   },
   { $id: 'wire.request.update-chat', additionalProperties: false },
 );

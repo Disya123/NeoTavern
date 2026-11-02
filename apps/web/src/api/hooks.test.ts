@@ -8,6 +8,7 @@ import { getCsrfToken, setCsrfToken } from './client.js';
 import {
   useAnalyzeSillyTavern,
   useAuthSession,
+  useBackgroundImageUrl,
   useBackgrounds,
   useBackups,
   useCharacterGallery,
@@ -47,9 +48,32 @@ import { ProductError } from '@neotavern/client-sdk';
 // `isKernelMode`; the default here is the legacy plane so the existing tests
 // stay as they were.
 const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => false) }));
+const assetsMock = vi.hoisted(() => ({
+  list: vi.fn(),
+  del: vi.fn(),
+  uploadBegin: vi.fn(),
+  uploadAppend: vi.fn(),
+  uploadFinish: vi.fn(),
+}));
 vi.mock('./backend.js', async (importOriginal) => {
-  const actual = (await importOriginal()) as { backend: unknown };
-  return { ...actual, isKernelMode: mocks.isKernelMode };
+  const actual = (await importOriginal()) as { backend: Record<string, unknown> };
+  const realBackend = actual.backend;
+  const realAssets = (realBackend as { assets: Record<string, unknown> }).assets;
+  // Wrap (never copy) the facade: other tests spy on `backend.characters` etc.,
+  // and a spread copy would drop prototype getters.
+  const assetsProxy = new Proxy(realAssets, {
+    get(target, prop, receiver) {
+      if (prop in assetsMock) return assetsMock[prop as keyof typeof assetsMock];
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+  const backendProxy = new Proxy(realBackend, {
+    get(target, prop, receiver) {
+      if (prop === 'assets') return assetsProxy;
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+  return { ...actual, isKernelMode: mocks.isKernelMode, backend: backendProxy };
 });
 
 // `usePromptPlan` routes through wireBridge.getPromptPlan; the plan itself is
@@ -428,7 +452,7 @@ describe('backups hooks (kernel-plane honesty, slice 19)', () => {
   });
 });
 
-describe('backgrounds hooks (kernel-plane honesty, slice 20)', () => {
+describe('backgrounds hooks (kernel plane: asset catalogue + chunked upload)', () => {
   it('useBackgrounds fetches the legacy list on the legacy plane', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ items: [{ id: 'bg1' }] }));
     const { result } = renderHook(() => useBackgrounds(), { wrapper: wrapperFor(queryClient) });
@@ -438,35 +462,115 @@ describe('backgrounds hooks (kernel-plane honesty, slice 20)', () => {
     expect(url).toBe('/api/v2/backgrounds');
   });
 
-  it('useBackgrounds resolves an honest empty list on the kernel plane without a network call', async () => {
+  it('useBackgrounds reads the background kind from the asset catalogue on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    assetsMock.list.mockResolvedValue({
+      items: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          kind: 'background',
+          relativeKey: 'background/abc123.webp',
+          checksumSha256: 'a'.repeat(64),
+          sizeBytes: 2048,
+          createdAt: '2026-11-02T10:00:00Z',
+        },
+      ],
+    });
     const { result } = renderHook(() => useBackgrounds(), { wrapper: wrapperFor(queryClient) });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ items: [] });
+    expect(assetsMock.list).toHaveBeenCalledWith({ kind: 'background', limit: 200 });
+    expect(result.current.data).toEqual({
+      items: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'abc123.webp',
+          originalUrl: '',
+          thumbnailUrl: '',
+          sizeBytes: 2048,
+          createdAt: Date.parse('2026-11-02T10:00:00Z'),
+        },
+      ],
+    });
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useUploadBackground rejects with UnsupportedError on the kernel plane', async () => {
+  it('useUploadBackground stages bounded chunks and publishes one background asset', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    assetsMock.uploadBegin.mockResolvedValue({ uploadId: 'u1', chunkSizeBytes: 3, expiresAt: 'x' });
+    // The hook reads the file through `readFileBase64`; 'abcde' base64-encodes
+    // to 'YWJjZGU=' (5 raw bytes), staged as 3 + 2 bytes.
+    promptPlanMock.readFileBase64.mockReset();
+    promptPlanMock.readFileBase64.mockResolvedValue(btoa('abcde'));
+    assetsMock.uploadAppend.mockResolvedValue({ uploadId: 'u1', receivedBytes: 0, nextIndex: 0 });
+    assetsMock.uploadFinish.mockResolvedValue({
+      asset: {
+        id: '22222222-2222-4222-8222-222222222222',
+        kind: 'background',
+        relativeKey: 'background/def456.png',
+        checksumSha256: 'b'.repeat(64),
+        sizeBytes: 5,
+        createdAt: '2026-11-02T11:00:00Z',
+      },
+      deduplicated: false,
+    });
     const { result } = renderHook(() => useUploadBackground(), {
       wrapper: wrapperFor(queryClient),
     });
-    act(() => result.current.mutate(new File(['x'], 'wall.png', { type: 'image/png' })));
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    act(() => result.current.mutate(new File(['abcde'], 'wall.png', { type: 'image/png' })));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(assetsMock.uploadBegin).toHaveBeenCalledWith({
+      kind: 'background',
+      filename: 'wall.png',
+      contentType: 'image/png',
+      totalBytes: 5,
+    });
+    // 5 raw bytes at a 3-byte chunk size = two sequential appends (3 + 2).
+    expect(assetsMock.uploadAppend).toHaveBeenCalledTimes(2);
+    expect(assetsMock.uploadAppend.mock.calls.map((call) => call[0].index)).toEqual([0, 1]);
+    const bodies = assetsMock.uploadAppend.mock.calls.map(
+      (call) => atob(call[0].contentBase64 as string) as string,
+    );
+    expect(bodies).toEqual(['abc', 'de']);
+    // No chunk ever exceeds the size the kernel negotiated.
+    expect(bodies.every((body) => body.length <= 3)).toBe(true);
+    expect(assetsMock.uploadFinish).toHaveBeenCalledWith({ uploadId: 'u1' });
+    expect(result.current.data?.id).toBe('22222222-2222-4222-8222-222222222222');
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useDeleteBackground rejects with UnsupportedError on the kernel plane', async () => {
+  it('useDeleteBackground deletes the asset on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    assetsMock.del.mockResolvedValue({});
     const { result } = renderHook(() => useDeleteBackground(), {
       wrapper: wrapperFor(queryClient),
     });
-    act(() => result.current.mutate('bg1'));
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    act(() => result.current.mutate('asset-1'));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(assetsMock.del).toHaveBeenCalledWith('asset-1');
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useBackgroundImageUrl resolves the wallpaper through assets.content on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    promptPlanMock.readAssetContentDataUrl.mockResolvedValue('data:image/png;base64,AAA');
+    const { result } = renderHook(() => useBackgroundImageUrl('asset-1'), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current).toBe('data:image/png;base64,AAA'));
+    expect(promptPlanMock.readAssetContentDataUrl).toHaveBeenCalledWith('asset-1');
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useBackgroundImageUrl answers null without a wallpaper id on both planes', () => {
+    promptPlanMock.readAssetContentDataUrl.mockClear();
+    const { result } = renderHook(() => useBackgroundImageUrl(null), {
+      wrapper: wrapperFor(queryClient),
+    });
+    expect(result.current).toBeNull();
+    expect(promptPlanMock.readAssetContentDataUrl).not.toHaveBeenCalled();
   });
 });
 

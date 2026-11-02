@@ -874,14 +874,18 @@ export function translateChatSummary(dto: ChatDto): ChatSummary {
 
 /** Wire chat → full legacy `Chat` (chat page). The user persona link
  * (`personaId`) is now part of the wire contract (Этап 4 slice 3,
- * ADR-0047 waiver 5) and passes through; branch/background/summary state
- * stays legacy-only with honest nulls. */
+ * ADR-0047 waiver 5) and passes through. The wallpaper slot carries the
+ * canonical `backgroundAssetId` (ADR-0061 consumer slice): in kernel mode the
+ * legacy `backgroundId` field holds an ASSET ID, because the legacy filename
+ * catalog does not exist there — the panel and the renderer both read it as
+ * an asset reference. Branch/summary state stays legacy-only with honest
+ * nulls. */
 export function translateChat(dto: ChatDto): Chat {
   return {
     ...translateChatSummary(dto),
     personaId: dto.personaId ?? null,
     activeBranchId: null,
-    backgroundId: null,
+    backgroundId: dto.backgroundAssetId ?? null,
     summary: '',
     deletedAt: null,
   };
@@ -1521,23 +1525,27 @@ export async function createChat(input: ChatCreate): Promise<Chat> {
 /** Update a chat: rename and/or re-link the user persona (Этап 4 slice 3). */
 export async function updateChat(id: string, update: ChatUpdate): Promise<Chat> {
   if (isKernelMode()) {
-    // background/summary/branch mutation stays legacy-only (Этап 4); a null
-    // persona clear is not expressible on the wire (personaId is optional,
-    // never null) → honest CAPABILITY_UNAVAILABLE.
-    if (
-      update.backgroundId !== undefined ||
-      update.summary !== undefined ||
-      update.activeBranchId !== undefined
-    ) {
+    // summary/branch mutation stays legacy-only (Этап 4); a null persona clear
+    // is not expressible on the wire (personaId is optional, never null) →
+    // honest CAPABILITY_UNAVAILABLE. The wallpaper IS expressible since the
+    // consumer slice: `backgroundId` carries an asset id, and `null` becomes the
+    // explicit `clearBackground` flag (the wire has no nullable fields).
+    if (update.summary !== undefined || update.activeBranchId !== undefined) {
       throw new UnsupportedError('chats.update.fields');
     }
     if (update.personaId === null) throw new UnsupportedError('chats.update.personaId.null');
-    if (update.title === undefined && update.personaId === undefined) {
+    if (
+      update.title === undefined &&
+      update.personaId === undefined &&
+      update.backgroundId === undefined
+    ) {
       throw new UnsupportedError('chats.update.fields');
     }
     const patch: Parameters<typeof backend.chats.update>[0] = { chatId: id };
     if (update.title !== undefined) patch.title = update.title;
     if (update.personaId !== undefined) patch.personaId = update.personaId;
+    if (update.backgroundId === null) patch.clearBackground = true;
+    else if (update.backgroundId !== undefined) patch.backgroundAssetId = update.backgroundId;
     const updated = await backend.chats.update(patch);
     return translateChat(updated);
   }

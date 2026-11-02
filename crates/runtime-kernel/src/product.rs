@@ -276,6 +276,30 @@ fn validate_avatar_asset(
     Ok(Some(id.to_string()))
 }
 
+/// Validate a chat wallpaper reference: the asset must exist AND be of kind
+/// `background`, so `assets.list({kind:"background"})` (the panel catalogue)
+/// and the chat field can never disagree — pointing a chat at a character card
+/// or a plugin blob would render nothing and hide the mistake.
+fn validate_background_asset(db: &Database, asset_id: &str) -> Result<(), KernelError> {
+    let kind: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT type FROM __neotavern_assets WHERE id = ?1",
+            params![asset_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "chats: background asset lookup"))?;
+    match kind.as_deref() {
+        None => Err(crate::assets::asset_not_found(asset_id)),
+        Some("background") => Ok(()),
+        Some(other) => Err(KernelError::new(
+            KernelErrorCode::ContractViolation,
+            format!("chats.update: asset {asset_id} is kind {other:?}, not \"background\""),
+        )),
+    }
+}
+
 /// Validates an explicit profile binding (SEC-02 waiver 4): the profile must
 /// exist; `None` (no binding requested) is always fine.
 fn validate_character_profile(db: &Database, profile_id: Option<&str>) -> Result<(), KernelError> {
@@ -379,6 +403,9 @@ fn row_to_chat(row: &rusqlite::Row) -> Result<ChatDto, KernelError> {
         source_message_id: row
             .get(9)
             .map_err(|e| sqlite(e, "chats: read source_message_id"))?,
+        background_asset_id: row
+            .get(10)
+            .map_err(|e| sqlite(e, "chats: read background_asset_id"))?,
     })
 }
 
@@ -1201,7 +1228,8 @@ pub fn chats_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelEr
         let conn = db.conn();
         let mut sql = String::from(
             "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
-             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id \
+             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id, \
+             c.background_asset_id \
              FROM chats c \
              LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
                ON m.chat_id = c.id",
@@ -1417,7 +1445,8 @@ pub fn chats_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelErr
     let mut stmt = conn
         .prepare(
             "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
-             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id \
+             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id, \
+             c.background_asset_id \
              FROM chats c \
              LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
                ON m.chat_id = c.id \
@@ -1545,7 +1574,8 @@ fn query_chat(conn: &rusqlite::Connection, chat_id: &str) -> Result<Option<ChatD
     let mut stmt = conn
         .prepare(
             "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
-             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id \
+             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id, \
+             c.background_asset_id \
              FROM chats c \
              LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
                ON m.chat_id = c.id \
@@ -1806,6 +1836,23 @@ pub fn chats_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kernel
     if let Some(persona_id) = &req.persona_id {
         sets.push("persona_id = ?".to_string());
         params.push(Value::Text(persona_id.clone()));
+    }
+    // Wallpaper (ADR-0061 consumer slice): the wire has no nullable fields, so
+    // `clearBackground` is the explicit unset and `backgroundAssetId` the set.
+    // Both together is a contradictory request, not a silent last-wins.
+    if req.background_asset_id.is_some() && req.clear_background == Some(true) {
+        return Err(KernelError::new(
+            KernelErrorCode::ContractViolation,
+            "chats.update: backgroundAssetId and clearBackground are mutually exclusive",
+        ));
+    }
+    if let Some(asset_id) = &req.background_asset_id {
+        validate_background_asset(db, asset_id)?;
+        sets.push("background_asset_id = ?".to_string());
+        params.push(Value::Text(asset_id.clone()));
+    }
+    if req.clear_background == Some(true) {
+        sets.push("background_asset_id = NULL".to_string());
     }
     if !sets.is_empty() {
         sets.push("updated_at = ?".to_string());
@@ -2322,7 +2369,8 @@ pub fn chats_snapshots_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>
         }
         let mut sql = String::from(
             "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
-             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id \
+             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id, \
+             c.background_asset_id \
              FROM chats c \
              LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
                ON m.chat_id = c.id \

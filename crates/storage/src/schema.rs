@@ -1231,6 +1231,35 @@ pub const MIGRATION_29_SQL: &str = migration_29_sql!();
 pub const MIGRATION_29_CHECKSUM: &str =
     "af028805717ce6b2de1b9b9946baca04256e315624f7520d46c397c34699c1dd";
 
+/// `chats.background_asset_id` (ADR-0061 consumer slice). The chat wallpaper
+/// stops being a legacy filename in `data/files/backgrounds/` and becomes a
+/// reference to a `background` asset published through `assets.put` /
+/// `assets.upload.*` and enumerated by `assets.list`. The column is nullable
+/// (a chat without a wallpaper) and deliberately has NO foreign key: the asset
+/// plane is content-addressed and `assets.delete` detaches references itself
+/// (the same asymmetry `characters.avatar_asset_id` already has), so deleting
+/// an asset can never fail because a chat still points at it.
+///
+/// Additive; rollback is the pre-migration backup restore (ТЗ 10.4).
+macro_rules! migration_30_sql {
+    () => {
+        r#"ALTER TABLE chats ADD COLUMN background_asset_id TEXT;
+CREATE INDEX idx_chats_background_asset ON chats(background_asset_id);"#
+    };
+}
+
+/// Name of the chat wallpaper reference (v30) schema migration.
+pub const MIGRATION_30_NAME: &str = "030_chat_background_asset";
+
+/// Exact SQL of the chat wallpaper reference schema migration (v30) — the
+/// `migration_30_sql!()` literal.
+pub const MIGRATION_30_SQL: &str = migration_30_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_30_SQL` string bytes (same
+/// computation as `MIGRATION_29_CHECKSUM`).
+pub const MIGRATION_30_CHECKSUM: &str =
+    "7610d878dcc7d4a8da326eefd0e893151d7a9fd250846e2dfc96f8386e727f33";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1295,7 +1324,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_28_sql!(),
     "\n",
-    migration_29_sql!()
+    migration_29_sql!(),
+    "\n",
+    migration_30_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

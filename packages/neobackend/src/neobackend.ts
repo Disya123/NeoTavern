@@ -76,6 +76,7 @@ import type {
   GenerationRunDto,
   GenerationToolResultRequestDto,
   GetAssetContentResultDto,
+  GetAssetThumbResultDto,
   GetAssetResultDto,
   GetMessageDraftRequestDto,
   GetSettingsRequestDto,
@@ -784,6 +785,12 @@ export interface AssetsApi {
   get(assetId: string, opts?: BackendCallOptions): Promise<GetAssetResultDto>;
   /** Asset content read (wire `assets.content`, base64 of the originals). */
   content(assetId: string, opts?: BackendCallOptions): Promise<GetAssetContentResultDto>;
+  /**
+   * Asset thumbnail read (wire `assets.thumb`): a bounded, aspect-preserving
+   * derivative cached by `(original sha256, maxPx, algorithm)` so the original
+   * never travels just to fill a catalog grid.
+   */
+  thumb(assetId: string, maxPx: number, opts?: BackendCallOptions): Promise<GetAssetThumbResultDto>;
   /** Asset publish (wire `assets.put`, idempotent re-import). */
   put(req: PutAssetRequestDto, opts?: BackendCallOptions): Promise<PutAssetResultDto>;
   /** Asset delete (wire `assets.delete`). */

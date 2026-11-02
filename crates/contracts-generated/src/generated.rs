@@ -782,6 +782,8 @@ pub struct ChatDto {
     pub origin: Option<SnapshotOrigin>,
     #[serde(rename = "sourceMessageId", default, skip_serializing_if = "Option::is_none")]
     pub source_message_id: Option<String>,
+    #[serde(rename = "backgroundAssetId", default, skip_serializing_if = "Option::is_none")]
+    pub background_asset_id: Option<String>,
 }
 
 pub(crate) fn check_chat_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
@@ -792,6 +794,7 @@ pub(crate) fn check_chat_dto(value: &Value, path: &str, issues: &mut Vec<Issue>)
     static RE_4: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     static RE_5: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     static RE_6: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_7: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -920,9 +923,20 @@ pub(crate) fn check_chat_dto(value: &Value, path: &str, issues: &mut Vec<Issue>)
                 None => issues.push(Issue::new(child_path.as_str(), "String")),
             }
         }
+        if let Some(child) = value.get("backgroundAssetId") {
+            let child_path = join_path(path, "backgroundAssetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_7.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "id" | "title" | "characterId" | "personaId" | "messageCount" | "createdAt" | "updatedAt" | "parentChatId" | "origin" | "sourceMessageId") {
+                if !matches!(key.as_str(), "id" | "title" | "characterId" | "personaId" | "messageCount" | "createdAt" | "updatedAt" | "parentChatId" | "origin" | "sourceMessageId" | "backgroundAssetId") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -14761,11 +14775,16 @@ pub struct RequestUpdateChat {
     pub title: Option<String>,
     #[serde(rename = "personaId", default, skip_serializing_if = "Option::is_none")]
     pub persona_id: Option<String>,
+    #[serde(rename = "backgroundAssetId", default, skip_serializing_if = "Option::is_none")]
+    pub background_asset_id: Option<String>,
+    #[serde(rename = "clearBackground", default, skip_serializing_if = "Option::is_none")]
+    pub clear_background: Option<bool>,
 }
 
 pub(crate) fn check_request_update_chat(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -14809,9 +14828,26 @@ pub(crate) fn check_request_update_chat(value: &Value, path: &str, issues: &mut 
                 None => issues.push(Issue::new(child_path.as_str(), "String")),
             }
         }
+        if let Some(child) = value.get("backgroundAssetId") {
+            let child_path = join_path(path, "backgroundAssetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("clearBackground") {
+            let child_path = join_path(path, "clearBackground");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "chatId" | "title" | "personaId") {
+                if !matches!(key.as_str(), "chatId" | "title" | "personaId" | "backgroundAssetId" | "clearBackground") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }

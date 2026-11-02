@@ -270,7 +270,7 @@ metadata is the generated `packages/contracts/generated/contract-manifest.json`.
 | `assets.upload.begin`              | transactional | non-idempotent | safe  | app.write | 2048    | 1024   | –      |
 | `assets.upload.append`             | transactional | non-idempotent | none  | app.write | 1048576 | 1024   | –      |
 | `assets.upload.finish`             | transactional | non-idempotent | none  | app.write | 1024    | 4096   | –      |
-| `assets.list`                     | transactional | idempotent     | safe  | app.read  | 1024    | 262144 | –      |
+| `assets.list`                      | transactional | idempotent     | safe  | app.read  | 1024    | 262144 | –      |
 | `assets.upload.abort`              | transactional | idempotent     | safe  | app.write | 1024    | 1024   | –      |
 
 The user-persona application slice (ADR-0047 waiver 3, closed in slice 3)
@@ -283,6 +283,20 @@ update is a no-op returning the unchanged chat), and `wire.prompt.plan` carries
 an optional `userName` — the resolved persona name the prompt pipeline
 substitutes for the `{{user}}` macro (see
 [Prompt pipeline](../prompt-pipeline/README.md)).
+
+The chat-wallpaper consumer slice (round 4, ADR-0061 follow-through) is
+likewise additive: `wire.chat.dto` carries an optional `backgroundAssetId`
+(uuid) and `chats.update` accepts optional `backgroundAssetId` plus the
+explicit `clearBackground` boolean. The flag exists because the wire has no
+nullable fields — `null` cannot mean "unset" — and the kernel rejects the
+contradictory request (set and clear in one call) with
+`CONTRACT_VIOLATION` instead of a silent last-wins. A referenced asset must
+exist (`ASSET_NOT_FOUND`) and be of kind `background`
+(`CONTRACT_VIOLATION` otherwise), so the panel catalog
+(`assets.list({kind:"background"})`) and the chat field can never disagree.
+Previews use the existing `assets.thumb` operation, now also surfaced by the
+facade as `backend.assets.thumb(assetId, maxPx)`. Schema migration **v30**
+(`chats.background_asset_id`, no FK — `assets.delete` detaches references).
 
 The canonical message model (Этап 4 slice 2, schema migration 008): the
 message text is the **active variant**; `message_variants` rows hold
@@ -427,12 +441,12 @@ audio input or a SillyTavern backup (up to 4 GiB) cannot ride a single
 operation. [ADR-0061](../adr/0061-large-file-ingestion.md) resolves this with a
 four-operation family instead of a second transport:
 
-| operation | request | result | notes |
-| --- | --- | --- | --- |
-| `assets.upload.begin` | `kind`, `filename`, `contentType?`, `totalBytes` (≤ 4 GiB) | `uploadId`, `chunkSizeBytes` (512 KiB raw), `expiresAt` | sweeps expired uploads before reserving a new one |
-| `assets.upload.append` | `uploadId`, `index`, `contentBase64` | `uploadId`, `receivedBytes`, `nextIndex` | `index` must equal `nextIndex`; the chunk may not exceed `chunkSizeBytes` or the declared length |
-| `assets.upload.finish` | `uploadId` | **the same DTO as `assets.put`** | refuses a length mismatch (`ASSET_UPLOAD_INCOMPLETE`) |
-| `assets.upload.abort` | `uploadId` | `deleted` | idempotent; reclaims the staged bytes |
+| operation              | request                                                    | result                                                  | notes                                                                                            |
+| ---------------------- | ---------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `assets.upload.begin`  | `kind`, `filename`, `contentType?`, `totalBytes` (≤ 4 GiB) | `uploadId`, `chunkSizeBytes` (512 KiB raw), `expiresAt` | sweeps expired uploads before reserving a new one                                                |
+| `assets.upload.append` | `uploadId`, `index`, `contentBase64`                       | `uploadId`, `receivedBytes`, `nextIndex`                | `index` must equal `nextIndex`; the chunk may not exceed `chunkSizeBytes` or the declared length |
+| `assets.upload.finish` | `uploadId`                                                 | **the same DTO as `assets.put`**                        | refuses a length mismatch (`ASSET_UPLOAD_INCOMPLETE`)                                            |
+| `assets.upload.abort`  | `uploadId`                                                 | `deleted`                                               | idempotent; reclaims the staged bytes                                                            |
 
 Bytes are staged in `<data_root>/staged/<uploadId>/data.part` and never enter
 SQLite (`asset_uploads`, schema v29, is bookkeeping only — AGENTS.md §11). The

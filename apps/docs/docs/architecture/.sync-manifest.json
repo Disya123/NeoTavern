@@ -285,7 +285,7 @@
     {
       "source": "adr/0061-large-file-ingestion.md",
       "target": "adr/0061-large-file-ingestion.md",
-      "sha256": "c266cacdbe2e5787a3302bca2839d103faa04f0a7463c0122101f28374fa6ecc"
+      "sha256": "d445f8b6622d7aa14d3723c66b3dcee349795bc31ebd21bbdf14e7f68e300c9b"
     },
     {
       "source": "adr/README.md",
@@ -300,7 +300,7 @@
     {
       "source": "api/README.md",
       "target": "api/README.md",
-      "sha256": "e015f149a955dcc139009c1f7c1534065b06a53fa673c01abcb1c4f4b445e197"
+      "sha256": "eea12ee80805f8b7e2bf43fcef7d71ed9b5e5961f311dc88a34c7a0d5774f000"
     },
     {
       "source": "architecture/README.md",
@@ -315,7 +315,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "72978761104384b3ce61c137c3156a9c78ade2d88863eb4c0e7ff09c9bf1a445"
+      "sha256": "97a62facc20af021570b293e67ae7d7a7325b4304de79ac4112151f85f01d76d"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -370,7 +370,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "0dd4af7599e15af7a09d5e0b229dee9e1cbdc9b91afd0eaf46f412db5d0d00b7"
+      "sha256": "6ff8ec54487f9c7cab835c33a38b159bb74baa0218c54adf2dee9a24c70e4025"
     },
     {
       "source": "architecture/version-axes.md",
@@ -380,7 +380,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "26f498ab5f7e96449e294ae83ffd756a1096d497eefb0c52a67782f1327f2fc1"
+      "sha256": "07f4f37f4a1e0f9c7639cec6fb7fc37ccd5adc4df0bfe76592f37b7fa0ae5417"
     },
     {
       "source": "audits/rust-app/INVENTORY.md",
@@ -420,7 +420,7 @@
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "4916facf89bff485071619917221e403df915767137ead44a0da152597d977a8"
+      "sha256": "3daccb3ffa71e2b52bd013dd2aff6b1be67957da3fb16e38f46364c78fbdb3fc"
     },
     {
       "source": "desktop/README.md",

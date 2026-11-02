@@ -83,6 +83,7 @@ import {
   restoreMessageRevision,
   updateCharacter,
   readAssetContentDataUrl,
+  wallpaperBackgroundUrl,
   readFileBase64,
   updateChat,
   updateLorebook,
@@ -751,16 +752,84 @@ export function useRestoreMessageRevision() {
 
 /* Backgrounds -------------------------------------------------------------- */
 
+/** Raw byte length of a canonical base64 string (padding aware). */
+function base64ByteLength(base64: string): number {
+  if (base64.length === 0) return 0;
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return Math.floor(base64.length / 4) * 3 - padding;
+}
+
+/** Wire asset → the panel catalogue row. The kernel keeps published bytes
+ * content-addressed, so the display name is the managed key basename
+ * (`<sha256><ext>`); the id doubles as the legacy `backgroundId` slot, because
+ * in kernel mode that slot carries an asset id. */
+function backgroundFromAsset(asset: {
+  id: string;
+  relativeKey: string;
+  sizeBytes: number;
+  createdAt: string;
+}): BackgroundItem {
+  const name = asset.relativeKey.split('/').pop() ?? asset.relativeKey;
+  return {
+    id: asset.id,
+    name,
+    // Kernel mode renders the original through `assets.content` (data URL);
+    // there is no URL surface and no fabricated one.
+    originalUrl: '',
+    thumbnailUrl: '',
+    sizeBytes: asset.sizeBytes,
+    createdAt: Date.parse(asset.createdAt),
+  };
+}
+
+const BACKGROUND_UPLOAD_KIND = 'background';
+
+/**
+ * Stage one wallpaper through the chunked-upload contract (ADR-0061). A
+ * wallpaper can exceed the 1 MiB request cap, so the file is sent as bounded
+ * chunks: `assets.upload.begin` negotiates `chunkSizeBytes`, `append` requires
+ * sequential indexes, and `finish` publishes ONE immutable `background` asset
+ * that `assets.list` then enumerates. The declared length is authoritative, so
+ * a truncated upload fails instead of publishing a partial image.
+ */
+async function uploadBackgroundFile(file: File): Promise<BackgroundItem> {
+  // The file is read once as base64 (`readFileBase64`), which is exactly the
+  // wire spelling of a chunk body, so the loop slices the encoded string on
+  // 4-character (3-byte) boundaries and never copies the whole image twice.
+  const base64 = await readFileBase64(file);
+  const totalBytes = base64ByteLength(base64);
+  const begun = await backend.assets.uploadBegin({
+    kind: BACKGROUND_UPLOAD_KIND,
+    filename: file.name || 'wallpaper.png',
+    ...(file.type ? { contentType: file.type } : {}),
+    totalBytes: totalBytes > 0 ? totalBytes : 1,
+  });
+  // One chunk never exceeds the negotiated raw size: `floor(n/3)*4` base64
+  // characters decode to at most `n` bytes (kernel default is 512 KiB).
+  const charsPerChunk = Math.max(4, Math.floor(begun.chunkSizeBytes / 3) * 4);
+  let index = 0;
+  for (let offset = 0; offset < base64.length; offset += charsPerChunk) {
+    const chunk = base64.slice(offset, offset + charsPerChunk);
+    await backend.assets.uploadAppend({
+      uploadId: begun.uploadId,
+      index,
+      contentBase64: chunk,
+    });
+    index += 1;
+  }
+  const published = await backend.assets.uploadFinish({ uploadId: begun.uploadId });
+  return backgroundFromAsset(published.asset);
+}
+
 export function useBackgrounds() {
   return useQuery({
     queryKey: ['backgrounds'],
-    queryFn: () => {
-      // Kernel plane: the wallpaper catalog is a legacy filesystem contour
-      // (`data/files/backgrounds/`, sidecar-owned); the kernel owns no
-      // backgrounds capability — honest empty list (ТЗ §13.1), never a
-      // silent legacy request (ARC-02).
+    queryFn: async (): Promise<BackgroundList> => {
+      // Kernel plane: the catalogue is the asset catalog filtered by kind
+      // (`assets.list`), not the sidecar's `data/files/backgrounds/` scan.
       if (isKernelMode()) {
-        return Promise.resolve<BackgroundList>({ items: [] });
+        const page = await backend.assets.list({ kind: BACKGROUND_UPLOAD_KIND, limit: 200 });
+        return { items: page.items.map(backgroundFromAsset) };
       }
       return api.get<BackgroundList>('/backgrounds');
     },
@@ -772,10 +841,9 @@ export function useUploadBackground() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (file: File) => {
-      // Kernel plane: no backgrounds capability → honest
-      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy upload.
+      // Kernel plane: bounded chunks + one published `background` asset.
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('backgrounds.upload'));
+        return uploadBackgroundFile(file);
       }
       return api.upload<BackgroundItem>('/backgrounds', file);
     },
@@ -787,9 +855,10 @@ export function useDeleteBackground() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => {
-      // Kernel plane: same honest CAPABILITY_UNAVAILABLE as upload.
+      // Kernel plane: `assets.delete` also detaches the reference from every
+      // chat, exactly like the legacy route did for its filename.
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('backgrounds.delete'));
+        return backend.assets.del(id);
       }
       return api.del<{ ok: boolean }>(`/backgrounds/${encodeURIComponent(id)}`);
     },
@@ -799,6 +868,47 @@ export function useDeleteBackground() {
       void qc.invalidateQueries({ queryKey: ['chat'] });
     },
   });
+}
+
+/**
+ * Resolve the chat wallpaper to something an `<img>`/`background-image` can
+ * render. Legacy plane: the sidecar URL. Kernel plane: a `data:` URL read from
+ * `assets.content`, because the kernel has no URL surface (the same rule the
+ * avatar plane follows). No wallpaper → `null`, and the shell keeps its token
+ * background.
+ */
+export function useBackgroundImageUrl(backgroundId: string | null | undefined) {
+  const kernel = isKernelMode();
+  const query = useQuery({
+    queryKey: ['background-image', backgroundId ?? ''],
+    queryFn: () => readAssetContentDataUrl(backgroundId as string),
+    enabled: kernel && backgroundId != null,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+  if (!backgroundId) return null;
+  if (!kernel) return wallpaperBackgroundUrl(backgroundId);
+  return query.data ?? null;
+}
+
+/**
+ * Catalog preview for one wallpaper. Kernel mode asks `assets.thumb` for a
+ * bounded derivative (`maxPx`), so a grid never pulls the 25 MiB original;
+ * the legacy plane already carries a `thumbnailUrl` and never calls this.
+ */
+export function useBackgroundThumbUrl(backgroundId: string | null | undefined, maxPx = 256) {
+  const kernel = isKernelMode();
+  const query = useQuery({
+    queryKey: ['background-thumb', backgroundId ?? '', String(maxPx)],
+    queryFn: async () => {
+      const thumb = await backend.assets.thumb(backgroundId as string, maxPx);
+      return `data:image/${thumb.format};base64,${thumb.contentBase64}`;
+    },
+    enabled: kernel && backgroundId != null,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+  return query.data ?? null;
 }
 
 /* Presets ------------------------------------------------------------------ */

@@ -112,6 +112,17 @@ ever see complete assets. `finish` publishes the assembled file into
 `begin`) deletes row and bytes. A leftover row is harmless: it expires and its
 staged directory is reclaimed. v29 is additive.
 
+**v30 `chats.background_asset_id`.** A chat's wallpaper stops being a
+filename in the sidecar's `data/files/backgrounds/` and becomes a reference
+to a `background` asset (`assets.put` / `assets.upload.*`), enumerated by
+`assets.list` and rendered through `assets.content`/`assets.thumb`. The column
+is nullable and has NO foreign key: the asset plane is content-addressed and
+`assets.delete` detaches every chat reference itself, so deleting an asset can
+never fail because a chat still points at it. The kernel validates the
+reference (`ASSET_NOT_FOUND`, and `CONTRACT_VIOLATION` when the asset is not
+kind `background`); clearing it is the explicit `clearBackground` flag, because
+the wire has no nullable fields.
+
 ### Plugin state and grants
 
 `plugin_state` stores user plugin state separately from `plugin_registry`

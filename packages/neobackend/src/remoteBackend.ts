@@ -85,6 +85,7 @@ import type {
   ThemeDto,
   ThemeSettingsResultDto,
   GetAssetContentResultDto,
+  GetAssetThumbResultDto,
   GetAssetResultDto,
   PutAssetResultDto,
   BeginAssetUploadResultDto,
@@ -503,6 +504,12 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<GetAssetContentResultDto>(
         'assets.content',
         { assetId },
+        { signal: opts?.signal },
+      ),
+    thumb: (assetId, maxPx, opts) =>
+      this.sdk.call<GetAssetThumbResultDto>(
+        'assets.thumb',
+        { assetId, maxPx },
         { signal: opts?.signal },
       ),
     put: (req, opts) =>

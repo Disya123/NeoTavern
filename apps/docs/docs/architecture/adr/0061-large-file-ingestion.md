@@ -42,12 +42,12 @@ that ADR-0059 (React-primary, remote Web Client is a product) and ADR-0038
 
 Contract:
 
-| Op | Request | Result | Notes |
-| --- | --- | --- | --- |
-| `assets.upload.begin` | `kind`, `filename`, `contentType?`, `totalBytes` | `uploadId`, `chunkSizeBytes`, `expiresAt` | `totalBytes` ≤ 4 GiB; sweeps expired uploads |
-| `assets.upload.append` | `uploadId`, `index`, `contentBase64` | `uploadId`, `receivedBytes`, `nextIndex` | ≤ 512 KiB raw per chunk; `index` must equal `nextIndex`; over-declared length is a stable refusal |
-| `assets.upload.finish` | `uploadId` | same DTO as `assets.put` | refuses an upload whose staged bytes ≠ `totalBytes`; publishes ONE immutable content-addressed asset |
-| `assets.upload.abort` | `uploadId` | `deleted` | idempotent; reclaims staged bytes |
+| Op                     | Request                                          | Result                                    | Notes                                                                                                |
+| ---------------------- | ------------------------------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `assets.upload.begin`  | `kind`, `filename`, `contentType?`, `totalBytes` | `uploadId`, `chunkSizeBytes`, `expiresAt` | `totalBytes` ≤ 4 GiB; sweeps expired uploads                                                         |
+| `assets.upload.append` | `uploadId`, `index`, `contentBase64`             | `uploadId`, `receivedBytes`, `nextIndex`  | ≤ 512 KiB raw per chunk; `index` must equal `nextIndex`; over-declared length is a stable refusal    |
+| `assets.upload.finish` | `uploadId`                                       | same DTO as `assets.put`                  | refuses an upload whose staged bytes ≠ `totalBytes`; publishes ONE immutable content-addressed asset |
+| `assets.upload.abort`  | `uploadId`                                       | `deleted`                                 | idempotent; reclaims staged bytes                                                                    |
 
 Invariants that make the staged resource safe to own:
 
@@ -99,3 +99,24 @@ Invariants that make the staged resource safe to own:
   and the generated DTOs.
 - **Store the upload in SQLite as BLOBs** — rejected by AGENTS.md §11 and by the
   backup/rollback story.
+
+## Consumer: chat wallpapers (round 4)
+
+The first feature flipped onto the family is the chat wallpaper picker, and
+it is the template for the remaining ones:
+
+- the catalog is a `kind` agreement, not a second store — `assets.list` with
+  `kind: "background"` replaces the sidecar directory scan;
+- the upload is the same file the legacy route accepted (25 MiB), streamed as
+  bounded `assets.upload.append` chunks instead of one multipart body;
+- the wallpaper reference moved into the product model:
+  `chats.backgroundAssetId` (schema v30, no FK, detached by `assets.delete`),
+  with `clearBackground` as the unset spelling because the wire has no
+  nullable fields;
+- rendering follows the kernel rule "no URL surface": the full image comes
+  from `assets.content` as a data URL and grid previews from `assets.thumb`.
+
+What this proves for the rest of the list (backup import, plugin blobs,
+sandbox assets, TTS audio): the contract is reusable as-is; only the
+consumer-side composition (chunk loop, progress, kind name) is per-feature
+work.
