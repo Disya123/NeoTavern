@@ -4,6 +4,15 @@
 
 ### Added
 
+- **ADR-0062 draft: legacy `app.db` import contract (round 12/40).** Row G7 of
+  the release gate needs a migration that does not exist yet; the draft fixes
+  its rules before code: read-only source, per-family transactions with import
+  receipts (so a second run is idempotent and a changed row is a conflict, not
+  an overwrite), dry-run by default with a hard refusal on unknown columns,
+  rollback via a `database.sqlite` snapshot instead of an inverse script, asset
+  bytes through the existing asset plane, legacy plugin state as opaque blobs
+  and plugin code discarded (ADR-0059).
+
 - **Release gate status page (round 10/40).** The Kernel default switch has
   five verified rows — clippy `-D warnings`, `pnpm format:check`, the
   no-silent-fallbacks gate, the 51-site legacy audit and wire codegen — and

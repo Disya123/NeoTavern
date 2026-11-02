@@ -288,9 +288,14 @@
       "sha256": "d445f8b6622d7aa14d3723c66b3dcee349795bc31ebd21bbdf14e7f68e300c9b"
     },
     {
+      "source": "adr/0062-legacy-app-db-import-contract.md",
+      "target": "adr/0062-legacy-app-db-import-contract.md",
+      "sha256": "39ca731366a53619ca9a2c2c17c5b3612a797a26202eeb4d7ad954d5cf6ef5a5"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "dd33af9a403894f245c4a1c3d040071d500dc14a986fdfff1104de35b641ed74"
+      "sha256": "16b224c514180bc90671b23284be60f4e0e113e715bd4037dcbd62a5aeab8f30"
     },
     {
       "source": "android/README.md",
@@ -375,7 +380,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "760a84c74737830fddeda9b9f6bf6073842902c65b93fa4243638104685bcf03"
+      "sha256": "bd3d2655d9d57a9e2f9a7d81120ddabbb8b9e4bea951f50ce08a39256061780a"
     },
     {
       "source": "architecture/resource-containment.md",

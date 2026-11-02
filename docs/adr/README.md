@@ -18,6 +18,8 @@ contract, unchanged dedupe by `(kind, sha256)`. Staged bytes expire after 24 h
 and are swept on `begin`. Full decision:
 [ADR-0061](0061-large-file-ingestion.md).
 
+- [ADR-0062: legacy `app.db` import contract (draft)](0062-legacy-app-db-import-contract.md)
+
 ## ADR-0060: App events are a durable cursor, not an SSE relay
 
 **Accepted (2026-11-09).** The canonical plane replaces the legacy
