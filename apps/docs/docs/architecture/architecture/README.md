@@ -261,6 +261,9 @@ gate passes.
 - [Host-surface boundary](host-surface-boundary.md) — the explicit, fail-closed
   boundary for plugin-host capabilities (install verification, safe mode, OAuth
   connection sessions) that Product Wire deliberately does not model.
+- [Kernel-plane empty branches](kernel-empty-branches.md) — the
+  "no silent fallbacks" gate: every kernel-mode branch calls the backend, throws,
+  or carries a justified `kernel-empty:` marker.
   wire-safe rules, handshake, versioning, deterministic codegen and the
   cross-language corpus.
 - [Presentation boundary](presentation-boundary.md) — Milestone A **PASS**

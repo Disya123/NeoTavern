@@ -61,6 +61,8 @@
     "capability:matrix:check": "node tools/capability-matrix/generate.mjs --check",
     "ui:api:check": "node scripts/check-ui-api.mjs --check",
     "ui:api:update": "node scripts/check-ui-api.mjs --update",
+    "ui:fallback:check": "node scripts/check-kernel-empty.mjs --check",
+    "ui:fallback:list": "node scripts/check-kernel-empty.mjs --list",
     "crates:test": "cargo test --manifest-path crates/Cargo.toml",
     "crates:test:adapter": "cargo test --manifest-path crates/Cargo.toml -p remote-http-adapter",
     "upgrade:drill": "node scripts/upgrade-drill.mjs",

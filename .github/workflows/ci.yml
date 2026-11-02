@@ -65,6 +65,12 @@ jobs:
       - name: Legacy UI surface gate (ARC-02/ARC-03)
         run: pnpm ui:api:check
 
+      # No silent kernel-plane fallbacks (release-gate item 4, ARC-02): a
+      # kernel-mode branch either calls the backend or throws, or it carries a
+      # justified `kernel-empty:` marker.
+      - name: Kernel-plane silent-fallback gate (ARC-02)
+        run: pnpm ui:fallback:check
+
       - name: Android APK web-assets scanner self-test (РўР— В§18.3)
         run: node scripts/check-android-apk-web-assets.mjs --self-test
 

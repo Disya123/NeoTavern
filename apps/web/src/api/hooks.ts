@@ -139,6 +139,10 @@ export function useAuthSession() {
       // legacy exposure (ТЗ §11.3). Honest local session: required=false,
       // authenticated=true — never a silent legacy request (ARC-02).
       if (isKernelMode()) {
+        // kernel-empty: the local kernel transport (Tauri IPC / loopback) has no
+        // remote-token session layer, so "not required, authenticated" is the
+        // truth of that transport rather than a hidden legacy fallback; a remote
+        // Web Client does not reach this branch (its auth is host-side).
         const session: AuthSession = { required: false, authenticated: true };
         return session;
       }

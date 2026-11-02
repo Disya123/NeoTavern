@@ -305,7 +305,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "3e2cf437bffd1b4c5996888b727c1194e17f3f3bce42587d0e9cca0888d7118a"
+      "sha256": "ba680fd96941022f6857b56b9a6f943d9f13440fa15965ecaeee0257f13d7fbc"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -331,6 +331,11 @@
       "source": "architecture/host-surface-boundary.md",
       "target": "architecture/host-surface-boundary.md",
       "sha256": "e8d6540694054e89423ba133a058783fb7857c1b9b4e14d6402ac4ce1fa856a2"
+    },
+    {
+      "source": "architecture/kernel-empty-branches.md",
+      "target": "architecture/kernel-empty-branches.md",
+      "sha256": "5991ef84e231da90c5c3863f4a342eb15664f1b92b3531e49851c41863b7cdeb"
     },
     {
       "source": "architecture/known-baseline-failures.md",
@@ -375,7 +380,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "a77bed71ed19b1ad11d354a970d8bd29db827b923a68ab7ec953bc478ba485ba"
+      "sha256": "dae28d36f766a01b91b048a5c8ea0bdc838b978a831120bbb42e122737b31b17"
     },
     {
       "source": "architecture/version-axes.md",

@@ -783,6 +783,9 @@ export function avatarOriginalUrl(
  */
 export function wallpaperBackgroundUrl(backgroundId: string | null | undefined): string | null {
   if (!backgroundId) return null;
+  // kernel-empty: the kernel has no URL surface — a wallpaper is rendered from
+  // `assets.content` as a data URL (useBackgroundImageUrl), so there is no URL
+  // to build and `null` is the honest answer, not a broken link.
   if (isKernelMode()) return null;
   // eslint-disable-next-line @neotavern/no-legacy-api-surface
   return `/api/v2/assets/backgrounds/${encodeURIComponent(backgroundId)}`;
@@ -2377,6 +2380,10 @@ export async function updateThemeSettings(
  * the legacy plane returns the documented route. */
 export function userCssUrl(): string | null {
   if (isKernelMode()) {
+    // kernel-empty: user.css is a file the legacy sidecar serves from the theme
+    // directory; the kernel stores theme settings as data and has no user-
+    // stylesheet file, so there is nothing to link (the theme plane falls back to
+    // its own tokens). Documented in docs/architecture/kernel-empty-branches.md.
     return null;
   }
   // eslint-disable-next-line @neotavern/no-legacy-api-surface

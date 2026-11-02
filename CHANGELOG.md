@@ -4,6 +4,21 @@
 
 ### Added
 
+- **"No silent fallbacks" gate for the kernel plane (round 6/40 of the
+  legacy-removal goal).** Release-gate item 4 asks for the absence of silent
+  fallbacks; until now it was a review habit, not a check. `pnpm ui:fallback:check`
+  (`scripts/check-kernel-empty.mjs`) now audits every `if (isKernelMode())` branch
+  and requires one of three outcomes: a backend call, a fail-closed
+  `UnsupportedError`, or a colocated `// kernel-empty: <reason>` marker. The
+  classifier is AST-based (TypeScript compiler API) because a textual scan
+  misreads negated guards, ternaries, thrown closures and
+  `new UnsupportedError(...)`. Three honest empty branches were found and
+  registered in place: the local auth session, `wallpaperBackgroundUrl` and
+  `themeUserCssUrl` (the kernel has no remote-token session and no URL surface).
+  The gate runs in CI next to the legacy-surface gate.
+  Docs: new [kernel-empty-branches.md](docs/architecture/kernel-empty-branches.md).
+  Tests: 8 classifier fixtures (`scripts/check-kernel-empty.test.mjs`).
+
 - **Explicit host-surface boundary for the plugin host (round 5/40 of the
   legacy-removal goal).** The seven plugin-host capabilities the web contour
   needs but Product Wire deliberately does not model â€” package install
@@ -20,7 +35,7 @@
   /api/v2 routes and legacyRaw() helpers, so plugin-host calls (whose prefix
   the shared client injects) were never counted. It now has a third kind,
   host-surface, and the baseline grew from 44 to 51 audited sites because those
-  calls became visible — an audit closure, not a regression.
+  calls became visible ï¿½ an audit closure, not a regression.
   Docs: new [host-surface-boundary.md](docs/architecture/host-surface-boundary.md),
   cutover registry rows 19/20/21a now point at it. Tests: 15 new cases
   (`apps/web/src/api/hostSurfaces.test.ts`) covering the registry invariants, the
