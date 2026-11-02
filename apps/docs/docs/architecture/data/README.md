@@ -124,12 +124,13 @@ kind `background`); clearing it is the explicit `clearBackground` flag, because
 the wire has no nullable fields.
 
 **v31 `031_import_receipts` (ADR-0062).** The legacy `app.db` import ledger:
-one row per imported source entity (`run_id`, `entity_family`, `source_id`,
-`target_id`, `source_checksum`, `imported_at`). The unique
-`(entity_family, source_id)` pair is what makes a resumed staged-root import
-skip already-imported rows instead of duplicating them. Additive; the table is
-created by `FRESH_SCHEMA_SQL`, so every staged root (ADR-0041) has it from
-birth.
+one row per imported FAMILY (`run_id`, `entity_family`, `source_id`,
+`target_id`, `source_checksum`, `imported_at`), where `source_checksum` is
+sha256 over the family's sorted legacy ids — a re-planned run against a
+changed source is a detectable fingerprint conflict, not a silent overwrite.
+The unique `(entity_family, source_id)` pair keeps a family single-recorded
+per staged root. Additive; the table is created by `FRESH_SCHEMA_SQL`, so
+every staged root (ADR-0041) has it from birth.
 
 ### Plugin state and grants
 

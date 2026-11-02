@@ -54,11 +54,15 @@ Three forces constrain the design:
    inside the staged root and the rest untouched_ — resumable and inspectable.
    Because that root is not active, partial progress is never shown to the
    user; the activation step is what turns it into the library.
-3. **Receipts, not guesswork, make it re-runnable.** One `import_receipts`
-   table records `(source, entity family, source id, target id, checksum)`.
-   A second run skips rows whose checksum matches and reports them as
-   `already-imported`; a changed row is a conflict that aborts that family
-   instead of silently overwriting.
+3. **Receipts, not guesswork, make it re-runnable.** The `import_receipts`
+   ledger records one row per imported FAMILY — `(run id, entity family,
+source fingerprint, target root, imported at)` — where the fingerprint is
+   sha256 over the family's sorted source ids. (Amended in round 17: the first
+   draft promised per-source-row receipts, but kernel ids are newly generated
+   per row and a checksum of an arbitrary legacy row is undefined; at staged-
+   root granularity the family fingerprint gives the same guarantees — a
+   re-planned run against a changed source produces a different fingerprint,
+   which is a detectable conflict, not a silent overwrite.)
 4. **Dry-run is the default.** The importer always plans first and requires an
    explicit `commit` flag; the plan reports per-family counts, unknown columns
    and unsupported values. Unknown columns in the source are a **hard refusal**
@@ -101,6 +105,9 @@ Three forces constrain the design:
 - The canonical schema gains `import_receipts` (schema migration,
   checksum-covered), so every staged root created from `FRESH_SCHEMA_SQL` has
   it; nothing about the legacy shape leaks into the Kernel schema.
+- The contract is implemented as `neotavern_storage::legacy_import`
+  (`plan` / `stage` / `validate_staged` / `activate_staged`) on top of the
+  existing `convert_legacy` converter and the ADR-0041 journal.
 - G7 verification becomes four tests, not a manual ritual: dry-run plan on an
   ST-era fixture, re-run idempotency inside the staged root, failed validation
   leaves the active root and its journal untouched, and a passing run flips

@@ -1339,3 +1339,148 @@ fn safety_copy_carries_the_legacy_files_tree() {
     assert_eq!(outcome.active_root, staging);
     assert_eq!(read_name(&data_root, "leg-c1"), "Alice");
 }
+
+// --- ADR-0062 staged legacy import (G7 data plane) ---------------------------
+
+use neotavern_storage::activation::ACTIVE_ROOT_FILE;
+use neotavern_storage::legacy_import::{activate_staged, plan, stage, validate_staged};
+
+/// The dry-run plan counts every family in the source and writes nothing:
+/// no `roots/` directory, no activation journal, no pointer.
+#[test]
+fn legacy_import_plan_counts_families_without_writing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+
+    let plan = plan(&source).expect("plan");
+    assert!(plan.ready, "problems: {:?}", plan.problems);
+    let plan_count = |family: &str| {
+        plan.families
+            .iter()
+            .find(|f| f.family == family)
+            .map(|f| f.count)
+            .unwrap_or(0)
+    };
+    assert_eq!(plan_count("characters"), 2);
+    assert_eq!(plan_count("chats"), 2);
+    assert_eq!(plan_count("messages"), 4);
+    assert_eq!(plan_count("lorebooks"), 1);
+    assert_eq!(plan_count("presets"), 1);
+    // Optional families absent from this old source are reported, not failures.
+    let personas = plan
+        .families
+        .iter()
+        .find(|f| f.family == "personas")
+        .expect("personas in plan");
+    assert!(!personas.present);
+    assert_eq!(personas.count, 0);
+
+    assert!(!data_root.join("roots").exists(), "plan created roots/");
+    assert!(
+        !data_root.join(ACTIVE_ROOT_FILE).exists(),
+        "plan wrote an active-root pointer"
+    );
+}
+
+/// A staged import converts into `roots/root-<id>/`, writes one receipt per
+/// imported family, and passes validation — while the data root stays
+/// untouched (no pointer, no journal).
+#[test]
+fn legacy_import_stage_writes_receipts_and_passes_validation() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+
+    let staged = stage(&source, &data_root).expect("stage");
+    assert_eq!(staged.report.characters, 2);
+    assert!(staged.staged_root.starts_with(&data_root));
+    validate_staged(&staged).expect("staged root validates");
+
+    let receipts: i64 = {
+        let conn = rusqlite::Connection::open_with_flags(
+            neotavern_storage::paths::db_path(&staged.staged_root),
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .expect("open staged db");
+        conn.query_row("SELECT COUNT(*) FROM import_receipts", [], |r| r.get(0))
+            .expect("count receipts")
+    };
+    // characters, chats, messages, lorebooks, presets — the families with rows.
+    assert_eq!(receipts, 5, "one receipt per imported family");
+
+    assert!(
+        !data_root.join(ACTIVE_ROOT_FILE).exists(),
+        "staging must not activate anything"
+    );
+}
+
+/// Activation goes through the journal with `kind: "import"` and flips
+/// `active-root.json` to the staged root; the previous root is retained on
+/// disk.
+#[test]
+fn legacy_import_activation_commits_through_the_journal() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+
+    let staged = stage(&source, &data_root).expect("stage");
+    let from_root = neotavern_storage::activation::active_root(&data_root).expect("active root");
+    activate_staged(&data_root, &staged, &from_root).expect("activate");
+
+    let pointer = neotavern_storage::activation::read_pointer(&data_root)
+        .expect("read pointer")
+        .expect("pointer exists after activation");
+    assert_eq!(pointer.root, staged.staged_root);
+
+    let entry = latest_entry(&data_root)
+        .expect("journal readable")
+        .expect("journal has the import entry");
+    assert_eq!(entry.kind, "import");
+    assert_eq!(entry.status, ActivationStatus::Committed);
+    assert_eq!(entry.to_root, staged.staged_root);
+    assert!(staged.staged_root.is_dir(), "previous roots stay on disk");
+}
+
+/// A source that fails the mandatory run group refuses BEFORE anything is
+/// created: no staged directory, no journal, no pointer — the active root is
+/// untouched (ADR-0062 "keep the old root").
+#[test]
+fn legacy_import_failure_keeps_the_active_root_untouched() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+    // Break the mandatory group: a source without presets cannot import.
+    {
+        let conn = rusqlite::Connection::open(&source).expect("reopen source");
+        conn.execute("DROP TABLE presets", [])
+            .expect("drop presets");
+    }
+
+    let error = stage(&source, &data_root).expect_err("mandatory group must refuse");
+    assert_eq!(
+        error.code,
+        StorageErrorCode::UnsupportedStorageFormat,
+        "unexpected error: {error:?}"
+    );
+
+    assert!(!data_root.join("roots").exists(), "refusal created roots/");
+    assert!(
+        !data_root.join(ACTIVE_ROOT_FILE).exists(),
+        "refusal wrote a pointer"
+    );
+    assert!(
+        latest_entry(&data_root)
+            .expect("journal readable")
+            .is_none(),
+        "refusal wrote a journal entry"
+    );
+}

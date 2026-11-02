@@ -21,6 +21,7 @@ pub mod export;
 pub mod gallery;
 pub mod lease;
 pub mod legacy;
+pub mod legacy_import;
 pub mod migration;
 pub mod migrations;
 pub mod open;
