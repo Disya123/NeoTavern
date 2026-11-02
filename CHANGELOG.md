@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Three more Packaged rows: variants/revisions/drafts, snapshots, app events
+  (round 25/40).** The packaged golden smoke now exercises the full message
+  variants lifecycle (create/list/activate/revisions.list/delete), the plugin
+  draft lifecycle (save/get/list/commit + save/discard), chat snapshots
+  (checkpoint create/list/rollback) and `events.poll` — all on the portable
+  artifact, promoting `chats.messages.variants-revisions-drafts`,
+  `chats.snapshots` and `app.live-events` to Packaged on desktop. Desktop
+  capability score: 13/43 Packaged.
+
 - **Six more Packaged matrix rows from packaged-smoke library walks (round
   24/40).** The packaged kernel self-smoke extends its golden path with full
   op-set walks for presets, personas, memories, lorebooks (including entry

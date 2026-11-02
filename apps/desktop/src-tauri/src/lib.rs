@@ -1126,6 +1126,90 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
     )?;
     dispatch_ok(&host, "lorebooks.delete", serde_json::json!({ "lorebookId": lorebook_id }))?;
     eprintln!("[smoke] golden: library clusters full walk ok");
+
+    // 6. Variants/revisions/drafts + snapshots + app events (G6 evidence,
+    //    round 25). Draft lifecycle lives on the throwaway chat's message;
+    //    snapshots walk on the golden chat (checkpoint at the last message,
+    //    rollback forks a child chat — the parent stays intact).
+    let assistant = dispatch_ok(
+        &host,
+        "chats.messages.list",
+        serde_json::json!({ "chatId": chat_id, "limit": 200 }),
+    )?;
+    let assistant_id = assistant["items"]
+        .as_array()
+        .and_then(|items| items.iter().find(|m| m["role"] == "assistant"))
+        .and_then(|m| m["id"].as_str())
+        .ok_or_else(|| "assistant message has no id".to_string())?
+        .to_string();
+    let variant = dispatch_ok(
+        &host,
+        "chats.messages.variants.create",
+        serde_json::json!({ "chatId": chat_id, "messageId": assistant_id, "content": "Alt swipe" }),
+    )?;
+    let variant_id = variant["id"]
+        .as_str()
+        .ok_or_else(|| "variant carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "chats.messages.variants.list",
+        serde_json::json!({ "chatId": chat_id, "messageId": assistant_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "chats.messages.variants.activate",
+        serde_json::json!({ "chatId": chat_id, "messageId": assistant_id, "variantId": variant_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "chats.messages.revisions.list",
+        serde_json::json!({ "chatId": chat_id, "messageId": assistant_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "chats.messages.variants.delete",
+        serde_json::json!({ "chatId": chat_id, "messageId": assistant_id, "variantId": variant_id }),
+    )?;
+
+    let draft_saved = dispatch_ok(
+        &host,
+        "chats.messages.drafts.save",
+        serde_json::json!({ "chatId": chat_id, "role": "assistant", "content": "partial…" }),
+    )?;
+    let draft_id = draft_saved["id"]
+        .as_str()
+        .ok_or_else(|| "draft carried no id".to_string())?
+        .to_string();
+    dispatch_ok(&host, "chats.messages.drafts.list", serde_json::json!({ "chatId": chat_id }))?;
+    dispatch_ok(&host, "chats.messages.drafts.get", serde_json::json!({ "chatId": chat_id, "draftId": draft_id }))?;
+    dispatch_ok(&host, "chats.messages.drafts.commit", serde_json::json!({ "chatId": chat_id, "draftId": draft_id }))?;
+    let draft_two = dispatch_ok(
+        &host,
+        "chats.messages.drafts.save",
+        serde_json::json!({ "chatId": chat_id, "role": "assistant", "content": "discard me" }),
+    )?;
+    dispatch_ok(
+        &host,
+        "chats.messages.drafts.discard",
+        serde_json::json!({ "chatId": chat_id, "draftId": draft_two["id"].as_str().unwrap_or("") }),
+    )?;
+
+    let checkpoint = dispatch_ok(
+        &host,
+        "chats.snapshots.create",
+        serde_json::json!({ "chatId": chat_id, "messageId": assistant_id, "kind": "checkpoint" }),
+    )?;
+    let _checkpoint_chat = checkpoint["chat"]["id"].as_str().unwrap_or("");
+    dispatch_ok(&host, "chats.snapshots.list", serde_json::json!({ "chatId": chat_id }))?;
+    dispatch_ok(
+        &host,
+        "chats.snapshots.rollback",
+        serde_json::json!({ "chatId": chat_id, "toMessageId": assistant_id }),
+    )?;
+
+    dispatch_ok(&host, "events.poll", serde_json::json!({}))?;
+    eprintln!("[smoke] golden: variants/drafts/snapshots/events walk ok");
     Ok(())
 }
 
