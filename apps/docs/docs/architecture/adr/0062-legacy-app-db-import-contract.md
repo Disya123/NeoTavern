@@ -4,11 +4,15 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/0062-legacy-ap
 
 # ADR-0062: legacy `app.db` import contract (draft)
 
-- **Status:** Draft / proposed (round 12 of the legacy-removal program).
-- **Supersedes:** nothing. **Amends:** nothing. **Related:**
+- **Status:** Accepted (owner review of `react-primary`, round 15 of the
+  legacy-removal program).
+- **Supersedes:** the snapshot-based rollback in this ADR's first draft.
+  **Amends:** nothing. **Related:**
   [ADR-0038](0038-canonical-rust-kernel-core.md) (canonical Kernel, no
-  dual-write), [ADR-0058](0058-no-web-plugin-ir-platform.md) (data
-  compatibility outlives plugin compatibility),
+  dual-write), [ADR-0041](0041-versioned-data-roots-activation.md) (versioned
+  data roots, activation journal — the mechanism this import runs on),
+  [ADR-0058](0058-no-web-plugin-ir-platform.md) (data compatibility outlives
+  plugin compatibility),
   [release-gate-status.md](../architecture/release-gate-status.md) row G7.
 - **Decision owner:** Kernel/data plane. This is an architectural but
   reversible decision, so it is implemented as a canonical-Product-Wire choice
@@ -25,7 +29,12 @@ have no dataset to work from.
 Three forces constrain the design:
 
 1. **Preservation of user data outranks everything** (AGENTS §1). A failed
-   import must leave both databases exactly as they were.
+   import must leave the **active data root** exactly as it was: the user never
+   sees a half-imported library. The first draft phrased this as "both
+   databases unchanged" while decision 2 committed per-family — a real
+   contradiction, resolved below: the import writes into a **staged, not yet
+   active** root (ADR-0041), so per-family commits are resumability inside a
+   disposable copy, and the active root is untouched until validation passes.
 2. **No dual-write** (ADR-0038): after the import the Kernel owns the data; the
    legacy file is evidence, not a peer.
 3. **Re-runnable import** (AGENTS §11): running it twice must not duplicate
@@ -34,13 +43,17 @@ Three forces constrain the design:
 ## Decision
 
 1. **One-way copy, never a link.** The importer opens `app.db` with SQLite
-   `readonly` and copies rows into `database.sqlite`. It never writes to the
-   source and never keeps a connection after the run.
-2. **Per-family transactions.** Each entity family (characters, chats,
-   messages, presets, lorebooks, personas, settings, plugins, asset metadata)
-   commits its own transaction together with its import receipt, so a failure
-   mid-run leaves _completed families committed and the rest untouched_ —
-   resumable and inspectable, not all-or-nothing.
+   `readonly` and copies rows into a **new staged versioned data root**
+   (`roots/root-<id>/database.sqlite`, ADR-0041), never into the active
+   `database.sqlite`. It never writes to the source and never keeps a
+   connection after the run.
+2. **Per-family transactions inside the staged root.** Each entity family
+   (characters, chats, messages, presets, lorebooks, personas, settings,
+   plugins, asset metadata) commits its own transaction together with its
+   import receipt, so a failure mid-run leaves _completed families committed
+   inside the staged root and the rest untouched_ — resumable and inspectable.
+   Because that root is not active, partial progress is never shown to the
+   user; the activation step is what turns it into the library.
 3. **Receipts, not guesswork, make it re-runnable.** One `import_receipts`
    table records `(source, entity family, source id, target id, checksum)`.
    A second run skips rows whose checksum matches and reports them as
@@ -51,10 +64,17 @@ Three forces constrain the design:
    and unsupported values. Unknown columns in the source are a **hard refusal**
    for that family — the alternative (silently dropping fields) violates
    AGENTS §11 ("do not lose unknown character card fields").
-5. **Rollback is a snapshot, not an inverse script.** Before the first commit
-   the importer takes a `database.sqlite` snapshot and records its path in the
-   run receipt; rollback restores that snapshot. Inverse-write scripts are
-   rejected: they cannot be proven correct for partial runs.
+5. **Rollback is "keep the old root", not a snapshot and not an inverse
+   script.** The staged root commits only through the ADR-0041 activation
+   protocol: the journal entry (`kind: "import"`) moves `prepared` →
+   `validated` → `activation_pending` → `committed` only after the mandatory
+   run group passes its checks (foreign keys, per-family counts, re-import
+   idempotency). Any failure before `committed` keeps `active-root.json`
+   pointing at the previous root and the staged root is retained for
+   inspection or deleted; after activation, ADR-0041 rollback retains the
+   previous root until the first new mutation. Inverse-write scripts and
+   snapshot restores are both rejected: the first is unprovable under partial
+   failure, the second is redundant when the previous root still exists.
 6. **Binary payloads stay out of the database.** Asset bytes go through the
    existing asset plane (`publish_asset_from_file`), and only the metadata rows
    are imported. This keeps `database.sqlite` a data database and reuses the
@@ -78,10 +98,13 @@ Three forces constrain the design:
 
 ## Consequences
 
-- `database.sqlite` gains `import_receipts` (schema migration, checksum-covered),
-  and the schema stays the Kernel's own: nothing about the legacy shape leaks.
-- G7 verification becomes three tests, not a manual ritual: dry-run plan on an
-  ST-era fixture, re-run idempotency, and snapshot rollback.
+- The canonical schema gains `import_receipts` (schema migration,
+  checksum-covered), so every staged root created from `FRESH_SCHEMA_SQL` has
+  it; nothing about the legacy shape leaks into the Kernel schema.
+- G7 verification becomes four tests, not a manual ritual: dry-run plan on an
+  ST-era fixture, re-run idempotency inside the staged root, failed validation
+  leaves the active root and its journal untouched, and a passing run flips
+  `active-root.json` with a `kind: "import"` journal entry.
 - G6 evidence can finally be produced from real user data, which is what the
   Packaged rows are supposed to mean.
 - Cost: two extra passes (plan, then commit) and a snapshot copy for large
@@ -101,17 +124,32 @@ Three forces constrain the design:
    receipt records `asset_missing` so a later run can retry without touching the
    rows that did import. A missing original is a user-visible data gap, not an
    error that should abort a whole library.
-3. **Snapshot ownership.** The Kernel owns the snapshot directory (under the
-   Kernel data dir), not the desktop host, so the CLI and the desktop behave
-   identically and the receipt path is portable across hosts. The host only
-   supplies the data dir.
+3. **Staged-root ownership.** The Kernel owns the staged root and the
+   activation journal (ADR-0041 layout under the data root), not the desktop
+   host, so the CLI and the desktop behave identically. The host only supplies
+   the data dir. (Amended from the first draft's snapshot directory, which the
+   staged-root decision above supersedes.)
 
-## Remaining question
+## Plugin state: quarantine policy (owner decision, round 15)
 
-One question stays open and is deliberately **not** answered by the importer:
-how the legacy _plugin state_ blob is validated before it is stored in
-`plugins.state`. Storing it opaquely is right (it is user data), but a plugin
-that later becomes active under the Kernel executor must not receive a blob it
-misreads. That answer belongs to the plugin executor work (program item 3,
-clusters 19/20/21a), not to the migration — and it does not block the import
-because the blobs are inert until an executor exists.
+Legacy `plugin_state` blobs are user data, but an unvalidated blob handed to an
+active plugin is a code-execution-adjacent risk, so the owner fixed the policy
+before any importer code exists:
+
+1. Imported legacy state goes to a **quarantine store** that keeps the original
+   bytes, the source plugin id and a checksum — it is never written straight
+   into the live `plugins.state` table.
+2. An imported blob is **never** delivered to an active plugin automatically,
+   and a matching `pluginId` alone is not sufficient to claim it.
+3. Restoration requires an identity/version/schema compatibility check against
+   the installing plugin; if the plugin declares an explicit state migration,
+   that migration is the only allowed transform.
+4. Restoration happens **only by explicit user action**; it never auto-enables
+   the plugin and never grants permissions.
+5. If compatibility cannot be verified, the blob stays quarantined: it is not
+   destroyed and not handed to the executor.
+
+Because of this policy the first G7 stage **defers plugin state import
+entirely** (the second run group): the blobs are inert until a Kernel executor
+exists, and the quarantine gives that executor work (program item 3, clusters
+19/20/21a) a well-defined, already-secured input.

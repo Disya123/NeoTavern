@@ -1260,6 +1260,44 @@ pub const MIGRATION_30_SQL: &str = migration_30_sql!();
 pub const MIGRATION_30_CHECKSUM: &str =
     "7610d878dcc7d4a8da326eefd0e893151d7a9fd250846e2dfc96f8386e727f33";
 
+/// The legacy `app.db` import ledger (v31, ADR-0062): one row per imported
+/// source entity. `run_id` groups one staged-root import run; the unique
+/// `(entity_family, source_id)` pair is what makes a resumed run skip
+/// already-imported rows instead of duplicating them, and a changed row
+/// (checksum mismatch) surface as a conflict instead of an overwrite. The
+/// table lives in the canonical schema, so every staged root created from
+/// `FRESH_SCHEMA_SQL` has it before the first family is copied. Additive;
+/// rollback is the ADR-0041 staged-root discard (the active root is never
+/// touched by the importer).
+macro_rules! migration_31_sql {
+    () => {
+        r#"CREATE TABLE import_receipts (
+  id TEXT NOT NULL PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  entity_family TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  source_checksum TEXT NOT NULL,
+  imported_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX idx_import_receipts_run ON import_receipts(run_id);
+CREATE UNIQUE INDEX idx_import_receipts_family_source
+  ON import_receipts(entity_family, source_id);"#
+    };
+}
+
+/// Name of the import ledger (v31) schema migration.
+pub const MIGRATION_31_NAME: &str = "031_import_receipts";
+
+/// Exact SQL of the import ledger schema migration (v31) — the
+/// `migration_31_sql!()` literal.
+pub const MIGRATION_31_SQL: &str = migration_31_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_31_SQL` string bytes (same
+/// computation as `MIGRATION_30_CHECKSUM`).
+pub const MIGRATION_31_CHECKSUM: &str =
+    "dcc2dd0cb415d0e763c93bc9012e038ddf07accafd236cb264c2e484ad793ce6";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1326,7 +1364,8 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_29_sql!(),
     "\n",
-    migration_30_sql!()
+    migration_30_sql!(),
+    migration_31_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

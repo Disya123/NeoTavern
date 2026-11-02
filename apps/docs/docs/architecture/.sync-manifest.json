@@ -290,7 +290,7 @@
     {
       "source": "adr/0062-legacy-app-db-import-contract.md",
       "target": "adr/0062-legacy-app-db-import-contract.md",
-      "sha256": "db1455d018076d61067b6f43ef332e75ece775bfc0ad8adc17dbfdde195a7366"
+      "sha256": "e6e164813d64ef810c5dcbec90fe44b98d3e0794a0f5e40659d21f82d0eb4085"
     },
     {
       "source": "adr/README.md",
@@ -440,7 +440,7 @@
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "3daccb3ffa71e2b52bd013dd2aff6b1be67957da3fb16e38f46364c78fbdb3fc"
+      "sha256": "57387fe79d74d35dfcf0d17f095259b25add82ec511d1a7d98dad92b77365727"
     },
     {
       "source": "desktop/README.md",
