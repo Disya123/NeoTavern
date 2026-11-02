@@ -19,6 +19,7 @@
 **Визуальные инварианты, которые уже реализованы (не объявлены PASS):**
 
 - `crates/presentation-design-system/src/lib.rs` — `PRODUCT_CSS` содержит:
+
   ```
   --st-color-accent: #e38a62
   --st-color-surface-canvas: #151311
@@ -26,7 +27,8 @@
   --st-shell-rail-width: 60px
   'Outfit Variable' / 'JetBrains Mono Variable' (70192 / 96940 bytes)
   ```
-  Пак пакует *точные* файлы шрифтов и Phosphor `path d` — не похожие иконки.
+
+  Пак пакует _точные_ файлы шрифтов и Phosphor `path d` — не похожие иконки.
 
 - `crates/presentation-dioxus-shell/src/product_shell.rs` — `character_card_description` зеркалит React, `ellipsize_css` (хотя эвристика), `RailSpec` — те же 8 пунктов (Chats/Characters/Personas/Lorebooks/Backgrounds/AI Settings/Plugins/Settings).
 
@@ -48,6 +50,7 @@
 ### Как сделано
 
 **Display list:**
+
 ```rust
 // crates/neocompositor/src/display_list.rs
 pub enum NeoPaintOp {
@@ -68,17 +71,21 @@ pub struct GlassBoundary {
 ```
 
 **Pass graph:**
+
 ```rust
 // pass_graph.rs
 BackdropBarrier → CompiledPass::Glass { barrier, open_scopes }
 ```
+
 `barriers_cut_raster_runs` — ни один raster pass не содержит чанков с обеих сторон барьера.
 
 **Effect-scope backdrop:**
+
 - `crates/neocompositor/src/scene.rs` — `NeoScene.glass: Vec<GlassSurface>` собирается из барьеров.
 - `docs/architecture/presentation-boundary.md:98-99` — PERF-18 **PASS** на физике (Vulkan, Xiaomi): ancestor opacity/filter/mask wrap prefix+glass+foreground как одна group; backdrop семплируется из parent root; group targets bounded; nested glass acyclic; malformed scopes → last-known-good.
 
 **Временная заглушка в chat route:**
+
 - `presentation-boundary.md:242-243` — `NeoGlass host markers are omitted on this route until opaque screenshots match React.` — т.е. live glass **отключён** на текущем chat-route, пока скриншоты непрозрачные не совпадут. Это честно: статус `DEFERRED (Milestone B/C)` в compatibility matrix.
 
 **Вердикт:** Архитектура glass — ✅ PASS (протокол, pass graph, эффект-скопы). Product glass на chat route — ⚠️ временно отключён (не скрыто).
@@ -104,6 +111,7 @@ fn collapse_two_arg_fn(css: &str, name: &str, combine: fn(f32,f32)->f32) -> Stri
 ```
 
 **Проблема:** naive строковый парсер ломается на:
+
 - `max(8px, var(--nt-safe-area-top))` — сейчас покрыто, но `max( var( --x ), 10px )` с пробелами/комментариями — может не совпасть.
 - вложенные `calc(calc(8px + 4px) + var(--x))` — срежет только внешний `calc(A+B)`.
 - `color-mix()` уже flatten-ится ранее, но будущие `color-mix(in srgb, ...)` сломаются.

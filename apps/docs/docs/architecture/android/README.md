@@ -221,8 +221,7 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   wallpaper capability). Plugin frontend slots stay CONTAINED in WebSurface
   ([ADR-0054](../adr/0054-plugin-visual-surface-contained.md)). WindowInsets
   are JNI `setSafeArea` physical px → CSS px (`density`), baked into
-  `--nt-inset-*` / `--nt-safe-area-*` as literal lengths (Blitz `env()` is
-  0) and applied as RSX `padding-top` / `padding-bottom` on the rail, header,
+  `--nt-inset-*` / `--nt-safe-area-*` as literal lengths (Blitz `env()` is 0) and applied as RSX `padding-top` / `padding-bottom` on the rail, header,
   and bottom tabs. Packed `--st-*` tokens, `color-mix()`, and logical
   properties are flattened to physical pixels; Blitz `DEFAULT_CSS` is
   removed so radii/colors survive. Phosphor icons are inline SVG fills, not

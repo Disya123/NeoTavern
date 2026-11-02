@@ -42,6 +42,7 @@ fn premultiply(image: &RgbaImage) -> Vec<u8> {
 ```
 
 **Где вызывается (фон):**
+
 ```rust
 // crates/presentation-chat/src/session.rs: refreshFromRoute / sendComposer
 holder.executor.execute { // ← SingleThreadExecutor, не UI, не compositor
@@ -61,14 +62,17 @@ impl AvatarGpu {
 ```
 
 **Проверка фона:**
+
 - `PresentationChatActivity.sendComposer` / `refreshFromRoute` / `prependOlder` — все `holder.executor.execute { ... thumbnail_from_bytes ... }` — не `runOnUiThread`, не `compositorHandler` (до `rebuildScene`).
 - `PresentationChatNative.openRoute` — тоже на `holder.executor`.
 
 **Встроенный data URI — запрещён на paint path:**
+
 ```rust
 // presentation-dioxus-shell/src/product_shell.rs: CharacterCardView
 pub avatar_data_uri: Option<String> // Always None on the paint path.
 ```
+
 `avatar_data_uri` — только для совместимости старых конструкторов, реально `None`. Blitz не получает `data:` URI, Vello не семплит `Image` brush (иначе чёрный SurfaceView на Vulkan — комментарий в boundary).
 
 **Вердикт decode:** ✅ PASS — decode в фоне, не на render thread, один `texture` на asset_id (header и card share one cached handle).
@@ -107,6 +111,7 @@ if software_debug { RendererOptions { use_cpu: true } } else { use_cpu: false }
 **Tiled raster — не full-frame CPU:**
 
 `presentation-boundary.md:277-284`:
+
 ```
 Resolution and display-list prefix bisection run on first bind;
 if only small targets write, GPU tiled raster is used (not CPU full-frame raster).
@@ -121,6 +126,7 @@ Images stay out of Vello; avatars are post-Vello sampled overlay.
 - `coarse_bin_count = tiles_x/16 * tiles_y/16`, `Vello 0.9 bin 16×16 px`.
 
 **Проверка tiled vs full-frame:**
+
 ```rust
 // vello_diag.rs: tile_origins(width, height, tileW, tileH) → Vec<(f32,f32)>
 // android_surface.rs: for origin in tile_origins(...) {
@@ -130,6 +136,7 @@ Images stay out of Vello; avatars are post-Vello sampled overlay.
 ```
 
 **Тест отсутствия full-frame CPU:**
+
 ```rust
 // crates/presentation-chat/tests/compositor_host.rs
 #[test] fn production_host_line_uses_gpu() {
@@ -157,6 +164,7 @@ Images stay out of Vello; avatars are post-Vello sampled overlay.
 `thumbnail_from_bytes` сразу `decode()`, затем `resize_exact`. Злоумышленник может подсунуть через `assets.content` большой PNG (напр., 8k×8k, ~200 MB декодированного). Нет проверки `bytes.len()` или `image.dimensions()` до аллокации.
 
 **Фикс:**
+
 ```rust
 if bytes.len() > 10*1024*1024 { return None; }
 let (w,h) = image_dimensions(Cursor::new(bytes))?;
@@ -171,10 +179,9 @@ if w*h > 4_000*4_000 { return None; }
 
 ## Итог
 
-| Требование | Статус | Доказательство |
-|---|---|---|
-| CPU decode в фоне | ✅ PASS | `holder.executor`, не `present` |
-| CPU full-frame raster запрещён | ✅ PASS | `use_cpu=false` по умолчанию, `cpu_full_frame_raster=0` в логах |
-| GPU tiled raster — не считается CPU raster | ✅ PASS | `Scene::append` на tile-sized target, один device |
-| No readback для аватаров | ✅ PASS | `write_texture` + sampled overlay, не `readback` |
-
+| Требование                                 | Статус  | Доказательство                                                  |
+| ------------------------------------------ | ------- | --------------------------------------------------------------- |
+| CPU decode в фоне                          | ✅ PASS | `holder.executor`, не `present`                                 |
+| CPU full-frame raster запрещён             | ✅ PASS | `use_cpu=false` по умолчанию, `cpu_full_frame_raster=0` в логах |
+| GPU tiled raster — не считается CPU raster | ✅ PASS | `Scene::append` на tile-sized target, один device               |
+| No readback для аватаров                   | ✅ PASS | `write_texture` + sampled overlay, не `readback`                |

@@ -7,15 +7,18 @@
 ### Как реализован
 
 **MainActivity (WebView) — для сравнения:**
+
 ```kotlin
 // MainActivity.kt:446-536
 applyPreferredDisplayMode() → DisplayRefreshPolicy.chooseHighestRefresh(supportedModes, current)
 → window.attributes.preferredDisplayModeId = requestedModeId
 → web.setRequestedFrameRate(hz) // API35+, иначе HIGH
 ```
+
 Логирует `m1-refresh phase=apply/observed`, `m1-env`, `m1-thermal`, `m1-choreographer` (UI thread `Choreographer.FrameCallback` — не present loop).
 
 **Rust canary — настоящий present loop:**
+
 ```kotlin
 // PresentationChatActivity.kt:596-687
 startPresentLoop() → HandlerThread("neocompositor-chat") + Choreographer.VsyncCallback (API33+)
@@ -38,7 +41,7 @@ GpuHost::present(timeline) → shared.present()? → InteropPresentOutcome
 - `docs/rfc/milestone-b-exit.json` — `input_to_present_p99_ns: 20646128` (20.65 мс) помечено `reference-device-baseline`, не бюджет; `release_budget_calibration_adr: null`
 - `docs/architecture/presentation-boundary.md:125-133` — явное предупреждение: «Raw p99 is a baseline, not a release budget, until a calibration ADR lands.»
 
-**Вердикт:** ✅ дизайн PASS, **метрический PASS — нет**. Следующий шаг — калибровочный ADR, который установит *release* бюджет (не `Choreographer#doFrame`).
+**Вердикт:** ✅ дизайн PASS, **метрический PASS — нет**. Следующий шаг — калибровочный ADR, который установит _release_ бюджет (не `Choreographer#doFrame`).
 
 ### Что не измерено
 
@@ -57,6 +60,7 @@ GpuHost::present(timeline) → shared.present()? → InteropPresentOutcome
 ### Реализация
 
 **`crates/neocompositor/src/fast_path.rs`**
+
 ```rust
 pub struct CompositorFastPath {
   snapshot: Option<Arc<PropertySnapshot>>,
@@ -71,12 +75,14 @@ impl CompositorFastPath {
 ```
 
 **`crates/neocompositor/src/scroll.rs`**
+
 - `AsyncScrollState { committed_offset, unacked_delta, screen_velocity, bounds }`
 - `visual_offset = committed_offset + unacked_delta`
 - `consume_delta` — clamp к `ScrollRange`, возвращает неиспользованный `unused` для handoff к outer scroll.
 - `ack()` — rebase без телепорта: `committed_offset = clamp(base_offset)`, `unacked = visual - committed`.
 
 **`crates/neocompositor/src/animation.rs`**
+
 ```rust
 pub enum AnimationProperty { Translation(SpatialId), Opacity(EffectId), Width, Height, Color, FontSize, GlyphOffset }
 impl AnimationProperty {
@@ -85,14 +91,17 @@ impl AnimationProperty {
   }
 }
 ```
+
 Width/Height/Color/FontSize/GlyphOffset → `Err(NeedsProducer)` и `producer_requests +=1`. Правильно.
 
 **`crates/neocompositor/src/property_tree.rs`**
+
 - `SpatialKind::Scroll/Sticky/Fixed` — per-node, не global delta. `Sticky` получает `constraint_rect` + `valid_scroll_range`, `Fixed` — `containing_block`.
 
 **Доказательство отсутствия Dioxus/layout в present:**
 
 Тест `tests/fast_path.rs: ten_thousand_frames_do_not_call_producer_or_raster`:
+
 ```rust
 for i in 0..10_000 {
   path.nudge(outer, Vec2(0.0,0.05), ScrollSequence(i+1), time).unwrap();
@@ -105,6 +114,7 @@ assert_eq!(sampled.worlds_ptr(), ptr); // no re-alloc
 ```
 
 **Проверка glass:**
+
 - `NeoDisplayList` — `GlassBoundary` как `BackdropBarrier` в paint order, между `PaintChunk`ами.
 - `pass_graph.rs: compile_passes` — `Barrier` → `Glass { open_scopes }`, мерж через барьер запрещён. Тесты `effect_scope.rs` проверяют `opacity 0.5 + Glass` — backdrop семплируется до применения group opacity.
 
@@ -114,11 +124,11 @@ assert_eq!(sampled.worlds_ptr(), ptr); // no re-alloc
 
 ## 3. Потенциальные перф-регрессии (не баги, но watch)
 
-| № | Файл | Риск | Пояснение |
-|---|---|---|---|
-| 3.1 | `chat-viewport/src/tiles.rs` + `session.rs` | Предсказание overscan может не успеть при быстром флинге | Predictor использует `PREDICTOR_BUDGETS` (viewport_h, 8 ms). Если бюджет занижен, при выходе за prepared range появится `PENDING_PHYSICAL` gap (spec §2.1 запрещает «uninitialized gap»). Текущий `PROTECTED_BAND_PX` и `GeometryDebtLedger` частично покрывают. |
-| 3.2 | `presentation-session/src/lib.rs` | `TileCache::new(256, 4MiB)` — entry cap без bytes pressure интеграции | При 10k виртуальных чатов 256 tiles может быть мало; pressure controller в `neocompositor` не связан с tile cache. |
-| 3.3 | `PresentationChatActivity.sendComposer` | `pollStream(50)` в цикле 40× на executor — до 2 сек блокирует executor | Долгий `holder.executor` HOL блокирует `chats.list`/`characters.list` на фоне. |
+| №   | Файл                                        | Риск                                                                   | Пояснение                                                                                                                                                                                                                                                        |
+| --- | ------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1 | `chat-viewport/src/tiles.rs` + `session.rs` | Предсказание overscan может не успеть при быстром флинге               | Predictor использует `PREDICTOR_BUDGETS` (viewport_h, 8 ms). Если бюджет занижен, при выходе за prepared range появится `PENDING_PHYSICAL` gap (spec §2.1 запрещает «uninitialized gap»). Текущий `PROTECTED_BAND_PX` и `GeometryDebtLedger` частично покрывают. |
+| 3.2 | `presentation-session/src/lib.rs`           | `TileCache::new(256, 4MiB)` — entry cap без bytes pressure интеграции  | При 10k виртуальных чатов 256 tiles может быть мало; pressure controller в `neocompositor` не связан с tile cache.                                                                                                                                               |
+| 3.3 | `PresentationChatActivity.sendComposer`     | `pollStream(50)` в цикле 40× на executor — до 2 сек блокирует executor | Долгий `holder.executor` HOL блокирует `chats.list`/`characters.list` на фоне.                                                                                                                                                                                   |
 
 ---
 

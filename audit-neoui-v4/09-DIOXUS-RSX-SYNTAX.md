@@ -69,14 +69,15 @@ rsx! {
 
 **Аналогия React:**
 
-| React (apps/web) | Dioxus RSX |
-|---|---|
+| React (apps/web)                                               | Dioxus RSX                                                               |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `<div data-component="chat-workspace" style={workspaceStyle}>` | `div { "data-component": "chat-workspace", style: "{workspace_style}" }` |
-| `{visibleRows.map(row => <div key={row.id}>{row.text}</div>)}` | `for row in view.visible_rows() { div { "{row.text}" } }` |
-| `className={styles.shell}` | `class: "{class}"` (CSS Modules имена пакует `product.css`) |
-| `aria-label={item.label}` | `"aria-label": "{item.label}"` |
+| `{visibleRows.map(row => <div key={row.id}>{row.text}</div>)}` | `for row in view.visible_rows() { div { "{row.text}" } }`                |
+| `className={styles.shell}`                                     | `class: "{class}"` (CSS Modules имена пакует `product.css`)              |
+| `aria-label={item.label}`                                      | `"aria-label": "{item.label}"`                                           |
 
 Комментарий в `product_shell.rs:1-5`:
+
 ```
 // App Shell + Character Manager RSX using packed React CSS modules.
 // Class names, tokens, Phosphor regular paths, and English copy come from the

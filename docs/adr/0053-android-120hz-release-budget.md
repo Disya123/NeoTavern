@@ -32,17 +32,17 @@ a false `PASS` (forbidden by the NeoUI v4 methodology and ADR-0052 §5).
 Adopt the following release budget for capability-qualified 120-Hz Android
 devices (GateP:P1 scope — qualified devices only; see §3 the degraded mode):
 
-| Parameter                         | Calibrated value                                  |
-| --------------------------------- | ------------------------------------------------- |
-| Refresh target                    | 120 Hz (`≈ 8.333 ms` frame budget)                |
-| `input-to-present` p99 budget     | **≤ 12 ms** on the reference device (Xiaomi `8f5c2b7c`, Adreno 710, Vulkan) |
-| `input-to-present` p95 budget     | **≤ 9 ms**                                         |
-| Sustained thermal window           | 10 min capped fling; no `GPU thermal` downgrade below 90 Hz in that window |
+| Parameter                              | Calibrated value                                                                                                                             |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Refresh target                         | 120 Hz (`≈ 8.333 ms` frame budget)                                                                                                           |
+| `input-to-present` p99 budget          | **≤ 12 ms** on the reference device (Xiaomi `8f5c2b7c`, Adreno 710, Vulkan)                                                                  |
+| `input-to-present` p95 budget          | **≤ 9 ms**                                                                                                                                   |
+| Sustained thermal window               | 10 min capped fling; no `GPU thermal` downgrade below 90 Hz in that window                                                                   |
 | `sf_gpu_deadline_missed` admissibility | admissible **only** when the same `FrameTimeline`/`SurfaceFlinger` trace confirms a timely app `submit` (the existing single-exclusion rule) |
-| `composite_only_frames`           | **> 0** sustained during scroll (compositor-driven, no `layout_rebuilds_on_scroll`) |
-| `layout_rebuilds_on_scroll`       | **== 0** during steady scroll (fast-path `present()` contract) |
-| Memory pressure admission         | `onTrimMemory >= RUNNING_LOW` → `evictForPressure(2 MiB)`; avatar LRU `AVATAR_GPU_MAX_BYTES=8 MiB` |
-| Degraded mode (unqualified GPU)   | static/opaque glass, no live `BackdropBarrier`; chat still functional |
+| `composite_only_frames`                | **> 0** sustained during scroll (compositor-driven, no `layout_rebuilds_on_scroll`)                                                          |
+| `layout_rebuilds_on_scroll`            | **== 0** during steady scroll (fast-path `present()` contract)                                                                               |
+| Memory pressure admission              | `onTrimMemory >= RUNNING_LOW` → `evictForPressure(2 MiB)`; avatar LRU `AVATAR_GPU_MAX_BYTES=8 MiB`                                           |
+| Degraded mode (unqualified GPU)        | static/opaque glass, no live `BackdropBarrier`; chat still functional                                                                        |
 
 The budget is measured with the existing
 `scripts/input-to-present-adjudicate.mjs` host adjudicator, which MUST NOT
@@ -52,10 +52,11 @@ treat `Choreographer#doFrame` as present and MUST NOT compare raw
 `composite_only_frames > 0 && layout_rebuilds_on_scroll == 0` is closed as
 **physical PASS** on the reference device (after glass
 enable per ADR-0052 §5) which reproduces:
+
 - `composite_only_frames > 0` across a 60 s capped 10k fling, and
 - `layout_rebuilds_on_scroll == 0` for the same window
-using `crates/neocompositor` `telemetry_line` (already emitted) and the
-`PERF-15` pressure fixture.
+  using `crates/neocompositor` `telemetry_line` (already emitted) and the
+  `PERF-15` pressure fixture.
 
 **2026-08-20 physical re-run PASS (8f5c2b7c, 1220×2712, 120Hz, Vulkan, APK `158412530` / `libneotavern_presentation_chat.so` `35073544`):** `logcat` telemetry showed `composite_only_frames=69390 layout_rebuilds_on_scroll=0 paint_rebuilds_on_scroll=0` during the sustained 10k fling, and `perf22` reported `gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan … glass=8 under_glass=true fallback_policy=OpaquePanel` — i.e. the compositor fast-path and live-glass capability are physically validated on the reference device. The 120-Hz claim is now `budget`-grade (not baseline). The `PARITY` cutover for glass/compositor rows still requires the owner signature (Disya123) and `≤1 dp` overlay evidence.
 

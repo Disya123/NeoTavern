@@ -240,12 +240,12 @@
     {
       "source": "adr/0052-webview-removal.md",
       "target": "adr/0052-webview-removal.md",
-      "sha256": "24111779577e8412c6512d123a8286aec1d904c7fd6541c52515b309a32a257a"
+      "sha256": "5a09df1040c7c0a35b655272957a63d7c0cdfa7146d6225363381af8ae089646"
     },
     {
       "source": "adr/0053-android-120hz-release-budget.md",
       "target": "adr/0053-android-120hz-release-budget.md",
-      "sha256": "fc556671cfbbb06f1b6b3792cc8f569ff31b8c73261d3100d0510e042eb58f5c"
+      "sha256": "6b7ca78e26fb38092ebc1fd95efbf7f0148612cadf4a63b4a69fd83f4f090137"
     },
     {
       "source": "adr/0054-plugin-visual-surface-contained.md",
@@ -295,7 +295,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "4d7887c2085ba062cdd6ffaf9c3b929fed5dd42297f85cbc800b29887514d979"
+      "sha256": "7444fc5f327eda660903daeafb1ae8392b256dc75b748dc469b60806d5c6273c"
     },
     {
       "source": "api/README.md",
@@ -350,7 +350,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "f1a953d62e20dd8d9dd04a457fb446b6dc6eeb15bf75d4e6e7958523896a61f0"
+      "sha256": "576c5078be8ff16540db45ed40babc06477d0c72d47940a67a8e0f1bb5f8d297"
     },
     {
       "source": "architecture/portable-data.md",
@@ -445,7 +445,7 @@
     {
       "source": "desktop/native-image-pipeline-audit.md",
       "target": "desktop/native-image-pipeline-audit.md",
-      "sha256": "a76745a154577e3c1880b0d38833882da2a251a09c78cff49a76a22cd3fa0a07"
+      "sha256": "4ae45b09c0e2ee5ef970d4f0f8575f2d4c34b82326ecd9992628b5b96222b5cf"
     },
     {
       "source": "desktop/neocompositor-desktop-host.md",
@@ -495,7 +495,7 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "6305aea0c578eb7ec17d4373b30947815c3d5912486dfd605914e92fe9817983"
+      "sha256": "f415a13640deb7ebfcf0eac2660d3e07d37b1960e5801db95ff5f6fe3b13988d"
     },
     {
       "source": "rfc/b-exit-physical-runbook.md",
@@ -560,12 +560,12 @@
     {
       "source": "rfc/milestone-c-canary.md",
       "target": "rfc/milestone-c-canary.md",
-      "sha256": "1e4026c642c2de54434d38fe99ba62f3393efc9e4c309261cff322c5d4e66a61"
+      "sha256": "46cd70c6adf0ad32d9881f04df4893504a208ec58d0a02e6730abd504286de95"
     },
     {
       "source": "rfc/milestone-c-physical-runbook.md",
       "target": "rfc/milestone-c-physical-runbook.md",
-      "sha256": "85b6aa35e2f3ef4ac925b53bf7249c935c9bf567b6f62b2bac60d6004ddf0f7f"
+      "sha256": "1ffdc21c6982b06666b9682e683805acadbcd15e4895b316b92826e24939accc"
     },
     {
       "source": "rfc/neoui-v4-android-presentation-backend.md",
@@ -580,7 +580,7 @@
     {
       "source": "rfc/presentation-compatibility-matrix.md",
       "target": "rfc/presentation-compatibility-matrix.md",
-      "sha256": "eea3a2341293500085d12669d9615a70b9db5b5664da59b2d78443a572994b78"
+      "sha256": "39d6cc7d8f0849ea80ef97c1fb07e931c2cc03a0bfa602c1e7fcf9766a4b63f2"
     },
     {
       "source": "rfc/remaining-b-physical-runbook.md",

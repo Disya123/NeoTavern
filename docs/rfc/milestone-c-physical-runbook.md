@@ -61,23 +61,23 @@ canary = false
 
 ## Journeys (successful stamp)
 
-| Journey              | Admission                                      | Stamp result                          |
-| -------------------- | ---------------------------------------------- | ------------------------------------- |
-| flag_off             | composer `enabled=false` without the extra     | PASS                                  |
-| live_open            | header `Chat header, Hazel, N messages`        | PASS (live Kernel chat, not fixture)  |
-| jni_mapped           | live route opened; `/proc/maps` via run-as empty on MIUI | PASS (inferred from live_open) |
-| a11y_semantics       | Chat workspace / header / messages / composer  | PASS                                  |
-| send                 | Kernel `messageCount` grew via Gboard SEND     | PASS (4 → 6)                          |
-| reopen               | same durable count after close/open            | PASS                                  |
-| ime                  | default IME is Gboard                          | READY                                 |
-| gboard_journey       | Gboard keys; IC `commitText` / `deleteSurroundingText` / `performEditorAction SEND`; inset show/hide | PASS |
-| rotate               | live header after `wm set-user-rotation`       | PASS                                  |
-| background           | live header after HOME + relaunch              | PASS                                  |
-| launcher_untouched   | LAUNCHER resolves to `MainActivity`            | PASS                                  |
-| safe_mode            | `NEOTA_SAFE_MODE=1` resumes `MainActivity`     | PASS                                  |
-| 10k messages         | isolated Kernel store + same Wire route        | PASS (`Isolated 10k` / 10000)         |
-| talkback_journey     | TalkBack enable/focus/scroll/click             | SKIPPED (operator waived)             |
-| compositor SurfaceView chat | —                                         | not this harness                      |
+| Journey                     | Admission                                                                                            | Stamp result                         |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| flag_off                    | composer `enabled=false` without the extra                                                           | PASS                                 |
+| live_open                   | header `Chat header, Hazel, N messages`                                                              | PASS (live Kernel chat, not fixture) |
+| jni_mapped                  | live route opened; `/proc/maps` via run-as empty on MIUI                                             | PASS (inferred from live_open)       |
+| a11y_semantics              | Chat workspace / header / messages / composer                                                        | PASS                                 |
+| send                        | Kernel `messageCount` grew via Gboard SEND                                                           | PASS (4 → 6)                         |
+| reopen                      | same durable count after close/open                                                                  | PASS                                 |
+| ime                         | default IME is Gboard                                                                                | READY                                |
+| gboard_journey              | Gboard keys; IC `commitText` / `deleteSurroundingText` / `performEditorAction SEND`; inset show/hide | PASS                                 |
+| rotate                      | live header after `wm set-user-rotation`                                                             | PASS                                 |
+| background                  | live header after HOME + relaunch                                                                    | PASS                                 |
+| launcher_untouched          | LAUNCHER resolves to `MainActivity`                                                                  | PASS                                 |
+| safe_mode                   | `NEOTA_SAFE_MODE=1` resumes `MainActivity`                                                           | PASS                                 |
+| 10k messages                | isolated Kernel store + same Wire route                                                              | PASS (`Isolated 10k` / 10000)        |
+| talkback_journey            | TalkBack enable/focus/scroll/click                                                                   | SKIPPED (operator waived)            |
+| compositor SurfaceView chat | —                                                                                                    | not this harness                     |
 
 This device's Gboard Alphabet/Russian layout commits letters through
 `commitText` rather than `setComposingText`. Physical admission does **not**

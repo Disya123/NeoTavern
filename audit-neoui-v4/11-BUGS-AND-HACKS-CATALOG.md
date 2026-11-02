@@ -106,11 +106,11 @@
 
 ## Сводная статистика
 
-| Severity | Count | Файлов |
-|---|---|---|
-| P0 | 1 | 1 activity |
-| P1 | 4 | 3 crates + 1 kt |
-| P2 | 6 | 5 файлов |
-| P3 | 3 | 3 файла |
+| Severity | Count | Файлов          |
+| -------- | ----- | --------------- |
+| P0       | 1     | 1 activity      |
+| P1       | 4     | 3 crates + 1 kt |
+| P2       | 6     | 5 файлов        |
+| P3       | 3     | 3 файла         |
 
 Все P0/P1 требуют фикса до `production_cutover`. P2 — до `Milestone C PASS` (RFC §51). P3 — на debt backlog.

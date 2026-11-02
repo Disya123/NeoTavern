@@ -10,31 +10,31 @@
 
 ## 2. Ключевые файлы — что читали
 
-| Файл | Строки | Что доказали |
-|---|---|---|
+| Файл                                                                              | Строки | Что доказали                                                                       |
+| --------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------- |
 | `apps/android/app/src/main/java/com/neotavern/mobile/PresentationChatActivity.kt` | 1-1142 | 4 hidden native views, alpha 0.01, SurfaceView primary, no WebView, guarded canary |
-| `apps/android/app/src/main/java/com/neotavern/mobile/MainActivity.kt` | 1-700 | WebView hardening, guarded handoff, safe-area publish |
-| `apps/android/app/src/main/java/com/neotavern/mobile/KernelHolder.kt` | 1-119 | singleThreadExecutor, refcount, release shutdown |
-| `apps/android/app/src/main/AndroidManifest.xml` | 1-60 | LAUNCHER — PresentationChatActivity, cleartext true |
-| `apps/android/app/src/main/res/xml/network_security_config.xml` | 1-14 | base-config cleartext true |
-| `crates/neocompositor/src/fast_path.rs` | 1-250 | present без alloc/lock/producer |
-| `crates/neocompositor/src/animation.rs` | 1-200 | compositor_sampleable только Translation/Opacity |
-| `crates/neocompositor/src/scroll.rs` | 1-250 | AsyncScrollState visual=committed+unacked, ack rebase |
-| `crates/neocompositor/src/shared_device.rs` | 1-300 | SharedGpuContext, SecondDevice, CpuReadbackForbidden |
-| `crates/neocompositor/tests/shared_device.rs` | 1-300 | 10 тестов на no readback / no cross-device |
-| `crates/neocompositor/src/display_list.rs` | 1-250 | NeoDisplayList, GlassBoundary, EffectKind |
-| `crates/neocompositor/src/pass_graph.rs` | 1-300 | compile_passes, barriers_cut_raster_runs |
-| `crates/presentation-chat/src/avatar.rs` | 1-120 | decode на CPU, premultiply, resize 192 |
-| `crates/presentation-chat/src/avatar_gpu.rs` | 1-150 | upload via write_texture, unbounded HashMap |
-| `crates/presentation-chat/src/vello_gpu.rs` | 1-250 | software_raster_debug, Rgba8Unorm, production_host_line |
-| `crates/presentation-chat/src/android_surface.rs` | 1-250 | GpuSurface, wgpu Vulkan, tile raster, logs |
-| `crates/presentation-chat/src/session.rs` | 1-250 | ChatSession via ProductWire, avatar cache |
-| `crates/presentation-dioxus-shell/src/product_shell.rs` | 1-400 | rsx!, packed React CSS, avatar fallback |
-| `crates/presentation-design-system/src/lib.rs` | 1-200 | bake_insets, collapse_max/calc, fonts |
-| `docs/architecture/presentation-boundary.md` | 1-296 | Milestone A/B/C статусы, «not visual golden PASS» |
-| `docs/rfc/milestone-b-exit.json` | 1-100 | 17 PERF PASS, release_budget null |
-| `docs/rfc/milestone-c-canary.md` | 1-120 | 8/8 canary PASS, PENDING_PHYSICAL |
-| `docs/adr/0049-track-d-dioxus-presentation.md` | 1-60 | D1/D2 GO, D3 DEFERRED |
+| `apps/android/app/src/main/java/com/neotavern/mobile/MainActivity.kt`             | 1-700  | WebView hardening, guarded handoff, safe-area publish                              |
+| `apps/android/app/src/main/java/com/neotavern/mobile/KernelHolder.kt`             | 1-119  | singleThreadExecutor, refcount, release shutdown                                   |
+| `apps/android/app/src/main/AndroidManifest.xml`                                   | 1-60   | LAUNCHER — PresentationChatActivity, cleartext true                                |
+| `apps/android/app/src/main/res/xml/network_security_config.xml`                   | 1-14   | base-config cleartext true                                                         |
+| `crates/neocompositor/src/fast_path.rs`                                           | 1-250  | present без alloc/lock/producer                                                    |
+| `crates/neocompositor/src/animation.rs`                                           | 1-200  | compositor_sampleable только Translation/Opacity                                   |
+| `crates/neocompositor/src/scroll.rs`                                              | 1-250  | AsyncScrollState visual=committed+unacked, ack rebase                              |
+| `crates/neocompositor/src/shared_device.rs`                                       | 1-300  | SharedGpuContext, SecondDevice, CpuReadbackForbidden                               |
+| `crates/neocompositor/tests/shared_device.rs`                                     | 1-300  | 10 тестов на no readback / no cross-device                                         |
+| `crates/neocompositor/src/display_list.rs`                                        | 1-250  | NeoDisplayList, GlassBoundary, EffectKind                                          |
+| `crates/neocompositor/src/pass_graph.rs`                                          | 1-300  | compile_passes, barriers_cut_raster_runs                                           |
+| `crates/presentation-chat/src/avatar.rs`                                          | 1-120  | decode на CPU, premultiply, resize 192                                             |
+| `crates/presentation-chat/src/avatar_gpu.rs`                                      | 1-150  | upload via write_texture, unbounded HashMap                                        |
+| `crates/presentation-chat/src/vello_gpu.rs`                                       | 1-250  | software_raster_debug, Rgba8Unorm, production_host_line                            |
+| `crates/presentation-chat/src/android_surface.rs`                                 | 1-250  | GpuSurface, wgpu Vulkan, tile raster, logs                                         |
+| `crates/presentation-chat/src/session.rs`                                         | 1-250  | ChatSession via ProductWire, avatar cache                                          |
+| `crates/presentation-dioxus-shell/src/product_shell.rs`                           | 1-400  | rsx!, packed React CSS, avatar fallback                                            |
+| `crates/presentation-design-system/src/lib.rs`                                    | 1-200  | bake_insets, collapse_max/calc, fonts                                              |
+| `docs/architecture/presentation-boundary.md`                                      | 1-296  | Milestone A/B/C статусы, «not visual golden PASS»                                  |
+| `docs/rfc/milestone-b-exit.json`                                                  | 1-100  | 17 PERF PASS, release_budget null                                                  |
+| `docs/rfc/milestone-c-canary.md`                                                  | 1-120  | 8/8 canary PASS, PENDING_PHYSICAL                                                  |
+| `docs/adr/0049-track-d-dioxus-presentation.md`                                    | 1-60   | D1/D2 GO, D3 DEFERRED                                                              |
 
 ---
 

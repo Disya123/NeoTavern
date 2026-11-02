@@ -159,7 +159,7 @@ Vello 0.9 Android Vulkan чёрный SurfaceView) и **возвращён в э
    непрозрачных, PNG с альфой), вызовы — `absorb_latest_page` +
    `note_durable`, лимит 32 фетча за проход, дедуп по стору.
    **A3 (window-first порядок):** первый проход гидрации берёт id'ы из
-   *видимого* окна — `visible_message_row_ids()` вычисляет span по
+   _видимого_ окна — `visible_message_row_ids()` вычисляет span по
    `compositor_height_index` с текущим scroll-офсетом (тот же
    bottom-anchored телепорт, что у presentation-пути) и overscan 4 строки
    с обеих сторон; остальная страница дозаполняет лимит в старом порядке.

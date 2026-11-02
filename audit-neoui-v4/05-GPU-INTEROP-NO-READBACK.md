@@ -35,6 +35,7 @@ pub struct SharedGpuContext {
 ```
 
 Ключевые ошибки (все `Err` до submit):
+
 ```rust
 pub enum SharedGpuError {
   SecondDevice, Unsupported, Degraded, StaleEpoch,
@@ -45,6 +46,7 @@ pub enum SharedGpuError {
 ```
 
 Методы, нарушающие инвариант, сразу падают:
+
 ```rust
 fn image_readback(&self) -> Err(CpuReadbackForbidden)
 fn cross_device_copy(&self) -> Err(CrossDeviceCopyForbidden)
@@ -71,6 +73,7 @@ shared.bind_raster()?; shared.bind_compositor()?;
 **Swapchain формат:** `plan_vello_target(features)` требует `Rgba8Unorm` с `STORAGE_WRITE_ONLY` + `TEXTURE_BINDING` + `COPY_SRC|DST` или `STORAGE_READ_ONLY`. Если формат не подходит — `Err("...cannot GPU-copy or storage-convert")`. Non-sRGB chosen сознательно — чтобы Vello sRGB bytes не гамма-корректировались дважды (бывший «gray veil»).
 
 **Present path:**
+
 ```rust
 // vello_gpu.rs: production_host_line(...)
 format!("host=neocompositor-surfaceview backend={} ... devices=1 ... cpu_full_frame_raster=0 image_readbacks=0 cross_device_copies=0 sampled_output=true")
@@ -114,13 +117,13 @@ pub fn gpu_storage_to_sampled(
 
 ## Проверка на нарушения
 
-| Проверка | Результат | Доказательство |
-|---|---|---|
-| Есть ли `map_async`/`read_buffer`/`get_mapped_range` в present? | ❌ Нет | Греп по `readback|map_async|get_mapped` в `android_surface.rs` — только в `vello_diag::peek_texture_rgba` (диагностика) |
-| Есть ли второй `Instance::new`/`request_adapter` после первого? | ❌ Нет | `SharedGpuFactory.devices_created()` счётчик, второй `open` → `SecondDevice` |
-| Есть ли `COPY_SRC` с `CPU_READBACK` флагом? | ❌ Нет | `DEFAULT_FORMAT.usage` не содержит `CPU_READBACK`; `SharedGpuContext::open` проверяет |
-| Есть ли `device.poll(true)` в present loop? | ❌ Нет | `poll_wait_in_present()` → `PollWaitForbidden`; реальный `device.poll(wait)` только в `android_surface` диагностике |
-| Аватары идут через CPU readback? | ❌ Нет | `avatar_gpu.rs` — `queue.write_texture` upload, затем sampled overlay; не `readback` |
+| Проверка                                                        | Результат | Доказательство                                                                                                      |
+| --------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------- |
+| Есть ли `map_async`/`read_buffer`/`get_mapped_range` в present? | ❌ Нет    | Греп по `readback                                                                                                   | map_async | get_mapped`в`android_surface.rs`— только в`vello_diag::peek_texture_rgba` (диагностика) |
+| Есть ли второй `Instance::new`/`request_adapter` после первого? | ❌ Нет    | `SharedGpuFactory.devices_created()` счётчик, второй `open` → `SecondDevice`                                        |
+| Есть ли `COPY_SRC` с `CPU_READBACK` флагом?                     | ❌ Нет    | `DEFAULT_FORMAT.usage` не содержит `CPU_READBACK`; `SharedGpuContext::open` проверяет                               |
+| Есть ли `device.poll(true)` в present loop?                     | ❌ Нет    | `poll_wait_in_present()` → `PollWaitForbidden`; реальный `device.poll(wait)` только в `android_surface` диагностике |
+| Аватары идут через CPU readback?                                | ❌ Нет    | `avatar_gpu.rs` — `queue.write_texture` upload, затем sampled overlay; не `readback`                                |
 
 ---
 

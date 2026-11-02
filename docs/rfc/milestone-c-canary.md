@@ -67,15 +67,15 @@ config. Isolated 10k is a debug harness profile and is not the canary store.
 
 ## Lab extras
 
-| Extra | Effect |
-| ----- | ------ |
-| `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1` | debug only: persist opt-in; selector may choose Dioxus |
-| `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=0` | debug only: persist opt-in off → WebView |
-| `com.neotavern.mobile.NEOTA_SAFE_MODE=1` | WebView this launch |
-| `com.neotavern.mobile.NEOTA_FORCE_INIT_FAILURE=1` | arm kill switch **before** `loadLibrary` → WebView |
-| `com.neotavern.mobile.NEOTA_CANARY_RESET=1` | clear kill switch and crash-loop counter |
-| `com.neotavern.mobile.NEOTA_CHAT_ID` | same Kernel chat across renderers |
-| `com.neotavern.mobile.NEOTA_SOFTWARE_RASTER_DEBUG=1` | CPU Vello only (not production/canary) |
+| Extra                                                | Effect                                                 |
+| ---------------------------------------------------- | ------------------------------------------------------ |
+| `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1`          | debug only: persist opt-in; selector may choose Dioxus |
+| `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=0`          | debug only: persist opt-in off → WebView               |
+| `com.neotavern.mobile.NEOTA_SAFE_MODE=1`             | WebView this launch                                    |
+| `com.neotavern.mobile.NEOTA_FORCE_INIT_FAILURE=1`    | arm kill switch **before** `loadLibrary` → WebView     |
+| `com.neotavern.mobile.NEOTA_CANARY_RESET=1`          | clear kill switch and crash-loop counter               |
+| `com.neotavern.mobile.NEOTA_CHAT_ID`                 | same Kernel chat across renderers                      |
+| `com.neotavern.mobile.NEOTA_SOFTWARE_RASTER_DEBUG=1` | CPU Vello only (not production/canary)                 |
 
 Enable once (Xiaomi `8f5c2b7c` only), then use the icon:
 
@@ -105,16 +105,16 @@ fill) is a HiDPI miss, not `NOT_CONNECTED`. Physical compositor scroll
 **PENDING_PHYSICAL**. TalkBack was enabled only for accessibility
 fallback, then restored **off**.
 
-| Case | Result |
-| ---- | ------ |
-| Rust launch | PASS — `PresentationChatActivity`, Hazel |
-| process death | PASS — icon after force-stop keeps Hazel |
-| upgrade/relaunch | PASS — `adb install -r` then persisted icon launch |
-| send/reopen | PASS — Hazel 6 → 8, reopen 8 |
-| safe mode | PASS — extra → WebView `MainActivity`; next icon Dioxus |
-| forced init failure | PASS — WebView before `loadLibrary`; kill holds on icon; reset recovers |
-| flag off | PASS — extra `0` + icon stay WebView |
-| accessibility fallback | PASS — TalkBack on → WebView, Rust host not created |
+| Case                   | Result                                                                  |
+| ---------------------- | ----------------------------------------------------------------------- |
+| Rust launch            | PASS — `PresentationChatActivity`, Hazel                                |
+| process death          | PASS — icon after force-stop keeps Hazel                                |
+| upgrade/relaunch       | PASS — `adb install -r` then persisted icon launch                      |
+| send/reopen            | PASS — Hazel 6 → 8, reopen 8                                            |
+| safe mode              | PASS — extra → WebView `MainActivity`; next icon Dioxus                 |
+| forced init failure    | PASS — WebView before `loadLibrary`; kill holds on icon; reset recovers |
+| flag off               | PASS — extra `0` + icon stay WebView                                    |
+| accessibility fallback | PASS — TalkBack on → WebView, Rust host not created                     |
 
 RFC §51 residual items (i18n/theme/plugin/no-WebView renderer) stay open.
 Owner may close Milestone C under the amended scope (native TalkBack

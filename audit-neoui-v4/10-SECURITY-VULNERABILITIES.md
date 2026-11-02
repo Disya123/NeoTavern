@@ -4,14 +4,14 @@
 
 **Файл:** `apps/android/app/src/main/java/com/neotavern/mobile/MainActivity.kt:161-228`
 
-| Мера | Реализация | Оценка |
-|---|---|---|
-| `allowFileAccess=false` | ✅ | Bundled assets доступны через `file:///android_asset` / `WebViewAssetLoader`, но `file://` не читает `filesDir`. |
-| `MIXED_CONTENT_NEVER_ALLOW` | ✅ | Блокирует http subresource внутри https. |
-| `allowUniversalAccessFromFileURLs` только для `MeasurementOrigin.Profile.File` | ✅ | Track B (AssetLoader HTTPS) — false. |
-| `evaluateJavascript` safe-area | ✅ low risk | Вводится только числа `px` из `WindowInsets`/`systemDimenPx`, не user input. |
-| `JsEscaping.kt` | ✅ | Экранирует `\`, `'`, `\n`, `<0x20` как `\uXXXX`. |
-| `@JavascriptInterface` | ✅ | Только `call/poll/cancel/notifyReady`, нет `eval`. |
+| Мера                                                                           | Реализация  | Оценка                                                                                                           |
+| ------------------------------------------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------- |
+| `allowFileAccess=false`                                                        | ✅          | Bundled assets доступны через `file:///android_asset` / `WebViewAssetLoader`, но `file://` не читает `filesDir`. |
+| `MIXED_CONTENT_NEVER_ALLOW`                                                    | ✅          | Блокирует http subresource внутри https.                                                                         |
+| `allowUniversalAccessFromFileURLs` только для `MeasurementOrigin.Profile.File` | ✅          | Track B (AssetLoader HTTPS) — false.                                                                             |
+| `evaluateJavascript` safe-area                                                 | ✅ low risk | Вводится только числа `px` из `WindowInsets`/`systemDimenPx`, не user input.                                     |
+| `JsEscaping.kt`                                                                | ✅          | Экранирует `\`, `'`, `\n`, `<0x20` как `\uXXXX`.                                                                 |
+| `@JavascriptInterface`                                                         | ✅          | Только `call/poll/cancel/notifyReady`, нет `eval`.                                                               |
 
 **Не найдено:** `addJavascriptInterface` для arbitrary JS, `loadUrl("javascript:...")` с user input.
 
@@ -58,6 +58,7 @@
 `network_security_config.xml` + `AndroidManifest usesCleartextTraffic="true"` — `base-config cleartextTrafficPermitted=true` для LAN HostConnect.
 
 **Threat model:**
+
 - Злоумышленник в LAN может MITM `http://` plugin fetch или `http://` HostConnect.
 - Защита: `WebView` CSP, `MIXED_CONTENT_NEVER_ALLOW`, plugin broker `SEC-03` (DNS + `remoteAddress` check), HostConnect bearer + `Origin: null` CORS.
 
@@ -82,24 +83,23 @@
 
 ## 8. DoS векторы
 
-| Вектор | Статус | Где |
-|---|---|---|
-| Large `assets.content` base64 → decode | ⚠️ P1 | `avatar.rs` — нет preflight |
-| Many `characters.list` avatars → unbounded cache | ⚠️ P1 | `avatar_gpu.rs` |
-| 40×50 мс poll loop блокирует executor | ⚠️ P2 | `PresentationChatActivity.sendComposer` |
-| Single-thread executor HOL | ⚠️ P2 | `KernelHolder.kt` |
+| Вектор                                           | Статус | Где                                     |
+| ------------------------------------------------ | ------ | --------------------------------------- |
+| Large `assets.content` base64 → decode           | ⚠️ P1  | `avatar.rs` — нет preflight             |
+| Many `characters.list` avatars → unbounded cache | ⚠️ P1  | `avatar_gpu.rs`                         |
+| 40×50 мс poll loop блокирует executor            | ⚠️ P2  | `PresentationChatActivity.sendComposer` |
+| Single-thread executor HOL                       | ⚠️ P2  | `KernelHolder.kt`                       |
 
 ---
 
 ## 9. Итог security
 
-| Класс | Найдено | Критичность |
-|---|---|---|
-| XSS via WebView bridge | 0 | — |
-| Arbitrary file read via WebView | 0 | `allowFileAccess=false` |
-| JNI panic/UB | 0 | `catch_unwind` + handle checks |
-| Secret leak | 0 | presentation не трогает |
-| **DoS OOM image decode** | **1** | **P1** — нужен preflight |
-| Broad cleartext | 1 | P2 — осознанно, можно сузить |
-| Permission leak | 0 | — |
-
+| Класс                           | Найдено | Критичность                    |
+| ------------------------------- | ------- | ------------------------------ |
+| XSS via WebView bridge          | 0       | —                              |
+| Arbitrary file read via WebView | 0       | `allowFileAccess=false`        |
+| JNI panic/UB                    | 0       | `catch_unwind` + handle checks |
+| Secret leak                     | 0       | presentation не трогает        |
+| **DoS OOM image decode**        | **1**   | **P1** — нужен preflight       |
+| Broad cleartext                 | 1       | P2 — осознанно, можно сузить   |
+| Permission leak                 | 0       | —                              |

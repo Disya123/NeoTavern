@@ -16,21 +16,21 @@
 
 ## Карта файлов
 
-| Файл | Что внутри |
-|---|---|
-| `00-EXECUTIVE-SUMMARY.md` | Коротко: проходит ли «просто Rust» и 8 критичных находок |
-| `01-COMPLIANCE-MATRIX.md` | 10 требований + kill-first Gates → PASS/PARTIAL |
-| `02-ARCHITECTURE-VIOLATIONS.md` | Kernel vs Presentation, WebView lifecycle, D3 debt, patch discipline |
-| `03-PERFORMANCE-120HZ-FAST-PATHS.md` | 120 Hz VsyncCallback, fast paths, 10k-кадров тест |
-| `04-VISUAL-PARITY-GLASS.md` | React golden, packed CSS flatten, live glass, почему не PASS |
-| `05-GPU-INTEROP-NO-READBACK.md` | SharedGpuContext, no readback / no cross-device |
-| `06-IMAGE-DECODE-VS-RASTER.md` | CPU decode в фоне vs CPU full-frame raster запрещён |
-| `07-WEBVIEW-LIFECYCLE-AND-HARDENING.md` | Guarded canary, WebView hardening, cleartext |
-| `08-NATIVE-VIEW-BYPASS-CHECK.md` | TextView/RecyclerView/Canvas/hidden WebView — детекция |
-| `09-DIOXUS-RSX-SYNTAX.md` | `rsx!` аналогия React |
-| `10-SECURITY-VULNERABILITIES.md` | XSS, JNI, Keystore, CAMERA, DoS |
-| `11-BUGS-AND-HACKS-CATALOG.md` | 14 багов P0-P3 с file:line и фиксом |
-| `12-EVIDENCE-AND-REPRO.md` | Команды repro, ключи артефактов, что не запускали |
+| Файл                                    | Что внутри                                                           |
+| --------------------------------------- | -------------------------------------------------------------------- |
+| `00-EXECUTIVE-SUMMARY.md`               | Коротко: проходит ли «просто Rust» и 8 критичных находок             |
+| `01-COMPLIANCE-MATRIX.md`               | 10 требований + kill-first Gates → PASS/PARTIAL                      |
+| `02-ARCHITECTURE-VIOLATIONS.md`         | Kernel vs Presentation, WebView lifecycle, D3 debt, patch discipline |
+| `03-PERFORMANCE-120HZ-FAST-PATHS.md`    | 120 Hz VsyncCallback, fast paths, 10k-кадров тест                    |
+| `04-VISUAL-PARITY-GLASS.md`             | React golden, packed CSS flatten, live glass, почему не PASS         |
+| `05-GPU-INTEROP-NO-READBACK.md`         | SharedGpuContext, no readback / no cross-device                      |
+| `06-IMAGE-DECODE-VS-RASTER.md`          | CPU decode в фоне vs CPU full-frame raster запрещён                  |
+| `07-WEBVIEW-LIFECYCLE-AND-HARDENING.md` | Guarded canary, WebView hardening, cleartext                         |
+| `08-NATIVE-VIEW-BYPASS-CHECK.md`        | TextView/RecyclerView/Canvas/hidden WebView — детекция               |
+| `09-DIOXUS-RSX-SYNTAX.md`               | `rsx!` аналогия React                                                |
+| `10-SECURITY-VULNERABILITIES.md`        | XSS, JNI, Keystore, CAMERA, DoS                                      |
+| `11-BUGS-AND-HACKS-CATALOG.md`          | 14 багов P0-P3 с file:line и фиксом                                  |
+| `12-EVIDENCE-AND-REPRO.md`              | Команды repro, ключи артефактов, что не запускали                    |
 
 ## Итог одной строкой
 

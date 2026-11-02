@@ -26,7 +26,7 @@ The Android host shipped with two renderers:
 - `MainActivity` — `WebView` (production default, rollback, instrumented-test
   harness).
 - `PresentationChatActivity` — Rust `SurfaceView` (`Dioxus → Blitz →
-  NeoCompositor → Vello-GPU`), guarded canary, `NEOTA_DIOXUS_SHELL` opt-in.
+NeoCompositor → Vello-GPU`), guarded canary, `NEOTA_DIOXUS_SHELL` opt-in.
 
 `audit-neoui-v4` (2026-08-19) found the migration architecturally honest but
 flagged **one open structural risk**: `WebView` removal had no owner/date, so
@@ -61,7 +61,7 @@ Product Wire, `database.sqlite`, or the `React`/`WebView` Web client.
    `NEOTA_SAFE_MODE` debug extras are ignored in release builds (already the
    case); release uses the signed rollout config / this ADR's default.
 
-3. **`WebView` is removed from the released `APK` as a *main-screen* renderer.**
+3. **`WebView` is removed from the released `APK` as a _main-screen_ renderer.**
    The WebView engine may remain linked **only** for the `CONTAINED`
    `PluginVisualSurface` / legacy `window.SillyTavern` island path
    (ADR-0039/ADR-0050), scoped to a sandboxed `WebSurface` process. If no
@@ -71,7 +71,7 @@ Product Wire, `database.sqlite`, or the `React`/`WebView` Web client.
 4. **Visual parity is signed, not assumed.** The switch requires
    owner-signed `PARITY` (or `DEFERRED_BY_OWNER` with a dated re-confirmation)
    on every row of `presentation-compatibility-matrix.md`. The `Chat
-   workspace`, `10k virtualization`, `Gboard typing/insets/editor-send`,
+workspace`, `10k virtualization`, `Gboard typing/insets/editor-send`,
    `Theme SDK`, `i18n/RTL`, `Deep links/HostConnect`, `Safe mode` rows move to
    `PARITY`. `Live backdrop glass` moves to `PARITY` on `GateP:P1`
    qualified devices (CONTAINED degraded mode on the rest). `Plugin frontend`
@@ -114,7 +114,7 @@ Product Wire, `database.sqlite`, or the `React`/`WebView` Web client.
 
 - `presentation-compatibility-matrix.md` is updated from `DEFERRED` to the
   signed `PARITY`/`CONTAINED` states in this ADR; `Production no-WebView
-  cutover` moves from `DEFERRED` to `PARITY` (or `CONTAINED` if WebSurface is
+cutover` moves from `DEFERRED` to `PARITY` (or `CONTAINED` if WebSurface is
   retained).
 - `docs/architecture/presentation-boundary.md` `Visual parity` section is
   amended: the "not a visual golden PASS" / "not WebView runtime removal"

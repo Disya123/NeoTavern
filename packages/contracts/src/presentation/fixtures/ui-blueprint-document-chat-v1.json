@@ -28,10 +28,7 @@
                 "nodeId": "identity-avatar",
                 "component": "IdentityAvatar",
                 "recipe": "avatar",
-                "stateSlots": [
-                  "image",
-                  "fallback"
-                ],
+                "stateSlots": ["image", "fallback"],
                 "actions": [],
                 "children": []
               },
@@ -73,10 +70,7 @@
         "nodeId": "chat-viewport",
         "component": "ChatViewport",
         "recipe": "chat-canvas",
-        "stateSlots": [
-          "streaming",
-          "idle"
-        ],
+        "stateSlots": ["streaming", "idle"],
         "actions": [],
         "children": [
           {
@@ -99,12 +93,7 @@
                     "component": "ChatMessage",
                     "recipe": "message-row",
                     "role": "listitem",
-                    "stateSlots": [
-                      "user",
-                      "assistant",
-                      "streaming",
-                      "done"
-                    ],
+                    "stateSlots": ["user", "assistant", "streaming", "done"],
                     "actions": [],
                     "children": [
                       {
@@ -118,10 +107,7 @@
                             "nodeId": "message-avatar",
                             "component": "MessageAvatar",
                             "recipe": "avatar",
-                            "stateSlots": [
-                              "image",
-                              "fallback"
-                            ],
+                            "stateSlots": ["image", "fallback"],
                             "actions": [],
                             "children": []
                           },
@@ -155,9 +141,7 @@
                             "component": "message-action-bar",
                             "recipe": "message-actions-inline",
                             "role": "toolbar",
-                            "stateSlots": [
-                              "idle"
-                            ],
+                            "stateSlots": ["idle"],
                             "actions": [
                               {
                                 "id": "chat.message.context",
@@ -506,10 +490,7 @@
         "nodeId": "chat-composer",
         "component": "ChatComposer",
         "recipe": "chat-composer",
-        "stateSlots": [
-          "streaming",
-          "idle"
-        ],
+        "stateSlots": ["streaming", "idle"],
         "actions": [],
         "children": [
           {
@@ -727,7 +708,5 @@
       "expression": "chat.draft"
     }
   ],
-  "sourceFixtureIds": [
-    "chat.canonical.expanded"
-  ]
+  "sourceFixtureIds": ["chat.canonical.expanded"]
 }

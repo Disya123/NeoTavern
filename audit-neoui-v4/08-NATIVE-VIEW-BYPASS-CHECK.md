@@ -72,10 +72,12 @@ root.addView(send, LayoutParams(WRAP_CONTENT, WRAP_CONTENT, BOTTOM|END))
 - `alpha=0.01` — остаётся `VISIBLE` для системы, но почти прозрачный для глаза и не попадает в `isOpaque` оптимизацию. Скриншот может поймать faint 1% blend, но на `#151311` фоне — невидимо.
 
 **Оценка:** это **костыль**, но не «подмена Rust UI». ТЗ запрещает подмену **рендера** — здесь рендер остаётся Rust. Тем не менее, дословное чтение ТЗ будет флагом. Нужен либо:
+
 - ADR-исключение: «4 hidden native views как IME/a11y мост, не primary renderer», или
 - замена на `INVISIBLE` + `importantForAccessibility=YES` + `setAlpha(0f)` + `setWillNotDraw(false)` + явный `AccessibilityNodeInfo` (без визуала).
 
 **Проверено, что не используется как скрытый рендерер:**
+
 - `composerWatcher` / `afterTextChanged` — только `PresentationChatNative.saveDraft(text)`, не рендер.
 - `bindSnapshot` — только `contentDescription` + лог, не `setText(messages)`.
 
@@ -145,12 +147,11 @@ private fun hasWebView(view: View): Boolean {
 
 ## 5. Сводка
 
-| Компонент | Найден в Rust path | Роль | Вердикт |
-|---|---|---|---|
+| Компонент                      | Найден в Rust path      | Роль            | Вердикт                                                  |
+| ------------------------------ | ----------------------- | --------------- | -------------------------------------------------------- |
 | `TextView`/`Button`/`EditText` | Да, 4 штуки, alpha 0.01 | IME + a11y мост | ⚠️ костыль, не primary renderer — требует ADR-исключение |
-| `RecyclerView` | Нет | — | ✅ |
-| `Canvas` (Android) | Нет | — | ✅ |
-| Скрытый `WebView` | Нет | — | ✅ |
+| `RecyclerView`                 | Нет                     | —               | ✅                                                       |
+| `Canvas` (Android)             | Нет                     | —               | ✅                                                       |
+| Скрытый `WebView`              | Нет                     | —               | ✅                                                       |
 
 **Рекомендация:** переоформить 4 view как явный `PlatformImeBridge` + `A11yOverlay` с `INVISIBLE` и документацией, или зафиксировать исключение в `docs/adr/0051` как part of `WEBVIEW_FALLBACK` → `NATIVE_A11Y_BRIDGE`.
-

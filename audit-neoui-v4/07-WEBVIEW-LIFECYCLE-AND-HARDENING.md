@@ -53,12 +53,12 @@ canaryFlag? (NEOTA_DIOXUS_SHELL=1 persisted) → else WebView
 
 ### Что остаётся WebView
 
-| Компонент | Статус | План удаления |
-|---|---|---|
-| `MainActivity` WebView | retained как harness и rollback | `instrumented tests + rollback` — пока нужен |
-| `PresentationChatActivity` | Rust SurfaceView | canary |
-| `WebViewAssetLoader` HTTPS | опциональный M1 Track B, не default | — |
-| production APK WebView | в APK | `presentation-compatibility-matrix.md:35` — `DEFERRED` (no date) |
+| Компонент                  | Статус                              | План удаления                                                    |
+| -------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| `MainActivity` WebView     | retained как harness и rollback     | `instrumented tests + rollback` — пока нужен                     |
+| `PresentationChatActivity` | Rust SurfaceView                    | canary                                                           |
+| `WebViewAssetLoader` HTTPS | опциональный M1 Track B, не default | —                                                                |
+| production APK WebView     | в APK                               | `presentation-compatibility-matrix.md:35` — `DEFERRED` (no date) |
 
 **Вердикт последовательности:** ✅ PASS — замена guard-ирована, не «big bang».  
 **Вердикт удаления:** ⚠️ PARTIAL — удаление заявлено, но без дедлайна/owner. Нужен отдельный `WEBVIEW_REMOVAL` ADR с `Milestone D/E` и условием `Character Manager visual golden PASS`.
@@ -80,6 +80,7 @@ web.settings.allowFileAccessFromFileURLs = // не трогается (default f
 ```
 
 **Правильно:**
+
 - `allowFileAccess=false` — даже при `file:///android_asset/web/index.html` assets доступны, но `file://` из JS не читает произвольный `filesDir`.
 - `MIXED_CONTENT_NEVER_ALLOW` — http subresource внутри https не грузится.
 - `WebViewAssetLoader` (`https://appassets.androidplatform.net`) — когда включён, `shouldInterceptRequest` перехватывает только `appassets.androidplatform.net`, остальное — `super`.
@@ -107,6 +108,7 @@ web.addJavascriptInterface(bridge, "__neotavernMobile") // до loadUrl
   <trust-anchors><certificates src="system"/></trust-anchors>
 </base-config>
 ```
+
 ```xml
 <!-- AndroidManifest.xml -->
 <application android:usesCleartextTraffic="true" ...>
@@ -117,6 +119,7 @@ web.addJavascriptInterface(bridge, "__neotavernMobile") // до loadUrl
 **Риск:** `cleartextTrafficPermitted=true` на `base-config` — разрешает cleartext **везде**, не только `appassets.androidplatform.net` или введённый пользователем host. Злоумышленник в той же Wi-Fi может MITM `http://` plugin fetch? Но plugin network broker (SEC-03) и `WebViewAssetLoader` HTTPS уже ограничивают; однако `WebView` может грузить `http://` subresource если страница сама его вставит (хотя `MIXED_CONTENT_NEVER_ALLOW` + CSP в `apps/web/index.html` должны блокировать).
 
 **Рекомендация (P2):** сузить до:
+
 ```xml
 <domain-config cleartextTrafficPermitted="true">
   <domain includeSubdomains="true">appassets.androidplatform.net</domain>
@@ -125,6 +128,7 @@ web.addJavascriptInterface(bridge, "__neotavernMobile") // до loadUrl
 </domain-config>
 <base-config cleartextTrafficPermitted="false"> ...
 ```
+
 Но тогда ручной LAN IP от HostConnect сломается — нужен `usesCleartextTraffic` per-host. Текущий широкий `true` — осознанный trade-off, задокументированный, не скрытый.
 
 ### CAMERA
