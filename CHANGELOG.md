@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Six more Packaged matrix rows from packaged-smoke library walks (round
+  24/40).** The packaged kernel self-smoke extends its golden path with full
+  op-set walks for presets, personas, memories, lorebooks (including entry
+  CRUD), providers.list/catalog and settings (get/update/instructformats) —
+  every operation of each capability observed on the portable artifact, so the
+  six desktop rows are promoted to Packaged (ARC-10, observed behaviour only).
+  Desktop capability score: 10/43 Packaged.
+
 - **First portable packaged evidence and the first Packaged matrix rows (round
   23/40).** `pnpm desktop:portable` now builds and verifies end to end on the
   branch: WiX MSI, the portable ZIP with its SHA-256, and the repo shell smoke

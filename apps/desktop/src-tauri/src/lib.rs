@@ -771,7 +771,9 @@ fn run_stream(
 ///    contract, `generation.tool.result` resumes and completes the run with a
 ///    second assistant message;
 /// 4. a full chats/messages CRUD walk on a throwaway chat — every op of the
-///    `chats.crud` and `chats.messages.crud` capabilities (G6 evidence).
+///    `chats.crud` and `chats.messages.crud` capabilities (G6 evidence);
+/// 5. full library-cluster walks — every op of presets, personas, memories,
+///    lorebooks (+entries), providers.list and settings (G6 evidence).
 ///
 /// No HTTP, no sidecar, no UI: this is the packaged host's own self-check,
 /// runnable headless via `NEOTA_DESKTOP_SMOKE=1`.
@@ -995,6 +997,135 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
     )?;
     dispatch_ok(&host, "chats.delete", serde_json::json!({ "chatId": second_id }))?;
     eprintln!("[smoke] golden: chats/messages CRUD full walk ok");
+
+    // 5. Full library-cluster walks (G6 evidence, round 24): presets,
+    //    personas, memories, lorebooks (+entries), providers.list, settings —
+    //    every op of each capability on the packaged artifact.
+    let preset = dispatch_ok(
+        &host,
+        "presets.create",
+        serde_json::json!({ "kind": "generation", "name": "Smoke preset", "data": {} }),
+    )?;
+    let preset_id = preset["id"]
+        .as_str()
+        .ok_or_else(|| "preset carried no id".to_string())?
+        .to_string();
+    dispatch_ok(&host, "presets.get", serde_json::json!({ "presetId": preset_id }))?;
+    dispatch_ok(
+        &host,
+        "presets.update",
+        serde_json::json!({ "presetId": preset_id, "name": "Smoke preset v2" }),
+    )?;
+    dispatch_ok(&host, "presets.list", serde_json::json!({}))?;
+    dispatch_ok(&host, "presets.delete", serde_json::json!({ "presetId": preset_id }))?;
+
+    let persona = dispatch_ok(
+        &host,
+        "personas.create",
+        serde_json::json!({ "name": "Smoke persona", "description": "Golden walk persona" }),
+    )?;
+    let persona_id = persona["id"]
+        .as_str()
+        .ok_or_else(|| "persona carried no id".to_string())?
+        .to_string();
+    dispatch_ok(&host, "personas.get", serde_json::json!({ "personaId": persona_id }))?;
+    dispatch_ok(
+        &host,
+        "personas.update",
+        serde_json::json!({ "personaId": persona_id, "name": "Smoke persona v2" }),
+    )?;
+    dispatch_ok(&host, "personas.list", serde_json::json!({}))?;
+    dispatch_ok(&host, "personas.delete", serde_json::json!({ "personaId": persona_id }))?;
+
+    let memory = dispatch_ok(
+        &host,
+        "memories.create",
+        serde_json::json!({
+            "scope": "character",
+            "characterId": character_id,
+            "keys": ["smoke"],
+            "content": "Golden walk memory.",
+        }),
+    )?;
+    let memory_id = memory["id"]
+        .as_str()
+        .ok_or_else(|| "memory carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "memories.update",
+        serde_json::json!({ "memoryId": memory_id, "content": "Golden walk memory v2." }),
+    )?;
+    dispatch_ok(&host, "memories.list", serde_json::json!({}))?;
+    dispatch_ok(&host, "memories.delete", serde_json::json!({ "memoryId": memory_id }))?;
+
+    dispatch_ok(&host, "providers.list", serde_json::json!({}))?;
+    dispatch_ok(&host, "providers.catalog", serde_json::json!({}))?;
+
+    dispatch_ok(&host, "settings.get", serde_json::json!({}))?;
+    dispatch_ok(
+        &host,
+        "settings.update",
+        serde_json::json!({
+            "settings": [{ "key": "app.language", "value": { "locale": "en" } }]
+        }),
+    )?;
+    dispatch_ok(&host, "settings.instructformats.list", serde_json::json!({}))?;
+
+    let lorebook = dispatch_ok(
+        &host,
+        "lorebooks.create",
+        serde_json::json!({
+            "name": "Smoke lore",
+            "description": "Golden walk lorebook",
+            "characterId": character_id,
+            "entries": [{ "keys": ["smoke"], "content": "Golden walk entry.", "enabled": true }],
+        }),
+    )?;
+    let lorebook_id = lorebook["id"]
+        .as_str()
+        .ok_or_else(|| "lorebook carried no id".to_string())?
+        .to_string();
+    dispatch_ok(&host, "lorebooks.get", serde_json::json!({ "lorebookId": lorebook_id }))?;
+    dispatch_ok(&host, "lorebooks.list", serde_json::json!({}))?;
+    dispatch_ok(
+        &host,
+        "lorebooks.update",
+        serde_json::json!({ "lorebookId": lorebook_id, "name": "Smoke lore v2" }),
+    )?;
+    dispatch_ok(
+        &host,
+        "lorebooks.entries.list",
+        serde_json::json!({ "lorebookId": lorebook_id }),
+    )?;
+    let entry = dispatch_ok(
+        &host,
+        "lorebooks.entries.create",
+        serde_json::json!({
+            "lorebookId": lorebook_id,
+            "entry": { "keys": ["second"], "content": "Second entry.", "enabled": true },
+        }),
+    )?;
+    let entry_id = entry["id"]
+        .as_str()
+        .ok_or_else(|| "entry carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "lorebooks.entries.update",
+        serde_json::json!({
+            "lorebookId": lorebook_id,
+            "entryId": entry_id,
+            "patch": { "content": "Second entry v2." },
+        }),
+    )?;
+    dispatch_ok(
+        &host,
+        "lorebooks.entries.delete",
+        serde_json::json!({ "lorebookId": lorebook_id, "entryId": entry_id }),
+    )?;
+    dispatch_ok(&host, "lorebooks.delete", serde_json::json!({ "lorebookId": lorebook_id }))?;
+    eprintln!("[smoke] golden: library clusters full walk ok");
     Ok(())
 }
 
