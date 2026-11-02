@@ -108,6 +108,9 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "plugins.uninstall" => Some(1024),
         "plugins.enable" => Some(1024),
         "plugins.disable" => Some(1024),
+        "plugins.state.get" => Some(2048),
+        "plugins.state.set" => Some(262144),
+        "plugins.state.delete" => Some(2048),
         "themes.list" => Some(1024),
         "themes.install" => Some(65536),
         "themes.uninstall" => Some(1024),
@@ -247,6 +250,9 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "plugins.uninstall" => Some(1024),
         "plugins.enable" => Some(262144),
         "plugins.disable" => Some(262144),
+        "plugins.state.get" => Some(262144),
+        "plugins.state.set" => Some(2048),
+        "plugins.state.delete" => Some(1024),
         "themes.list" => Some(262144),
         "themes.install" => Some(262144),
         "themes.uninstall" => Some(1024),
@@ -8897,6 +8903,436 @@ pub fn validate_request_plugins_disable(value: &Value) -> Result<(), Vec<Issue>>
 
 pub fn decode_request_plugins_disable(bytes: &[u8]) -> Result<RequestPluginsDisable, WireError> {
     crate::decode::<RequestPluginsDisable>(validate_request_plugins_disable, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PluginStateScope {
+    #[serde(rename = "installation")] Installation,
+    #[serde(rename = "user")] User,
+    #[serde(rename = "workspace")] Workspace,
+    #[serde(rename = "chat")] Chat,
+}
+
+pub(crate) fn check_plugin_state_scope(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "installation" | "user" | "workspace" | "chat") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_plugin_state_scope(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_plugin_state_scope(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_plugin_state_scope(bytes: &[u8]) -> Result<PluginStateScope, WireError> {
+    crate::decode::<PluginStateScope>(validate_plugin_state_scope, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsStateGet {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    pub scope: PluginStateScope,
+    #[serde(rename = "ownerId", default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
+}
+
+pub(crate) fn check_request_plugins_state_get(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("scope").is_none() {
+            issues.push(Issue::new(join_path(path, "scope"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_plugin_state_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("ownerId") {
+            let child_path = join_path(path, "ownerId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "scope" | "ownerId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_state_get(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_state_get(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_state_get(bytes: &[u8]) -> Result<RequestPluginsStateGet, WireError> {
+    crate::decode::<RequestPluginsStateGet>(validate_request_plugins_state_get, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsState {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    pub scope: PluginStateScope,
+    #[serde(rename = "ownerId")]
+    pub owner_id: String,
+    pub revision: i64,
+    #[serde(rename = "schemaVersion")]
+    pub schema_version: i64,
+    pub data: FreeObject,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+pub(crate) fn check_result_plugins_state(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("scope").is_none() {
+            issues.push(Issue::new(join_path(path, "scope"), "RequiredProperty"));
+        }
+        if value.get("ownerId").is_none() {
+            issues.push(Issue::new(join_path(path, "ownerId"), "RequiredProperty"));
+        }
+        if value.get("revision").is_none() {
+            issues.push(Issue::new(join_path(path, "revision"), "RequiredProperty"));
+        }
+        if value.get("schemaVersion").is_none() {
+            issues.push(Issue::new(join_path(path, "schemaVersion"), "RequiredProperty"));
+        }
+        if value.get("data").is_none() {
+            issues.push(Issue::new(join_path(path, "data"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_plugin_state_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("ownerId") {
+            let child_path = join_path(path, "ownerId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("revision") {
+            let child_path = join_path(path, "revision");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("schemaVersion") {
+            let child_path = join_path(path, "schemaVersion");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("data") {
+            let child_path = join_path(path, "data");
+            check_free_object(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 20 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 40 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "scope" | "ownerId" | "revision" | "schemaVersion" | "data" | "updatedAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_state(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_state(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_state(bytes: &[u8]) -> Result<ResultPluginsState, WireError> {
+    crate::decode::<ResultPluginsState>(validate_result_plugins_state, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsStateSet {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    pub scope: PluginStateScope,
+    #[serde(rename = "ownerId", default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
+    pub data: FreeObject,
+    #[serde(rename = "expectedRevision", default, skip_serializing_if = "Option::is_none")]
+    pub expected_revision: Option<i64>,
+}
+
+pub(crate) fn check_request_plugins_state_set(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("scope").is_none() {
+            issues.push(Issue::new(join_path(path, "scope"), "RequiredProperty"));
+        }
+        if value.get("data").is_none() {
+            issues.push(Issue::new(join_path(path, "data"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_plugin_state_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("ownerId") {
+            let child_path = join_path(path, "ownerId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("data") {
+            let child_path = join_path(path, "data");
+            check_free_object(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("expectedRevision") {
+            let child_path = join_path(path, "expectedRevision");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "scope" | "ownerId" | "data" | "expectedRevision") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_state_set(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_state_set(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_state_set(bytes: &[u8]) -> Result<RequestPluginsStateSet, WireError> {
+    crate::decode::<RequestPluginsStateSet>(validate_request_plugins_state_set, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsStateSet {
+    pub revision: i64,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+pub(crate) fn check_result_plugins_state_set(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("revision").is_none() {
+            issues.push(Issue::new(join_path(path, "revision"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("revision") {
+            let child_path = join_path(path, "revision");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 20 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 40 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "revision" | "updatedAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_state_set(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_state_set(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_state_set(bytes: &[u8]) -> Result<ResultPluginsStateSet, WireError> {
+    crate::decode::<ResultPluginsStateSet>(validate_result_plugins_state_set, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsStateDelete {
+    pub deleted: bool,
+}
+
+pub(crate) fn check_result_plugins_state_delete(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("deleted").is_none() {
+            issues.push(Issue::new(join_path(path, "deleted"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("deleted") {
+            let child_path = join_path(path, "deleted");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "deleted") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_state_delete(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_state_delete(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_state_delete(bytes: &[u8]) -> Result<ResultPluginsStateDelete, WireError> {
+    crate::decode::<ResultPluginsStateDelete>(validate_result_plugins_state_delete, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

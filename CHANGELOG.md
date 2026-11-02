@@ -4,6 +4,29 @@
 
 ### Added
 
+- **Plugin KV state on the kernel plane (M7 Etap-4 slice; cluster 21 part 1).**
+  Three new wire ops move the plugin KV store off the legacy
+  `/api/v2/plugins/:id/state` route: `plugins.state.get`,
+  `plugins.state.set` (whole-value CAS write) and `plugins.state.delete`
+  (idempotent), backed by schema v27 STRICT `plugin_state` — one row per
+  `(plugin, scope, owner)` with `revision`, `schema_version`, the opaque
+  plugin object and the FK CASCADE on uninstall. The scope doubles as the
+  required capability (`storage.installation|user|workspace|chat`, the set
+  recorded at install = the consent moment), `installation`/`user` are
+  singleton rows (the result reports an empty `ownerId` — the wire has no
+  nullable field), `workspace` is the literal workspace row and `chat`
+  REQUIRES an explicit `ownerId`, so a plugin can never address another
+  chat's state; an owner supplied for a singleton scope is a VALIDATION
+  refusal. A stale `expectedRevision` is `REVISION_CONFLICT` carrying the
+  stored revision instead of a silent overwrite, and the documented
+  64-key/64-KiB quota is enforced before the write
+  (`STATE_QUOTA_EXCEEDED`). Facade: `backend.plugins.stateGet/stateSet/
+  stateDelete` (local/remote implemented; the legacy facade keeps
+  `UnsupportedError`). Web: the plugin sandbox's `storage.kv.*` handlers read
+  and write through the wire on the kernel plane with the same capability
+  gates and the same sandbox error codes. Honest boundary: binary plugin
+  blobs stay on the legacy route on both transports — the wire v1 has no
+  binary body. Contract hash `d9cf483f…`; registry 134 ops.
 - **Durable app-event plane on the kernel (M7 Etap-4 slice; cluster 18).** The
   legacy `GET /api/v2/events` SSE relay is replaced on the canonical plane by a
   resumable cursor: schema v26 adds the STRICT `app_events` log

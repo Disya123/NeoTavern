@@ -24,7 +24,10 @@ import {
   type GenerationRunDto,
   type GetAssetContentResultDto,
   type GetAssetResultDto,
+  type DeletePluginStateResultDto,
   type InstallPluginResultDto,
+  type PluginStateDto,
+  type SetPluginStateResultDto,
   type InstallThemeResultDto,
   type ListPluginsResultDto,
   type ListProfilesResultDto,
@@ -473,6 +476,10 @@ export class LocalBackend implements NeoBackend {
       enable: (pluginId, opts) => this.invoke<PluginDto>('plugins.enable', { id: pluginId }, opts),
       disable: (pluginId, opts) =>
         this.invoke<PluginDto>('plugins.disable', { id: pluginId }, opts),
+      stateGet: (req, opts) => this.invoke<PluginStateDto>('plugins.state.get', req, opts),
+      stateSet: (req, opts) => this.invoke<SetPluginStateResultDto>('plugins.state.set', req, opts),
+      stateDelete: (req, opts) =>
+        this.invoke<DeletePluginStateResultDto>('plugins.state.delete', req, opts),
     };
     this.themes = {
       list: (opts) => this.invoke<ListThemesResultDto>('themes.list', {}, opts),

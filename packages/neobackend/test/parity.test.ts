@@ -15,7 +15,10 @@ import {
   type GenerationRunDto,
   type GetAssetContentResultDto,
   type GetAssetResultDto,
+  type DeletePluginStateResultDto,
   type InstallPluginResultDto,
+  type PluginStateDto,
+  type SetPluginStateResultDto,
   type InstallThemeResultDto,
   type ListLorebooksResultDto,
   type SearchResultDto,
@@ -253,6 +256,17 @@ const PLUGIN: PluginDto = {
 };
 const PLUGIN_LIST: ListPluginsResultDto = { items: [PLUGIN] };
 const PLUGIN_INSTALL: InstallPluginResultDto = { plugin: PLUGIN };
+const PLUGIN_STATE: PluginStateDto = {
+  pluginId: 'lorebook-searcher',
+  scope: 'installation',
+  ownerId: '',
+  revision: 3,
+  schemaVersion: 1,
+  data: { lastQuery: 'dragons' },
+  updatedAt: TIMESTAMP,
+};
+const PLUGIN_STATE_SET: SetPluginStateResultDto = { revision: 4, updatedAt: TIMESTAMP };
+const PLUGIN_STATE_DELETE: DeletePluginStateResultDto = { deleted: true };
 const ENABLED_PLUGIN: PluginDto = { ...PLUGIN, enabled: true };
 
 const THEME: ThemeDto = {
@@ -744,6 +758,12 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: PLUGIN };
       case 'plugins.uninstall':
         return { ok: true, value: EMPTY_RESULT };
+      case 'plugins.state.get':
+        return { ok: true, value: PLUGIN_STATE };
+      case 'plugins.state.set':
+        return { ok: true, value: PLUGIN_STATE_SET };
+      case 'plugins.state.delete':
+        return { ok: true, value: PLUGIN_STATE_DELETE };
       case 'themes.list':
         return { ok: true, value: THEME_LIST };
       case 'themes.install':
@@ -936,6 +956,12 @@ function rpcResult(operationId: string | undefined): unknown {
       return PLUGIN;
     case 'plugins.uninstall':
       return EMPTY_RESULT;
+    case 'plugins.state.get':
+      return PLUGIN_STATE;
+    case 'plugins.state.set':
+      return PLUGIN_STATE_SET;
+    case 'plugins.state.delete':
+      return PLUGIN_STATE_DELETE;
     case 'themes.list':
       return THEME_LIST;
     case 'themes.install':
@@ -2289,6 +2315,67 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
       { operationId: 'plugins.disable', payload: { id: PLUGIN.id } },
       { operationId: 'plugins.uninstall', payload: { id: PLUGIN.id } },
     ]);
+  });
+
+  it('plugins.state.get/set/delete forward the scope address and decode canonical DTOs', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const address = { pluginId: PLUGIN.id, scope: 'installation' as const };
+    const [getLocal, getRemote] = await Promise.all([
+      local.plugins.stateGet(address),
+      remote.plugins.stateGet(address),
+    ]);
+    expect(getLocal).toEqual(getRemote);
+    expect(getLocal).toEqual(PLUGIN_STATE);
+
+    const write = {
+      pluginId: PLUGIN.id,
+      scope: 'chat' as const,
+      ownerId: 'chat-42',
+      data: { lastQuery: 'dragons' },
+      expectedRevision: 3,
+    };
+    const [setLocal, setRemote] = await Promise.all([
+      local.plugins.stateSet(write),
+      remote.plugins.stateSet(write),
+    ]);
+    expect(setLocal).toEqual(setRemote);
+    expect(setLocal).toEqual(PLUGIN_STATE_SET);
+
+    const [deleteLocal, deleteRemote] = await Promise.all([
+      local.plugins.stateDelete(address),
+      remote.plugins.stateDelete(address),
+    ]);
+    expect(deleteLocal).toEqual(deleteRemote);
+    expect(deleteLocal).toEqual(PLUGIN_STATE_DELETE);
+
+    // The address is forwarded verbatim — the kernel resolves the owner key
+    // from the scope, the caller never guesses it.
+    expect(kernel.requests).toEqual([
+      { operationId: 'plugins.state.get', payload: address },
+      { operationId: 'plugins.state.set', payload: write },
+      { operationId: 'plugins.state.delete', payload: address },
+    ]);
+  });
+
+  it('plugins.state.* is an honest refusal on the legacy facade', () => {
+    const legacy = new LegacyBackend({
+      baseUrl: 'http://legacy.local',
+      fetchImpl: async () => {
+        throw new Error('the legacy facade must refuse before any request');
+      },
+    });
+    expect(() => legacy.plugins.stateGet({ pluginId: PLUGIN.id, scope: 'user' })).toThrow(
+      UnsupportedError,
+    );
+    expect(() => legacy.plugins.stateSet({ pluginId: PLUGIN.id, scope: 'user', data: {} })).toThrow(
+      UnsupportedError,
+    );
+    expect(() => legacy.plugins.stateDelete({ pluginId: PLUGIN.id, scope: 'user' })).toThrow(
+      UnsupportedError,
+    );
   });
 
   it('themes.list/install/activate/uninstall forward payloads and decode canonical DTOs', async () => {

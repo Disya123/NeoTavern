@@ -3061,6 +3061,94 @@ export const DisablePluginRequestDtoSchema = Type.Object(
 export type DisablePluginRequestDto = Static<typeof DisablePluginRequestDtoSchema>;
 
 /**
+ * Plugin state scope (`wire.plugin.state.scope`): the four namespaces the
+ * plugin KV store exposes. Each scope maps to the `storage.<scope>`
+ * capability the installation consented to, and to an owner: `installation`
+ * and `user` are singleton rows for the installation, `workspace` names the
+ * literal workspace row, and `chat` requires an explicit `ownerId` (the chat
+ * the state belongs to).
+ */
+export const PluginStateScopeSchema = Type.Union(
+  [
+    Type.Literal('installation'),
+    Type.Literal('user'),
+    Type.Literal('workspace'),
+    Type.Literal('chat'),
+  ],
+  { $id: 'wire.plugin.state.scope', 'x-wire-unknown-behavior': 'reject' },
+);
+export type PluginStateScopeDto = Static<typeof PluginStateScopeSchema>;
+
+/** Plugin state addressing (`wire.request.plugins.state.get|delete`). */
+export const PluginStateRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    scope: PluginStateScopeSchema,
+    /** Required for `scope: "chat"`; ignored (must be omitted) otherwise. */
+    ownerId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  },
+  { $id: 'wire.request.plugins.state.get', additionalProperties: false },
+);
+export type PluginStateRequestDto = Static<typeof PluginStateRequestDtoSchema>;
+
+/** Plugin state read result (`wire.result.plugins.state`). */
+export const PluginStateDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    scope: PluginStateScopeSchema,
+    /** Resolved owner key. The wire has no nullable field, so the two
+     * non-owned scopes (installation/user) report the empty string, a
+     * workspace row reports `workspace` and a chat row reports the chat id. */
+    ownerId: Type.String({ maxLength: 64 }),
+    revision: Type.Integer({ minimum: 0 }),
+    schemaVersion: Type.Integer({ minimum: 1 }),
+    /** The plugin-authored object; the kernel treats it as opaque. */
+    data: WireFreeObjectSchema,
+    updatedAt: Type.String({ minLength: 20, maxLength: 40 }),
+  },
+  { $id: 'wire.result.plugins.state', additionalProperties: false },
+);
+export type PluginStateDto = Static<typeof PluginStateDtoSchema>;
+
+/**
+ * Plugin state write request (`wire.request.plugins.state.set`): a whole-value
+ * CAS write. `expectedRevision` is the revision the caller observed (`0` for
+ * "expect an empty store"); a stale value refuses the write with CONFLICT and
+ * the caller re-reads, so two writers can never silently clobber each other.
+ */
+export const SetPluginStateRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    scope: PluginStateScopeSchema,
+    ownerId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+    data: WireFreeObjectSchema,
+    expectedRevision: Type.Optional(Type.Integer({ minimum: 0 })),
+  },
+  { $id: 'wire.request.plugins.state.set', additionalProperties: false },
+);
+export type SetPluginStateRequestDto = Static<typeof SetPluginStateRequestDtoSchema>;
+
+/** Plugin state write result (`wire.result.plugins.state.set`). */
+export const SetPluginStateResultDtoSchema = Type.Object(
+  {
+    revision: Type.Integer({ minimum: 0 }),
+    updatedAt: Type.String({ minLength: 20, maxLength: 40 }),
+  },
+  { $id: 'wire.result.plugins.state.set', additionalProperties: false },
+);
+export type SetPluginStateResultDto = Static<typeof SetPluginStateResultDtoSchema>;
+
+/** Plugin state delete result (`wire.result.plugins.state.delete`): `deleted`
+ * is `false` when the row did not exist (idempotent delete). */
+export const DeletePluginStateResultDtoSchema = Type.Object(
+  {
+    deleted: Type.Boolean(),
+  },
+  { $id: 'wire.result.plugins.state.delete', additionalProperties: false },
+);
+export type DeletePluginStateResultDto = Static<typeof DeletePluginStateResultDtoSchema>;
+
+/**
  * Message block attachment DTO (`wire.message-block.item`) — one durable
  * plugin→message binding (rev4 stage 4, M7 cluster 15): the kernel-plane
  * replacement for the legacy `message_block_attachments` row. The attachment
@@ -3476,6 +3564,12 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.plugins.uninstall': UninstallPluginRequestDtoSchema,
   'wire.request.plugins.enable': EnablePluginRequestDtoSchema,
   'wire.request.plugins.disable': DisablePluginRequestDtoSchema,
+  'wire.plugin.state.scope': PluginStateScopeSchema,
+  'wire.request.plugins.state.get': PluginStateRequestDtoSchema,
+  'wire.result.plugins.state': PluginStateDtoSchema,
+  'wire.request.plugins.state.set': SetPluginStateRequestDtoSchema,
+  'wire.result.plugins.state.set': SetPluginStateResultDtoSchema,
+  'wire.result.plugins.state.delete': DeletePluginStateResultDtoSchema,
   'wire.themes.item': ThemeDtoSchema,
   'wire.result.themes.list': ListThemesResultDtoSchema,
   'wire.request.themes.install': InstallThemeRequestDtoSchema,

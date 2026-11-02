@@ -16,7 +16,10 @@ import type {
   SearchResultDto,
   AppEventsPageDto,
   GenerationRunDto,
+  DeletePluginStateResultDto,
   InstallPluginResultDto,
+  PluginStateDto,
+  SetPluginStateResultDto,
   InstallThemeResultDto,
   ListPluginsResultDto,
   ListProfilesResultDto,
@@ -389,6 +392,14 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<PluginDto>('plugins.enable', { id: pluginId }, { signal: opts?.signal }),
     disable: (pluginId, opts) =>
       this.sdk.call<PluginDto>('plugins.disable', { id: pluginId }, { signal: opts?.signal }),
+    stateGet: (req, opts) =>
+      this.sdk.call<PluginStateDto>('plugins.state.get', req, { signal: opts?.signal }),
+    stateSet: (req, opts) =>
+      this.sdk.call<SetPluginStateResultDto>('plugins.state.set', req, { signal: opts?.signal }),
+    stateDelete: (req, opts) =>
+      this.sdk.call<DeletePluginStateResultDto>('plugins.state.delete', req, {
+        signal: opts?.signal,
+      }),
   };
 
   readonly themes: ThemesApi = {

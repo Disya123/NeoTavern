@@ -88,6 +88,11 @@ import {
   type ChatPromptPreviewRequestDto,
   type ChatPromptPreviewResultDto,
   type AppEventsPageDto,
+  type PluginStateDto,
+  type PluginStateRequestDto,
+  type SetPluginStateRequestDto,
+  type SetPluginStateResultDto,
+  type DeletePluginStateResultDto,
   type MessageBlock,
   type MessageBlockDto,
   type BlockAttach,
@@ -101,6 +106,7 @@ import {
   type ChatSnapshotResult,
 } from '@neotavern/contracts';
 import { CONTEXT_TOKEN_DEFAULT, DEFAULT_PROMPT_TEMPLATE } from '@neotavern/contracts';
+import { ProductError } from '@neotavern/client-sdk';
 import { type BackendCallOptions, UnsupportedError } from '@neotavern/neobackend';
 import { api } from './client.js';
 import { backend, isKernelMode } from './backend.js';
@@ -1334,6 +1340,52 @@ export async function getChatPromptPreview(
   throw new UnsupportedError('chats.prompt.preview');
 }
 
+/**
+ * One plugin KV state row (wire `plugins.state.get`, M7 Etap-4 cluster 21
+ * part 1): `null` when that scope/owner was never written (the kernel's
+ * `PLUGIN_STATE_NOT_FOUND`), so the sandbox distinguishes "empty store" from
+ * a real failure. Kernel plane only — the legacy plane keeps its own
+ * `/plugins/:id/state` fetch in the plugin host.
+ */
+export async function readPluginState(
+  request: PluginStateRequestDto,
+): Promise<PluginStateDto | null> {
+  if (isKernelMode()) {
+    try {
+      return await backend.plugins.stateGet(request);
+    } catch (error) {
+      if (error instanceof ProductError && error.code === 'PLUGIN_STATE_NOT_FOUND') {
+        return null;
+      }
+      throw error;
+    }
+  }
+  throw new UnsupportedError('plugins.state.get');
+}
+
+/**
+ * Whole-value CAS write of one plugin KV state row (wire
+ * `plugins.state.set`). A stale `expectedRevision` surfaces as the kernel's
+ * `REVISION_CONFLICT` product error; the caller re-reads and retries.
+ */
+export async function writePluginState(
+  request: SetPluginStateRequestDto,
+): Promise<SetPluginStateResultDto> {
+  if (isKernelMode()) {
+    return backend.plugins.stateSet(request);
+  }
+  throw new UnsupportedError('plugins.state.set');
+}
+
+/** Remove one plugin KV state row (wire `plugins.state.delete`). */
+export async function removePluginState(
+  request: PluginStateRequestDto,
+): Promise<DeletePluginStateResultDto> {
+  if (isKernelMode()) {
+    return backend.plugins.stateDelete(request);
+  }
+  throw new UnsupportedError('plugins.state.delete');
+}
 /**
  * One page of the durable app-event log (wire `events.poll`, M7 Etap-4
  * cluster 18): the canonical plane's replacement for the legacy SSE relay.

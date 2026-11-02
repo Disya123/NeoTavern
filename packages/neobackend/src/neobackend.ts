@@ -110,6 +110,11 @@ import type {
   ListMessageVariantsResultDto,
   ListPersonasResultDto,
   ListPluginsResultDto,
+  PluginStateDto,
+  PluginStateRequestDto,
+  SetPluginStateRequestDto,
+  SetPluginStateResultDto,
+  DeletePluginStateResultDto,
   ListPresetsRequestDto,
   ListPresetsResultDto,
   ListProfilesResultDto,
@@ -535,6 +540,27 @@ export interface PluginsApi {
   enable(pluginId: string, opts?: BackendCallOptions): Promise<PluginDto>;
   /** Disable a plugin (idempotent; runtime cleanup is the executor's job, SEC-06). */
   disable(pluginId: string, opts?: BackendCallOptions): Promise<PluginDto>;
+  /**
+   * Read one KV state row of a plugin (wire plugins.state.get, M7 cluster 21
+   * part 1). PLUGIN_STATE_NOT_FOUND when that scope/owner was never written;
+   * PLUGIN_PERMISSION_DENIED when the installation never consented to
+   * storage.<scope>.
+   */
+  stateGet(req: PluginStateRequestDto, opts?: BackendCallOptions): Promise<PluginStateDto>;
+  /**
+   * Whole-value CAS write of one KV state row (plugins.state.set). A stale
+   * expectedRevision is REVISION_CONFLICT carrying the current revision, so
+   * two writers can never clobber each other silently.
+   */
+  stateSet(
+    req: SetPluginStateRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<SetPluginStateResultDto>;
+  /** Remove one KV state row (plugins.state.delete); idempotent. */
+  stateDelete(
+    req: PluginStateRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<DeletePluginStateResultDto>;
 }
 
 /**

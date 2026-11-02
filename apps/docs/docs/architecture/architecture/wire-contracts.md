@@ -195,6 +195,9 @@ ops (eventSchemaId) carrying a response schema; empty/unknown
 | `generation.get`          | transactional | idempotent     | safe  | app.read  | 2048    | 65536  | –      |
 | `generation.events`       | transactional | idempotent     | safe  | app.read  | 4096    | 262144 | –      |
 | `events.poll`             | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
+| `plugins.state.get`       | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
+| `plugins.state.set`       | transactional | non-idempotent | none  | app.write | 262144  | 2048   | –      |
+| `plugins.state.delete`    | transactional | idempotent     | safe  | app.write | 2048    | 1024   | –      |
 | `generation.retry`        | workflow      | non-idempotent | none  | app.write | 2048    | –      | 65536  |
 | `generation.keep`         | transactional | idempotent     | safe  | app.write | 2048    | 65536  | –      |
 | `generation.discard`      | transactional | idempotent     | safe  | app.write | 2048    | 65536  | –      |
@@ -219,7 +222,7 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
 `(kind,name)`). All slice-3 additions are `transactional`, strict
 `additionalProperties: false`, ARC-07. The M7 Этап-4 clusters then grew the
-registry to **131 ops** (the latest additions are the cluster-8 provider-access
+registry to **134 ops** (the latest additions are the cluster-8 provider-access
 pair `providers.models` / `providers.test`, the cluster-23 maintenance op
 `diagnostics.cache.clear`, the cluster-17 audit op `chats.context.audit`
 — the chat's latest durable `wire.prompt.plan`, after the provider catalog +
@@ -234,7 +237,10 @@ shape minus the run identity, because a preview is not a generation run, and
 the cluster-18 app-event cursor `events.poll`, which answers
 `wire.result.app-events-page` of `wire.app-event` items — the durable,
 resumable replacement for the legacy SSE relay, see
-[ADR-0060](../adr/0060-app-event-cursor-not-sse.md));
+[ADR-0060](../adr/0060-app-event-cursor-not-sse.md), and the cluster-21
+plugin KV family `plugins.state.get` / `plugins.state.set` /
+`plugins.state.delete`, whose scope doubles as the `storage.<scope>`
+capability and whose write is a CAS transition over `expectedRevision`);
 the authoritative live list with per-op
 metadata is the generated `packages/contracts/generated/contract-manifest.json`.
 
@@ -300,6 +306,25 @@ row, `hasMore` means "drain again immediately", and `truncated` means the
 cursor aged out of the bounded (2048-row) retention window, so the subscriber
 must reset its caches instead of assuming a complete stream. Push is a host
 concern — see [ADR-0060](../adr/0060-app-event-cursor-not-sse.md).
+
+`plugins.state.get` / `plugins.state.set` / `plugins.state.delete` are the
+plugin KV store (M7 cluster 21 part 1; schema v27 `plugin_state`, one STRICT row
+per `(plugin, scope, owner)`). The request addresses `{ pluginId, scope,
+ownerId? }`: `scope` is the `wire.plugin.state.scope` union
+(`installation` | `user` | `workspace` | `chat`) and _is_ the required
+capability (`storage.<scope>` from the install consent), `installation`/`user`
+are singleton rows (the result reports the empty `ownerId`, since the wire has
+no nullable field), `workspace` names the literal workspace row and `chat`
+requires an explicit `ownerId` — an owner supplied for a singleton scope is a
+VALIDATION refusal. A write carries the whole object plus the `expectedRevision`
+the caller observed (`0` = expect an empty store): a stale value is
+`REVISION_CONFLICT` with the stored revision, never a silent overwrite, and the
+64-key/64-KiB quota is enforced before anything is written
+(`STATE_QUOTA_EXCEEDED`). A read of a never-written scope is
+`PLUGIN_STATE_NOT_FOUND`, an uninstalled plugin `PLUGIN_NOT_FOUND` and a scope
+the installation never consented to `PLUGIN_PERMISSION_DENIED`. Binary blob
+storage (`/plugins/:id/blobs*`) is NOT part of this family: the wire v1 has no
+binary body, so it stays a documented transport boundary.
 
 `providers.list` reports the registered provider adapters (ТЗ §55/§60):
 `wire.result.list-providers` items carry id/name/builtin, the

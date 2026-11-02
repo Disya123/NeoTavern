@@ -73,8 +73,19 @@ prune to a bounded retention window inside the same transaction as the
 mutation, so a client can never observe an event without its data change;
 `events.poll` reports `truncated` when the requested cursor has already aged
 out, and the subscriber then resets its caches instead of pretending it saw a
-complete stream. Rollback for any kernel migration is the pre-migration
-backup restore (ТЗ §10.4); v20–v26 are additive.
+complete stream. v27 (`027_plugin_state`, M7 cluster 21 part 1) adds the
+kernel-owned `plugin_state` — the canonical counterpart of the legacy
+`/api/v2/plugins/:id/state` KV store (the legacy row lives in `app.db`
+migration 0016 and is a different database, not the same table): one STRICT row
+per `(plugin_id, scope, owner_key)` where `scope` is
+`installation|user|workspace|chat`, `owner_key` is `''` for the two non-owned
+scopes (an empty marker rather than NULL, because SQLite does not make PRIMARY
+KEY columns implicitly NOT NULL on rowid tables), `workspace` for a workspace
+row or the owning chat id for a chat row; `revision` is the CAS counter
+(`expectedRevision` on write, CONFLICT on a stale value), `schema_version` the
+plugin's own data format, `data_json` the opaque plugin object, the FK CASCADE
+on uninstall. Rollback for any kernel migration is the pre-migration
+backup restore (ТЗ §10.4); v20–v27 are additive.
 
 ### Plugin state and grants
 

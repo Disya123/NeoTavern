@@ -1,12 +1,23 @@
 /**
  * Rev4 kernel: storage.kv + storage.blobs host handlers (contract §2).
  *
- * KV state lives server-side behind `/api/v2/plugins/:id/state` (one JSON
- * object per (plugin, scope, ownerId), CAS revision); blobs live behind
- * `/api/v2/plugins/:id/blobs`. The host enforces capabilities before every
- * call and translates REST envelopes back into KernelErrors so the sandbox
- * only ever sees wire codes.
+ * KV state lives server-side (one JSON object per (plugin, scope, ownerId),
+ * CAS revision). Two planes, one sandbox contract:
+ *
+ * - kernel plane: `plugins.state.get|set|delete` (M7 cluster 21 part 1) via
+ *   the Product Wire facade, so the sandbox is served by the canonical store;
+ * - legacy plane: the legacy plugin state route (see stateUrl).
+ *
+ * Blobs stay on the legacy plane on both (the legacy blob route below): the
+ * wire has no binary body in v1, so that route is a documented transport
+ * boundary rather than a half-modelled op.
+ *
+ * The host enforces capabilities before every call and translates backend
+ * failures back into KernelErrors so the sandbox only ever sees wire codes.
  */
+import { ProductError } from '@neotavern/client-sdk';
+import { isKernelMode } from '../../api/backend.js';
+import { readPluginState, writePluginState } from '../../api/wireBridge.js';
 import { kernel } from '@neotavern/plugin-sdk';
 import type { KernelHostContext } from './types.js';
 
@@ -112,12 +123,45 @@ function stateUrl(pluginId: string, scope: KvScope, ownerId: string | null): str
   return `/api/v2/plugins/${encodeURIComponent(pluginId)}/state?${query.toString()}`;
 }
 
-/** GET state; `null` when the store is empty (404). */
+/** Map a kernel-plane product error onto the sandbox's kernel codes. */
+function kernelErrorFromProduct(error: ProductError): KernelError {
+  const details = { code: error.code, params: error.params };
+  switch (error.code) {
+    case 'REVISION_CONFLICT':
+      return fail(KernelErrorCode.REVISION_CONFLICT, details);
+    case 'PLUGIN_PERMISSION_DENIED':
+      return fail(KernelErrorCode.CAPABILITY_DENIED, details);
+    case 'PLUGIN_STATE_NOT_FOUND':
+    case 'PLUGIN_NOT_FOUND':
+      return fail(KernelErrorCode.NOT_FOUND, details);
+    case 'STATE_QUOTA_EXCEEDED':
+      return fail(KernelErrorCode.PLUGIN_QUOTA_EXCEEDED, details);
+    case 'VALIDATION':
+      return fail(KernelErrorCode.VALIDATION_FAILED, details);
+    default:
+      return fail(KernelErrorCode.INTERNAL, details);
+  }
+}
+
+/** GET state; `null` when the store is empty (404 / PLUGIN_STATE_NOT_FOUND). */
 async function fetchState(
   ctx: KernelHostContext,
   scope: KvScope,
   ownerId: string | null,
 ): Promise<StateBody | null> {
+  if (isKernelMode()) {
+    const address =
+      ownerId === null
+        ? { pluginId: ctx.pluginId, scope }
+        : { pluginId: ctx.pluginId, scope, ownerId };
+    try {
+      const state = await readPluginState(address);
+      return state ? { data: state.data, revision: state.revision } : null;
+    } catch (error) {
+      if (error instanceof ProductError) throw kernelErrorFromProduct(error);
+      throw fail(KernelErrorCode.INTERNAL, { message: String(error) });
+    }
+  }
   const res = await fetch(stateUrl(ctx.pluginId, scope, ownerId));
   if (res.status === 404) return null;
   if (!res.ok) throw await parseError(res);
@@ -132,6 +176,21 @@ async function putState(
   data: Record<string, unknown>,
   expectedRevision: number | undefined,
 ): Promise<{ revision: number }> {
+  if (isKernelMode()) {
+    try {
+      const result = await writePluginState({
+        pluginId: ctx.pluginId,
+        scope,
+        ...(ownerId === null ? {} : { ownerId }),
+        data,
+        ...(expectedRevision === undefined ? {} : { expectedRevision }),
+      });
+      return { revision: result.revision };
+    } catch (error) {
+      if (error instanceof ProductError) throw kernelErrorFromProduct(error);
+      throw fail(KernelErrorCode.INTERNAL, { message: String(error) });
+    }
+  }
   const res = await fetch(stateUrl(ctx.pluginId, scope, ownerId), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

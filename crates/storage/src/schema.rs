@@ -1100,6 +1100,53 @@ pub const MIGRATION_26_SQL: &str = migration_26_sql!();
 pub const MIGRATION_26_CHECKSUM: &str =
     "a7e28e3ac45f37c628400511015aac526d561132d45b8f6491349a8675d8d9b4";
 
+/// Literal body of the plugin state store (v27) schema migration (M7 Etap-4
+/// cluster 21 part 1): the STRICT `plugin_state` table — the kernel-owned
+/// counterpart of the legacy `/api/v2/plugins/:id/state` KV store.
+///
+/// One row per `(plugin, scope, owner)`: `scope` is one of `installation`,
+/// `user`, `workspace`, `chat` (the legacy capability mapping — `storage.<scope>`
+/// gates access), and `owner_key` is `''` for the two non-owned scopes, the
+/// literal `workspace` for a workspace row or the owning chat id for a chat
+/// row. `owner_key` is NOT NULL (SQLite does not make PRIMARY KEY columns
+/// implicitly NOT NULL on rowid tables, so an empty marker keeps the key
+/// unique instead of allowing duplicate NULL rows).
+///
+/// `revision` is the CAS counter the client echoes as `expectedRevision`; every
+/// successful write bumps it by one, so a concurrent writer is refused with
+/// CONFLICT instead of silently overwriting. `data_json` is the opaque
+/// plugin-authored object (the kernel validates only that it IS an object and
+/// applies the documented key/byte quota on write).
+/// Additive; rollback is the pre-migration backup restore (ТЗ §10.4).
+macro_rules! migration_27_sql {
+    () => {
+        r#"CREATE TABLE plugin_state (
+  plugin_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  owner_key TEXT NOT NULL DEFAULT '',
+  revision INTEGER NOT NULL DEFAULT 0,
+  schema_version INTEGER NOT NULL DEFAULT 1,
+  data_json TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (plugin_id, scope, owner_key),
+  FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX idx_plugin_state_plugin ON plugin_state(plugin_id);"#
+    };
+}
+
+/// Name of the plugin state store (v27) schema migration.
+pub const MIGRATION_27_NAME: &str = "027_plugin_state";
+
+/// Exact SQL of the plugin state store schema migration (v27) — the
+/// `migration_27_sql!()` literal.
+pub const MIGRATION_27_SQL: &str = migration_27_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_27_SQL` string bytes (same
+/// computation as `MIGRATION_26_CHECKSUM`).
+pub const MIGRATION_27_CHECKSUM: &str =
+    "67309f821bab10f60692532981898308e8f297a6713f88c5625e0e9b11e72863";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1158,7 +1205,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_25_sql!(),
     "\n",
-    migration_26_sql!()
+    migration_26_sql!(),
+    "\n",
+    migration_27_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

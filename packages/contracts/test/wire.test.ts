@@ -81,8 +81,9 @@ describe('product wire registry', () => {
     // (127); the theme-settings slice (M7 cluster 14) adds
     // themes.settings.{get,update} (129); the prompt-preview slice (M7
     // cluster 17, part 2) adds chats.prompt.preview (130); the app-event slice
-    // (M7 cluster 18) adds events.poll (131).
-    expect(registry.operations).toHaveLength(131);
+    // (M7 cluster 18) adds events.poll and the plugin state KV slice adds
+    // three ops (134).
+    expect(registry.operations).toHaveLength(134);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -172,6 +173,9 @@ describe('product wire registry', () => {
       'plugins.uninstall',
       'plugins.enable',
       'plugins.disable',
+      'plugins.state.get',
+      'plugins.state.set',
+      'plugins.state.delete',
       'themes.list',
       'themes.install',
       'themes.uninstall',

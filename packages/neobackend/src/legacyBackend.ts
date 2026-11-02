@@ -314,6 +314,9 @@ export class LegacyBackend implements NeoBackend {
     uninstall: () => this.unsupported('plugins.uninstall'),
     enable: () => this.unsupported('plugins.enable'),
     disable: () => this.unsupported('plugins.disable'),
+    stateGet: () => this.unsupported('plugins.state.get'),
+    stateSet: () => this.unsupported('plugins.state.set'),
+    stateDelete: () => this.unsupported('plugins.state.delete'),
   };
 
   readonly themes: ThemesApi = {

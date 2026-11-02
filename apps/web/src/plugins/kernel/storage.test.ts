@@ -104,9 +104,26 @@ function jsonResponse(body: unknown, status = 200, headers: Record<string, strin
   });
 }
 
+// Kernel plane (M7 cluster 21 part 1): the KV handlers switch to the Product
+// Wire when the active backend is the local/remote kernel. Default is the
+// legacy plane so the REST tests below stay unchanged.
+const planeMocks = vi.hoisted(() => ({
+  isKernelMode: vi.fn(() => false),
+  readPluginState: vi.fn(),
+  writePluginState: vi.fn(),
+}));
+vi.mock('../../api/backend.js', () => ({ isKernelMode: planeMocks.isKernelMode }));
+vi.mock('../../api/wireBridge.js', () => ({
+  readPluginState: planeMocks.readPluginState,
+  writePluginState: planeMocks.writePluginState,
+}));
+
 let fetchMock: Mock;
 
 beforeEach(() => {
+  planeMocks.isKernelMode.mockReturnValue(false);
+  planeMocks.readPluginState.mockReset();
+  planeMocks.writePluginState.mockReset();
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -380,5 +397,105 @@ describe('attachStorage blobs', () => {
     await expect(
       callHandler(session, 'storage.blobs.delete', { blobId: 'missing' }),
     ).rejects.toMatchObject({ code: kernel.KernelErrorCode.NOT_FOUND });
+  });
+});
+
+describe('kernel-plane KV state (wire plugins.state.*)', () => {
+  it('reads through plugins.state.get and never touches the REST route', async () => {
+    planeMocks.isKernelMode.mockReturnValue(true);
+    planeMocks.readPluginState.mockResolvedValue({
+      pluginId: 'plugin.test',
+      scope: 'user',
+      ownerId: '',
+      revision: 4,
+      schemaVersion: 1,
+      data: { lastQuery: 'dragons' },
+      updatedAt: '2026-08-13T00:00:00.000Z',
+    });
+    const { ctx, session } = makeContext({ capabilities: ['storage.user'] });
+    attachStorage(ctx);
+
+    const result = (await callHandler(session, 'storage.kv.get', {
+      scope: 'user',
+      key: 'lastQuery',
+    })) as { value: unknown; revision: number };
+
+    expect(planeMocks.readPluginState).toHaveBeenCalledWith({
+      pluginId: 'plugin.test',
+      scope: 'user',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ value: 'dragons', revision: 4 });
+  });
+
+  it('maps PLUGIN_STATE_NOT_FOUND to an empty store instead of an error', async () => {
+    planeMocks.isKernelMode.mockReturnValue(true);
+    planeMocks.readPluginState.mockResolvedValue(null);
+    const { ctx, session } = makeContext({ capabilities: ['storage.user'] });
+    attachStorage(ctx);
+
+    const result = (await callHandler(session, 'storage.kv.list', { scope: 'user' })) as {
+      keys: string[];
+      revision: number;
+    };
+    expect(result).toEqual({ keys: [], revision: 0 });
+  });
+
+  it('writes the merged object with the observed revision as the CAS guard', async () => {
+    planeMocks.isKernelMode.mockReturnValue(true);
+    planeMocks.readPluginState.mockResolvedValue({
+      pluginId: 'plugin.test',
+      scope: 'user',
+      ownerId: '',
+      revision: 3,
+      schemaVersion: 1,
+      data: { a: 1 },
+      updatedAt: '2026-08-13T00:00:00.000Z',
+    });
+    planeMocks.writePluginState.mockResolvedValue({
+      revision: 4,
+      updatedAt: '2026-08-13T00:00:01.000Z',
+    });
+    const { ctx, session } = makeContext({ capabilities: ['storage.user'] });
+    attachStorage(ctx);
+
+    const result = (await callHandler(session, 'storage.kv.set', {
+      scope: 'user',
+      key: 'b',
+      value: 2,
+    })) as { revision: number };
+
+    expect(planeMocks.writePluginState).toHaveBeenCalledWith({
+      pluginId: 'plugin.test',
+      scope: 'user',
+      data: { a: 1, b: 2 },
+      expectedRevision: 3,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ revision: 4 });
+  });
+
+  it('surfaces REVISION_CONFLICT from the kernel as a typed sandbox error', async () => {
+    planeMocks.isKernelMode.mockReturnValue(true);
+    planeMocks.readPluginState.mockResolvedValue({
+      pluginId: 'plugin.test',
+      scope: 'user',
+      ownerId: '',
+      revision: 1,
+      schemaVersion: 1,
+      data: {},
+      updatedAt: '2026-08-13T00:00:00.000Z',
+    });
+    const { ProductError } = await import('@neotavern/client-sdk');
+    planeMocks.writePluginState.mockRejectedValue(
+      new ProductError({ code: 'REVISION_CONFLICT', params: { revision: '2' } }),
+    );
+    const { ctx, session } = makeContext({ capabilities: ['storage.user'] });
+    attachStorage(ctx);
+
+    await expect(
+      callHandler(session, 'storage.kv.set', { scope: 'user', key: 'a', value: 1 }),
+    ).rejects.toMatchObject({ code: kernel.KernelErrorCode.REVISION_CONFLICT });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

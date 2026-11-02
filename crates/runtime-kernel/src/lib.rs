@@ -42,6 +42,7 @@ pub mod generation;
 pub mod headless;
 pub mod imports;
 pub mod local;
+pub mod plugin_state;
 pub mod plugins;
 pub mod product;
 pub mod profiles;
@@ -699,6 +700,10 @@ fn handle_unary(
         "plugins.uninstall" => with_db_opt(db, |db| plugins::plugins_uninstall(db, req)),
         "plugins.enable" => with_db_opt(db, |db| plugins::plugins_enable(db, req)),
         "plugins.disable" => with_db_opt(db, |db| plugins::plugins_disable(db, req)),
+        // Этап 4 cluster 21 part 1: canonical plugin KV state store.
+        "plugins.state.get" => with_db_opt(db, |db| plugin_state::state_get(db, req)),
+        "plugins.state.set" => with_db_opt(db, |db| plugin_state::state_set(db, req)),
+        "plugins.state.delete" => with_db_opt(db, |db| plugin_state::state_delete(db, req)),
         // Этап 4 slice 6 part 2: canonical Theme-SDK registry (SEC-05).
         "themes.list" => with_db_opt(db, |db| themes::themes_list(db, req)),
         "themes.install" => with_db_opt(db, |db| themes::themes_install(db, req)),
