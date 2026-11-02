@@ -4,6 +4,28 @@
 
 ### Added
 
+- **Explicit host-surface boundary for the plugin host (round 5/40 of the
+  legacy-removal goal).** The seven plugin-host capabilities the web contour
+  needs but Product Wire deliberately does not model — package install
+  verification, Git install, safe-mode enter/exit and the three OAuth
+  connection calls — moved out of the transport module into
+  `apps/web/src/api/hostSurfaces.ts`, where `HOST_SURFACES` states for each one
+  its legacy route, why it is host-owned and what stage 6 must replace it with.
+  Behaviour is unchanged on the legacy plane and stays fail-closed on the kernel
+  plane (`UnsupportedError` whose `feature` is the registry id, no network call),
+  but the boundary can no longer drift: the id, the error and the table row are
+  the same string, and a test pins the registry id set to the exported calls.
+  `wireBridge` re-exports the functions so existing importers are untouched.
+  The legacy audit also closed a real hole: pnpm ui:api:check only matched literal
+  /api/v2 routes and legacyRaw() helpers, so plugin-host calls (whose prefix
+  the shared client injects) were never counted. It now has a third kind,
+  host-surface, and the baseline grew from 44 to 51 audited sites because those
+  calls became visible � an audit closure, not a regression.
+  Docs: new [host-surface-boundary.md](docs/architecture/host-surface-boundary.md),
+  cutover registry rows 19/20/21a now point at it. Tests: 15 new cases
+  (`apps/web/src/api/hostSurfaces.test.ts`) covering the registry invariants, the
+  kernel-plane refusals and the legacy routes/methods.
+
 - **Chat wallpapers on the kernel plane (round 4/40 of the legacy-removal
   goal).** The backgrounds cluster is flipped from the sidecar filesystem
   contour to the canonical asset plane, and the wallpaper becomes product data:

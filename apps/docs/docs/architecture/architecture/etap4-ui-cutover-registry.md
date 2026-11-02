@@ -210,6 +210,14 @@ with a stable `UnsupportedError`, and the legacy sidecar keeps the feature. The
 "contract landed, consumer pending" — it is no longer a blocker that code alone
 cannot move.
 
+Per-surface note (round 5): the plugin-host capabilities these rows need
+(install verification, safe mode, OAuth connection sessions) are now declared
+in one auditable place — [host-surface-boundary.md](host-surface-boundary.md) /
+`apps/web/src/api/hostSurfaces.ts`. That does not turn them into wire ops; it
+makes the boundary explicit, fail-closed on the kernel plane, and gives the
+future kernel-mode executor a single list of what it has to own before rows
+19/20/21a can be flipped.
+
 ### 4.1 Reassessment after cluster 21 part 2
 
 The plugin secret store closed the last family that was still parked behind a

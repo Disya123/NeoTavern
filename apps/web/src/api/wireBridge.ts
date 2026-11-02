@@ -59,17 +59,9 @@ import {
   type ThemeListResponse,
   type ThemeDto,
   type InstalledPlugin,
-  type PluginAuthConnectRequest,
-  type PluginAuthConnectResult,
-  type PluginAuthConnectionsResponse,
-  type PluginAuthRevokeRequest,
-  type PluginAuthRevokeResult,
   type PluginDeleteResult,
-  type PluginGitInstallRequest,
-  type PluginInstallResult,
   type PluginLifecycleResult,
   type PluginListResponse,
-  type PluginSafeModeResult,
   type PluginDto,
   type CharacterDto,
   type CharacterImportResult,
@@ -2496,85 +2488,22 @@ export async function deletePlugin(id: string): Promise<PluginDeleteResult> {
   return api.del<PluginDeleteResult>(`/plugins/${encodeURIComponent(id)}`);
 }
 
-/** Install a plugin package. On the kernel plane the wire contract requires
- * the HOST to have already verified the package (SEC-05 signature/digest +
- * ZIP hardening) before `plugins.install` runs; the web transport has no
- * such host command yet — honest CAPABILITY_UNAVAILABLE. */
-export async function installPlugin(file: File): Promise<PluginInstallResult> {
-  if (isKernelMode()) {
-    throw new UnsupportedError('plugins.install.host-verify');
-  }
-  return api.upload<PluginInstallResult>('/plugins/install', file);
-}
-
-/** Install a plugin from a public Git repository archive (host-side fetch +
- * verification required). Not expressible on the kernel plane. */
-export async function installPluginFromGit(
-  input: PluginGitInstallRequest,
-): Promise<PluginInstallResult> {
-  if (isKernelMode()) {
-    throw new UnsupportedError('plugins.install.git.host-verify');
-  }
-  return api.post<PluginInstallResult>('/plugins/install-git', input);
-}
-
-/** Enter runtime safe mode. The kernel has no safe-mode mechanism (no wire
- * op) — honest CAPABILITY_UNAVAILABLE. */
-export async function enterPluginSafeMode(): Promise<PluginSafeModeResult> {
-  if (isKernelMode()) {
-    throw new UnsupportedError('plugins.safe-mode.enter');
-  }
-  return api.post<PluginSafeModeResult>('/plugins/runtime/safe-mode');
-}
-
-/** Exit runtime safe mode. See {@link enterPluginSafeMode}. */
-export async function exitPluginSafeMode(): Promise<PluginSafeModeResult> {
-  if (isKernelMode()) {
-    throw new UnsupportedError('plugins.safe-mode.exit');
-  }
-  return api.del<PluginSafeModeResult>('/plugins/runtime/safe-mode');
-}
-
-/** List auth connections of one plugin. OAuth/session state lives outside the
- * kernel wire model — honest CAPABILITY_UNAVAILABLE. */
-export async function readPluginAuthConnections(
-  pluginId: string,
-): Promise<PluginAuthConnectionsResponse> {
-  if (isKernelMode()) {
-    throw new UnsupportedError('plugins.auth.connections');
-  }
-  return api.get<PluginAuthConnectionsResponse>(
-    `/plugins/${encodeURIComponent(pluginId)}/auth/connections`,
-  );
-}
-
-/** Connect an OAuth flow for one plugin. See {@link readPluginAuthConnections}. */
-export async function connectPluginAuth(
-  pluginId: string,
-  input: PluginAuthConnectRequest,
-): Promise<PluginAuthConnectResult> {
-  if (isKernelMode()) {
-    throw new UnsupportedError('plugins.auth.connect');
-  }
-  return api.post<PluginAuthConnectResult>(
-    `/plugins/${encodeURIComponent(pluginId)}/auth/connect`,
-    input,
-  );
-}
-
-/** Revoke an OAuth connection. See {@link readPluginAuthConnections}. */
-export async function revokePluginAuth(
-  pluginId: string,
-  input: PluginAuthRevokeRequest,
-): Promise<PluginAuthRevokeResult> {
-  if (isKernelMode()) {
-    throw new UnsupportedError('plugins.auth.revoke');
-  }
-  return api.post<PluginAuthRevokeResult>(
-    `/plugins/${encodeURIComponent(pluginId)}/auth/revoke`,
-    input,
-  );
-}
+// The plugin host surfaces (install verification, safe mode, OAuth connection
+// sessions) moved to `./hostSurfaces.ts`, the single auditable boundary for
+// host/HTTP capabilities that Product Wire deliberately does not model. These
+// re-exports keep the historical entry point working for the UI hooks.
+export {
+  connectPluginAuth,
+  enterPluginSafeMode,
+  exitPluginSafeMode,
+  HOST_SURFACES,
+  hostSurface,
+  installPlugin,
+  installPluginFromGit,
+  readPluginAuthConnections,
+  revokePluginAuth,
+} from './hostSurfaces.js';
+export type { HostSurface } from './hostSurfaces.js';
 
 /** Set-equality comparison for permission lists (wire order is not
  * meaningful; the UI selection may arrive in any order). */

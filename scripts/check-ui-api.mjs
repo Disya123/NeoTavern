@@ -179,6 +179,13 @@ function detectHits(file) {
       kind = 'legacyRaw';
       const method = line.match(/\.(request|sseUrl)\(\s*'([^']+)'/);
       detail = method ? `${method[1]} ${method[2]}` : 'legacyRaw';
+    } else if (/hostSurface\(/.test(line) && !/function hostSurface\(/.test(line)) {
+      // Host-surface boundary (round 5): these calls hit legacy routes WITHOUT
+      // the `/api/v2` prefix (the shared api client prepends it), which is why
+      // they used to escape this audit. The registry id is the detail.
+      kind = 'host-surface';
+      const m = line.match(/hostSurface\(\s*'([^']+)'/);
+      detail = m ? m[1] : 'hostSurface';
     }
     if (kind) {
       hits.push({
@@ -214,6 +221,7 @@ const LEGACY_COMPAT_FILES = [
   'apps/web/src/api/client.ts',
   'apps/web/src/api/events.ts',
   'apps/web/src/api/generate.ts',
+  'apps/web/src/api/hostSurfaces.ts',
   'apps/web/src/api/legacyExtensionSettings.ts',
   'apps/web/src/api/wireBridge.ts',
 ];

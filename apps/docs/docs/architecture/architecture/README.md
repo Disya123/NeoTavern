@@ -258,6 +258,9 @@ gate passes.
   checklist of the vertical slices that move the React UI off `/api/v2`
   onto the Product Wire plane (ADR-0038 Этап 4), one slice per commit.
 - [Product Wire Contracts](wire-contracts.md) — canonical TypeBox contracts,
+- [Host-surface boundary](host-surface-boundary.md) — the explicit, fail-closed
+  boundary for plugin-host capabilities (install verification, safe mode, OAuth
+  connection sessions) that Product Wire deliberately does not model.
   wire-safe rules, handshake, versioning, deterministic codegen and the
   cross-language corpus.
 - [Presentation boundary](presentation-boundary.md) — Milestone A **PASS**
