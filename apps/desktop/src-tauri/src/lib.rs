@@ -769,7 +769,9 @@ fn run_stream(
 /// 3. a tool round trip (§8.3): register a declarative tool, a second run
 ///    durably waits (`waiting_for_tool`), `generation.tools.list` serves the
 ///    contract, `generation.tool.result` resumes and completes the run with a
-///    second assistant message.
+///    second assistant message;
+/// 4. a full chats/messages CRUD walk on a throwaway chat — every op of the
+///    `chats.crud` and `chats.messages.crud` capabilities (G6 evidence).
 ///
 /// No HTTP, no sidecar, no UI: this is the packaged host's own self-check,
 /// runnable headless via `NEOTA_DESKTOP_SMOKE=1`.
@@ -944,6 +946,55 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         ));
     }
     eprintln!("[smoke] golden: tool round trip completed, two assistant messages saved");
+
+    // 4. Full chats.crud + chats.messages.crud walk (G6 evidence, round 23:
+    //    every op of both capabilities runs on the packaged artifact, on a
+    //    throwaway chat that is deleted afterwards).
+    let second = dispatch_ok(
+        &host,
+        "chats.create",
+        serde_json::json!({ "characterId": character_id, "title": "Smoke throwaway" }),
+    )?;
+    let second_id = second["id"]
+        .as_str()
+        .ok_or_else(|| "throwaway chat carried no id".to_string())?
+        .to_string();
+    dispatch_ok(&host, "chats.get", serde_json::json!({ "chatId": second_id }))?;
+    dispatch_ok(
+        &host,
+        "chats.update",
+        serde_json::json!({ "chatId": second_id, "title": "Smoke renamed" }),
+    )?;
+    let throwaway = dispatch_ok(
+        &host,
+        "chats.messages.create",
+        serde_json::json!({ "chatId": second_id, "role": "user", "content": "edit me" }),
+    )?;
+    let throwaway_message = throwaway["id"]
+        .as_str()
+        .ok_or_else(|| "throwaway message carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "chats.messages.update",
+        serde_json::json!({
+            "chatId": second_id,
+            "messageId": throwaway_message,
+            "content": "edited",
+        }),
+    )?;
+    dispatch_ok(
+        &host,
+        "chats.messages.delete",
+        serde_json::json!({ "chatId": second_id, "messageId": throwaway_message }),
+    )?;
+    dispatch_ok(
+        &host,
+        "chats.reorder",
+        serde_json::json!({ "characterId": character_id, "order": [chat_id, second_id] }),
+    )?;
+    dispatch_ok(&host, "chats.delete", serde_json::json!({ "chatId": second_id }))?;
+    eprintln!("[smoke] golden: chats/messages CRUD full walk ok");
     Ok(())
 }
 

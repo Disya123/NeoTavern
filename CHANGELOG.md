@@ -4,6 +4,17 @@
 
 ### Added
 
+- **First portable packaged evidence and the first Packaged matrix rows (round
+  23/40).** `pnpm desktop:portable` now builds and verifies end to end on the
+  branch: WiX MSI, the portable ZIP with its SHA-256, and the repo shell smoke
+  (portable data path, readiness, sidecar cleanup) passing on the artifact.
+  The packaged kernel self-smoke extends its golden path with a full
+  `chats.crud` + `chats.messages.crud` walk on a throwaway chat (create, get,
+  rename, message edit/delete, manual reorder, delete), so `chats.crud`,
+  `chats.messages.crud`, `generation.tool-loop` and `meta.get` are promoted to
+  Packaged on desktop in the capability matrix — promoted by observed
+  behaviour, per ARC-10.
+
 - **`neotavern-headless legacy-rollback` — the G8 operator command (round
   21/40).** Completes the import/rollback loop over the real binary: returns
   the data root to the retained previous root (newest inactive root under
