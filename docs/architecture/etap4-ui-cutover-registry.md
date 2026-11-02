@@ -196,6 +196,47 @@ Until then the honest state is what ships today: the React hooks refuse in
 kernel mode with a stable `UnsupportedError`, and the legacy sidecar keeps the
 feature.
 
+### 4.1 Reassessment after cluster 21 part 2
+
+The plugin secret store closed the last family that was still parked behind a
+"security decision". Nothing else in the missing set is waiting on a security
+model: each remaining route falls into exactly one of four buckets, and none of
+them can be moved by writing code alone.
+
+1. **Ingestion transport (the decision above).** Row 8 tail (audio/images/
+   transcribe), row 10 (backup import), row 13 (wallpapers), row 21a (plugin
+   blobs) and the asset half of row 20 all need bytes that a JSON request
+   cannot carry. Both candidate contracts are recorded in the table above and
+   neither is approved; implementing one unilaterally would change the
+   transport contract without an owner decision.
+2. **Host/HTTP surface by architecture, not by omission.** Row 19's install
+   verifier, row 20 (git install, safe-mode file, sandbox session, package
+   assets), row 21b (`pluginJobs` — the in-process sandbox executor queue) and
+   row 21c (`pluginAuth` — OAuth redirects plus a server-side token-holding
+   fetch proxy) all own live host handles or browser-flow state. The kernel
+   owns product state; moving these in would mean the kernel becoming a job
+   runner and an HTTP proxy, which the approved architecture (ADR-0038/0059,
+   ТЗ 14.1) deliberately keeps out of the core.
+3. **N/A because the React product never calls them.** Row 9 (connection
+   profiles) and row 22 (browser-session auth) are legacy-contour surfaces;
+   the canonical equivalents are already covered (`providers.config.*` +
+   `providers.secrets.*` + `presets.*` for row 9, the `remote-http` pairing
+   adapter for row 22). The two in-row N/As (lorebook trash restore, per-theme
+   file tree) are recorded the same way.
+4. **First-paint boundary.** `themes/boot` must answer before React mounts, so
+   it belongs to the app bootstrap (a host concern by construction) — the
+   kernel already supplies its inputs and the documented first-paint difference
+   stands.
+
+Consequence for planning: the wire-coverage program in this registry is at its
+honest ceiling — 112 covered / 5 partial / 48 missing, with every missing route
+classified above. The next move on buckets 1–2 is the owner's: pick the
+ingestion contract (host-staged vs chunked upload), and state explicitly
+whether any host/HTTP surface should be pulled into the kernel. Bucket 3 stays
+N/A and bucket 4 stays a documented boundary. The remaining product work on
+covered rows is the separate UI-flag-flip program (`todo (UI flag flip)`), not
+a wire gap.
+
 ## 5. Ground truth and machine gates
 
 - Route inventory: `docs/architecture/operations-inventory.md` (updated per
