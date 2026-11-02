@@ -4,6 +4,15 @@
 
 ### Added
 
+- **`activation::rollback_to` — the G8 rollback mechanism (round 19/40).**
+  After a committed import activation the data root can return to the
+  retained previous root through the same durable journal stages
+  (`kind: "rollback"`, `prepared -> committed`); the rolled-back-from root
+  stays on disk, so the switch is itself reversible. Refuses a target without
+  a database (`IntegrityViolation`) and rolling back to the already-active
+  root (`Conflict`). Two journal-level tests pin the flow; packaged-artifact
+  verification (the actual G8 gate row) stays open.
+
 - **`neotavern-headless legacy-import` — the local G7 entry point (round
   17/40).** ADR-0062 requires the legacy `app.db` migration to be a local
   kernel operation, never an HTTP route. The headless host now ships the

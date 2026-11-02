@@ -1484,3 +1484,72 @@ fn legacy_import_failure_keeps_the_active_root_untouched() {
         "refusal wrote a journal entry"
     );
 }
+
+// --- G8: rollback after a committed import activation ------------------------
+
+use neotavern_storage::activation::rollback_to;
+
+/// After a committed import activation, rolling back returns the data root to
+/// the previous root through the journal (`kind: "rollback"`), and the
+/// rolled-back-from staged root stays on disk (so the switch is reversible).
+#[test]
+fn legacy_import_rollback_returns_to_the_previous_root() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    // A realistic rollback needs a REAL previous root: the user already ran
+    // NeoTavern here (v1 flat layout, database at the data root).
+    let seed = {
+        let mut progress = |_: MigrationProgress| {};
+        open(&data_root, &ConnectionPolicy::default(), &mut progress).expect("seed previous root")
+    };
+    drop(seed);
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+
+    let staged = stage(&source, &data_root).expect("stage");
+    let previous = neotavern_storage::activation::active_root(&data_root).expect("active root");
+    activate_staged(&data_root, &staged, &previous).expect("activate");
+
+    rollback_to(&data_root, &previous).expect("rollback");
+
+    let pointer = neotavern_storage::activation::read_pointer(&data_root)
+        .expect("read pointer")
+        .expect("pointer exists");
+    assert_eq!(pointer.root, previous, "the previous root is active again");
+
+    let entry = latest_entry(&data_root)
+        .expect("journal readable")
+        .expect("journal has the rollback entry");
+    assert_eq!(entry.kind, "rollback");
+    assert_eq!(entry.status, ActivationStatus::Committed);
+
+    assert!(
+        staged.staged_root.is_dir(),
+        "the rolled-back-from root is retained on disk"
+    );
+}
+
+/// A rollback target that is not a real root refuses with IntegrityViolation
+/// and leaves the current pointer untouched.
+#[test]
+fn rollback_refuses_a_missing_target_and_keeps_the_pointer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+
+    let staged = stage(&source, &data_root).expect("stage");
+    let previous = neotavern_storage::activation::active_root(&data_root).expect("active root");
+    activate_staged(&data_root, &staged, &previous).expect("activate");
+
+    let missing = dir.path().join("no-such-root");
+    let error = rollback_to(&data_root, &missing).expect_err("missing target must refuse");
+    assert_eq!(error.code, StorageErrorCode::IntegrityViolation);
+
+    let pointer = neotavern_storage::activation::read_pointer(&data_root)
+        .expect("read pointer")
+        .expect("pointer exists");
+    assert_eq!(pointer.root, staged.staged_root, "pointer untouched");
+}

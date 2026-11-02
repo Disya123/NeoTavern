@@ -75,6 +75,10 @@ source fingerprint, target root, imported at)` — where the fingerprint is
    previous root until the first new mutation. Inverse-write scripts and
    snapshot restores are both rejected: the first is unprovable under partial
    failure, the second is redundant when the previous root still exists.
+   Implemented (round 19) as `activation::rollback_to`: it journals
+   `kind: "rollback"` through `prepared -> committed` and repoints the
+   pointer; the rolled-back-from root stays on disk, so the switch is itself
+   reversible. Host policy owns the "until the first new mutation" boundary.
 6. **Binary payloads stay out of the database.** Asset bytes go through the
    existing asset plane (`publish_asset_from_file`), and only the metadata rows
    are imported. This keeps `database.sqlite` a data database and reuses the

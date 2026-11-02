@@ -290,7 +290,7 @@
     {
       "source": "adr/0062-legacy-app-db-import-contract.md",
       "target": "adr/0062-legacy-app-db-import-contract.md",
-      "sha256": "2e569b4cd16ac41181ae1e4df256affef7ce1d6896c7e83ff6e45365ae5152cd"
+      "sha256": "c8fd46d2ff8cf665f5dcd1067ab17edfb0193c0c521c1086ed361032403d0358"
     },
     {
       "source": "adr/README.md",
@@ -380,7 +380,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "bd3d2655d9d57a9e2f9a7d81120ddabbb8b9e4bea951f50ce08a39256061780a"
+      "sha256": "b163834c58e59f2529ac5fc52c82203ed0eaa2c3465adab59fdc4a3b61a8cfe8"
     },
     {
       "source": "architecture/resource-containment.md",

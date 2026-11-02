@@ -570,6 +570,39 @@ pub fn activate(
     transition_status(data_root, id, ActivationStatus::Committed, None)
 }
 
+/// Rolls the active root back to a retained previous root (the ADR-0041
+/// rollback window): the same durable protocol as any activation, journalled
+/// as `kind: "rollback"`. The rolled-back-from root stays on disk, so the
+/// switch can itself be undone by rolling back again. Host policy owns the
+/// "until the first new mutation" boundary — this function only requires the
+/// target to be a real root that is not already active.
+pub fn rollback_to(data_root: &Path, to_root: &Path) -> Result<()> {
+    if !crate::paths::db_path(to_root).is_file() {
+        return Err(StorageError::new(
+            StorageErrorCode::IntegrityViolation,
+            "rollback target has no database; rollback refused",
+        ));
+    }
+    let from_root = active_root(data_root)?;
+    if from_root == to_root {
+        return Err(StorageError::new(
+            StorageErrorCode::Conflict,
+            "rollback target is already the active root",
+        ));
+    }
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    activate(
+        data_root,
+        &format!("rollback-{millis}"),
+        "rollback",
+        &from_root,
+        to_root,
+    )
+}
+
 /// Retry policy for the pointer switch (ТЗ §10.3.1): bounded retry, base
 /// delay doubled per attempt, ±20 % jitter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
