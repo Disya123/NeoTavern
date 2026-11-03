@@ -187,6 +187,32 @@ describe('connectAppEvents', () => {
     mocks.pollAppEvents.mockReset();
     mocks.isKernelMode.mockReturnValue(false);
   });
+  it('coalesces a replayed event page into one refetch per distinct key', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const item = (sequence: number) => ({
+      sequence,
+      event: 'chat.message.created',
+      payload: { chatId: 'chat-backlog' },
+      createdAt: '2026-08-13T00:00:00Z',
+    });
+    mocks.pollAppEvents.mockResolvedValue({
+      items: [item(1), item(2), item(3), item(4), item(5)],
+      hasMore: false,
+      truncated: false,
+    });
+    queryClient.clear();
+    invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const kernelTeardown = connectAppEvents(queryClient);
+    await vi.waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['chats'] }));
+    // Five replayed message events collapse into the 3 distinct keys of ONE
+    // message event — not 15 invalidations.
+    expect(invalidateSpy).toHaveBeenCalledTimes(3);
+
+    kernelTeardown();
+    mocks.pollAppEvents.mockReset();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
 
   it('resets every cache when the kernel cursor aged out of retention', async () => {
     mocks.isKernelMode.mockReturnValue(true);

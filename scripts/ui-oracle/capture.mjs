@@ -11,15 +11,6 @@
  * capture both authored and resolved layers or explicitly reject them.
  */
 
-function implicitRole(element) {
-  if (element.tagName === 'BUTTON') return 'button';
-  if (element.tagName === 'INPUT') {
-    return element.getAttribute('type') === 'search' ? 'searchbox' : 'textbox';
-  }
-  if (element.tagName === 'SELECT') return 'combobox';
-  return undefined;
-}
-
 /**
  * Extract an annotated UI capture. `computedStyleProperties` must be the
  * whitelist exported by the presentation contract; passing an ad-hoc property
@@ -43,7 +34,14 @@ export async function captureAnnotatedUi(page, options) {
       if (!root.matches('[data-ui-node][data-ui-component]')) {
         throw new Error('UI oracle root must declare data-ui-node and data-ui-component');
       }
-
+      const implicitRole = (element) => {
+        if (element.tagName === 'BUTTON') return 'button';
+        if (element.tagName === 'INPUT') {
+          return element.getAttribute('type') === 'search' ? 'searchbox' : 'textbox';
+        }
+        if (element.tagName === 'SELECT') return 'combobox';
+        return undefined;
+      };
       const declarationsFor = (element) => {
         const declarations = [];
         const visitRules = (rules, conditions) => {

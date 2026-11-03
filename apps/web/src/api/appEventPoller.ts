@@ -41,6 +41,8 @@ export interface AppEventPollingOptions {
   poll: (afterSequence: number, signal: AbortSignal) => Promise<AppEventPage>;
   /** Called for every event, in sequence order. */
   onEvent: (event: string, payload: Record<string, unknown>) => void;
+  /** Called once after the whole page of events was delivered (may be empty). */
+  onBatch?: () => void;
   /** The cursor aged out: reset caches, then the loop keeps going. */
   onTruncated?: () => void;
   /** Idle poll interval in ms (default 2000). */
@@ -101,6 +103,10 @@ export function startAppEventPolling(options: AppEventPollingOptions): () => voi
       cursor = Math.max(cursor, item.sequence);
       options.onEvent(item.event, item.payload);
     }
+    // One page of replayed events is one batch: consumers coalescing cache
+    // work per batch keep a long retained backlog from becoming a request
+    // storm (each page flushes once instead of once per event).
+    options.onBatch?.();
     schedule(page.hasMore ? 0 : intervalMs);
   };
 

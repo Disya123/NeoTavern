@@ -1063,6 +1063,18 @@
 
 ### Fixed
 
+- **Playwright E2E suite goes green for the first time (round 35/40).** The
+  kernel-mode suite (`apps/web` dist + `neotavern-headless` over Product
+  Wire) passes 4/4 shards: remote HostConnect, generation preset and
+  memory CRUD, the virtualized feed (240-message chat mounts only the
+  visible window; load-older stays top-anchored) and the ui-oracle
+  CaptureBundle. Fixes: ui-oracle blueprint loading (package exports
+  subpath, workspace devDep, explicit tsconfig reference), `implicitRole`
+  captured outside the `page.evaluate` scope, the capture spec now seeds
+  the character its `populated` contract requires, and the kernel-plane
+  event poller coalesces cache invalidation per event page instead of
+  firing one refetch per replayed backlog event.
+
 - **Desktop: the built-in `app.now` tool id now satisfies the `wire.tool.spec`
   contract (round 22/40).** The first packaged release build's shell smoke
   caught a packaged-only defect: the host registered its clock tool with the

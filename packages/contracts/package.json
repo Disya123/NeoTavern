@@ -11,6 +11,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./presentation/blueprint": {
+      "types": "./dist/presentation/blueprint.d.ts",
+      "import": "./dist/presentation/blueprint.js",
+      "require": "./dist/presentation/blueprint.js"
+    },
+    "./presentation/blueprint.js": {
+      "types": "./dist/presentation/blueprint.d.ts",
+      "import": "./dist/presentation/blueprint.js",
+      "require": "./dist/presentation/blueprint.js"
     }
   },
   "scripts": {

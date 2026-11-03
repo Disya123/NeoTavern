@@ -23,6 +23,9 @@ importers:
       '@eslint/js':
         specifier: ^9.17.0
         version: 9.39.5
+      '@neotavern/contracts':
+        specifier: workspace:^
+        version: link:packages/contracts
       '@playwright/test':
         specifier: ^1.49.1
         version: 1.62.0

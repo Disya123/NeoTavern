@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { captureAnnotatedUi } from '../../scripts/ui-oracle/capture.mjs';
+import { postJson } from '../helpers.js';
 
 async function loadPresentationBlueprint() {
-  return import('../../packages/contracts/dist/presentation/blueprint.js');
+  return import('@neotavern/contracts/presentation/blueprint.js');
 }
 
 async function waitForApp(page: Page): Promise<void> {
@@ -36,6 +37,12 @@ async function captureCards(
   width: number,
   height: number,
 ) {
+  // The capture contract (character-manager.populated.*) requires at least
+  // one card: seed one deterministic character for this capture session.
+  await postJson(page, '/characters', {
+    name: `Oracle Character ${Date.now().toString(36)}`,
+    description: 'Seeded by the ui-oracle capture spec.',
+  });
   await page.setViewportSize({ width, height });
   await page.goto('/home');
   await waitForApp(page);

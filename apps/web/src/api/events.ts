@@ -38,8 +38,48 @@ interface AppEventIds {
 }
 
 /**
+ * Query keys one relayed event invalidates. Pure mapping shared by both
+ * transports so the kernel and the legacy contour cannot drift apart in what
+ * they invalidate.
+ */
+export function keysForAppEvent(
+  event: string,
+  payload: AppEventIds | undefined,
+): readonly (readonly unknown[])[] {
+  const chatId = payload?.chatId;
+  switch (event) {
+    case 'chat.created':
+    case 'chat.opened':
+      return [['chats']];
+    case 'chat.message.created':
+    case 'chat.message.updated':
+    case 'chat.message.deleted':
+      return chatId ? [['messages', chatId], ['chat', chatId], ['chats']] : [['chats']];
+    case 'generation.finished':
+    case 'generation.error':
+      return chatId ? [['messages', chatId], ['chat', chatId], ['chats']] : [];
+    case 'plugin.installed':
+    case 'plugin.updating':
+    case 'plugin.updated':
+    case 'plugin.rollback':
+    case 'plugin.activated':
+    case 'plugin.disabled':
+    case 'plugin.uninstalling':
+    case 'plugin.deleted':
+      return [['plugins']];
+    default:
+      // generation.started/delta are streaming noise and character.selected
+      // targets plugins вЂ” none require cache invalidation. Block changes are
+      // handled by the plugin bridge (it owns the block cache), not here.
+      return [];
+  }
+}
+
+/**
  * Apply one relayed event to the query cache. Shared by both transports so the
  * kernel and the legacy contour cannot drift apart in what they invalidate.
+ * The kernel plane coalesces per event PAGE (see connectAppEvents): replaying
+ * a long retained backlog must not fire one refetch per replayed event.
  */
 export function invalidateForAppEvent(
   queryClient: QueryClient,
@@ -49,44 +89,8 @@ export function invalidateForAppEvent(
   const invalidate = (key: readonly unknown[]): void => {
     void queryClient.invalidateQueries({ queryKey: key });
   };
-  const chatId = payload?.chatId;
-  switch (event) {
-    case 'chat.created':
-    case 'chat.opened':
-      invalidate(['chats']);
-      break;
-    case 'chat.message.created':
-    case 'chat.message.updated':
-    case 'chat.message.deleted':
-      if (chatId) {
-        invalidate(['messages', chatId]);
-        invalidate(['chat', chatId]);
-      }
-      invalidate(['chats']);
-      break;
-    case 'generation.finished':
-    case 'generation.error':
-      if (chatId) {
-        invalidate(['messages', chatId]);
-        invalidate(['chat', chatId]);
-        invalidate(['chats']);
-      }
-      break;
-    case 'plugin.installed':
-    case 'plugin.updating':
-    case 'plugin.updated':
-    case 'plugin.rollback':
-    case 'plugin.activated':
-    case 'plugin.disabled':
-    case 'plugin.uninstalling':
-    case 'plugin.deleted':
-      invalidate(['plugins']);
-      break;
-    default:
-      // generation.started/delta are streaming noise and character.selected
-      // targets plugins — none require cache invalidation. Block changes are
-      // handled by the plugin bridge (it owns the block cache), not here.
-      break;
+  for (const key of keysForAppEvent(event, payload)) {
+    invalidate(key);
   }
 }
 
@@ -104,10 +108,24 @@ export function connectAppEvents(queryClient: QueryClient): () => void {
   }
 
   if (isKernelMode()) {
+    // Coalesce per event page: the durable log replays retained backlogs in
+    // batches (a fresh session over a long-lived kernel starts at cursor -1),
+    // and one refetch per replayed event turns that into a request storm.
+    // Each page collapses into one refetch per distinct query key instead.
+    let pageKeys = new Set<string>();
     return startAppEventPolling({
       poll: (afterSequence, signal) => pollAppEvents(afterSequence, signal),
       onEvent: (event, payload) => {
-        invalidateForAppEvent(queryClient, event, payload as AppEventIds);
+        for (const key of keysForAppEvent(event, payload as AppEventIds)) {
+          pageKeys.add(JSON.stringify(key));
+        }
+      },
+      onBatch: () => {
+        const pending = [...pageKeys];
+        pageKeys = new Set<string>();
+        for (const key of pending) {
+          void queryClient.invalidateQueries({ queryKey: JSON.parse(key) as readonly unknown[] });
+        }
       },
       // The cursor aged out of retention: we cannot prove what we missed, so
       // every server-state cache is refetched rather than kept half-stale.
