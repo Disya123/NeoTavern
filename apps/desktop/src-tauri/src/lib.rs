@@ -39,20 +39,20 @@ const STARTUP_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const UPDATE_ENDPOINT: Option<&str> = option_env!("NEOTA_UPDATE_ENDPOINT");
 #[cfg(desktop)]
 const UPDATE_PUBLIC_KEY: Option<&str> = option_env!("NEOTA_UPDATE_PUBLIC_KEY");
-/// Backend mode selection — the honest staged default (ADR-0038 "Honest
-/// Desktop default", AGENTS.md §21).
+/// Backend mode selection вЂ” the honest staged default (ADR-0038 "Honest
+/// Desktop default", AGENTS.md В§21).
 ///
 /// The Runtime Kernel is the canonical core, but public/release builds
 /// temporarily run the tested legacy Node sidecar while the Kernel is an
 /// explicit Preview; nightly/internal builds default to the Kernel. The
 /// channel is baked at build time via `NEOTA_DESKTOP_CHANNEL`
-/// (`nightly` → Kernel default; any other value or unset → sidecar default).
+/// (`nightly` в†’ Kernel default; any other value or unset в†’ sidecar default).
 /// Debug (dev) builds are internal and default to the Kernel.
 ///
 /// Explicit runtime overrides always win: `NEOTA_LEGACY_SERVER=1` forces the
 /// sidecar, `NEOTA_KERNEL=1` forces the Kernel (Preview opt-in). CONFLICT
-/// POLICY (ADR-0038): when BOTH overrides are set, `NEOTA_KERNEL=1` wins —
-/// the Kernel is the canonical plane and the direction of travel — and a
+/// POLICY (ADR-0038): when BOTH overrides are set, `NEOTA_KERNEL=1` wins вЂ”
+/// the Kernel is the canonical plane and the direction of travel вЂ” and a
 /// warning is printed to stderr. The full mode matrix is covered by unit
 /// tests (`resolve_desktop_mode`, see `mod tests` below).
 #[cfg(desktop)]
@@ -69,15 +69,15 @@ enum DesktopMode {
     Kernel,
 }
 
-/// Pure mode resolver — the decision table behind [`desktop_mode`], explicit
+/// Pure mode resolver вЂ” the decision table behind [`desktop_mode`], explicit
 /// inputs so the whole matrix is unit-testable (no env/global access).
 ///
 /// Precedence (ADR-0038):
-/// 1. `legacy_override` (`NEOTA_LEGACY_SERVER=1`) → Sidecar;
-/// 2. `kernel_override` (`NEOTA_KERNEL=1`) → Kernel; when BOTH are set the
-///    Kernel wins (conflict policy — the warning is printed by the caller);
-/// 3. `debug_build` → Kernel (dev builds are internal);
-/// 4. build channel: `nightly` → Kernel, any other/unset → Sidecar (the
+/// 1. `legacy_override` (`NEOTA_LEGACY_SERVER=1`) в†’ Sidecar;
+/// 2. `kernel_override` (`NEOTA_KERNEL=1`) в†’ Kernel; when BOTH are set the
+///    Kernel wins (conflict policy вЂ” the warning is printed by the caller);
+/// 3. `debug_build` в†’ Kernel (dev builds are internal);
+/// 4. build channel: `nightly` в†’ Kernel, any other/unset в†’ Sidecar (the
 ///    public release default while the Kernel is a Preview).
 #[cfg(desktop)]
 fn resolve_desktop_mode(
@@ -380,7 +380,7 @@ fn stop_sidecar(app: &AppHandle) {
 /// the portable build, otherwise the platform app-data directory. Both the
 /// kernel and (opt-in) legacy sidecar use this root; only one mode runs at a
 /// time, so the root never has two writable owners. Returns `(root, portable)`
-/// — the portable flag selects the secret backend (SEC-01.1).
+/// вЂ” the portable flag selects the secret backend (SEC-01.1).
 #[cfg(desktop)]
 fn resolve_data_dir(app: &tauri::App) -> Result<(PathBuf, bool), Box<dyn std::error::Error>> {
     let executable = std::env::current_exe()?;
@@ -447,7 +447,7 @@ fn open_main_window_when_ready(app: AppHandle, port: u16) {
     });
 }
 
-/// Spawns the legacy Node sidecar — the release-channel default while the
+/// Spawns the legacy Node sidecar вЂ” the release-channel default while the
 /// Kernel is a Preview, and the explicit `NEOTA_LEGACY_SERVER=1` transition
 /// bridge for unmigrated features (ADR-0038). Returns the events receiver and
 /// child.
@@ -568,8 +568,8 @@ fn setup_local_kernel_mode(
         error.to_string()
     })?;
 
-    // М5 slice 57 (ТЗ §8.3/§9.3): the host performs the effects of registered
-    // safe tools — the kernel never executes tools. Wire the declarative
+    // Рњ5 slice 57 (РўР— В§8.3/В§9.3): the host performs the effects of registered
+    // safe tools вЂ” the kernel never executes tools. Wire the declarative
     // `app_now` contract (UTC clock, side-effect-free, consent-free) and the
     // built-in executor that resumes waiting runs automatically.
     host.set_tool_executor(Some(Arc::new(neotavern_host_tools::BuiltinToolExecutor)));
@@ -586,9 +586,9 @@ fn setup_local_kernel_mode(
 
     app.manage(host);
 
-    // Phase 9 Remote Access host service (ТЗ §10): the service wraps the
+    // Phase 9 Remote Access host service (РўР— В§10): the service wraps the
     // remote-http adapter lifecycle; its config persists next to the app
-    // data. Resolution is best-effort — a failure falls back to the local
+    // data. Resolution is best-effort вЂ” a failure falls back to the local
     // data dir instead of failing startup (Remote Access is off by default;
     // the UI surfaces any persistence failure later as `REMOTE_IO`).
     #[cfg(feature = "remote")]
@@ -628,7 +628,7 @@ fn setup_local_kernel_mode(
     Ok(())
 }
 
-/// Selects the kernel SecretStore backend (ТЗ §SEC-01, SEC-01.1).
+/// Selects the kernel SecretStore backend (РўР— В§SEC-01, SEC-01.1).
 ///
 /// - `NEOTA_SECRET_BACKEND=osvault|session` wins explicitly (tests, rollback);
 /// - smoke self-checks stay deterministic with the session-only store;
@@ -637,7 +637,7 @@ fn setup_local_kernel_mode(
 /// - installed (non-portable) kernel mode defaults to the machine-bound OS
 ///   credential vault (Windows Credential Manager / macOS Keychain / Linux
 ///   Secret Service): keys never travel with the data folder, an
-///   unreachable vault reports `SECRET_UNAVAILABLE_ON_THIS_DEVICE` — never a
+///   unreachable vault reports `SECRET_UNAVAILABLE_ON_THIS_DEVICE` вЂ” never a
 ///   plaintext fallback.
 #[cfg(desktop)]
 fn resolve_secret_backend(portable: bool) -> SecretBackend {
@@ -672,7 +672,7 @@ fn run_kernel_smoke(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// One unary wire round trip: envelope → protocol check → kernel dispatch →
+/// One unary wire round trip: envelope в†’ protocol check в†’ kernel dispatch в†’
 /// validated response envelope. `Err` carries the envelope error or a
 /// transport failure.
 #[cfg(desktop)]
@@ -789,20 +789,20 @@ fn run_stream(
     Ok((stream_id, events))
 }
 
-/// The packaged golden vertical slice (Этап 2.9/2.10): the SAME user flow the
+/// The packaged golden vertical slice (Р­С‚Р°Рї 2.9/2.10): the SAME user flow the
 /// UI drives through the generated client, exercised over the REAL Tauri host
-/// path (shell → KernelHost envelope → kernel → SQLite) on a fresh data root:
+/// path (shell в†’ KernelHost envelope в†’ kernel в†’ SQLite) on a fresh data root:
 ///
-/// 1. character → chat → user message;
-/// 2. `generation.start` (deterministic fake grammar) → the run completes and
+/// 1. character в†’ chat в†’ user message;
+/// 2. `generation.start` (deterministic fake grammar) в†’ the run completes and
 ///    saves exactly one assistant message durably;
-/// 3. a tool round trip (§8.3): register a declarative tool, a second run
+/// 3. a tool round trip (В§8.3): register a declarative tool, a second run
 ///    durably waits (`waiting_for_tool`), `generation.tools.list` serves the
 ///    contract, `generation.tool.result` resumes and completes the run with a
 ///    second assistant message;
-/// 4. a full chats/messages CRUD walk on a throwaway chat — every op of the
+/// 4. a full chats/messages CRUD walk on a throwaway chat вЂ” every op of the
 ///    `chats.crud` and `chats.messages.crud` capabilities (G6 evidence);
-/// 5. full library-cluster walks — every op of presets, personas, memories,
+/// 5. full library-cluster walks вЂ” every op of presets, personas, memories,
 ///    lorebooks (+entries), providers.list and settings (G6 evidence).
 ///
 /// No HTTP, no sidecar, no UI: this is the packaged host's own self-check,
@@ -848,8 +848,8 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     )?;
     eprintln!("[smoke] golden: character/chat/message created");
 
-    // 2. Plain generation → durable save (fake provider, deterministic
-    //    grammar: one step × 24 chars).
+    // 2. Plain generation в†’ durable save (fake provider, deterministic
+    //    grammar: one step Г— 24 chars).
     let (run_id, _events) = run_stream(
         &host,
         "generation.start",
@@ -892,7 +892,7 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     }
     eprintln!("[smoke] golden: generation completed, one assistant message saved");
 
-    // 3. Tool round trip (§8.3). The fake adapter calls with
+    // 3. Tool round trip (В§8.3). The fake adapter calls with
     //    `{"query": "<input>"}`, so the registered schema accepts exactly
     //    that (matching the kernel integration suite's weather tool).
     host.register_tool(serde_json::json!({
@@ -1037,7 +1037,7 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     eprintln!("[smoke] golden: chats/messages CRUD full walk ok");
 
     // 5. Full library-cluster walks (G6 evidence, round 24): presets,
-    //    personas, memories, lorebooks (+entries), providers.list, settings —
+    //    personas, memories, lorebooks (+entries), providers.list, settings вЂ”
     //    every op of each capability on the packaged artifact.
     let preset = dispatch_ok(
         &host,
@@ -1200,7 +1200,7 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     // 6. Variants/revisions/drafts + snapshots + app events (G6 evidence,
     //    round 25). Draft lifecycle lives on the throwaway chat's message;
     //    snapshots walk on the golden chat (checkpoint at the last message,
-    //    rollback forks a child chat — the parent stays intact).
+    //    rollback forks a child chat вЂ” the parent stays intact).
     let assistant = dispatch_ok(
         &host,
         "chats.messages.list",
@@ -1245,7 +1245,7 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     let draft_saved = dispatch_ok(
         &host,
         "chats.messages.drafts.save",
-        serde_json::json!({ "chatId": chat_id, "role": "assistant", "content": "partial…" }),
+        serde_json::json!({ "chatId": chat_id, "role": "assistant", "content": "partialвЂ¦" }),
     )?;
     let draft_id = draft_saved["id"]
         .as_str()
@@ -1495,7 +1495,7 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         return Err("fail-at run unexpectedly completed".to_string());
     }
     // Retry the CANCELLED run: retry inherits the original model grammar, and
-    // the failed run's `fail-at=1` would deterministically fail again — the
+    // the failed run's `fail-at=1` would deterministically fail again вЂ” the
     // cancelled run's grammar completes.
     let (retried_id, _retry_events) = run_stream(
         &host,
@@ -1517,9 +1517,9 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     )?;
     eprintln!("[smoke] golden: retry after failure -> completed");
 
-    // keep/discard recover TERMINAL runs (failed/cancelled/interrupted, ТЗ §4):
+    // keep/discard recover TERMINAL runs (failed/cancelled/interrupted, РўР— В§4):
     // keep persists the partial output as an assistant message, discard purges
-    // the journal. A waiting_for_tool run is NOT recoverable — it resumes via
+    // the journal. A waiting_for_tool run is NOT recoverable вЂ” it resumes via
     // generation.tool.result (already exercised above).
     let (partial_id, _partial_events) = run_stream(
         &host,
@@ -1866,7 +1866,7 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     )?;
     eprintln!("[smoke] golden: profiles + profile export/import ok");
 
-    // 12. Secrets lifecycle: status (backend describe), then lock — the
+    // 12. Secrets lifecycle: status (backend describe), then lock вЂ” the
     //     lock response itself carries `locked: true` (status reports the
     //     store shape, not the lock state).
     let status = dispatch_ok(&host, "secrets.status", serde_json::json!({}))?;
@@ -1879,6 +1879,51 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     }
     dispatch_ok(&host, "secrets.status", serde_json::json!({}))?;
     eprintln!("[smoke] golden: secrets status/lock ok");
+    // 14. Character card import (G6 evidence, round 33): a SillyTavern-
+    //     compatible V2 card rides a PNG chara tEXt chunk (fixed fixture
+    //     bytes, valid CRCs), published through assets.put kind card.
+    const CARD_PNG_B64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAA9nRFWHRjaGFyYQBleUp6Y0dWaklqb2lZMmhoY21GZlkyRnlaRjkyTWlJc0luTndaV05mZG1WeWMybHZiaUk2SWpJdU1DSXNJbTVoYldVaU9pSkRZWEprSUVsdGNHOXlkQ0lzSW1SbGMyTnlhWEIwYVc5dUlqb2lTVzF3YjNKMFpXUWdabkp2YlNCaElGQk9SeUJqWVhKa0lHSjVJSFJvWlNCd1lXTnJZV2RsWkNCemJXOXJaU0lzSW1acGNuTjBYMjFsY3lJNklraGxiR3h2SUdaeWIyMGdkR2hsSUdOaGNtUXVJaXdpZEdGbmN5STZXeUpqWVhKa0lsMTmuwW+pAAAAAElFTkSuQmCC";
+    let card_asset = dispatch_ok(
+        &host,
+        "assets.put",
+        serde_json::json!({
+            "kind": "card",
+            "filename": "card-import.png",
+            "contentType": "image/png",
+            "contentBase64": CARD_PNG_B64,
+        }),
+    )?;
+    let card_asset_id = card_asset["asset"]["id"]
+        .as_str()
+        .ok_or_else(|| "card asset carried no id".to_string())?
+        .to_string();
+    let imported_card = dispatch_ok(
+        &host,
+        "imports.character.card",
+        serde_json::json!({ "assetId": card_asset_id }),
+    )?;
+    let card_character = imported_card["character"]["name"]
+        .as_str()
+        .ok_or_else(|| "card import carried no character name".to_string())?;
+    if card_character != "Card Import" {
+        return Err(format!(
+            "card import produced the wrong character: {imported_card}"
+        ));
+    }
+    if imported_card["created"] != serde_json::json!(true) {
+        return Err(format!("card import was not created: {imported_card}"));
+    }
+    // Re-import dedup (AGENTS §11): the same bytes must NOT create a second
+    // character.
+    let reimported = dispatch_ok(
+        &host,
+        "imports.character.card",
+        serde_json::json!({ "assetId": card_asset_id }),
+    )?;
+    if reimported["created"] != serde_json::json!(false) {
+        return Err(format!("card re-import created a duplicate: {reimported}"));
+    }
+    eprintln!("[smoke] golden: character card import + dedup ok ({card_character})");
     Ok(())
 }
 
@@ -1975,13 +2020,13 @@ pub fn run() {
                 commands::kernel_dispatch,
                 commands::kernel_stream_start,
                 commands::kernel_stream_abort,
-                // G7/G8 user-facing half (round 29): the Settings → Data
+                // G7/G8 user-facing half (round 29): the Settings в†’ Data
                 // legacy import/rollback host commands over the ADR-0062
                 // staged-root lifecycle.
                 commands::legacy_import_plan,
                 commands::legacy_import_execute,
                 commands::legacy_import_rollback,
-                // Phase 9 Remote Access (ТЗ §10) — the desktop build always
+                // Phase 9 Remote Access (РўР— В§10) вЂ” the desktop build always
                 // has the `remote` feature; the cfg guard keeps a
                 // tauri-only tauri-local configuration compiling.
                 #[cfg(feature = "remote")]

@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Character card import reaches Packaged on desktop (round 33/40).** The
+  packaged golden smoke imports a SillyTavern-compatible V2 character card
+  carried in a PNG `chara` tEXt chunk (published through assets.put kind
+  `card`), verifies the created character and proves re-import
+  deduplication (created=false on identical bytes). `library.characterImport`
+  promoted to Packaged. Desktop score: 27/43.
+
 - **Themes, profiles and profile export/import reach Packaged on desktop
   (round 32/40).** The packaged golden smoke walks the full theme lifecycle
   (declarative theme with a manifest-declared settings schema — settings
