@@ -710,6 +710,35 @@ fn dispatch_ok(
 /// event envelope until the end-of-stream sentinel, returning the run id and
 /// the event log.
 #[cfg(desktop)]
+/// Dispatches an operation EXPECTING an error envelope; resolves with the
+/// serialized error object (for fail-closed assertions like
+/// `providers.secrets.reveal` with exposure off).
+fn dispatch_error(
+    host: &KernelHost,
+    operation_id: &str,
+    payload: serde_json::Value,
+) -> Result<String, String> {
+    let request = build_request_envelope(
+        operation_id,
+        payload,
+        "00000000-0000-4000-8000-000000000004",
+    );
+    let body = host
+        .dispatch_envelope(&request)
+        .map_err(|failure| format!("transport failure: {failure:?}"))?;
+    let envelope: serde_json::Value =
+        serde_json::from_slice(&body).map_err(|_| "response was not JSON".to_string())?;
+    if envelope.get("kind").and_then(|k| k.as_str()) == Some("ok") {
+        return Err(format!(
+            "{operation_id}: expected an error envelope, got ok"
+        ));
+    }
+    Ok(envelope
+        .get("error")
+        .map(|error| error.to_string())
+        .unwrap_or_default())
+}
+
 fn run_stream(
     host: &KernelHost,
     operation_id: &str,
@@ -1605,6 +1634,142 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         "[smoke] golden: migration walk staged {} and rolled back to the previous root",
         staged.root_id
     );
+
+    // 11. Backups + prompt plan + provider config/secrets + activation
+    //     status (G6 evidence, round 31). Restore runs as the dedicated
+    //     offline writer op (close -> swap -> reopen + migrations).
+    let backup = dispatch_ok(&host, "backups.create", serde_json::json!({}))?;
+    let backup_id = backup["id"]
+        .as_str()
+        .or_else(|| backup["backupId"].as_str())
+        .ok_or_else(|| "backup carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "backups.restore",
+        serde_json::json!({ "backupId": backup_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "backups.delete",
+        serde_json::json!({ "backupId": backup_id }),
+    )?;
+    dispatch_ok(&host, "backups.list", serde_json::json!({}))?;
+    eprintln!("[smoke] golden: backups create/restore/delete/list ok");
+
+    dispatch_ok(&host, "data.activation.status", serde_json::json!({}))?;
+
+    let plan = dispatch_ok(
+        &host,
+        "generation.prompt.plan",
+        serde_json::json!({ "runId": retried_id }),
+    )?;
+    let message_count = plan["messages"]
+        .as_array()
+        .map(|messages| messages.len())
+        .unwrap_or(0);
+    if message_count == 0 || plan["inputTokens"].as_i64().unwrap_or(0) == 0 {
+        return Err(format!("prompt plan carried no messages/tokens: {plan}"));
+    }
+    dispatch_ok(
+        &host,
+        "chats.context.audit",
+        serde_json::json!({ "chatId": chat_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "chats.prompt.preview",
+        serde_json::json!({ "chatId": chat_id, "userMessage": "preview" }),
+    )?;
+    eprintln!("[smoke] golden: prompt plan/context audit/preview ok");
+
+    let config = dispatch_ok(
+        &host,
+        "providers.config.set",
+        serde_json::json!({
+            "provider": "fake",
+            "name": "local",
+            "config": { "temperature": 0.7 },
+        }),
+    )?;
+    let config_id = config["config"]["id"]
+        .as_str()
+        .or_else(|| config["id"].as_str())
+        .ok_or_else(|| "provider config carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "providers.config.get",
+        serde_json::json!({ "provider": "fake", "name": "local" }),
+    )?;
+    dispatch_ok(&host, "providers.config.list", serde_json::json!({}))?;
+    let secret = dispatch_ok(
+        &host,
+        "providers.secrets.create",
+        serde_json::json!({
+            "providerId": config_id,
+            "value": "sk-smoke-secret",
+            "label": "smoke",
+        }),
+    )?;
+    let secret_id = secret["secret"]["id"]
+        .as_str()
+        .or_else(|| secret["id"].as_str())
+        .or_else(|| secret["secretId"].as_str())
+        .ok_or_else(|| "provider secret carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "providers.secrets.list",
+        serde_json::json!({ "providerId": config_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "providers.secrets.update",
+        serde_json::json!({
+            "providerId": config_id,
+            "secretId": secret_id,
+            "label": "renamed",
+            "active": true,
+        }),
+    )?;
+    // SEC-01 fail-closed: exposure is OFF by default, so reveal must refuse
+    // with the stable code and must never echo the plaintext value.
+    let reveal_error = dispatch_error(
+        &host,
+        "providers.secrets.reveal",
+        serde_json::json!({ "providerId": config_id, "secretId": secret_id }),
+    )?;
+    if !reveal_error.contains("SECRETS_EXPOSURE_DISABLED")
+        || reveal_error.contains("sk-smoke-secret")
+    {
+        return Err(format!("reveal did not fail closed: {reveal_error}"));
+    }
+    dispatch_ok(
+        &host,
+        "providers.secrets.delete",
+        serde_json::json!({ "providerId": config_id, "secretId": secret_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "providers.config.delete",
+        serde_json::json!({ "provider": "fake", "name": "local" }),
+    )?;
+    eprintln!("[smoke] golden: provider config/secrets walk ok (reveal fail-closed)");
+
+    // 12. Secrets lifecycle: status (backend describe), then lock — the
+    //     lock response itself carries `locked: true` (status reports the
+    //     store shape, not the lock state).
+    let status = dispatch_ok(&host, "secrets.status", serde_json::json!({}))?;
+    if status["available"] != serde_json::json!(true) {
+        return Err(format!("secret store is unavailable: {status}"));
+    }
+    let lock = dispatch_ok(&host, "secrets.lock", serde_json::json!({}))?;
+    if lock["locked"] != serde_json::json!(true) {
+        return Err(format!("lock did not report locked: {lock}"));
+    }
+    dispatch_ok(&host, "secrets.status", serde_json::json!({}))?;
+    eprintln!("[smoke] golden: secrets status/lock ok");
     Ok(())
 }
 

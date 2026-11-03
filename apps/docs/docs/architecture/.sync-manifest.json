@@ -380,7 +380,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "df64552494b802babfc11320c1512b0c877daeab599004845d1919520c7c2306"
+      "sha256": "0bc41110547119d095e4bd775042d049a0d916ef7745c4bef8432710b68aa396"
     },
     {
       "source": "architecture/resource-containment.md",
@@ -435,7 +435,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "7fd407ebeae6c8d1e03795f786735d7c3ece584f4ada6c1ffbff21b4eb4368d4"
+      "sha256": "8bb1fb0ee29678559bf29bc8af1f2e68095eda3d23d57457e319597f3c8cd8e5"
     },
     {
       "source": "data/README.md",

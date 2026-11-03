@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Six more families reach Packaged on desktop (round 31/40).** The packaged
+  golden smoke now walks backups end-to-end (create → the offline-restore
+  writer swap → delete → list), the prompt-pipeline read family (prompt plan
+  with token budget, context audit, prompt preview), providers.config
+  (set/get/list/delete) and providers.secrets (create/list/update/delete,
+  with reveal proven to FAIL CLOSED via SECRETS_EXPOSURE_DISABLED while the
+  plaintext never surfaces), plus secrets status/lock and activation status.
+  `backups`, `generation.prompt.plan`, `ui.secrets`, `ui.portable-data`,
+  `providers.config`, `providers.secrets` promoted to Packaged. Desktop
+  score: 23/43.
+
 - **The Settings → Data UI reaches the legacy import commands (round 30/40).**
   `DataMigrationPanel` gains a kernel-mode block: the legacy `app.db` is
   picked through the native dialog plugin, the staged import plan shows
