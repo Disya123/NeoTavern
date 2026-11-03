@@ -2272,7 +2272,7 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
             "version": "1.0.0",
             "trustState": "verified-publisher",
             "publisherKeyId": "fp-smoke",
-            "permissions": ["plugin.storage", "storage.user", "secrets.manageOwn", "secrets.reveal"],
+            "permissions": ["plugin.storage", "storage.user", "storage.blobs", "secrets.manageOwn", "secrets.reveal"],
             "manifest": { "id": "smoke-plugin", "main": "dist/index.js" },
         }),
     )?;
@@ -2396,6 +2396,83 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         "plugins.secrets.delete",
         serde_json::json!({ "pluginId": "smoke-plugin", "scope": "user", "key": "apiKey" }),
     )?;
+
+    // Cluster 21a: the plugin blob store — chunked publish, bounded range read,
+    // list and idempotent delete through the packaged KernelHost envelope. The
+    // digest of "hello" is the blob id, which is what makes the assertion below
+    // a content-addressing check rather than a shape check.
+    let blob_begin = dispatch_ok(
+        &host,
+        "plugins.blobs.begin",
+        serde_json::json!({
+            "pluginId": "smoke-plugin",
+            "name": "smoke.bin",
+            "contentType": "application/octet-stream",
+            "totalBytes": 5,
+        }),
+    )?;
+    let blob_upload_id = blob_begin["uploadId"]
+        .as_str()
+        .ok_or_else(|| "blob begin carried no uploadId".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "plugins.blobs.append",
+        serde_json::json!({
+            "pluginId": "smoke-plugin",
+            "uploadId": blob_upload_id,
+            "index": 0,
+            "contentBase64": "aGVsbG8=",
+        }),
+    )?;
+    let blob = dispatch_ok(
+        &host,
+        "plugins.blobs.finish",
+        serde_json::json!({ "pluginId": "smoke-plugin", "uploadId": blob_upload_id }),
+    )?;
+    let blob_id = blob["blobId"]
+        .as_str()
+        .ok_or_else(|| "blob finish carried no blobId".to_string())?
+        .to_string();
+    let expected_blob_id = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+    if blob_id != expected_blob_id || blob["sizeBytes"] != serde_json::json!(5) {
+        return Err(format!(
+            "plugin blob publish is not content-addressed: {blob}"
+        ));
+    }
+    let blob_read = dispatch_ok(
+        &host,
+        "plugins.blobs.read",
+        serde_json::json!({
+            "pluginId": "smoke-plugin",
+            "blobId": blob_id,
+            "offset": 0,
+            "length": 16,
+        }),
+    )?;
+    if blob_read["dataBase64"] != serde_json::json!("aGVsbG8=")
+        || blob_read["eof"] != serde_json::json!(true)
+    {
+        return Err(format!("plugin blob range read failed: {blob_read}"));
+    }
+    let blob_list = dispatch_ok(
+        &host,
+        "plugins.blobs.list",
+        serde_json::json!({ "pluginId": "smoke-plugin" }),
+    )?;
+    if blob_list["items"].as_array().map(Vec::len) != Some(1) {
+        return Err(format!(
+            "plugin blob list did not report the blob: {blob_list}"
+        ));
+    }
+    let blob_deleted = dispatch_ok(
+        &host,
+        "plugins.blobs.delete",
+        serde_json::json!({ "pluginId": "smoke-plugin", "blobId": blob_id }),
+    )?;
+    if blob_deleted["deleted"] != serde_json::json!(true) {
+        return Err(format!("plugin blob delete was not honest: {blob_deleted}"));
+    }
 
     dispatch_ok(
         &host,

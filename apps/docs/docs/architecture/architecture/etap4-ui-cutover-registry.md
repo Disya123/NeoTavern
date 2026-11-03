@@ -250,6 +250,15 @@ either direction. Evidence: 7 kernel tests
 bounded ranges, sequential staging, grant denial, cross-plugin refusal,
 64-blob quota) and 3 web tests (`plugins/kernel/storage.test.ts`).
 
+Round 47 added the packaged evidence: `run_golden_smoke` in
+`apps/desktop/src-tauri/src/lib.rs` now drives `plugins.blobs.begin|append|finish`
+(the sha256 of the bytes is asserted as the blob id), `plugins.blobs.read`
+(bounded range + `eof`), `plugins.blobs.list` and `plugins.blobs.delete`
+(idempotent truth) through the real KernelHost envelope, and
+`scripts/smoke-desktop-shell.mjs` boots the portable bundle with
+`NEOTA_DESKTOP_SMOKE=1 NEOTA_KERNEL=1` and exits 0 — so the family is exercised
+inside `NeoTavern_0.1.0_x64-portable`, not only by kernel-plane tests.
+
 Per-surface note (round 46c, release-gate audit): the capability-matrix audit
 found that `crates/adapters/package-verify` has **no call site outside its own
 crate** — on the kernel/packaged plane nothing actually verifies a plugin

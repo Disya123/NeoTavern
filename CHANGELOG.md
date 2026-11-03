@@ -24,6 +24,18 @@
 
 ### Added
 
+- **Plugin blobs now have packaged evidence (round 47/99).** The packaged golden
+  smoke (`run_golden_smoke` in `apps/desktop/src-tauri/src/lib.rs`, launched by
+  `scripts/smoke-desktop-shell.mjs` with `NEOTA_DESKTOP_SMOKE=1 NEOTA_KERNEL=1`)
+  walks the whole `plugins.blobs` family through the real KernelHost envelope:
+  `begin` + `append` + `finish` publish "hello" and the smoke asserts the blob
+  id is its sha256 (content addressing, not just shape), `read` returns the
+  bounded range with `eof`, `list` reports exactly the one blob and `delete`
+  answers `deleted: true`. The smoke plugin gains the `storage.blobs` grant.
+  Result: portable build `NeoTavern_0.1.0_x64-portable` exits 0, so the family
+  is no longer "kernel tests only" — the matrix note and G6 lose that caveat
+  while the remaining unwalked ops stay disclosed.
+
 - **Visual regression on the kernel plane (round 46/99).** G10's last open half —
   "visual regression is still not set up" — now has evidence on the canonical
   plane instead of inheriting the sidecar's snapshots: `e2e/visual-shell.spec.ts`
