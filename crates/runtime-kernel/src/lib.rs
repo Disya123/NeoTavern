@@ -53,6 +53,7 @@ pub mod product;
 pub mod profiles;
 pub mod prompt;
 pub mod provider_access;
+pub mod provider_media;
 pub mod provider_secrets;
 pub mod providers;
 pub mod providers_config;
@@ -690,6 +691,10 @@ fn handle_unary(
         }),
         "providers.test" => with_db_opt(db, |db| {
             provider_access::test(db, &state.registry, state.secret_resolver.as_deref(), req)
+        }),
+        // ADR-0063 media operations: transcription over a staged audio asset.
+        "providers.transcribe" => with_db_opt(db, |db| {
+            provider_media::transcribe(db, &state.registry, state.secret_resolver.as_deref(), req)
         }),
         // Этап 4 slice 5 remainder: canonical content-addressed AssetStore.
         "assets.put" => with_db_opt(db, |db| assets::assets_put(db, req)),

@@ -90,6 +90,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "secrets.exposure" => Some(1024),
         "providers.models" => Some(2048),
         "providers.test" => Some(8192),
+        "providers.transcribe" => Some(2048),
         "backups.create" => Some(1024),
         "backups.list" => Some(1024),
         "backups.restore" => Some(1024),
@@ -249,6 +250,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "secrets.exposure" => Some(1024),
         "providers.models" => Some(262144),
         "providers.test" => Some(262144),
+        "providers.transcribe" => Some(262144),
         "backups.create" => Some(262144),
         "backups.list" => Some(262144),
         "backups.restore" => Some(1024),
@@ -4329,6 +4331,199 @@ pub fn validate_result_provider_test(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_result_provider_test(bytes: &[u8]) -> Result<ResultProviderTest, WireError> {
     crate::decode::<ResultProviderTest>(validate_result_provider_test, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestProviderTranscribe {
+    #[serde(rename = "providerId")]
+    pub provider_id: String,
+    #[serde(rename = "audioAssetId")]
+    pub audio_asset_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+}
+
+pub(crate) fn check_request_provider_transcribe(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("providerId").is_none() {
+            issues.push(Issue::new(join_path(path, "providerId"), "RequiredProperty"));
+        }
+        if value.get("audioAssetId").is_none() {
+            issues.push(Issue::new(join_path(path, "audioAssetId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("providerId") {
+            let child_path = join_path(path, "providerId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("audioAssetId") {
+            let child_path = join_path(path, "audioAssetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("model") {
+            let child_path = join_path(path, "model");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("language") {
+            let child_path = join_path(path, "language");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 2 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 16 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "providerId" | "audioAssetId" | "model" | "language") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_provider_transcribe(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_provider_transcribe(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_provider_transcribe(bytes: &[u8]) -> Result<RequestProviderTranscribe, WireError> {
+    crate::decode::<RequestProviderTranscribe>(validate_request_provider_transcribe, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultProviderTranscribe {
+    pub text: String,
+    pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(rename = "durationMs", default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<i64>,
+}
+
+pub(crate) fn check_result_provider_transcribe(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("text").is_none() {
+            issues.push(Issue::new(join_path(path, "text"), "RequiredProperty"));
+        }
+        if value.get("model").is_none() {
+            issues.push(Issue::new(join_path(path, "model"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("text") {
+            let child_path = join_path(path, "text");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 262144 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("model") {
+            let child_path = join_path(path, "model");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("language") {
+            let child_path = join_path(path, "language");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 2 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 16 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("durationMs") {
+            let child_path = join_path(path, "durationMs");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "text" | "model" | "language" | "durationMs") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_provider_transcribe(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_provider_transcribe(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_provider_transcribe(bytes: &[u8]) -> Result<ResultProviderTranscribe, WireError> {
+    crate::decode::<ResultProviderTranscribe>(validate_result_provider_transcribe, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

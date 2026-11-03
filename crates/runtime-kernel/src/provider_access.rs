@@ -60,7 +60,7 @@ fn model_required(provider_id: &str) -> KernelError {
 /// Maps a normalized provider error to a stable product code (documented in
 /// `docs/architecture/providers.md`): the message stays in the kernel log, the
 /// wire carries only the code plus non-secret params.
-fn provider_error(err: &ProviderError) -> KernelError {
+pub(crate) fn provider_error(err: &ProviderError) -> KernelError {
     let code = match err.code {
         ProviderErrorCode::Timeout => "PROVIDER_TIMEOUT",
         ProviderErrorCode::Cancelled => "CANCELLED",
@@ -83,7 +83,7 @@ fn provider_error(err: &ProviderError) -> KernelError {
 /// for known kinds (openai / openai-compatible), else the registered built-in
 /// adapter of that provider id (`fake`). No adapter at all is an honest
 /// `CAPABILITY_UNAVAILABLE`, never a fabricated result.
-fn resolve_adapter(
+pub(crate) fn resolve_adapter(
     registry: &ProviderRegistry,
     provider: &str,
     config: &serde_json::Value,
@@ -101,7 +101,7 @@ fn resolve_adapter(
 /// Reads the model the config names: the hoisted `model` string first, then
 /// `models[0].id` (the adapter's own fallback default is not guessed here — the
 /// test op must be explicit about which model it billable-pings).
-fn config_model(config: &serde_json::Value) -> Option<String> {
+pub(crate) fn config_model(config: &serde_json::Value) -> Option<String> {
     let hoisted = config.get("model").and_then(|value| value.as_str());
     let listed = config
         .get("models")

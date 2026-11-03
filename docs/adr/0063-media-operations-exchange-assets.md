@@ -1,6 +1,7 @@
 # ADR-0063 — Media operations exchange assets, never bytes
 
-**Status:** proposed (draft; no implementation yet)
+**Status:** accepted; implemented for `providers.transcribe` (round 52) —
+`providers.speech` / `providers.images` remain open on the same exchange
 **Date:** 2026-11-04
 **Supersedes:** nothing. **Related:** ADR-0061 (chunked ingestion), ADR-0038
 (kernel owns product state, no second backend surface), ADR-0059 (React-primary,
@@ -98,3 +99,30 @@ metadata, never media bytes.** Concretely:
 - **Direct provider URLs to the client** — rejected: it leaks credentials to
   the sandbox/browser and breaks the provider governor and the secret store
   model.
+
+## Implementation note (round 52)
+
+`providers.transcribe` is the first operation ported on this ADR and it exercises
+every rule the contract needs:
+
+- the request carries `audioAssetId` (ADR-0061 staging) plus an optional model
+  override and BCP-47 hint — no bytes, no base64;
+- the kernel resolves the ADDRESSED config (`config_adapter`), so endpoint, key
+  and model follow that row; the model is never guessed (request override, else
+  the config's model, else `PROVIDER_MODEL_REQUIRED`);
+- the staged audio is size-checked **before** the file is read
+  (`AUDIO_TOO_LARGE` at 64 MiB) and the row's `size_bytes` is compared with the
+  file's, so a truncated asset is a storage failure rather than a partial
+  transcript;
+- `ProviderAdapter::transcribe` defaults to `CAPABILITY_UNAVAILABLE`, so a
+  provider that cannot transcribe refuses honestly instead of answering an empty
+  text (`crates/runtime-kernel/tests/provider_media.rs` pins this with the
+  `recorded` adapter);
+- the result is text + the two facts a provider may report (language, duration).
+  No segments: the kernel does not model subtitles and would otherwise have to
+  invent them.
+
+Speech and images reuse the exchange with the opposite direction of travel
+(kernel stages the produced bytes as `generated-audio` / `generated-image` and
+returns the asset id); they need the two adapters to declare the capability
+before they can be claimed.

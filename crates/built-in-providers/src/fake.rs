@@ -24,7 +24,8 @@ use provider_sdk::policy::Deadline;
 use provider_sdk::policy::Usage;
 use provider_sdk::{
     Availability, CancelToken, EmitStatus, ProviderAdapter, ProviderCapabilities, ProviderError,
-    ProviderErrorCode, ProviderEvent, ProviderModel, ProviderRequest,
+    ProviderErrorCode, ProviderEvent, ProviderModel, ProviderRequest, Transcription,
+    TranscriptionRequest,
 };
 use sha2::{Digest, Sha256};
 
@@ -357,6 +358,30 @@ impl ProviderAdapter for FakeProvider {
         Ok(Usage {
             steps: emitted_steps,
             output_chars,
+        })
+    }
+
+    /// Deterministic transcription: the transcript is derived from the audio
+    /// digest and length, never from the wall clock, so two calls with the same
+    /// bytes answer byte-identically (the kernel tests rely on it).
+    fn transcribe(
+        &self,
+        request: &TranscriptionRequest<'_>,
+    ) -> Result<Transcription, ProviderError> {
+        let digest = Sha256::digest(request.audio);
+        let prefix: String = digest
+            .iter()
+            .take(8)
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        Ok(Transcription {
+            text: format!(
+                "fake transcript: {} bytes, sha256 {prefix}",
+                request.audio.len()
+            ),
+            language: request.language.map(str::to_string),
+            // 16 kHz mono 16-bit is 32 bytes per millisecond.
+            duration_ms: Some((request.audio.len() as u64) / 32),
         })
     }
 }

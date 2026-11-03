@@ -80,6 +80,7 @@ import {
   type ProviderCatalogResultDto,
   type ProviderModelsResultDto,
   type ProviderTestResultDto,
+  type ProviderTranscribeResultDto,
   type ProviderSecretDto,
   type ListProviderSecretsResultDto,
   type CreateProviderSecretResultDto,
@@ -485,6 +486,8 @@ export class LocalBackend implements NeoBackend {
       },
       models: (req, opts) => this.invoke<ProviderModelsResultDto>('providers.models', req, opts),
       test: (req, opts) => this.invoke<ProviderTestResultDto>('providers.test', req, opts),
+      transcribe: (req, opts) =>
+        this.invoke<ProviderTranscribeResultDto>('providers.transcribe', req, opts),
     };
     this.plugins = {
       list: (opts) => this.invoke<ListPluginsResultDto>('plugins.list', {}, opts),

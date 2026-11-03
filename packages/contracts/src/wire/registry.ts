@@ -1366,6 +1366,36 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     262144,
     undefined,
   ),
+
+  // ADR-0063 media operations: transcription is the first one ported. The
+  // audio is an asset id (ADR-0061), the provider is one stored config, and a
+  // provider that cannot transcribe answers CAPABILITY_UNAVAILABLE through the
+  // adapter's default implementation instead of being handed bytes.
+  op(
+    'providers.transcribe',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.provider-transcribe',
+    'wire.result.provider-transcribe',
+    undefined,
+    [
+      'INTERNAL',
+      'VALIDATION',
+      'NOT_FOUND',
+      'UNAUTHORIZED',
+      'RATE_LIMITED',
+      'PROVIDER_ERROR',
+      'CAPABILITY_UNAVAILABLE',
+      'CANCELLED',
+      'CONTRACT_VIOLATION',
+      'OUTCOME_UNKNOWN',
+    ],
+    2048,
+    262144,
+    undefined,
+  ),
   op(
     'backups.create',
     'workflow',
@@ -3601,6 +3631,11 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     secretId: UUID_PROVIDER_SECRET,
   }),
   fx('secrets-exposure-request', 'secrets.exposure', 'request', true, {}),
+  fx('provider-transcribe-request', 'providers.transcribe', 'request', true, {
+    providerId: UUID_AVATAR,
+    audioAssetId: UUID_PRESET,
+    language: 'en',
+  }),
   fx('providers-models-request', 'providers.models', 'request', true, {
     providerId: UUID_CONFIG,
   }),
@@ -4325,6 +4360,14 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     pluginId: 'Lorebook Searcher',
     scope: 'user',
   }),
+  fx('neg-provider-transcribe-bad-asset', 'providers.transcribe', 'request', false, {
+    providerId: UUID_AVATAR,
+    audioAssetId: 'not-a-uuid',
+  }),
+  fx('neg-provider-transcribe-empty-model', 'providers.transcribe', 'response', false, {
+    text: 'hello from the audio',
+    model: '',
+  }),
   fx('neg-plugins-blobs-begin-bad-plugin-id', 'plugins.blobs.begin', 'request', false, {
     pluginId: 'Lorebook Searcher',
     name: 'index.bin',
@@ -4506,6 +4549,12 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('secrets-exposure-response', 'secrets.exposure', 'response', true, {
     allowSecretsExposure: false,
+  }),
+  fx('provider-transcribe-response', 'providers.transcribe', 'response', true, {
+    text: 'hello from the audio',
+    model: 'fake-1',
+    language: 'en',
+    durationMs: 1200,
   }),
   fx('providers-models-response', 'providers.models', 'response', true, {
     models: [

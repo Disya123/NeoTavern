@@ -352,6 +352,41 @@ export const FullBackupExecuteResultDtoSchema = Type.Object(
 export type FullBackupExecuteResultDto = Static<typeof FullBackupExecuteResultDtoSchema>;
 
 /**
+ * Transcription request (`wire.request.provider-transcribe`, ADR-0063): the
+ * audio is a STAGED asset (ADR-0061), so the bytes never ride a JSON request and
+ * the kernel owns the read; `providerId` addresses one stored config and
+ * `model` overrides the config's model when the caller needs a different
+ * transcription model. `language` is an optional BCP-47 hint.
+ */
+export const ProviderTranscribeRequestDtoSchema = Type.Object(
+  {
+    providerId: Type.String({ format: 'uuid' }),
+    audioAssetId: Type.String({ format: 'uuid' }),
+    model: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+    language: Type.Optional(Type.String({ minLength: 2, maxLength: 16 })),
+  },
+  { $id: 'wire.request.provider-transcribe', additionalProperties: false },
+);
+export type ProviderTranscribeRequestDto = Static<typeof ProviderTranscribeRequestDtoSchema>;
+
+/**
+ * Transcription result (`wire.result.provider-transcribe`): plain text plus the
+ * two facts a provider may report (language, duration). Deliberately no
+ * per-segment timing: the kernel does not model subtitles, and inventing
+ * segments would be a fabricated structure.
+ */
+export const ProviderTranscribeResultDtoSchema = Type.Object(
+  {
+    text: Type.String({ maxLength: 262144 }),
+    model: Type.String({ minLength: 1, maxLength: 200 }),
+    language: Type.Optional(Type.String({ minLength: 2, maxLength: 16 })),
+    durationMs: Type.Optional(Type.Integer({ minimum: 0 })),
+  },
+  { $id: 'wire.result.provider-transcribe', additionalProperties: false },
+);
+export type ProviderTranscribeResultDto = Static<typeof ProviderTranscribeResultDtoSchema>;
+
+/**
  * Character-card export format (`wire.card.export.format`): a the legacy app
  * card container in plain JSON or a PNG whose `chara` tEXt chunk carries
  * base64-encoded JSON — the same container shapes `imports.character.card`
@@ -4202,6 +4237,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.provider-test': ProviderTestRequestDtoSchema,
   'wire.provider-test.usage': ProviderTestUsageDtoSchema,
   'wire.result.provider-test': ProviderTestResultDtoSchema,
+  'wire.request.provider-transcribe': ProviderTranscribeRequestDtoSchema,
+  'wire.result.provider-transcribe': ProviderTranscribeResultDtoSchema,
   'wire.request.profile-export': ProfileExportRequestDtoSchema,
   'wire.result.profile-export': ProfileExportResultDtoSchema,
   'wire.request.profile-import': ProfileImportRequestDtoSchema,

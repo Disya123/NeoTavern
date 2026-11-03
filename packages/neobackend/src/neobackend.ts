@@ -197,6 +197,8 @@ import type {
   UpdatePersonaRequestDto,
   UpdatePresetRequestDto,
   UpdateSettingsRequestDto,
+  ProviderTranscribeRequestDto,
+  ProviderTranscribeResultDto,
 } from '@neotavern/contracts';
 
 /** Options accepted by facade calls (ТЗ §15). */
@@ -949,6 +951,17 @@ export interface ProvidersApi {
    * `/providers/:id/test` parity: the answer text plus attempt accounting.
    */
   test(req: ProviderTestRequestDto, opts?: BackendCallOptions): Promise<ProviderTestResultDto>;
+  /**
+   * Transcribes one STAGED audio asset through one stored config (wire
+   * `providers.transcribe`, ADR-0063): the audio is an asset id produced by the
+   * ADR-0061 staging family, so bytes never ride the request. A provider
+   * without the capability answers `CAPABILITY_UNAVAILABLE` rather than an empty
+   * transcript.
+   */
+  transcribe(
+    req: ProviderTranscribeRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ProviderTranscribeResultDto>;
 }
 
 /**

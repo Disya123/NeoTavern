@@ -135,6 +135,7 @@
   "providers.secrets.reveal",
   "providers.secrets.update",
   "providers.test",
+  "providers.transcribe",
   "search.query",
   "search.rebuild",
   "secrets.exposure",

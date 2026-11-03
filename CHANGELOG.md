@@ -22,6 +22,26 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Added
+
+- **`providers.transcribe` — the first media operation on the wire (round
+  52/99, ADR-0063).** Audio is a STAGED asset (ADR-0061), never bytes in a JSON
+  request: the op takes `providerId` + `audioAssetId` (+ optional model/language)
+  and answers `{ text, model, language?, durationMs? }`. The kernel resolves the
+  ADDRESSED config's adapter/endpoint/key, caps the read at 64 MiB before
+  touching the file, compares the row's size with the file's, and maps provider
+  failures to the normalized codes. `ProviderAdapter::transcribe` defaults to
+  `CAPABILITY_UNAVAILABLE`, so a provider that cannot transcribe refuses instead
+  of returning an empty transcript (pinned against the `recorded` adapter). The
+  fake provider answers a deterministic transcript derived from the audio digest
+  and length, so the DTO shape is tested without a network. Facade:
+  `backend.providers.transcribe`; legacy plane answers `UnsupportedError` (the
+  legacy server never had the route, and no silent fallback is added).
+  Registry: 152 ops; schema hash updated; capability `providers.media`
+  (Implemented on all hosts, not Packaged — no packaged smoke step yet).
+  Verified: `cargo test -p runtime-kernel --test provider_media` 5/5,
+  `cargo clippy -D warnings`, codegen/dispatch/docs:check, `tsc -b`.
+
 ### Changed
 
 - **The data-import surface is named after the data, not the previous app

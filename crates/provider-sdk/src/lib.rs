@@ -322,6 +322,39 @@ impl ProviderCapabilities {
     }
 }
 
+/// One transcription request (media operations, ADR-0063).
+///
+/// The caller stages the audio as an asset and the kernel hands the adapter the
+/// bytes exactly once; `api_key` is resolved by the kernel for the addressed
+/// config and must only be used to build the outgoing request (never logged or
+/// stored).
+pub struct TranscriptionRequest<'a> {
+    /// Provider identifier used on the wire.
+    pub provider_id: &'a str,
+    /// Model the config addresses.
+    pub model: &'a str,
+    /// The audio bytes (the staged asset's content).
+    pub audio: &'a [u8],
+    /// Content type of those bytes (`audio/mpeg`, `audio/wav`, …).
+    pub content_type: &'a str,
+    /// Optional BCP-47 language hint.
+    pub language: Option<&'a str>,
+    /// Bounds the whole call.
+    pub deadline: Option<policy::Deadline>,
+    /// Resolved API key, when the config has one.
+    pub api_key: Option<&'a str>,
+}
+
+/// A completed transcription.
+pub struct Transcription {
+    /// The transcript text.
+    pub text: String,
+    /// Language the provider reports, when it reports one.
+    pub language: Option<String>,
+    /// Audio duration the provider reports, when it reports one.
+    pub duration_ms: Option<u64>,
+}
+
 /// The portable provider adapter contract (§55).
 ///
 /// Implementations must be deterministic where documented, must never retry a
@@ -360,6 +393,23 @@ pub trait ProviderAdapter: Send + Sync {
         Err(ProviderError::with(
             ProviderErrorCode::CapabilityUnavailable,
             "this provider does not support live model discovery",
+            vec![("provider".to_string(), self.id().to_string())],
+        ))
+    }
+
+    /// Transcribes one audio asset (media operations, ADR-0063).
+    ///
+    /// Optional capability: the default refuses with
+    /// [`ProviderErrorCode::CapabilityUnavailable`], so a provider that cannot
+    /// transcribe is reported honestly instead of being handed bytes it would
+    /// ignore. Implementations must not retry a billable attempt internally.
+    fn transcribe(
+        &self,
+        _request: &TranscriptionRequest<'_>,
+    ) -> Result<Transcription, ProviderError> {
+        Err(ProviderError::with(
+            ProviderErrorCode::CapabilityUnavailable,
+            "this provider does not support transcription",
             vec![("provider".to_string(), self.id().to_string())],
         ))
     }

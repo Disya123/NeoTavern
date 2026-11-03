@@ -365,6 +365,18 @@
       "milestone": "M7"
     },
     {
+      "id": "providers.media",
+      "title": "Media operations over staged assets (transcription)",
+      "wireOps": ["providers.transcribe"],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Implemented"
+      },
+      "milestone": "M7"
+    },
+    {
       "id": "providers.list",
       "title": "Provider catalog read",
       "wireOps": ["providers.list", "providers.catalog"],

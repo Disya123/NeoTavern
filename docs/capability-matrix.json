@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-11-03T22:38:35.032Z",
+  "generatedAt": "2026-11-03T23:16:49.644Z",
   "rows": [
     {
       "hosts": {
@@ -400,6 +400,19 @@
       "notes": "Kernel op exists; provider configuration without secrets in DB is delivered (providers.config.*). M5 slice 4: every provider DTO now carries the adapter's honest capability declaration (wire.provider.capabilities: tools/vision/thinking/jsonMode/streaming) so the UI can pre-negotiate without guessing; the kernel generation path enforces the same declaration — a run that would send tool calls to a provider without tool support fails with CAPABILITY_UNAVAILABLE before any network request (kernel_capability_negotiation.rs proves generate is never invoked). Статус поднят до Integrated (ARC-10, M5 slice 55): useProviderCatalog (backend.providers.list) powers the provider select in GenerationPresetEditor/ProviderProfileEditor and the honest capability declarations drive CAPABILITY_UNAVAILABLE pre-negotiation on the kernel plane. M7 Etap-4 cluster 7: providers.catalog is the canonical source catalog consumed by both editors (backend.providers.catalog); the kernel answer is deliberately minimal — only sources it can materialize (openai, openai-compatible, fake), samplerSupport is empty until the kernel ProviderRequest carries sampler knobs, and Card fields the UI cannot represent (the test-only fake source) are skipped by the bridge instead of synthesizing labels. Packaged evidence (mechanism, not a date): `scripts/smoke-desktop-shell.mjs` boots the portable bundle (`apps/desktop/src-tauri/target/release/bundle/portable/*-portable/NeoTavern.exe`) with NEOTA_DESKTOP_SMOKE=1 NEOTA_KERNEL=1 and fails on any non-zero exit; `run_golden_smoke` step 5 (`lib.rs:1268-1269`) drives providers.list and providers.catalog through the KernelHost envelope.",
       "title": "Provider catalog read",
       "wireOps": ["providers.catalog", "providers.list"]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "providers.media",
+      "milestone": "M7",
+      "notes": "",
+      "title": "Media operations over staged assets (transcription)",
+      "wireOps": ["providers.transcribe"]
     },
     {
       "hosts": {
