@@ -24,6 +24,25 @@
 
 ### Added
 
+- **SillyTavern backup import: the destructive half is on the wire (round 49/99).**
+  `imports.sillytavern.execute` closes the logic half of cutover-registry row 10.
+  It reads the SAME staged archive `imports.sillytavern.analyze` inspected and
+  requires an explicit conflict policy (`skip` / `copy` / `merge` / `replace`,
+  mirroring the legacy `DataImportConflictPolicy`); per-entity sha256 dedupe via
+  `characters.import_hash` means a card whose bytes already exist is reused, not
+  duplicated, and `import_receipts` (schema v31) makes re-running one archive
+  idempotent while never laundering a skipped conflict into "imported" (receipts
+  are written only for rows actually written). `replace` snapshots the character
+  into `character_versions` before overwriting, so the destructive policy stays
+  reversible; groups / extension-settings / api-settings are preserved verbatim
+  as non-secret settings documents with an honest warning instead of pretending
+  the kernel models them. Per-category arithmetic is closed:
+  `discovered = imported + reused + skipped + invalid`.
+  Evidence: `crates/runtime-kernel/tests/kernel_imports_st.rs` grew to 16 tests
+  (7 analyze + 9 execute); wire registry 151 ops. Still open: discard/direct
+  variants, the `DataMigrationPanel` flip and packaged-artifact coverage — the
+  row is not claimed Packaged.
+
 - **The packaged smoke now walks every previously undisclosed op (round 48/99).**
   The round-46c audit had to list four families the Packaged cells claimed but
   no packaged step exercised. Round 47 walked the plugin blobs; this round

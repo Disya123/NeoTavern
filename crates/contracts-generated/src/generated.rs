@@ -109,6 +109,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "assets.delete" => Some(1024),
         "imports.character.card" => Some(1024),
         "imports.sillytavern.analyze" => Some(1024),
+        "imports.sillytavern.execute" => Some(1024),
         "plugins.list" => Some(1024),
         "plugins.install" => Some(65536),
         "plugins.uninstall" => Some(1024),
@@ -267,6 +268,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "assets.delete" => Some(1024),
         "imports.character.card" => Some(262144),
         "imports.sillytavern.analyze" => Some(262144),
+        "imports.sillytavern.execute" => Some(262144),
         "plugins.list" => Some(262144),
         "plugins.install" => Some(262144),
         "plugins.uninstall" => Some(1024),
@@ -8081,6 +8083,228 @@ pub fn decode_result_imports_sillytavern_analyze(bytes: &[u8]) -> Result<ResultI
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestImportsSillytavernExecute {
+    #[serde(rename = "assetId")]
+    pub asset_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub categories: Option<Vec<ImportsSillytavernCategory>>,
+    #[serde(rename = "conflictPolicy")]
+    pub conflict_policy: ImportsSillytavernConflictPolicy,
+}
+
+pub(crate) fn check_request_imports_sillytavern_execute(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("assetId").is_none() {
+            issues.push(Issue::new(join_path(path, "assetId"), "RequiredProperty"));
+        }
+        if value.get("conflictPolicy").is_none() {
+            issues.push(Issue::new(join_path(path, "conflictPolicy"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("assetId") {
+            let child_path = join_path(path, "assetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("categories") {
+            let child_path = join_path(path, "categories");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() < 1 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMinItems"));
+                }
+                if arr.len() > 11 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_imports_sillytavern_category(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(child) = value.get("conflictPolicy") {
+            let child_path = join_path(path, "conflictPolicy");
+            check_imports_sillytavern_conflict_policy(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "assetId" | "categories" | "conflictPolicy") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_imports_sillytavern_execute(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_imports_sillytavern_execute(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_imports_sillytavern_execute(bytes: &[u8]) -> Result<RequestImportsSillytavernExecute, WireError> {
+    crate::decode::<RequestImportsSillytavernExecute>(validate_request_imports_sillytavern_execute, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultImportsSillytavernExecute {
+    #[serde(rename = "runId")]
+    pub run_id: String,
+    #[serde(rename = "sourceHash")]
+    pub source_hash: String,
+    #[serde(rename = "conflictPolicy")]
+    pub conflict_policy: ImportsSillytavernConflictPolicy,
+    #[serde(rename = "archiveAlreadyImported")]
+    pub archive_already_imported: bool,
+    pub categories: Vec<ImportsSillytavernCategoryExecute>,
+    pub totals: ImportsSillytavernTotals,
+    #[serde(rename = "warningCount")]
+    pub warning_count: i64,
+    pub warnings: Vec<ImportsSillytavernWarning>,
+}
+
+pub(crate) fn check_result_imports_sillytavern_execute(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-f0-9]{64}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("runId").is_none() {
+            issues.push(Issue::new(join_path(path, "runId"), "RequiredProperty"));
+        }
+        if value.get("sourceHash").is_none() {
+            issues.push(Issue::new(join_path(path, "sourceHash"), "RequiredProperty"));
+        }
+        if value.get("conflictPolicy").is_none() {
+            issues.push(Issue::new(join_path(path, "conflictPolicy"), "RequiredProperty"));
+        }
+        if value.get("archiveAlreadyImported").is_none() {
+            issues.push(Issue::new(join_path(path, "archiveAlreadyImported"), "RequiredProperty"));
+        }
+        if value.get("categories").is_none() {
+            issues.push(Issue::new(join_path(path, "categories"), "RequiredProperty"));
+        }
+        if value.get("totals").is_none() {
+            issues.push(Issue::new(join_path(path, "totals"), "RequiredProperty"));
+        }
+        if value.get("warningCount").is_none() {
+            issues.push(Issue::new(join_path(path, "warningCount"), "RequiredProperty"));
+        }
+        if value.get("warnings").is_none() {
+            issues.push(Issue::new(join_path(path, "warnings"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("runId") {
+            let child_path = join_path(path, "runId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("sourceHash") {
+            let child_path = join_path(path, "sourceHash");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("conflictPolicy") {
+            let child_path = join_path(path, "conflictPolicy");
+            check_imports_sillytavern_conflict_policy(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("archiveAlreadyImported") {
+            let child_path = join_path(path, "archiveAlreadyImported");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("categories") {
+            let child_path = join_path(path, "categories");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() < 11 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMinItems"));
+                }
+                if arr.len() > 11 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_imports_sillytavern_category_execute(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(child) = value.get("totals") {
+            let child_path = join_path(path, "totals");
+            check_imports_sillytavern_totals(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("warningCount") {
+            let child_path = join_path(path, "warningCount");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("warnings") {
+            let child_path = join_path(path, "warnings");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 64 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_imports_sillytavern_warning(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "runId" | "sourceHash" | "conflictPolicy" | "archiveAlreadyImported" | "categories" | "totals" | "warningCount" | "warnings") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_imports_sillytavern_execute(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_imports_sillytavern_execute(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_imports_sillytavern_execute(bytes: &[u8]) -> Result<ResultImportsSillytavernExecute, WireError> {
+    crate::decode::<ResultImportsSillytavernExecute>(validate_result_imports_sillytavern_execute, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ImportsSillytavernCategory {
     #[serde(rename = "characters")] Characters,
     #[serde(rename = "chats")] Chats,
@@ -8214,6 +8438,269 @@ pub fn validate_imports_sillytavern_category_analysis(value: &Value) -> Result<(
 
 pub fn decode_imports_sillytavern_category_analysis(bytes: &[u8]) -> Result<ImportsSillytavernCategoryAnalysis, WireError> {
     crate::decode::<ImportsSillytavernCategoryAnalysis>(validate_imports_sillytavern_category_analysis, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ImportsSillytavernCategoryExecute {
+    pub id: ImportsSillytavernCategory,
+    pub imported: i64,
+    pub reused: i64,
+    pub skipped: i64,
+    pub conflicted: i64,
+    pub invalid: i64,
+    #[serde(rename = "dependentImported")]
+    pub dependent_imported: i64,
+}
+
+pub(crate) fn check_imports_sillytavern_category_execute(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("imported").is_none() {
+            issues.push(Issue::new(join_path(path, "imported"), "RequiredProperty"));
+        }
+        if value.get("reused").is_none() {
+            issues.push(Issue::new(join_path(path, "reused"), "RequiredProperty"));
+        }
+        if value.get("skipped").is_none() {
+            issues.push(Issue::new(join_path(path, "skipped"), "RequiredProperty"));
+        }
+        if value.get("conflicted").is_none() {
+            issues.push(Issue::new(join_path(path, "conflicted"), "RequiredProperty"));
+        }
+        if value.get("invalid").is_none() {
+            issues.push(Issue::new(join_path(path, "invalid"), "RequiredProperty"));
+        }
+        if value.get("dependentImported").is_none() {
+            issues.push(Issue::new(join_path(path, "dependentImported"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            check_imports_sillytavern_category(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("imported") {
+            let child_path = join_path(path, "imported");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("reused") {
+            let child_path = join_path(path, "reused");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("skipped") {
+            let child_path = join_path(path, "skipped");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("conflicted") {
+            let child_path = join_path(path, "conflicted");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("invalid") {
+            let child_path = join_path(path, "invalid");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("dependentImported") {
+            let child_path = join_path(path, "dependentImported");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "imported" | "reused" | "skipped" | "conflicted" | "invalid" | "dependentImported") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_imports_sillytavern_category_execute(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_imports_sillytavern_category_execute(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_imports_sillytavern_category_execute(bytes: &[u8]) -> Result<ImportsSillytavernCategoryExecute, WireError> {
+    crate::decode::<ImportsSillytavernCategoryExecute>(validate_imports_sillytavern_category_execute, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ImportsSillytavernConflictPolicy {
+    #[serde(rename = "skip")] Skip,
+    #[serde(rename = "copy")] Copy,
+    #[serde(rename = "merge")] Merge,
+    #[serde(rename = "replace")] Replace,
+}
+
+pub(crate) fn check_imports_sillytavern_conflict_policy(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "skip" | "copy" | "merge" | "replace") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_imports_sillytavern_conflict_policy(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_imports_sillytavern_conflict_policy(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_imports_sillytavern_conflict_policy(bytes: &[u8]) -> Result<ImportsSillytavernConflictPolicy, WireError> {
+    crate::decode::<ImportsSillytavernConflictPolicy>(validate_imports_sillytavern_conflict_policy, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ImportsSillytavernTotals {
+    pub imported: i64,
+    pub reused: i64,
+    pub skipped: i64,
+    pub conflicted: i64,
+    pub invalid: i64,
+}
+
+pub(crate) fn check_imports_sillytavern_totals(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("imported").is_none() {
+            issues.push(Issue::new(join_path(path, "imported"), "RequiredProperty"));
+        }
+        if value.get("reused").is_none() {
+            issues.push(Issue::new(join_path(path, "reused"), "RequiredProperty"));
+        }
+        if value.get("skipped").is_none() {
+            issues.push(Issue::new(join_path(path, "skipped"), "RequiredProperty"));
+        }
+        if value.get("conflicted").is_none() {
+            issues.push(Issue::new(join_path(path, "conflicted"), "RequiredProperty"));
+        }
+        if value.get("invalid").is_none() {
+            issues.push(Issue::new(join_path(path, "invalid"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("imported") {
+            let child_path = join_path(path, "imported");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("reused") {
+            let child_path = join_path(path, "reused");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("skipped") {
+            let child_path = join_path(path, "skipped");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("conflicted") {
+            let child_path = join_path(path, "conflicted");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("invalid") {
+            let child_path = join_path(path, "invalid");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "imported" | "reused" | "skipped" | "conflicted" | "invalid") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_imports_sillytavern_totals(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_imports_sillytavern_totals(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_imports_sillytavern_totals(bytes: &[u8]) -> Result<ImportsSillytavernTotals, WireError> {
+    crate::decode::<ImportsSillytavernTotals>(validate_imports_sillytavern_totals, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -37,20 +37,20 @@ use crate::{KernelError, KernelErrorCode};
 
 /// Bounded warning sample (the contract caps the array; `warningCount` carries
 /// the full total).
-const MAX_WARNING_SAMPLE: usize = 64;
+pub(crate) const MAX_WARNING_SAMPLE: usize = 64;
 /// Total bytes the walk may decompress while validating nested payloads.
 const READ_BUDGET_BYTES: u64 = 256 * 1024 * 1024;
 /// Refuse absurd archives before touching them (zip-bomb guard).
-const MAX_EXPANDED_BYTES: i64 = 8 * 1024 * 1024 * 1024;
+pub(crate) const MAX_EXPANDED_BYTES: i64 = 8 * 1024 * 1024 * 1024;
 /// Refuse archives with an absurd number of entries.
-const MAX_ENTRIES: usize = 400_000;
+pub(crate) const MAX_ENTRIES: usize = 400_000;
 /// Legacy per-file caps (mirrored so the analysis reports the same verdicts).
-const MAX_CHARACTER_BYTES: i64 = 25 * 1024 * 1024;
-const MAX_SETTINGS_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_WORLD_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_PRESET_BYTES: u64 = 32 * 1024 * 1024;
-const MAX_CHAT_LINE_CHARS: usize = 16 * 1024 * 1024;
-const MAX_BACKGROUND_BYTES: i64 = 64 * 1024 * 1024;
+pub(crate) const MAX_CHARACTER_BYTES: i64 = 25 * 1024 * 1024;
+pub(crate) const MAX_SETTINGS_BYTES: u64 = 64 * 1024 * 1024;
+pub(crate) const MAX_WORLD_BYTES: u64 = 64 * 1024 * 1024;
+pub(crate) const MAX_PRESET_BYTES: u64 = 32 * 1024 * 1024;
+pub(crate) const MAX_CHAT_LINE_CHARS: usize = 16 * 1024 * 1024;
+pub(crate) const MAX_BACKGROUND_BYTES: i64 = 64 * 1024 * 1024;
 
 /// Directories that mark a SillyTavern user-data root (lowercase).
 const ROOT_MARKERS: [&str; 16] = [
@@ -74,7 +74,7 @@ const ROOT_MARKERS: [&str; 16] = [
 
 /// Preset directories (lowercase); `openai settings` doubles as the API-settings
 /// bucket exactly like the legacy analyzer.
-const PRESET_DIRECTORIES: [&str; 8] = [
+pub(crate) const PRESET_DIRECTORIES: [&str; 8] = [
     "instruct",
     "context",
     "sysprompt",
@@ -85,10 +85,10 @@ const PRESET_DIRECTORIES: [&str; 8] = [
     "textgen settings",
 ];
 
-const IMAGE_EXTENSIONS: [&str; 5] = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+pub(crate) const IMAGE_EXTENSIONS: [&str; 5] = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
 
 /// Canonical category order of the result array.
-const CATEGORY_ORDER: [ImportsSillytavernCategory; 11] = [
+pub(crate) const CATEGORY_ORDER: [ImportsSillytavernCategory; 11] = [
     ImportsSillytavernCategory::Characters,
     ImportsSillytavernCategory::Chats,
     ImportsSillytavernCategory::Personas,
@@ -102,7 +102,7 @@ const CATEGORY_ORDER: [ImportsSillytavernCategory; 11] = [
     ImportsSillytavernCategory::Themes,
 ];
 
-fn category_index(id: ImportsSillytavernCategory) -> usize {
+pub(crate) fn category_index(id: ImportsSillytavernCategory) -> usize {
     match id {
         ImportsSillytavernCategory::Characters => 0,
         ImportsSillytavernCategory::Chats => 1,
@@ -119,13 +119,77 @@ fn category_index(id: ImportsSillytavernCategory) -> usize {
 }
 
 /// One archive entry as recorded in the central directory.
-struct Entry {
+pub(crate) struct Entry {
     /// Archive path with forward slashes, exactly as stored.
-    name: String,
+    pub(crate) name: String,
     /// Lowercase path used for matching.
-    lower: String,
-    size: i64,
-    is_dir: bool,
+    pub(crate) lower: String,
+    pub(crate) size: i64,
+    pub(crate) is_dir: bool,
+}
+
+/// Whole central directory: the entries, the ancestor directory set (for root
+/// detection) and the byte totals. Shared by `analyze` and `execute` so both
+/// halves classify the same archive shape the same way.
+pub(crate) struct ArchiveIndex {
+    pub(crate) entries: Vec<Entry>,
+    pub(crate) dirs: BTreeSet<String>,
+    pub(crate) total_expanded: i64,
+    pub(crate) total_compressed: i64,
+}
+
+/// Indexes the ZIP central directory (two passes: root detection needs the
+/// whole shape, classification needs the entries).
+pub(crate) fn index_archive(archive: &mut ZipArchive<File>) -> Result<ArchiveIndex, KernelError> {
+    let mut entries: Vec<Entry> = Vec::new();
+    let mut dirs: BTreeSet<String> = BTreeSet::new();
+    let mut total_expanded: i64 = 0;
+    let mut total_compressed: i64 = 0;
+    if archive.len() > MAX_ENTRIES {
+        return Err(archive_too_large(MAX_EXPANDED_BYTES));
+    }
+    for index in 0..archive.len() {
+        let Ok(entry) = archive.by_index_raw(index) else {
+            continue;
+        };
+        let name = entry.name().replace('\\', "/");
+        let is_dir = entry.is_dir();
+        let size = entry.size() as i64;
+        let compressed_size = entry.compressed_size() as i64;
+        total_expanded = total_expanded.saturating_add(size);
+        total_compressed = total_compressed.saturating_add(compressed_size);
+        if total_expanded > MAX_EXPANDED_BYTES {
+            return Err(archive_too_large(MAX_EXPANDED_BYTES));
+        }
+        let lower = name.to_lowercase();
+        dirs.insert(lower.trim_end_matches('/').to_string());
+        // Every ancestor directory counts, not only explicit directory
+        // entries: a flat ZIP from the SillyTavern exporter has no dir rows.
+        let mut cursor = if is_dir {
+            lower.trim_end_matches('/').to_string()
+        } else {
+            parent_of(&lower).trim_end_matches('/').to_string()
+        };
+        loop {
+            dirs.insert(format!("{cursor}/"));
+            match cursor.rfind('/') {
+                Some(index) => cursor.truncate(index),
+                None => break,
+            }
+        }
+        entries.push(Entry {
+            name,
+            lower,
+            size,
+            is_dir,
+        });
+    }
+    Ok(ArchiveIndex {
+        entries,
+        dirs,
+        total_expanded,
+        total_compressed,
+    })
 }
 
 /// Accumulated analysis state.
@@ -185,14 +249,14 @@ impl Analysis {
     }
 }
 
-fn archive_invalid(reason: &str) -> KernelError {
+pub(crate) fn archive_invalid(reason: &str) -> KernelError {
     KernelError::product(
         "SILLYTAVERN_ARCHIVE_INVALID".to_string(),
         vec![("reason".to_string(), reason.to_string())],
     )
 }
 
-fn data_root_missing() -> KernelError {
+pub(crate) fn data_root_missing() -> KernelError {
     KernelError::product("SILLYTAVERN_DATA_ROOT_NOT_FOUND".to_string(), Vec::new())
 }
 
@@ -203,11 +267,11 @@ fn archive_too_large(limit: i64) -> KernelError {
     )
 }
 
-fn sqlite(err: rusqlite::Error, context: &str) -> KernelError {
+pub(crate) fn sqlite(err: rusqlite::Error, context: &str) -> KernelError {
     KernelError::new(KernelErrorCode::StorageFailure, format!("{context}: {err}"))
 }
 
-fn storage(message: String) -> KernelError {
+pub(crate) fn storage(message: String) -> KernelError {
     KernelError::new(KernelErrorCode::StorageFailure, message)
 }
 
@@ -246,61 +310,22 @@ pub fn imports_sillytavern_analyze(
     let mut archive = ZipArchive::new(file)
         .map_err(|err| archive_invalid(&format!("not a readable zip: {err}")))?;
 
-    // 2. Index the central directory (two passes: root detection needs the
-    //    whole shape, classification needs the entries).
-    let mut entries: Vec<Entry> = Vec::new();
-    let mut dirs: BTreeSet<String> = BTreeSet::new();
-    let mut total_expanded: i64 = 0;
-    let mut total_compressed: i64 = 0;
-    if archive.len() > MAX_ENTRIES {
-        return Err(archive_too_large(MAX_EXPANDED_BYTES));
-    }
-    for index in 0..archive.len() {
-        let Ok(entry) = archive.by_index_raw(index) else {
-            continue;
-        };
-        let name = entry.name().replace('\\', "/");
-        let is_dir = entry.is_dir();
-        let size = entry.size() as i64;
-        let compressed_size = entry.compressed_size() as i64;
-        total_expanded = total_expanded.saturating_add(size);
-        total_compressed = total_compressed.saturating_add(compressed_size);
-        if total_expanded > MAX_EXPANDED_BYTES {
-            return Err(archive_too_large(MAX_EXPANDED_BYTES));
-        }
-        let lower = name.to_lowercase();
-        dirs.insert(lower.trim_end_matches('/').to_string());
-        // Every ancestor directory counts, not only explicit directory
-        // entries: a flat ZIP from the SillyTavern exporter has no dir rows.
-        let mut cursor = if is_dir {
-            lower.trim_end_matches('/').to_string()
-        } else {
-            parent_of(&lower).trim_end_matches('/').to_string()
-        };
-        loop {
-            dirs.insert(format!("{cursor}/"));
-            match cursor.rfind('/') {
-                Some(index) => cursor.truncate(index),
-                None => break,
-            }
-        }
-        entries.push(Entry {
-            name,
-            lower,
-            size,
-            is_dir,
-        });
-    }
+    // 2. Index the central directory.
+    let index = index_archive(&mut archive)?;
+    let entries = &index.entries;
+    let dirs = &index.dirs;
+    let total_expanded = index.total_expanded;
+    let total_compressed = index.total_compressed;
 
     // 3. Detect the user-data root.
-    let root = detect_root(&entries, &dirs).ok_or_else(data_root_missing)?;
+    let root = detect_root(entries, dirs).ok_or_else(data_root_missing)?;
 
     // 4. Classify.
     let mut analysis = Analysis::new();
 
     // Unsafe / unsupported archive shape first: an absolute path or a `..`
     // segment never reaches a category (the importer would refuse it too).
-    for entry in &entries {
+    for entry in entries {
         if entry.is_dir {
             continue;
         }
@@ -573,7 +598,17 @@ pub fn imports_sillytavern_analyze(
             let mut invalid = 0i64;
             for (avatar_id, name) in personas {
                 discovered += 1;
-                if !name.is_string() {
+                // SillyTavern stores an object per avatar id (`{name, description}`)
+                // and older backups a bare string; anything else is invalid.
+                let valid = match name {
+                    serde_json::Value::String(text) => !text.trim().is_empty(),
+                    serde_json::Value::Object(map) => map
+                        .get("name")
+                        .and_then(|value| value.as_str())
+                        .is_some_and(|text| !text.trim().is_empty()),
+                    _ => false,
+                };
+                if !valid {
                     invalid += 1;
                     analysis.warn(
                         "PERSONA_INVALID",
@@ -624,7 +659,7 @@ pub fn imports_sillytavern_analyze(
     }
 
     // 4h. Backgrounds: image files under `backgrounds/`.
-    for entry in &entries {
+    for entry in entries {
         if entry.is_dir
             || !entry.lower.starts_with(&format!("{root}backgrounds/"))
             || !IMAGE_EXTENSIONS
@@ -648,7 +683,7 @@ pub fn imports_sillytavern_analyze(
 
     // 4i. Legacy extensions: `extensions/<dir>/index.js` and its tree size.
     let mut extension_dirs: HashMap<String, (bool, i64)> = HashMap::new();
-    for entry in &entries {
+    for entry in entries {
         if !entry.lower.starts_with(&format!("{root}extensions/")) {
             continue;
         }
@@ -676,7 +711,7 @@ pub fn imports_sillytavern_analyze(
     }
 
     // 4j. Themes: `themes/*.css` / `*.json`.
-    for entry in &entries {
+    for entry in entries {
         if entry.is_dir || !entry.lower.starts_with(&format!("{root}themes/")) {
             continue;
         }
@@ -702,7 +737,7 @@ pub fn imports_sillytavern_analyze(
 }
 
 /// Parent directory of a lowercase archive path ("" for a top-level file).
-fn parent_of(path: &str) -> &str {
+pub(crate) fn parent_of(path: &str) -> &str {
     match path.rfind('/') {
         Some(index) => &path[..index + 1],
         None => "",
@@ -710,7 +745,7 @@ fn parent_of(path: &str) -> &str {
 }
 
 /// Absolute paths, drive letters and `..` segments are refused by the importer.
-fn is_unsafe_path(path: &str) -> bool {
+pub(crate) fn is_unsafe_path(path: &str) -> bool {
     if path.starts_with('/') || path.starts_with('\\') {
         return true;
     }
@@ -722,7 +757,7 @@ fn is_unsafe_path(path: &str) -> bool {
 }
 
 /// Scores every directory that looks like a SillyTavern user-data root.
-fn detect_root(entries: &[Entry], dirs: &BTreeSet<String>) -> Option<String> {
+pub(crate) fn detect_root(entries: &[Entry], dirs: &BTreeSet<String>) -> Option<String> {
     let mut candidates: Vec<String> = dirs
         .iter()
         .filter(|dir| dir.is_empty() || dir.ends_with('/'))

@@ -325,7 +325,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "097de059e0db7ee6fe93fe5cfafb441c0f91eea8c703e61da80521cace1c1c8d"
+      "sha256": "96cb3da3cd0a0b62c862737958c77543ec94d4a8d38868d2d7f5d0c35249eade"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -385,7 +385,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "7ebfbf3d96a0da6b46728d3399eef7ccec2dcddbe988c31d17beb79990fc631a"
+      "sha256": "4d8fad8c74598e2d1e249f7d4f88bca911d705beca777a2ffc00e12335396e38"
     },
     {
       "source": "architecture/resource-containment.md",
@@ -440,7 +440,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "8be29865b5317031b6ad21e1bbb37753ba35f23d9ddef518e8a1cafb39d72e2a"
+      "sha256": "2232e739aaad622eae9b4831fa50bc6329407d70c603d5805db0890c00c7dfc8"
     },
     {
       "source": "data/README.md",

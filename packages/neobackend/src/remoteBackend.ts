@@ -110,6 +110,9 @@ import type {
   GalleryDeleteResultDto,
   CharacterVersionsResultDto,
   CharacterCardImportResultDto,
+  SillyTavernAnalyzeResultDto,
+  SillyTavernExecuteRequestDto,
+  SillyTavernExecuteResultDto,
   ChatsExportResultDto,
 } from '@neotavern/contracts';
 import type {
@@ -575,6 +578,16 @@ export class RemoteBackend implements NeoBackend {
         { assetId },
         { signal: opts?.signal },
       ),
+    sillyTavernAnalyze: (assetId, opts) =>
+      this.sdk.call<SillyTavernAnalyzeResultDto>(
+        'imports.sillytavern.analyze',
+        { assetId },
+        { signal: opts?.signal },
+      ),
+    sillyTavernExecute: (req, opts) =>
+      this.sdk.call<SillyTavernExecuteResultDto>('imports.sillytavern.execute', req, {
+        signal: opts?.signal,
+      }),
   };
 
   readonly search: SearchApi = {

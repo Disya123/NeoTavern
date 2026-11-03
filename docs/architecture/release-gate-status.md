@@ -17,7 +17,7 @@ capability matrix (`docs/capability-matrix.json`, generated), [cutover registry]
 | G2  | Repository formatting clean              | `pnpm format:check` → "All matched files use Prettier code style"                                 | **PASS** (round 8)               |
 | G3  | No silent kernel-plane fallbacks         | `pnpm ui:fallback:check` → 3 registered `kernel-empty:` branches, AST classifier, CI step present | **PASS** (round 6)               |
 | G4  | Legacy UI surface audited and frozen     | `pnpm ui:api:check` → 51 sites, per-site fingerprints + owner/removal records                     | **PASS** (round 5 audit closure) |
-| G5  | Product Wire contract determinism        | `node tools/contract-codegen/codegen.mjs --check` → 150 ops in sync                               | **PASS**                         |
+| G5  | Product Wire contract determinism        | `node tools/contract-codegen/codegen.mjs --check` → 151 ops in sync                               | **PASS**                         |
 
 ## Not satisfied
 

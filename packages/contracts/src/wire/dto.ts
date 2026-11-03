@@ -189,6 +189,169 @@ export const SillyTavernAnalyzeResultDtoSchema = Type.Object(
 export type SillyTavernAnalyzeResultDto = Static<typeof SillyTavernAnalyzeResultDtoSchema>;
 
 /**
+ * Conflict policy of `imports.sillytavern.execute`
+ * (`wire.imports.sillytavern.conflict-policy`): the legacy
+ * `DataImportConflictPolicy` verbatim, so the migration panel offers the same
+ * four choices it always did.
+ *
+ * A conflict is a target row the archive did NOT create — the same character
+ * name, lorebook name, preset (kind + name), persona name, or settings document
+ * key. The policy only governs those collisions:
+ *
+ * - `skip` — keep the existing row, the archive row is `conflicted` and
+ *   `skipped`;
+ * - `copy` — write the archive row alongside the existing one under the same
+ *   name (the legacy `#copy:<executionId>` source-key suffix, so the copy keeps
+ *   its own receipt and stays idempotent);
+ * - `merge` — keep the existing row's non-empty fields and fill the gaps from
+ *   the archive (`conflicted` + `imported`);
+ * - `replace` — overwrite the existing row from the archive (`conflicted` +
+ *   `imported`); a character is snapshotted into `character_versions` first, so
+ *   the overwrite stays reversible through `characters.versions.restore`.
+ *
+ * An entity already recorded in `import_receipts` with the SAME source checksum
+ * is never a conflict: it is `reused` under every policy. That is what makes a
+ * re-run of the same archive idempotent, and it is the default the legacy
+ * `preserve` policy expressed.
+ */
+export const WireSillyTavernConflictPolicy = Type.Union(
+  [Type.Literal('skip'), Type.Literal('copy'), Type.Literal('merge'), Type.Literal('replace')],
+  { $id: 'wire.imports.sillytavern.conflict-policy', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WireSillyTavernConflictPolicy = Static<typeof WireSillyTavernConflictPolicy>;
+
+/**
+ * SillyTavern archive execute request
+ * (`wire.request.imports.sillytavern.execute`) — the destructive half of
+ * cutover-registry row 10. It reads the SAME staged asset the analysis read
+ * (ADR-0061: the archive never rides a JSON request) and writes the categories
+ * the analyzer reported.
+ *
+ * `conflictPolicy` is REQUIRED: execute overwrites product data, so there is no
+ * silent default the caller did not choose. `categories` is the subset the user
+ * confirmed in the migration panel; absent means every supported category.
+ * `legacyExtensions` is deliberately NOT importable (ADR-0059: SillyTavern-era
+ * extensions are not a supported plugin surface) — requesting it is refused
+ * with a `VALIDATION` product error rather than silently ignored, and omitting
+ * it never loses the warning the analysis already raised.
+ *
+ * What lands where (the kernel owns no first-class model for everything
+ * SillyTavern stored):
+ *
+ * - `characters` → `characters` rows (the full card preserved under
+ *   `ext_json._card`, provenance under `ext_json._st2`, the PNG card published
+ *   as an `avatar` asset);
+ * - `chats` → `chats` + `messages` (the transcript's `chat_metadata` header is
+ *   not a message, exactly like the legacy importer);
+ * - `personas` → `personas` (avatar files from `user avatars/` become `avatar`
+ *   assets);
+ * - `lorebooks` → `lorebooks` (`entries_json` keeps every entry object);
+ * - `presets` → `presets` (the legacy directory→kind map, settings verbatim);
+ * - `backgrounds` → `background` assets (the canonical wallpaper kind);
+ * - `themes` → `theme-css` / `theme-json` assets, ready for `themes.install`;
+ * - `groups`, `extensionSettings`, `apiSettings` → preserved VERBATIM as
+ *   non-secret settings documents (`sillytavern.groups`,
+ *   `sillytavern.extension_settings`, `sillytavern.api_settings`) because the
+ *   kernel has no group model, no extension-settings store and no unsolicited
+ *   provider-config registry; the response warns about it
+ *   (`*_PRESERVED_NOT_MODELED`) instead of pretending they are live
+ *   configuration. Secrets are never imported (`secrets.json` is skipped).
+ *
+ * Counts are per category and never a silent partial success:
+ * `discovered == imported + reused + skipped + invalid` holds for every
+ * category in the result, `conflicted` counts the rows that hit a collision
+ * (whatever the policy decided), and `dependentImported` counts the nested rows
+ * written (messages, lore entries). The bounded `warnings` sample is backed by
+ * the full `warningCount`.
+ */
+export const SillyTavernExecuteRequestDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+    categories: Type.Optional(
+      Type.Array(WireSillyTavernCategory, { minItems: 1, maxItems: 11, uniqueItems: true }),
+    ),
+    conflictPolicy: WireSillyTavernConflictPolicy,
+  },
+  { $id: 'wire.request.imports.sillytavern.execute', additionalProperties: false },
+);
+export type SillyTavernExecuteRequestDto = Static<typeof SillyTavernExecuteRequestDtoSchema>;
+
+/**
+ * Per-category execute outcome (`wire.imports.sillytavern.category-execute`):
+ * the same eleven buckets the analysis reports, now with what actually
+ * happened.
+ *
+ * - `imported` — rows this run wrote (created, or updated under
+ *   `merge`/`replace`); for the asset categories, bytes newly published;
+ * - `reused` — rows already imported from the SAME source checksum (receipt
+ *   hit), or identical bytes already in the asset store: nothing was touched;
+ * - `skipped` — rows deliberately not written (policy `skip` on a conflict, a
+ *   chat whose character is not in the archive, an unsupported category);
+ * - `conflicted` — rows that collided with a target the archive did not create
+ *   (counted whatever the policy decided, so it may overlap `imported`);
+ * - `invalid` — archive entries that cannot be imported as-is (unparseable,
+ *   over the per-file cap, missing a required field);
+ * - `dependentImported` — nested rows written (messages of a chat, entries of a
+ *   lorebook).
+ *
+ * `imported + reused + skipped + invalid == discovered` from the analysis, so a
+ * caller can reconcile the two operations without guessing.
+ */
+export const SillyTavernCategoryExecuteDtoSchema = Type.Object(
+  {
+    id: WireSillyTavernCategory,
+    imported: Type.Integer({ minimum: 0 }),
+    reused: Type.Integer({ minimum: 0 }),
+    skipped: Type.Integer({ minimum: 0 }),
+    conflicted: Type.Integer({ minimum: 0 }),
+    invalid: Type.Integer({ minimum: 0 }),
+    dependentImported: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.imports.sillytavern.category-execute', additionalProperties: false },
+);
+export type SillyTavernCategoryExecuteDto = Static<typeof SillyTavernCategoryExecuteDtoSchema>;
+
+/** Execute totals (`wire.imports.sillytavern.totals`): the sum of the
+ * per-category counters, so a client never has to add them up itself. */
+export const SillyTavernExecuteTotalsDtoSchema = Type.Object(
+  {
+    imported: Type.Integer({ minimum: 0 }),
+    reused: Type.Integer({ minimum: 0 }),
+    skipped: Type.Integer({ minimum: 0 }),
+    conflicted: Type.Integer({ minimum: 0 }),
+    invalid: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.imports.sillytavern.totals', additionalProperties: false },
+);
+export type SillyTavernExecuteTotalsDto = Static<typeof SillyTavernExecuteTotalsDtoSchema>;
+
+/**
+ * SillyTavern archive execute result (`wire.result.imports.sillytavern.execute`).
+ *
+ * `runId` groups the `import_receipts` rows this run wrote (schema v31), so a
+ * resumed or repeated import is reconcilable; `archiveAlreadyImported` is true
+ * when the run wrote nothing because every selected entity was already imported
+ * from the same source checksum (the legacy `reusedArchive` signal).
+ */
+export const SillyTavernExecuteResultDtoSchema = Type.Object(
+  {
+    runId: Type.String({ format: 'uuid' }),
+    sourceHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+    conflictPolicy: WireSillyTavernConflictPolicy,
+    archiveAlreadyImported: Type.Boolean(),
+    categories: Type.Array(SillyTavernCategoryExecuteDtoSchema, {
+      minItems: 11,
+      maxItems: 11,
+    }),
+    totals: SillyTavernExecuteTotalsDtoSchema,
+    warningCount: Type.Integer({ minimum: 0 }),
+    warnings: Type.Array(SillyTavernWarningDtoSchema, { maxItems: 64 }),
+  },
+  { $id: 'wire.result.imports.sillytavern.execute', additionalProperties: false },
+);
+export type SillyTavernExecuteResultDto = Static<typeof SillyTavernExecuteResultDtoSchema>;
+
+/**
  * Character-card export format (`wire.card.export.format`): a SillyTavern
  * card container in plain JSON or a PNG whose `chara` tEXt chunk carries
  * base64-encoded JSON — the same container shapes `imports.character.card`
@@ -4085,8 +4248,13 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.imports.character.card': CharacterCardImportRequestDtoSchema,
   'wire.request.imports.sillytavern.analyze': SillyTavernAnalyzeRequestDtoSchema,
   'wire.result.imports.sillytavern.analyze': SillyTavernAnalyzeResultDtoSchema,
+  'wire.request.imports.sillytavern.execute': SillyTavernExecuteRequestDtoSchema,
+  'wire.result.imports.sillytavern.execute': SillyTavernExecuteResultDtoSchema,
   'wire.imports.sillytavern.category': WireSillyTavernCategory,
   'wire.imports.sillytavern.category-analysis': SillyTavernCategoryAnalysisDtoSchema,
+  'wire.imports.sillytavern.category-execute': SillyTavernCategoryExecuteDtoSchema,
+  'wire.imports.sillytavern.conflict-policy': WireSillyTavernConflictPolicy,
+  'wire.imports.sillytavern.totals': SillyTavernExecuteTotalsDtoSchema,
   'wire.imports.sillytavern.warning': SillyTavernWarningDtoSchema,
   'wire.card.export.format': WireCardExportFormat,
   'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,

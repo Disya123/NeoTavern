@@ -19,6 +19,9 @@ import type {
   GalleryDeleteRequestDto,
   GalleryDeleteResultDto,
   CharacterCardImportResultDto,
+  SillyTavernAnalyzeResultDto,
+  SillyTavernExecuteRequestDto,
+  SillyTavernExecuteResultDto,
   CharacterVersionRestoreRequestDto,
   CharacterVersionsResultDto,
   ChatsExportResultDto,
@@ -878,10 +881,39 @@ export interface AssetsApi {
  * `assets.put` (kind `card`); `characterCard` parses it, deduplicates by the
  * sha256 of the original bytes and creates the character (`created` is false
  * for a re-import, AGENTS.md §11).
+ *
+ * Cutover-registry row 10 (SillyTavern backup) is a two-step over ONE staged
+ * asset produced by the chunked `assets.upload.*` ingestion contract (ADR-0061):
+ * `sillyTavernAnalyze` reports what the archive contains and writes nothing,
+ * `sillyTavernExecute` imports the confirmed categories under an explicit
+ * conflict policy. Both halves are exposed together so the migration panel has
+ * a single surface and no silent fallback.
  */
 export interface ImportsApi {
   /** Character-card import (wire `imports.character.card`). */
   characterCard(assetId: string, opts?: BackendCallOptions): Promise<CharacterCardImportResultDto>;
+  /**
+   * Read-only SillyTavern backup analysis (wire
+   * `imports.sillytavern.analyze`): the eleven legacy categories with
+   * `discovered` / `dependentRecords` / `invalid` / `sizeBytes`, archive
+   * totals, the archive sha256 and a bounded warning sample.
+   */
+  sillyTavernAnalyze(
+    assetId: string,
+    opts?: BackendCallOptions,
+  ): Promise<SillyTavernAnalyzeResultDto>;
+  /**
+   * Destructive SillyTavern backup import (wire `imports.sillytavern.execute`):
+   * imports the selected categories from the same staged archive under
+   * `conflictPolicy` (`skip` / `copy` / `merge` / `replace`) and reports
+   * per-category `imported` / `reused` / `skipped` / `conflicted` / `invalid`
+   * counts. Re-running the same archive is idempotent through
+   * `import_receipts`, and `archiveAlreadyImported` says so.
+   */
+  sillyTavernExecute(
+    req: SillyTavernExecuteRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<SillyTavernExecuteResultDto>;
 }
 
 /** Provider domain operations (wire `providers.*`). */

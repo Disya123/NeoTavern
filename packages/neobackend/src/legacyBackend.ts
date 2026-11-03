@@ -380,6 +380,11 @@ export class LegacyBackend implements NeoBackend {
 
   readonly imports: ImportsApi = {
     characterCard: () => this.unsupported('imports.character.card'),
+    // The legacy plane keeps its own multipart `/api/v2/imports/sillytavern/*`
+    // routes; the canonical staged-asset half refuses honestly (ARC-02) rather
+    // than pretending a legacy path is a wire path.
+    sillyTavernAnalyze: () => this.unsupported('imports.sillytavern.analyze'),
+    sillyTavernExecute: () => this.unsupported('imports.sillytavern.execute'),
   };
 
   readonly search: SearchApi = {

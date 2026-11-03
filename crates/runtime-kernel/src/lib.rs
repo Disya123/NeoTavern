@@ -43,6 +43,7 @@ pub mod generation;
 pub mod headless;
 pub mod imports;
 pub mod imports_st;
+pub mod imports_st_execute;
 pub mod local;
 pub mod plugin_blobs;
 pub mod plugin_secrets;
@@ -706,6 +707,9 @@ fn handle_unary(
         "imports.sillytavern.analyze" => {
             with_db_opt(db, |db| imports_st::imports_sillytavern_analyze(db, req))
         }
+        "imports.sillytavern.execute" => with_db_opt(db, |db| {
+            imports_st_execute::imports_sillytavern_execute(db, req)
+        }),
         "characters.export.card" => with_db_opt(db, |db| exports::characters_export_card(db, req)),
         // Этап 4 slice 6: canonical Extensions-context registry (SEC-05).
         "plugins.list" => with_db_opt(db, |db| plugins::plugins_list(db, req)),

@@ -50,6 +50,9 @@ import {
   type PagedMessagesDto,
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
+  type SillyTavernAnalyzeResultDto,
+  type SillyTavernExecuteRequestDto,
+  type SillyTavernExecuteResultDto,
   type ChatsExportResultDto,
   type PromptPlanDto,
   type ChatContextAuditResultDto,
@@ -468,6 +471,140 @@ const CHARACTER_CARD_IMPORT: CharacterCardImportResultDto = {
   warnings: [],
 };
 
+/** `imports.sillytavern.analyze` response (cutover row 10): the read half. */
+const SILLYTAVERN_ANALYZE: SillyTavernAnalyzeResultDto = {
+  sourceHash: 'abababababababababababababababababababababababababababababababab',
+  totalCompressedBytes: 4096,
+  totalExpandedBytes: 65536,
+  categories: [
+    { id: 'characters', discovered: 1, dependentRecords: 0, invalid: 0, sizeBytes: 2048 },
+    { id: 'chats', discovered: 1, dependentRecords: 2, invalid: 0, sizeBytes: 1024 },
+    { id: 'personas', discovered: 0, dependentRecords: 0, invalid: 0, sizeBytes: 0 },
+    { id: 'lorebooks', discovered: 0, dependentRecords: 0, invalid: 0, sizeBytes: 0 },
+    { id: 'presets', discovered: 0, dependentRecords: 0, invalid: 0, sizeBytes: 0 },
+    { id: 'groups', discovered: 0, dependentRecords: 0, invalid: 0, sizeBytes: 0 },
+    { id: 'backgrounds', discovered: 0, dependentRecords: 0, invalid: 0, sizeBytes: 0 },
+    { id: 'extensionSettings', discovered: 0, dependentRecords: 0, invalid: 0, sizeBytes: 0 },
+    { id: 'apiSettings', discovered: 0, dependentRecords: 0, invalid: 0, sizeBytes: 0 },
+    { id: 'legacyExtensions', discovered: 0, dependentRecords: 0, invalid: 0, sizeBytes: 0 },
+    { id: 'themes', discovered: 0, dependentRecords: 0, invalid: 0, sizeBytes: 0 },
+  ],
+  warningCount: 0,
+  warnings: [],
+};
+
+/** `imports.sillytavern.execute` response: the destructive half. */
+const SILLYTAVERN_EXECUTE: SillyTavernExecuteResultDto = {
+  runId: ASSET_ID,
+  sourceHash: 'abababababababababababababababababababababababababababababababab',
+  conflictPolicy: 'skip',
+  archiveAlreadyImported: false,
+  categories: [
+    {
+      id: 'characters',
+      imported: 1,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 0,
+    },
+    {
+      id: 'chats',
+      imported: 1,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 2,
+    },
+    {
+      id: 'personas',
+      imported: 0,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 0,
+    },
+    {
+      id: 'lorebooks',
+      imported: 0,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 0,
+    },
+    {
+      id: 'presets',
+      imported: 0,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 0,
+    },
+    {
+      id: 'groups',
+      imported: 0,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 0,
+    },
+    {
+      id: 'backgrounds',
+      imported: 0,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 0,
+    },
+    {
+      id: 'extensionSettings',
+      imported: 0,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 0,
+    },
+    {
+      id: 'apiSettings',
+      imported: 0,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 0,
+    },
+    {
+      id: 'legacyExtensions',
+      imported: 0,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 0,
+    },
+    {
+      id: 'themes',
+      imported: 0,
+      reused: 0,
+      skipped: 0,
+      conflicted: 0,
+      invalid: 0,
+      dependentImported: 0,
+    },
+  ],
+  totals: { imported: 2, reused: 0, skipped: 0, conflicted: 0, invalid: 0 },
+  warningCount: 0,
+  warnings: [],
+};
+
 /** `characters.export.card` response (Этап 4.5): the exported container. */
 const CHARACTER_CARD_EXPORT: CharacterCardExportResultDto = {
   filename: 'ada-lovelace.json',
@@ -879,6 +1016,10 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: EMPTY_RESULT };
       case 'imports.character.card':
         return { ok: true, value: CHARACTER_CARD_IMPORT };
+      case 'imports.sillytavern.analyze':
+        return { ok: true, value: SILLYTAVERN_ANALYZE };
+      case 'imports.sillytavern.execute':
+        return { ok: true, value: SILLYTAVERN_EXECUTE };
       case 'characters.export.card':
         return { ok: true, value: CHARACTER_CARD_EXPORT };
       case 'chats.export':
@@ -1097,6 +1238,10 @@ function rpcResult(operationId: string | undefined): unknown {
       return EMPTY_RESULT;
     case 'imports.character.card':
       return CHARACTER_CARD_IMPORT;
+    case 'imports.sillytavern.analyze':
+      return SILLYTAVERN_ANALYZE;
+    case 'imports.sillytavern.execute':
+      return SILLYTAVERN_EXECUTE;
     case 'characters.export.card':
       return CHARACTER_CARD_EXPORT;
     case 'chats.export':
@@ -2959,6 +3104,54 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
 
     await expect(backend.imports.characterCard('nope')).rejects.toThrow(ValidationError);
     expect(kernel.calls).toBe(0);
+  });
+
+  it('imports.sillytavern.execute is routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const request: SillyTavernExecuteRequestDto = {
+      assetId: ASSET_ID,
+      conflictPolicy: 'skip',
+    };
+    const [localResult, remoteResult] = await Promise.all([
+      local.imports.sillyTavernExecute(request),
+      remote.imports.sillyTavernExecute(request),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(SILLYTAVERN_EXECUTE);
+    expect(kernel.requests).toEqual([
+      { operationId: 'imports.sillytavern.execute', payload: request },
+    ]);
+  });
+
+  it('imports.sillytavern.execute with an unknown policy throws ValidationError before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(
+      backend.imports.sillyTavernExecute({
+        assetId: ASSET_ID,
+        conflictPolicy: 'overwrite' as SillyTavernExecuteRequestDto['conflictPolicy'],
+      }),
+    ).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
+  });
+
+  it('imports.sillytavern.analyze is routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.imports.sillyTavernAnalyze(ASSET_ID),
+      remote.imports.sillyTavernAnalyze(ASSET_ID),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(kernel.requests).toEqual([
+      { operationId: 'imports.sillytavern.analyze', payload: { assetId: ASSET_ID } },
+    ]);
   });
 
   it('characters.export.card is routed identically by local and remote backends', async () => {
