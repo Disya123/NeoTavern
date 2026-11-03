@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-11-03T19:38:51.899Z",
+  "generatedAt": "2026-11-03T20:14:24.220Z",
   "rows": [
     {
       "hosts": {
@@ -256,6 +256,19 @@
       "notes": "Этап 4.5 (M5 slice 31): canonical character-card import over Product Wire (89 ops total). The card file (SillyTavern-compatible V2 JSON, or a PNG carrying the chara tEXt chunk with base64-encoded JSON) is staged through assets.put (kind card, content-addressed, idempotent; the ~786 KiB wire request cap surfaces as a transport error — never a silent downgrade) and parsed by imports.character.card: sha256 of the original bytes deduplicates against characters.import_hash (schema migration 019, indexed) so re-running an import returns the existing character with created:false (AGENTS.md §11: import must not create duplicates). Card fields beyond the canonical columns (personality, scenario, first message, example dialogue, system prompt, post-history instructions, creator, character version, extensions and any unknown fields) survive verbatim under ext_json._card (AGENTS.md §11: unknown character card fields and extension metadata must not be lost); over-length scalar columns are truncated with an honest warning. PNG cards link the staged asset as the avatar (avatar_asset_id = asset id); JSON cards carry none. Missing asset → stable ASSET_NOT_FOUND; unparseable card → CHARACTER_CARD_INVALID with a reason param (INVALID_JSON/INVALID_PNG_SIGNATURE/TRUNCATED_PNG_CHUNK/INVALID_PNG_CARD_ENCODING/PNG_CARD_METADATA_MISSING). Kernel tests (kernel_imports.rs, 5): JSON create + field preservation, dedupe, PNG avatar link, unparseable reject, missing asset. Host parity (Этап 5 foundation): remote_http.rs character_card_import_over_http drives the full flow over the loopback HTTP adapter — assets.put -> imports.character.card -> created, re-import dedupe (created:false, same id), ASSET_NOT_FOUND and CHARACTER_CARD_INVALID (reason param) error envelopes verbatim, every payload wire-validated through the generated decoders. Facade: NeoBackend.imports.characterCard — LocalBackend forwards with request/response validation, RemoteBackend via ClientSdk, LegacyBackend throws UnsupportedError. Web transport: importCharacter on the kernel plane now runs assets.put + imports.character.card (two-step); UI wiring (CharactersPage/CharacterManagementPanel) is slice 32. Статус поднят до Integrated (ARC-10, M5 slice 50): UI wiring (slice 32) is live — CharacterManagementPanel and the Characters page route importCharacter through the wire facade in kernel mode (assets.put -> imports.character.card, dedupe by content hash), the legacy contour keeps its multipart import; kernel + host-parity + transport tests above are the evidence. Packaged (round 33): a SillyTavern-compatible V2 card in a PNG `chara` tEXt chunk (fixed fixture bytes, valid CRCs) was published through assets.put kind `card`, imported (created=true, name verified), re-imported deduplicated (created=false) — all on the packaged portable build through the shell-smoke golden path (exit 0).",
       "title": "Character-card import (PNG/JSON, content-hash dedupe)",
       "wireOps": ["imports.character.card"]
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "library.sillytavernImport",
+      "milestone": "M5",
+      "notes": "Этап 4.5 cluster 10 (cutover registry row 10). Round 43 landed the READ half in the kernel: `imports.sillytavern.analyze` addresses a staged asset produced by the chunked `assets.upload.*` ingestion contract (ADR-0061 — a real backup may reach the legacy 4 GiB cap, so it never rides a JSON request), walks the ZIP read-only and reports the eleven legacy categories with discovered/dependentRecords/invalid/sizeBytes, archive totals, the sha256 of the staged bytes and a bounded warning sample (SECRETS_SKIPPED, LEGACY_EXTENSIONS_SKIPPED per ADR-0059, SETTINGS_PARTIALLY_IMPORTED, ARCHIVE_ENTRY_UNSAFE, CHARACTER_TOO_LARGE, BACKGROUND_TOO_LARGE, CHAT_RECORD_INVALID, CHAT_LINE_TOO_LARGE, LORE_ENTRY_INVALID, PRESET/GROUP/CHARACTER import failures, ANALYSIS_BUDGET_EXHAUSTED). Deliberately narrower than the legacy analyzer: no analysisId/expiresAt staging tuple (the staged asset owns the lifetime), no sourceName display field (the asset plane is content-addressed) and no conflict list (conflicts depend on the policy chosen at execute time). Evidence: crates/runtime-kernel/tests/kernel_imports_st.rs (7 tests). STILL OPEN for this capability: `imports.sillytavern.execute` (destructive import + conflict policy), the discard/direct-import variants and the `ui.flip`, so the desktop host state is Implemented, NOT Packaged — the packaged walk cannot claim it and the legacy /api/v2/imports/sillytavern/* routes keep serving the shipped app.",
+      "title": "SillyTavern user-data backup import (analyse / execute)",
+      "wireOps": ["imports.sillytavern.analyze"]
     },
     {
       "hosts": {

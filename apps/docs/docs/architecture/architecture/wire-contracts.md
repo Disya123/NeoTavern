@@ -226,9 +226,15 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
 `(kind,name)`). All slice-3 additions are `transactional`, strict
 `additionalProperties: false`, ARC-07. The M7 Этап-4 clusters then grew the
-registry to **142 ops** (the latest additions are the cluster-8 provider-access
-pair `providers.models` / `providers.test`, the cluster-23 maintenance op
-`diagnostics.cache.clear`, the cluster-17 audit op `chats.context.audit`
+registry to **144 ops** (the latest addition is the cluster-10 SillyTavern
+archive read `imports.sillytavern.analyze` — it takes a staged `assetId` from
+the chunked upload family and walks the ZIP read-only: eleven categories with
+`discovered`/`dependentRecords`/`invalid`/`sizeBytes`, archive totals, the
+archive sha256 and a bounded warning sample; it is `transactional` /
+`idempotent` / `safe` and writes nothing. Before it came the cluster-8
+provider-access pair `providers.models` / `providers.test`, the cluster-23
+maintenance op `diagnostics.cache.clear`, the cluster-17 audit op
+`chats.context.audit`
 — the chat's latest durable `wire.prompt.plan`, after the provider catalog +
 named-key set described in §5 — the cluster-15 block-attachment family
 `chats.blocks.list` / `chats.blocks.attach` / `blocks.update` /

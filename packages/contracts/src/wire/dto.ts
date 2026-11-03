@@ -88,6 +88,107 @@ export const CharacterCardImportResultDtoSchema = Type.Object(
 export type CharacterCardImportResultDto = Static<typeof CharacterCardImportResultDtoSchema>;
 
 /**
+ * SillyTavern user-data archive analysis request
+ * (`wire.request.imports.sillytavern.analyze`).
+ *
+ * The archive is staged first through the chunked `assets.put` ingestion
+ * contract (ADR-0061): a real SillyTavern backup can reach the legacy 4 GiB
+ * limit, so it never rides a JSON request — it is uploaded in chunks and
+ * addressed here by asset id. This is the transport the cutover registry row
+ * 10 was blocked on (Этап 4.5 cluster 10).
+ */
+export const SillyTavernAnalyzeRequestDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.imports.sillytavern.analyze', additionalProperties: false },
+);
+export type SillyTavernAnalyzeRequestDto = Static<typeof SillyTavernAnalyzeRequestDtoSchema>;
+
+/**
+ * SillyTavern import categories (`wire.imports.sillytavern.category`): the
+ * same eleven buckets the legacy analyzer reports, so the migration panel can
+ * present one row per bucket before anything is written.
+ */
+export const WireSillyTavernCategory = Type.Union(
+  [
+    Type.Literal('characters'),
+    Type.Literal('chats'),
+    Type.Literal('personas'),
+    Type.Literal('lorebooks'),
+    Type.Literal('presets'),
+    Type.Literal('groups'),
+    Type.Literal('backgrounds'),
+    Type.Literal('extensionSettings'),
+    Type.Literal('apiSettings'),
+    Type.Literal('legacyExtensions'),
+    Type.Literal('themes'),
+  ],
+  { $id: 'wire.imports.sillytavern.category', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WireSillyTavernCategory = Static<typeof WireSillyTavernCategory>;
+
+/** Per-category analysis (`wire.imports.sillytavern.category-analysis`).
+ * `dependentRecords` counts nested rows the category would import (messages
+ * in chats, entries in a lorebook); `invalid` counts entries that were
+ * discovered but cannot be imported as-is (reported in `warnings`). */
+export const SillyTavernCategoryAnalysisDtoSchema = Type.Object(
+  {
+    id: WireSillyTavernCategory,
+    discovered: Type.Integer({ minimum: 0 }),
+    dependentRecords: Type.Integer({ minimum: 0 }),
+    invalid: Type.Integer({ minimum: 0 }),
+    sizeBytes: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.imports.sillytavern.category-analysis', additionalProperties: false },
+);
+export type SillyTavernCategoryAnalysisDto = Static<typeof SillyTavernCategoryAnalysisDtoSchema>;
+
+/**
+ * Analysis warning (`wire.imports.sillytavern.warning`): a stable machine code
+ * plus the archive-relative path it applies to. Localization stays a frontend
+ * concern (AGENTS.md §16); the bounded `warnings` sample is backed by the
+ * full `warningCount`.
+ */
+export const SillyTavernWarningDtoSchema = Type.Object(
+  {
+    code: Type.String({ pattern: '^[A-Z][A-Z0-9_]*$', maxLength: 64 }),
+    path: Type.Optional(Type.String({ maxLength: 1024 })),
+  },
+  { $id: 'wire.imports.sillytavern.warning', additionalProperties: false },
+);
+export type SillyTavernWarningDto = Static<typeof SillyTavernWarningDtoSchema>;
+
+/**
+ * SillyTavern archive analysis result
+ * (`wire.result.imports.sillytavern.analyze`): a read-only inspection of the
+ * staged archive. It writes nothing, so it can be re-run freely; the actual
+ * import (execute) is a separate, explicitly destructive operation.
+ *
+ * Deliberately absent: the legacy `analysisId`/`expiresAt` staging tuple, a
+ * `sourceName` display field (the asset plane is content-addressed — the
+ * managed key is `<sha256>.zip` — so the caller already owns the file
+ * name it uploaded) and the conflict list (conflicts depend on the policy
+ * chosen at execute time, and reporting them before the user picked one would
+ * be a guess).
+ */
+export const SillyTavernAnalyzeResultDtoSchema = Type.Object(
+  {
+    sourceHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+    totalCompressedBytes: Type.Integer({ minimum: 0 }),
+    totalExpandedBytes: Type.Integer({ minimum: 0 }),
+    categories: Type.Array(SillyTavernCategoryAnalysisDtoSchema, {
+      minItems: 11,
+      maxItems: 11,
+    }),
+    warningCount: Type.Integer({ minimum: 0 }),
+    warnings: Type.Array(SillyTavernWarningDtoSchema, { maxItems: 64 }),
+  },
+  { $id: 'wire.result.imports.sillytavern.analyze', additionalProperties: false },
+);
+export type SillyTavernAnalyzeResultDto = Static<typeof SillyTavernAnalyzeResultDtoSchema>;
+
+/**
  * Character-card export format (`wire.card.export.format`): a SillyTavern
  * card container in plain JSON or a PNG whose `chara` tEXt chunk carries
  * base64-encoded JSON — the same container shapes `imports.character.card`
@@ -3816,6 +3917,11 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.character-versions': CharacterVersionsResultDtoSchema,
   'wire.request.characters.versions.restore': CharacterVersionRestoreRequestDtoSchema,
   'wire.request.imports.character.card': CharacterCardImportRequestDtoSchema,
+  'wire.request.imports.sillytavern.analyze': SillyTavernAnalyzeRequestDtoSchema,
+  'wire.result.imports.sillytavern.analyze': SillyTavernAnalyzeResultDtoSchema,
+  'wire.imports.sillytavern.category': WireSillyTavernCategory,
+  'wire.imports.sillytavern.category-analysis': SillyTavernCategoryAnalysisDtoSchema,
+  'wire.imports.sillytavern.warning': SillyTavernWarningDtoSchema,
   'wire.card.export.format': WireCardExportFormat,
   'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,
   'wire.result.characters.export.card': CharacterCardExportResultDtoSchema,

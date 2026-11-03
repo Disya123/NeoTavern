@@ -72,6 +72,7 @@
   "generation.tool.result",
   "generation.tools.list",
   "imports.character.card",
+  "imports.sillytavern.analyze",
   "lorebooks.create",
   "lorebooks.delete",
   "lorebooks.entries.create",

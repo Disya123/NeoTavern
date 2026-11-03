@@ -1630,6 +1630,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'imports.sillytavern.analyze',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.imports.sillytavern.analyze',
+    'wire.result.imports.sillytavern.analyze',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
     'plugins.list',
     'transactional',
     'idempotent',
@@ -3795,6 +3809,60 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('imports-character-card-request', 'imports.character.card', 'request', true, {
     assetId: UUID_AVATAR,
   }),
+
+  fx('imports-sillytavern-analyze-request', 'imports.sillytavern.analyze', 'request', true, {
+    assetId: UUID_AVATAR,
+  }),
+  fx('imports-sillytavern-analyze-response', 'imports.sillytavern.analyze', 'response', true, {
+    sourceHash: IMPORT_SHA256,
+    totalCompressedBytes: 4096,
+    totalExpandedBytes: 65536,
+    categories: [
+      { id: 'characters', discovered: 3, dependentRecords: 0, invalid: 0, sizeBytes: 2048 },
+      { id: 'chats', discovered: 2, dependentRecords: 41, invalid: 1, sizeBytes: 16384 },
+      { id: 'personas', discovered: 1, dependentRecords: 0, invalid: 0, sizeBytes: 512 },
+      { id: 'lorebooks', discovered: 1, dependentRecords: 12, invalid: 0, sizeBytes: 8192 },
+      { id: 'presets', discovered: 0, dependentRecords: 0, invalid: 0, sizeBytes: 0 },
+      { id: 'groups', discovered: 1, dependentRecords: 7, invalid: 0, sizeBytes: 1024 },
+      { id: 'backgrounds', discovered: 2, dependentRecords: 0, invalid: 0, sizeBytes: 32768 },
+      { id: 'extensionSettings', discovered: 4, dependentRecords: 0, invalid: 0, sizeBytes: 256 },
+      { id: 'apiSettings', discovered: 1, dependentRecords: 0, invalid: 0, sizeBytes: 128 },
+      { id: 'legacyExtensions', discovered: 1, dependentRecords: 0, invalid: 0, sizeBytes: 4096 },
+      { id: 'themes', discovered: 2, dependentRecords: 0, invalid: 0, sizeBytes: 2048 },
+    ],
+    warningCount: 2,
+    warnings: [
+      { code: 'SECRETS_SKIPPED', path: 'backup/default-user/secrets.json' },
+      { code: 'LEGACY_EXTENSIONS_SKIPPED', path: 'backup/default-user/extensions' },
+    ],
+  }),
+  fx('neg-imports-sillytavern-missing-asset', 'imports.sillytavern.analyze', 'request', false, {}),
+  fx('neg-imports-sillytavern-bad-category', 'imports.sillytavern.analyze', 'response', false, {
+    sourceHash: IMPORT_SHA256,
+    totalCompressedBytes: 4096,
+    totalExpandedBytes: 65536,
+    categories: [
+      { id: 'silverware', discovered: 1, dependentRecords: 0, invalid: 0, sizeBytes: 1 },
+    ],
+    warningCount: 0,
+    warnings: [],
+  }),
+  fx(
+    'neg-imports-sillytavern-short-category-list',
+    'imports.sillytavern.analyze',
+    'response',
+    false,
+    {
+      sourceHash: IMPORT_SHA256,
+      totalCompressedBytes: 4096,
+      totalExpandedBytes: 65536,
+      categories: [
+        { id: 'characters', discovered: 1, dependentRecords: 0, invalid: 0, sizeBytes: 1 },
+      ],
+      warningCount: 0,
+      warnings: [],
+    },
+  ),
   fx('imports-character-card-response', 'imports.character.card', 'response', true, {
     character: CHARACTER_VALUE,
     created: true,

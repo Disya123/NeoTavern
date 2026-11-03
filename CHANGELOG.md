@@ -4,6 +4,33 @@
 
 ### Added
 
+# Changelog
+
+## Unreleased
+
+### Added
+
+- **SillyTavern archive analysis over staged assets (round 43/99).** New wire
+  operation `imports.sillytavern.analyze` removes the transport blocker that
+  kept cutover-registry row 10 classified as "transport-blocked": the backup is
+  uploaded through the chunked `assets.upload.*` ingestion contract (ADR-0061,
+  up to the legacy 4 GiB cap) and analysed by `assetId`, so the archive never
+  rides a JSON request. The kernel walks the ZIP read-only and reports the
+  eleven legacy categories with `discovered` / `dependentRecords` / `invalid` /
+  `sizeBytes`, archive totals, the sha256 of the staged bytes and a bounded
+  warning sample (`warningCount` carries the full total) for secrets skipped,
+  unsupported legacy extensions (ADR-0059), partially imported settings, unsafe
+  entry paths, oversized cards/backgrounds and invalid chat/lorebook rows.
+  Deliberately narrower than the legacy analyzer: no `analysisId`/`expiresAt`
+  staging tuple (the staged asset owns the lifetime), no `sourceName` display
+  field (the asset plane is content-addressed) and no conflict list (conflicts
+  depend on the policy chosen at execute time). Execute, discard and the
+  `DataMigrationPanel` flip remain open, so the capability is **not** claimed
+  as Packaged. Evidence: `crates/runtime-kernel/tests/kernel_imports_st.rs`
+  (7 tests: category counts, nested record counts, idempotency, unsafe paths,
+  non-ZIP rejection, unknown asset, invalid chat records, nested `default-user`
+  root detection). `WIRE_SCHEMA_HASH` moves to `83413c97…5700`.
+
 - **Plugin package trust reaches Packaged on desktop (round 42/99).**
   `security.plugin-package-trust` now has behavioural packaged evidence for
   the SEC-05 fence: a probe plugin installed as `verified-publisher` is

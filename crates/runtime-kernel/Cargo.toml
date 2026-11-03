@@ -30,6 +30,11 @@ base64 = "0.22"
 # Character-card import: sha256 of the original card bytes (deduplication,
 # AGENTS.md §11 — re-importing the same card must not create a duplicate).
 sha2 = "0.10"
+# SillyTavern archive analysis (`imports.sillytavern.analyze`, Этап 4.5
+# cluster 10): the staged asset is a ZIP user-data backup, so the kernel reads
+# the central directory directly. Same pin/feature set as the plugin package
+# verifier (no bzip2/zstd support — matching the legacy extractor).
+zip = { version = "2", default-features = false, features = ["deflate"] }
 # Lease expiry timestamps (`now + 30s` formatted RFC 3339, same crate the
 # storage layer uses for its wire timestamps) plus RFC 3339 parsing for the
 # search date sort (`search.query` maps stored stamps to epoch ms).
