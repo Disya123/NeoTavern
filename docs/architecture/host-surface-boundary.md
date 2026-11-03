@@ -20,6 +20,9 @@ Source of truth: [`apps/web/src/api/hostSurfaces.ts`](../../apps/web/src/api/hos
 | `plugins.auth.connections`        | `/plugins/:id/auth/connections` | GET    | OAuth tokens live in the host secret store and never leave it; Product Wire models plugin state and secrets, not third-party sessions.           |
 | `plugins.auth.connect`            | `/plugins/:id/auth/connect`     | POST   | Starts a browser OAuth flow whose redirect endpoint is the host (state/PKCE).                                                                    |
 | `plugins.auth.revoke`             | `/plugins/:id/auth/revoke`      | POST   | Revocation must delete a host-held token; the kernel never has a copy.                                                                           |
+| `plugins.auth.sandbox-session`    | `/plugins/:id/auth`             | POST   | The rev4 sandbox broker reads/service-starts OAuth flows; tokens stay host-side, the browser flow is a host endpoint.                            |
+| `plugins.auth.fetch-proxy`        | `/plugins/:id/auth/fetch`       | POST   | An authenticated `network.fetch` must inject the token server-side (rev4 §K5); the kernel is not an HTTP client for plugin credentials.          |
+| `plugins.jobs.host-queue`         | `/plugins/:id/jobs`             | POST   | The scheduler (timers, retries, DLQ, worker) is the trusted host's in-process queue; the kernel is deliberately not a job runner.                |
 
 ## Rules
 

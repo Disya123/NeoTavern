@@ -335,7 +335,7 @@
     {
       "source": "architecture/host-surface-boundary.md",
       "target": "architecture/host-surface-boundary.md",
-      "sha256": "e8d6540694054e89423ba133a058783fb7857c1b9b4e14d6402ac4ce1fa856a2"
+      "sha256": "43758238ea2cb13c562b7103b92ec13402f13549cb65210852dedee07b7a4fbf"
     },
     {
       "source": "architecture/kernel-empty-branches.md",
@@ -390,7 +390,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "0d2cc7f023abacbbdc7ec3dca02d581732b4b5d56f2a798c619076c034d7636a"
+      "sha256": "d26ef0941e1549be115f6123064bc355edfa2ae22edf0fc9d81b9df7303d1400"
     },
     {
       "source": "architecture/version-axes.md",

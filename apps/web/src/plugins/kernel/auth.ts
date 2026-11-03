@@ -4,6 +4,8 @@
  * the server holds the tokens, the sandbox only ever sees metadata.
  */
 import { kernel } from '@neotavern/plugin-sdk';
+import { UnsupportedError } from '@neotavern/neobackend';
+import { hostSurfaceFetch } from '../../api/hostSurfaces.js';
 import type { KernelHostContext } from './types.js';
 
 const { KernelError, KernelErrorCode } = kernel;
@@ -43,16 +45,28 @@ function mapRestError(status: number, body: unknown): KernelError {
   return new KernelError(KernelErrorCode.INTERNAL, { details: { status, code } });
 }
 
+/**
+ * One OAuth-metadata call through the declared host surface
+ * (`plugins.auth.sandbox-session`). On the kernel plane this is a stable
+ * CAPABILITY_UNAVAILABLE: the tokens and the browser flow live in the trusted
+ * host, and a dead legacy route must never be dialled from the sandbox.
+ */
 async function authRest(
   ctx: KernelHostContext,
   path: string,
   init?: { method: string; body?: string },
 ): Promise<Record<string, unknown>> {
-  const response = await fetch(`/api/v2/plugins/${encodeURIComponent(ctx.pluginId)}/auth${path}`, {
-    method: init?.method ?? 'GET',
-    headers: { 'content-type': 'application/json' },
-    ...(init?.body === undefined ? {} : { body: init.body }),
-  });
+  let response: Response;
+  try {
+    response = await hostSurfaceFetch('plugins.auth.sandbox-session', ctx.pluginId, path, init);
+  } catch (error) {
+    if (error instanceof UnsupportedError) {
+      throw new KernelError(KernelErrorCode.PROTOCOL_UNSUPPORTED, {
+        details: { surface: error.feature },
+      });
+    }
+    throw error;
+  }
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) throw mapRestError(response.status, body);
   return isPlainRecord(body) ? body : {};

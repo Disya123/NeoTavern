@@ -33,6 +33,16 @@ export class ApiNetworkError extends Error {
 const BASE = '/api/v2';
 let csrfToken: string | null = null;
 
+/**
+ * Absolute same-origin URL for one legacy route. The host-surface adapter
+ * (`hostSurfaces.ts`) is the only non-facade consumer: keeping the `/api/v2`
+ * prefix here means the legacy contour has exactly one place that spells it,
+ * and the UI call-site gate keeps counting facade shims, not adapters.
+ */
+export function legacyUrl(path: string): string {
+  return `${BASE}${path}`;
+}
+
 export function setCsrfToken(value: string | null): void {
   csrfToken = value;
 }

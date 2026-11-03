@@ -16,6 +16,8 @@
  *   gates user-gesture actions on `navigator.userActivation`.
  */
 import { kernel } from '@neotavern/plugin-sdk';
+import { UnsupportedError } from '@neotavern/neobackend';
+import { hostSurfaceFetch } from '../../api/hostSurfaces.js';
 import type { KernelHostContext } from './types.js';
 
 const { KernelError, KernelErrorCode } = kernel;
@@ -67,22 +69,43 @@ function mapRestError(status: number, body: unknown): KernelError {
   return new KernelError(KernelErrorCode.INTERNAL, { details: { status, code } });
 }
 
+/**
+ * One job-queue host call. The queue is the trusted host's in-process
+ * scheduler (see `plugins.jobs.host-queue` in hostSurfaces.ts), so on the
+ * kernel plane the sandbox gets a stable CAPABILITY_UNAVAILABLE instead of a
+ * request to a route the plane does not serve.
+ */
 async function jobsRest(
   ctx: KernelHostContext,
   path: string,
   init?: { method: string; body?: string },
 ): Promise<Record<string, unknown>> {
-  const response = await fetch(`/api/v2/plugins/${encodeURIComponent(ctx.pluginId)}${path}`, {
-    method: init?.method ?? 'GET',
-    // An empty body with `content-type: application/json` is a Fastify 400
-    // (FST_ERR_CTP_EMPTY_JSON_BODY) — the header only travels with a body.
-    ...(init?.body === undefined
-      ? {}
-      : { headers: { 'content-type': 'application/json' }, body: init.body }),
-  });
+  let response: Response;
+  try {
+    // The registry route owns the `/jobs` segment, so the per-call suffix is
+    // the sub-path the handler built (`/jobs/list` -> `/list`).
+    response = await hostSurfaceFetch(
+      'plugins.jobs.host-queue',
+      ctx.pluginId,
+      path.replace(/^\/jobs/u, ''),
+      init,
+    );
+  } catch (error) {
+    throw mapHostSurfaceError(error);
+  }
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) throw mapRestError(response.status, body);
   return isPlainRecord(body) ? body : {};
+}
+
+/** A fail-closed host surface becomes the sandbox's CAPABILITY_UNAVAILABLE. */
+function mapHostSurfaceError(error: unknown): unknown {
+  if (error instanceof UnsupportedError) {
+    return new KernelError(KernelErrorCode.PROTOCOL_UNSUPPORTED, {
+      details: { surface: error.feature },
+    });
+  }
+  return error;
 }
 
 function readActivation(): boolean {
@@ -217,23 +240,27 @@ async function performNetworkFetch(
     // go through the auth/fetch proxy (rev4 §K5), never straight from the
     // browser where the Authorization header would leak to the sandbox.
     if (!ctx.hasCapability('auth.connections')) throw denied(ctx, 'auth.connections');
-    const response = await fetch(`/api/v2/plugins/${encodeURIComponent(ctx.pluginId)}/auth/fetch`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        url: params['url'],
-        connectionId: params['connectionId'],
-        ...(typeof params['method'] === 'string' ? { method: params['method'] } : {}),
-        ...(isPlainRecord(params['headers'])
-          ? {
-              headers: Object.fromEntries(
-                Object.entries(params['headers']).filter(([, v]) => typeof v === 'string'),
-              ),
-            }
-          : {}),
-        ...(typeof params['bodyText'] === 'string' ? { bodyText: params['bodyText'] } : {}),
-      }),
-    });
+    let response: Response;
+    try {
+      response = await hostSurfaceFetch('plugins.auth.fetch-proxy', ctx.pluginId, '', {
+        method: 'POST',
+        body: JSON.stringify({
+          url: params['url'],
+          connectionId: params['connectionId'],
+          ...(typeof params['method'] === 'string' ? { method: params['method'] } : {}),
+          ...(isPlainRecord(params['headers'])
+            ? {
+                headers: Object.fromEntries(
+                  Object.entries(params['headers']).filter(([, v]) => typeof v === 'string'),
+                ),
+              }
+            : {}),
+          ...(typeof params['bodyText'] === 'string' ? { bodyText: params['bodyText'] } : {}),
+        }),
+      });
+    } catch (error) {
+      throw mapHostSurfaceError(error);
+    }
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) throw mapRestError(response.status, body);
     if (!isPlainRecord(body)) throw new KernelError(KernelErrorCode.INTERNAL, {});

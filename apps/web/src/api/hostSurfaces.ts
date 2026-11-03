@@ -27,7 +27,7 @@ import {
   type PluginSafeModeResult,
 } from '@neotavern/contracts';
 import { UnsupportedError } from '@neotavern/neobackend';
-import { api } from './client.js';
+import { api, legacyUrl } from './client.js';
 import { isKernelMode } from './backend.js';
 
 /**
@@ -48,7 +48,10 @@ export interface HostSurface {
     | 'plugins.safe-mode.exit'
     | 'plugins.auth.connections'
     | 'plugins.auth.connect'
-    | 'plugins.auth.revoke';
+    | 'plugins.auth.revoke'
+    | 'plugins.auth.sandbox-session'
+    | 'plugins.auth.fetch-proxy'
+    | 'plugins.jobs.host-queue';
   /** Legacy route template (the sidecar side of the boundary). */
   readonly route: string;
   readonly method: 'GET' | 'POST' | 'DELETE';
@@ -136,6 +139,46 @@ export const HOST_SURFACES: readonly HostSurface[] = [
     why: 'Revocation must delete the host-held token; the kernel never has a copy.',
     removal: 'Same executor-owned connection store as `plugins.auth.connect`.',
   },
+  // ── sandbox-internal hosts (same boundary, reached from plugins/kernel/*) ──
+  {
+    id: 'plugins.auth.sandbox-session',
+    route: '/plugins/:id/auth',
+    method: 'POST',
+    kernelMode: 'unsupported',
+    why:
+      'The rev4 sandbox broker (`plugins/kernel/auth.ts`) reads service/connection metadata and starts flows ' +
+      'through the legacy auth routes; the tokens stay in the host store and the browser flow is a host ' +
+      'endpoint, so this is the same host plane as `plugins.auth.connect`, reached from the sandbox RPC.',
+    removal:
+      'Point the sandbox broker at the executor-owned connection store (metadata-only reads + flow start) ' +
+      'instead of HTTP.',
+  },
+  {
+    id: 'plugins.auth.fetch-proxy',
+    route: '/plugins/:id/auth/fetch',
+    method: 'POST',
+    kernelMode: 'unsupported',
+    why:
+      'An authenticated `network.fetch` with a connectionId must go through a server-side proxy: the token ' +
+      'never reaches the sandbox, and the host performs the outbound request (rev4 §K5). The kernel is not an ' +
+      'HTTP client for plugin credentials.',
+    removal:
+      'The executor owns authenticated fetch (token injection in the trusted host); the sandbox RPC calls it ' +
+      'directly instead of an HTTP proxy.',
+  },
+  {
+    id: 'plugins.jobs.host-queue',
+    route: '/plugins/:id/jobs',
+    method: 'POST',
+    kernelMode: 'unsupported',
+    why:
+      'The job scheduler is the in-process legacy host queue (`pluginJobs`): timers, retries, DLQ and the ' +
+      'worker that turns a due job into a sandbox RPC all live in the trusted host, not in product state. The ' +
+      'kernel deliberately is not a job runner (ADR-0038 / ТЗ 14.1), so scheduling is a host capability.',
+    removal:
+      'The kernel-mode plugin executor owns scheduling and delivers `jobs.run` to the sandbox; the UI stops ' +
+      'calling the HTTP routes.',
+  },
 ] as const;
 
 /** Look up a surface by id (throws on an unknown id — that is a code bug). */
@@ -153,6 +196,31 @@ function assertLegacyPlane(id: HostSurface['id']): void {
   if (isKernelMode()) {
     throw new UnsupportedError(id);
   }
+}
+
+/**
+ * The sandbox host's adapter: resolve one declared surface to its legacy route
+ * (`/api/v2` + the surface template + a per-call suffix), then hand the request
+ * to `fetch` on the legacy plane. On the kernel plane it throws the same typed
+ * `UnsupportedError` as every other surface, so a sandbox RPC can never reach a
+ * dead route by accident — the caller maps it to `CAPABILITY_UNAVAILABLE`.
+ */
+export async function hostSurfaceFetch(
+  id: 'plugins.auth.sandbox-session' | 'plugins.auth.fetch-proxy' | 'plugins.jobs.host-queue',
+  pluginId: string,
+  suffix: string,
+  init?: { method?: string; body?: string },
+): Promise<Response> {
+  assertLegacyPlane(id);
+  const route = hostSurface(id).route.replace(':id', encodeURIComponent(pluginId));
+  return fetch(legacyUrl(`${route}${suffix}`), {
+    method: init?.method ?? 'GET',
+    // An empty body with `content-type: application/json` is a Fastify 400
+    // (FST_ERR_CTP_EMPTY_JSON_BODY) — the header only travels with a body.
+    ...(init?.body === undefined
+      ? {}
+      : { headers: { 'content-type': 'application/json' }, body: init.body }),
+  });
 }
 
 /** Install a plugin package the host has verified (see `plugins.install.host-verify`). */

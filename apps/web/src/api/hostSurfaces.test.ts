@@ -23,6 +23,7 @@ import {
   enterPluginSafeMode,
   exitPluginSafeMode,
   hostSurface,
+  hostSurfaceFetch,
   installPlugin,
   installPluginFromGit,
   readPluginAuthConnections,
@@ -74,6 +75,9 @@ describe('host surface registry', () => {
         'plugins.auth.connections',
         'plugins.auth.connect',
         'plugins.auth.revoke',
+        'plugins.auth.sandbox-session',
+        'plugins.auth.fetch-proxy',
+        'plugins.jobs.host-queue',
       ]),
     );
   });
@@ -96,6 +100,22 @@ describe('host surfaces fail closed on the kernel plane', () => {
     ['plugins.auth.connections', () => readPluginAuthConnections('author.p')],
     ['plugins.auth.connect', () => connectPluginAuth('author.p', { serviceId: 'idp' })],
     ['plugins.auth.revoke', () => revokePluginAuth('author.p', { connectionId: 'conn-1' })],
+    [
+      'plugins.auth.sandbox-session',
+      () => hostSurfaceFetch('plugins.auth.sandbox-session', 'author.p', '/status'),
+    ],
+    [
+      'plugins.auth.fetch-proxy',
+      () =>
+        hostSurfaceFetch('plugins.auth.fetch-proxy', 'author.p', '', {
+          method: 'POST',
+          body: '{}',
+        }),
+    ],
+    [
+      'plugins.jobs.host-queue',
+      () => hostSurfaceFetch('plugins.jobs.host-queue', 'author.p', '/list', { method: 'POST' }),
+    ],
   ];
 
   for (const [id, call] of cases) {
@@ -140,5 +160,38 @@ describe('host surfaces keep the legacy routes on the legacy plane', () => {
     await revokePluginAuth('author.p', { connectionId: 'conn-1' });
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/v2/plugins/author.p/auth/connect');
     expect(String(fetchMock.mock.calls[1]?.[0])).toBe('/api/v2/plugins/author.p/auth/revoke');
+  });
+});
+
+describe('sandbox host adapter keeps the declared routes on the legacy plane', () => {
+  it('jobs calls resolve under /api/v2/plugins/:id/jobs', async () => {
+    await hostSurfaceFetch('plugins.jobs.host-queue', 'author.p', '/list', { method: 'POST' });
+    const [url, init] = fetchMock.mock.calls[0] as [string, { method?: string }];
+    expect(url).toBe('/api/v2/plugins/author.p/jobs/list');
+    expect(init.method).toBe('POST');
+  });
+
+  it('sandbox auth metadata resolves under /api/v2/plugins/:id/auth', async () => {
+    await hostSurfaceFetch('plugins.auth.sandbox-session', 'author.p', '/connections');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/v2/plugins/author.p/auth/connections');
+  });
+
+  it('the authenticated fetch proxy posts json only when a body exists', async () => {
+    await hostSurfaceFetch('plugins.auth.fetch-proxy', 'author.p', '', {
+      method: 'POST',
+      body: '{"url":"https://example.test"}',
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [
+      string,
+      { method?: string; headers?: Record<string, string>; body?: string },
+    ];
+    expect(url).toBe('/api/v2/plugins/author.p/auth/fetch');
+    expect(init.headers).toEqual({ 'content-type': 'application/json' });
+    expect(init.body).toBe('{"url":"https://example.test"}');
+
+    fetchMock.mockClear();
+    await hostSurfaceFetch('plugins.jobs.host-queue', 'author.p', '/list', { method: 'POST' });
+    const [, plain] = fetchMock.mock.calls[0] as [string, { headers?: unknown }];
+    expect(plain.headers).toBeUndefined();
   });
 });
