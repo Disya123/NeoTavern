@@ -24,6 +24,22 @@
 
 ### Added
 
+- **The packaged smoke now walks every previously undisclosed op (round 48/99).**
+  The round-46c audit had to list four families the Packaged cells claimed but
+  no packaged step exercised. Round 47 walked the plugin blobs; this round
+  closes the other three, all through `run_golden_smoke` in the portable
+  artifact: `chats.list` (the smoke chat must appear in the page),
+  `secrets.exposure` (asserts the fail-closed `allowSecretsExposure: false`
+  default, so the policy is dispatched rather than only inferred from a
+  refusal) and the ADR-0061 ingestion family (`assets.upload.begin` + `append`
+  + `finish` publish 5 bytes and assert the published size, `assets.upload.abort`
+  answers `deleted: true`). Rebuilt portable artifact
+  `NeoTavern_0.1.0_x64-portable` (SHA-256 `0c9e1ab5…2deb`) boots with
+  `NEOTA_DESKTOP_SMOKE=1 NEOTA_KERNEL=1` and exits 0. The matrix/G6 disclosure
+  list is now empty; the only remaining Packaged correction is
+  `security.plugin-package-trust` (downgraded — `package-verify` is not wired
+  into the host yet).
+
 - **Plugin blobs now have packaged evidence (round 47/99).** The packaged golden
   smoke (`run_golden_smoke` in `apps/desktop/src-tauri/src/lib.rs`, launched by
   `scripts/smoke-desktop-shell.mjs` with `NEOTA_DESKTOP_SMOKE=1 NEOTA_KERNEL=1`)

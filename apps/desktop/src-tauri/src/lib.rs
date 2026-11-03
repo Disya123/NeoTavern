@@ -2474,6 +2474,78 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         return Err(format!("plugin blob delete was not honest: {blob_deleted}"));
     }
 
+    // Round 48: the audit's remaining "the packaged smoke never calls it"
+    // caveats, walked here so the matrix discloses nothing it cannot prove.
+    let chat_page = dispatch_ok(&host, "chats.list", serde_json::json!({ "limit": 50 }))?;
+    let chat_ids: Vec<&str> = chat_page["items"]
+        .as_array()
+        .map(|items| items.iter().filter_map(|item| item["id"].as_str()).collect())
+        .unwrap_or_default();
+    if !chat_ids.contains(&chat_id.as_str()) {
+        return Err(format!("chats.list did not report the smoke chat: {chat_page}"));
+    }
+
+    let exposure = dispatch_ok(&host, "secrets.exposure", serde_json::json!({}))?;
+    if exposure["allowSecretsExposure"] != serde_json::json!(false) {
+        return Err(format!(
+            "secrets.exposure did not report the fail-closed default: {exposure}"
+        ));
+    }
+
+    let upload_begin = dispatch_ok(
+        &host,
+        "assets.upload.begin",
+        serde_json::json!({
+            "kind": "smoke.upload",
+            "filename": "smoke.bin",
+            "contentType": "application/octet-stream",
+            "totalBytes": 5,
+        }),
+    )?;
+    let upload_id = upload_begin["uploadId"]
+        .as_str()
+        .ok_or_else(|| "asset upload begin carried no uploadId".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "assets.upload.append",
+        serde_json::json!({
+            "uploadId": upload_id,
+            "index": 0,
+            "contentBase64": "aGVsbG8=",
+        }),
+    )?;
+    let uploaded = dispatch_ok(
+        &host,
+        "assets.upload.finish",
+        serde_json::json!({ "uploadId": upload_id }),
+    )?;
+    if uploaded["asset"]["sizeBytes"] != serde_json::json!(5) {
+        return Err(format!("chunked asset upload did not publish the bytes: {uploaded}"));
+    }
+    let abort_begin = dispatch_ok(
+        &host,
+        "assets.upload.begin",
+        serde_json::json!({
+            "kind": "smoke.upload",
+            "filename": "discard.bin",
+            "contentType": "application/octet-stream",
+            "totalBytes": 5,
+        }),
+    )?;
+    let abort_id = abort_begin["uploadId"]
+        .as_str()
+        .ok_or_else(|| "asset upload begin carried no uploadId".to_string())?
+        .to_string();
+    let aborted = dispatch_ok(
+        &host,
+        "assets.upload.abort",
+        serde_json::json!({ "uploadId": abort_id }),
+    )?;
+    if aborted["deleted"] != serde_json::json!(true) {
+        return Err(format!("asset upload abort was not honest: {aborted}"));
+    }
+
     dispatch_ok(
         &host,
         "plugins.disable",
