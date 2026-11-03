@@ -158,7 +158,7 @@ export type ResolvedTokenSet = Record<TokenName, string>;
 export const DEFAULT_LIGHT_TOKENS: ResolvedTokenSet = {
   'color-text-primary': '#26221f',
   'color-text-secondary': '#5c554f',
-  'color-text-muted': '#706861',
+  'color-text-muted': '#675f58',
   'color-text-inverse': '#ffffff',
   'color-text-link': '#8d4026',
   'color-surface-primary': '#fbfaf8',
@@ -281,7 +281,7 @@ export const DEFAULT_DARK_TOKENS: ResolvedTokenSet = {
   ...DEFAULT_LIGHT_TOKENS,
   'color-text-primary': '#f3eee8',
   'color-text-secondary': '#c5bbb2',
-  'color-text-muted': '#998f87',
+  'color-text-muted': '#a39a91',
   'color-text-inverse': '#211b17',
   'color-text-link': '#f0a07d',
   'color-surface-primary': '#1b1917',
