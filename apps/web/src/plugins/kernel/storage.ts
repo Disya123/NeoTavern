@@ -17,7 +17,14 @@
  */
 import { ProductError } from '@neotavern/client-sdk';
 import { isKernelMode } from '../../api/backend.js';
-import { readPluginState, writePluginState } from '../../api/wireBridge.js';
+import {
+  deletePluginBlob,
+  listPluginBlobs,
+  readPluginBlobRange,
+  readPluginState,
+  stagePluginBlob,
+  writePluginState,
+} from '../../api/wireBridge.js';
 import { kernel } from '@neotavern/plugin-sdk';
 import type { KernelHostContext } from './types.js';
 
@@ -37,6 +44,8 @@ const KV_SCOPES: Record<string, true> = {
 const MAX_BLOB_BYTES = 8 * 1024 * 1024;
 /** Chunk size for host→plugin blob streams (well under any credit window). */
 const STREAM_CHUNK_BYTES = 256 * 1024;
+/** Chunk size for kernel→host blob ranges (the wire cap for one read). */
+const BLOB_READ_BYTES = 256 * 1024;
 
 interface StateBody {
   data: Record<string, unknown>;
@@ -262,6 +271,11 @@ export function attachStorage(ctx: KernelHostContext): void {
   });
 
   // ── storage.blobs ─────────────────────────────────────────────────────────
+  //
+  // Kernel plane: the chunked `plugins.blobs` family (M7 cluster 21a) — bytes
+  // are staged, hashed and published by the kernel under the plugin's own
+  // namespace, then served back as bounded ranges. Legacy plane: the legacy
+  // blob route, unchanged, while the sidecar owns the feature.
   const blobsUrl = `/api/v2/plugins/${encodeURIComponent(ctx.pluginId)}/blobs`;
 
   ctx.session.handle('storage.blobs.put', async (request) => {
@@ -295,6 +309,22 @@ export function attachStorage(ctx: KernelHostContext): void {
       bytes.set(part, offset);
       offset += part.byteLength;
     }
+
+    if (isKernelMode()) {
+      try {
+        const stored = await stagePluginBlob({
+          pluginId: ctx.pluginId,
+          name,
+          contentType,
+          bytes,
+        });
+        return { blobId: stored.blobId, hash: stored.hash, size: stored.sizeBytes };
+      } catch (error) {
+        if (error instanceof ProductError) throw kernelErrorFromProduct(error);
+        throw fail(KernelErrorCode.INTERNAL, { message: String(error) });
+      }
+    }
+
     const query = new URLSearchParams({ name, contentType });
     const res = await fetch(`${blobsUrl}?${query.toString()}`, {
       method: 'POST',
@@ -310,11 +340,50 @@ export function attachStorage(ctx: KernelHostContext): void {
     const params = request.params as Record<string, unknown>;
     const blobId = stringParam(params, 'blobId');
     requireCapability(ctx, 'storage.blobs');
-    const res = await fetch(`${blobsUrl}/${encodeURIComponent(blobId)}`);
-    if (!res.ok) throw await parseError(res);
-    const bytes = toBytes(await res.arrayBuffer());
-    const contentType = res.headers.get('Content-Type') ?? 'application/octet-stream';
-    const size = bytes.byteLength;
+
+    let chunks: Uint8Array[];
+    let contentType: string;
+    let size: number;
+    if (isKernelMode()) {
+      const collected: Uint8Array[] = [];
+      let offset = 0;
+      let eof = false;
+      contentType = 'application/octet-stream';
+      size = 0;
+      while (!eof) {
+        let range;
+        try {
+          range = await readPluginBlobRange({
+            pluginId: ctx.pluginId,
+            blobId,
+            offset,
+            length: BLOB_READ_BYTES,
+          });
+        } catch (error) {
+          if (error instanceof ProductError) throw kernelErrorFromProduct(error);
+          throw fail(KernelErrorCode.INTERNAL, { message: String(error) });
+        }
+        contentType = range.contentType;
+        size = range.sizeBytes;
+        const slice = bytesFromBase64(range.dataBase64);
+        // No progress + no eof can only mean a corrupt store: refuse instead
+        // of spinning forever in the sandbox's read loop.
+        if (slice.byteLength === 0 && !range.eof) {
+          throw fail(KernelErrorCode.INTERNAL, { reason: 'blob-read-stalled', blobId });
+        }
+        if (slice.byteLength > 0) collected.push(slice);
+        offset += slice.byteLength;
+        eof = range.eof;
+      }
+      chunks = collected;
+    } else {
+      const res = await fetch(`${blobsUrl}/${encodeURIComponent(blobId)}`);
+      if (!res.ok) throw await parseError(res);
+      chunks = [toBytes(await res.arrayBuffer())];
+      contentType = res.headers.get('Content-Type') ?? 'application/octet-stream';
+      size = chunks[0]?.byteLength ?? 0;
+    }
+
     const outbound = ctx.session.openOutboundStream({
       kind: 'blobs.get',
       blobId,
@@ -322,8 +391,10 @@ export function attachStorage(ctx: KernelHostContext): void {
       size,
     });
     try {
-      for (let offset = 0; offset < size; offset += STREAM_CHUNK_BYTES) {
-        await outbound.write(bytes.subarray(offset, offset + STREAM_CHUNK_BYTES));
+      for (const chunk of chunks) {
+        for (let offset = 0; offset < chunk.byteLength; offset += STREAM_CHUNK_BYTES) {
+          await outbound.write(chunk.subarray(offset, offset + STREAM_CHUNK_BYTES));
+        }
       }
       outbound.end();
     } catch (error) {
@@ -335,6 +406,24 @@ export function attachStorage(ctx: KernelHostContext): void {
 
   ctx.session.handle('storage.blobs.list', async () => {
     requireCapability(ctx, 'storage.blobs');
+    if (isKernelMode()) {
+      try {
+        const page = await listPluginBlobs({ pluginId: ctx.pluginId });
+        return {
+          items: page.items.map((item) => ({
+            blobId: item.blobId,
+            hash: item.hash,
+            size: item.sizeBytes,
+            name: item.name,
+            contentType: item.contentType,
+            createdAt: Date.parse(item.createdAt),
+          })),
+        };
+      } catch (error) {
+        if (error instanceof ProductError) throw kernelErrorFromProduct(error);
+        throw fail(KernelErrorCode.INTERNAL, { message: String(error) });
+      }
+    }
     const res = await fetch(blobsUrl);
     if (!res.ok) throw await parseError(res);
     return (await res.json()) as { items: unknown[] };
@@ -344,8 +433,28 @@ export function attachStorage(ctx: KernelHostContext): void {
     const params = request.params as Record<string, unknown>;
     const blobId = stringParam(params, 'blobId');
     requireCapability(ctx, 'storage.blobs');
+    if (isKernelMode()) {
+      try {
+        const result = await deletePluginBlob({ pluginId: ctx.pluginId, blobId });
+        return { deleted: result.deleted };
+      } catch (error) {
+        if (error instanceof ProductError) throw kernelErrorFromProduct(error);
+        throw fail(KernelErrorCode.INTERNAL, { message: String(error) });
+      }
+    }
     const res = await fetch(`${blobsUrl}/${encodeURIComponent(blobId)}`, { method: 'DELETE' });
     if (!res.ok) throw await parseError(res);
     return (await res.json()) as { deleted: boolean };
   });
+}
+
+/** Raw bytes of one base64 wire range. */
+function bytesFromBase64(data: string): Uint8Array {
+  if (data.length === 0) return new Uint8Array(0);
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }

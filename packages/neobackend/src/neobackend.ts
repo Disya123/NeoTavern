@@ -116,6 +116,18 @@ import type {
   SetPluginStateRequestDto,
   SetPluginStateResultDto,
   DeletePluginStateResultDto,
+  BeginPluginBlobRequestDto,
+  BeginPluginBlobResultDto,
+  AppendPluginBlobRequestDto,
+  AppendPluginBlobResultDto,
+  FinishPluginBlobRequestDto,
+  PluginBlobDto,
+  ListPluginBlobsRequestDto,
+  ListPluginBlobsResultDto,
+  ReadPluginBlobRequestDto,
+  ReadPluginBlobResultDto,
+  DeletePluginBlobRequestDto,
+  DeletePluginBlobResultDto,
   PluginSecretDto,
   ListPluginSecretsRequestDto,
   ListPluginSecretsResultDto,
@@ -579,6 +591,38 @@ export interface PluginsApi {
     req: PluginStateRequestDto,
     opts?: BackendCallOptions,
   ): Promise<DeletePluginStateResultDto>;
+  /**
+   * Reserve a chunked blob upload (wire plugins.blobs.begin, M7 cluster 21a).
+   * Blobs are plugin-scoped and content-addressed; the declared `totalBytes`
+   * is authoritative and bounded by the 8 MiB rev4 cap. Requires the
+   * `storage.blobs` grant.
+   */
+  blobBegin(
+    req: BeginPluginBlobRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<BeginPluginBlobResultDto>;
+  /** Stage one sequential chunk (plugins.blobs.append). */
+  blobAppend(
+    req: AppendPluginBlobRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<AppendPluginBlobResultDto>;
+  /** Publish the staged bytes as one blob (plugins.blobs.finish). */
+  blobFinish(req: FinishPluginBlobRequestDto, opts?: BackendCallOptions): Promise<PluginBlobDto>;
+  /** List the plugin's blobs, newest first (plugins.blobs.list). */
+  blobsList(
+    req: ListPluginBlobsRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ListPluginBlobsResultDto>;
+  /** Read one bounded range (plugins.blobs.read); loop until `eof`. */
+  blobRead(
+    req: ReadPluginBlobRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ReadPluginBlobResultDto>;
+  /** Remove one blob (plugins.blobs.delete); idempotent. */
+  blobDelete(
+    req: DeletePluginBlobRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<DeletePluginBlobResultDto>;
   /**
    * List the plugin's own secret keys in one scope (wire
    * plugins.secrets.list, M7 cluster 21 part 2). Value-free by construction:

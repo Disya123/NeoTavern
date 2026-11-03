@@ -117,6 +117,12 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "plugins.state.get" => Some(2048),
         "plugins.state.set" => Some(262144),
         "plugins.state.delete" => Some(2048),
+        "plugins.blobs.begin" => Some(2048),
+        "plugins.blobs.append" => Some(1048576),
+        "plugins.blobs.finish" => Some(1024),
+        "plugins.blobs.list" => Some(2048),
+        "plugins.blobs.read" => Some(2048),
+        "plugins.blobs.delete" => Some(2048),
         "plugins.secrets.list" => Some(2048),
         "plugins.secrets.set" => Some(131072),
         "plugins.secrets.delete" => Some(2048),
@@ -269,6 +275,12 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "plugins.state.get" => Some(262144),
         "plugins.state.set" => Some(2048),
         "plugins.state.delete" => Some(1024),
+        "plugins.blobs.begin" => Some(1024),
+        "plugins.blobs.append" => Some(1024),
+        "plugins.blobs.finish" => Some(2048),
+        "plugins.blobs.list" => Some(65536),
+        "plugins.blobs.read" => Some(524288),
+        "plugins.blobs.delete" => Some(1024),
         "plugins.secrets.list" => Some(262144),
         "plugins.secrets.set" => Some(2048),
         "plugins.secrets.delete" => Some(1024),
@@ -10378,6 +10390,990 @@ pub fn validate_result_plugins_state_delete(value: &Value) -> Result<(), Vec<Iss
 
 pub fn decode_result_plugins_state_delete(bytes: &[u8]) -> Result<ResultPluginsStateDelete, WireError> {
     crate::decode::<ResultPluginsStateDelete>(validate_result_plugins_state_delete, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PluginBlob {
+    #[serde(rename = "blobId")]
+    pub blob_id: String,
+    pub hash: String,
+    pub name: String,
+    #[serde(rename = "contentType")]
+    pub content_type: String,
+    #[serde(rename = "sizeBytes")]
+    pub size_bytes: i64,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}
+
+pub(crate) fn check_plugin_blob(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-f0-9]{64}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-f0-9]{64}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("blobId").is_none() {
+            issues.push(Issue::new(join_path(path, "blobId"), "RequiredProperty"));
+        }
+        if value.get("hash").is_none() {
+            issues.push(Issue::new(join_path(path, "hash"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("contentType").is_none() {
+            issues.push(Issue::new(join_path(path, "contentType"), "RequiredProperty"));
+        }
+        if value.get("sizeBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "sizeBytes"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("blobId") {
+            let child_path = join_path(path, "blobId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("hash") {
+            let child_path = join_path(path, "hash");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 255 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("contentType") {
+            let child_path = join_path(path, "contentType");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 255 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("sizeBytes") {
+            let child_path = join_path(path, "sizeBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "blobId" | "hash" | "name" | "contentType" | "sizeBytes" | "createdAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_plugin_blob(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_plugin_blob(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_plugin_blob(bytes: &[u8]) -> Result<PluginBlob, WireError> {
+    crate::decode::<PluginBlob>(validate_plugin_blob, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsBlobsBegin {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    pub name: String,
+    #[serde(rename = "contentType")]
+    pub content_type: String,
+    #[serde(rename = "totalBytes")]
+    pub total_bytes: i64,
+}
+
+pub(crate) fn check_request_plugins_blobs_begin(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("contentType").is_none() {
+            issues.push(Issue::new(join_path(path, "contentType"), "RequiredProperty"));
+        }
+        if value.get("totalBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "totalBytes"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 255 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("contentType") {
+            let child_path = join_path(path, "contentType");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 255 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("totalBytes") {
+            let child_path = join_path(path, "totalBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 8388608 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "name" | "contentType" | "totalBytes") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_blobs_begin(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_blobs_begin(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_blobs_begin(bytes: &[u8]) -> Result<RequestPluginsBlobsBegin, WireError> {
+    crate::decode::<RequestPluginsBlobsBegin>(validate_request_plugins_blobs_begin, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsBlobsBegin {
+    #[serde(rename = "uploadId")]
+    pub upload_id: String,
+    #[serde(rename = "chunkSizeBytes")]
+    pub chunk_size_bytes: i64,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: String,
+}
+
+pub(crate) fn check_result_plugins_blobs_begin(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("uploadId").is_none() {
+            issues.push(Issue::new(join_path(path, "uploadId"), "RequiredProperty"));
+        }
+        if value.get("chunkSizeBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "chunkSizeBytes"), "RequiredProperty"));
+        }
+        if value.get("expiresAt").is_none() {
+            issues.push(Issue::new(join_path(path, "expiresAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("uploadId") {
+            let child_path = join_path(path, "uploadId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("chunkSizeBytes") {
+            let child_path = join_path(path, "chunkSizeBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("expiresAt") {
+            let child_path = join_path(path, "expiresAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "uploadId" | "chunkSizeBytes" | "expiresAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_blobs_begin(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_blobs_begin(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_blobs_begin(bytes: &[u8]) -> Result<ResultPluginsBlobsBegin, WireError> {
+    crate::decode::<ResultPluginsBlobsBegin>(validate_result_plugins_blobs_begin, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsBlobsAppend {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    #[serde(rename = "uploadId")]
+    pub upload_id: String,
+    pub index: i64,
+    #[serde(rename = "contentBase64")]
+    pub content_base64: String,
+}
+
+pub(crate) fn check_request_plugins_blobs_append(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[A-Za-z0-9+/]*={0,2}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("uploadId").is_none() {
+            issues.push(Issue::new(join_path(path, "uploadId"), "RequiredProperty"));
+        }
+        if value.get("index").is_none() {
+            issues.push(Issue::new(join_path(path, "index"), "RequiredProperty"));
+        }
+        if value.get("contentBase64").is_none() {
+            issues.push(Issue::new(join_path(path, "contentBase64"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("uploadId") {
+            let child_path = join_path(path, "uploadId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("index") {
+            let child_path = join_path(path, "index");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("contentBase64") {
+            let child_path = join_path(path, "contentBase64");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "uploadId" | "index" | "contentBase64") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_blobs_append(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_blobs_append(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_blobs_append(bytes: &[u8]) -> Result<RequestPluginsBlobsAppend, WireError> {
+    crate::decode::<RequestPluginsBlobsAppend>(validate_request_plugins_blobs_append, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsBlobsAppend {
+    #[serde(rename = "uploadId")]
+    pub upload_id: String,
+    #[serde(rename = "receivedBytes")]
+    pub received_bytes: i64,
+    #[serde(rename = "nextIndex")]
+    pub next_index: i64,
+}
+
+pub(crate) fn check_result_plugins_blobs_append(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("uploadId").is_none() {
+            issues.push(Issue::new(join_path(path, "uploadId"), "RequiredProperty"));
+        }
+        if value.get("receivedBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "receivedBytes"), "RequiredProperty"));
+        }
+        if value.get("nextIndex").is_none() {
+            issues.push(Issue::new(join_path(path, "nextIndex"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("uploadId") {
+            let child_path = join_path(path, "uploadId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("receivedBytes") {
+            let child_path = join_path(path, "receivedBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("nextIndex") {
+            let child_path = join_path(path, "nextIndex");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "uploadId" | "receivedBytes" | "nextIndex") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_blobs_append(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_blobs_append(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_blobs_append(bytes: &[u8]) -> Result<ResultPluginsBlobsAppend, WireError> {
+    crate::decode::<ResultPluginsBlobsAppend>(validate_result_plugins_blobs_append, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsBlobsFinish {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    #[serde(rename = "uploadId")]
+    pub upload_id: String,
+}
+
+pub(crate) fn check_request_plugins_blobs_finish(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("uploadId").is_none() {
+            issues.push(Issue::new(join_path(path, "uploadId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("uploadId") {
+            let child_path = join_path(path, "uploadId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "uploadId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_blobs_finish(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_blobs_finish(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_blobs_finish(bytes: &[u8]) -> Result<RequestPluginsBlobsFinish, WireError> {
+    crate::decode::<RequestPluginsBlobsFinish>(validate_request_plugins_blobs_finish, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsBlobsList {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+}
+
+pub(crate) fn check_request_plugins_blobs_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_blobs_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_blobs_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_blobs_list(bytes: &[u8]) -> Result<RequestPluginsBlobsList, WireError> {
+    crate::decode::<RequestPluginsBlobsList>(validate_request_plugins_blobs_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsBlobsList {
+    pub items: Vec<PluginBlob>,
+}
+
+pub(crate) fn check_result_plugins_blobs_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 64 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_plugin_blob(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_blobs_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_blobs_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_blobs_list(bytes: &[u8]) -> Result<ResultPluginsBlobsList, WireError> {
+    crate::decode::<ResultPluginsBlobsList>(validate_result_plugins_blobs_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsBlobsRead {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    #[serde(rename = "blobId")]
+    pub blob_id: String,
+    pub offset: i64,
+    pub length: i64,
+}
+
+pub(crate) fn check_request_plugins_blobs_read(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-f0-9]{64}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("blobId").is_none() {
+            issues.push(Issue::new(join_path(path, "blobId"), "RequiredProperty"));
+        }
+        if value.get("offset").is_none() {
+            issues.push(Issue::new(join_path(path, "offset"), "RequiredProperty"));
+        }
+        if value.get("length").is_none() {
+            issues.push(Issue::new(join_path(path, "length"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("blobId") {
+            let child_path = join_path(path, "blobId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("offset") {
+            let child_path = join_path(path, "offset");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("length") {
+            let child_path = join_path(path, "length");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 262144 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "blobId" | "offset" | "length") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_blobs_read(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_blobs_read(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_blobs_read(bytes: &[u8]) -> Result<RequestPluginsBlobsRead, WireError> {
+    crate::decode::<RequestPluginsBlobsRead>(validate_request_plugins_blobs_read, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsBlobsRead {
+    #[serde(rename = "blobId")]
+    pub blob_id: String,
+    #[serde(rename = "contentType")]
+    pub content_type: String,
+    #[serde(rename = "sizeBytes")]
+    pub size_bytes: i64,
+    pub offset: i64,
+    #[serde(rename = "dataBase64")]
+    pub data_base64: String,
+    pub eof: bool,
+}
+
+pub(crate) fn check_result_plugins_blobs_read(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-f0-9]{64}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[A-Za-z0-9+/]*={0,2}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("blobId").is_none() {
+            issues.push(Issue::new(join_path(path, "blobId"), "RequiredProperty"));
+        }
+        if value.get("contentType").is_none() {
+            issues.push(Issue::new(join_path(path, "contentType"), "RequiredProperty"));
+        }
+        if value.get("sizeBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "sizeBytes"), "RequiredProperty"));
+        }
+        if value.get("offset").is_none() {
+            issues.push(Issue::new(join_path(path, "offset"), "RequiredProperty"));
+        }
+        if value.get("dataBase64").is_none() {
+            issues.push(Issue::new(join_path(path, "dataBase64"), "RequiredProperty"));
+        }
+        if value.get("eof").is_none() {
+            issues.push(Issue::new(join_path(path, "eof"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("blobId") {
+            let child_path = join_path(path, "blobId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("contentType") {
+            let child_path = join_path(path, "contentType");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 255 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("sizeBytes") {
+            let child_path = join_path(path, "sizeBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("offset") {
+            let child_path = join_path(path, "offset");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("dataBase64") {
+            let child_path = join_path(path, "dataBase64");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("eof") {
+            let child_path = join_path(path, "eof");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "blobId" | "contentType" | "sizeBytes" | "offset" | "dataBase64" | "eof") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_blobs_read(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_blobs_read(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_blobs_read(bytes: &[u8]) -> Result<ResultPluginsBlobsRead, WireError> {
+    crate::decode::<ResultPluginsBlobsRead>(validate_result_plugins_blobs_read, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsBlobsDelete {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    #[serde(rename = "blobId")]
+    pub blob_id: String,
+}
+
+pub(crate) fn check_request_plugins_blobs_delete(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-f0-9]{64}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("blobId").is_none() {
+            issues.push(Issue::new(join_path(path, "blobId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("blobId") {
+            let child_path = join_path(path, "blobId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "blobId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_blobs_delete(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_blobs_delete(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_blobs_delete(bytes: &[u8]) -> Result<RequestPluginsBlobsDelete, WireError> {
+    crate::decode::<RequestPluginsBlobsDelete>(validate_request_plugins_blobs_delete, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsBlobsDelete {
+    pub deleted: bool,
+}
+
+pub(crate) fn check_result_plugins_blobs_delete(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("deleted").is_none() {
+            issues.push(Issue::new(join_path(path, "deleted"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("deleted") {
+            let child_path = join_path(path, "deleted");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "deleted") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_blobs_delete(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_blobs_delete(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_blobs_delete(bytes: &[u8]) -> Result<ResultPluginsBlobsDelete, WireError> {
+    crate::decode::<ResultPluginsBlobsDelete>(validate_result_plugins_blobs_delete, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

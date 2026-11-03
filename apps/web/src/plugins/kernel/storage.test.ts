@@ -111,11 +111,19 @@ const planeMocks = vi.hoisted(() => ({
   isKernelMode: vi.fn(() => false),
   readPluginState: vi.fn(),
   writePluginState: vi.fn(),
+  stagePluginBlob: vi.fn(),
+  readPluginBlobRange: vi.fn(),
+  listPluginBlobs: vi.fn(),
+  deletePluginBlob: vi.fn(),
 }));
 vi.mock('../../api/backend.js', () => ({ isKernelMode: planeMocks.isKernelMode }));
 vi.mock('../../api/wireBridge.js', () => ({
   readPluginState: planeMocks.readPluginState,
   writePluginState: planeMocks.writePluginState,
+  stagePluginBlob: planeMocks.stagePluginBlob,
+  readPluginBlobRange: planeMocks.readPluginBlobRange,
+  listPluginBlobs: planeMocks.listPluginBlobs,
+  deletePluginBlob: planeMocks.deletePluginBlob,
 }));
 
 let fetchMock: Mock;
@@ -124,6 +132,10 @@ beforeEach(() => {
   planeMocks.isKernelMode.mockReturnValue(false);
   planeMocks.readPluginState.mockReset();
   planeMocks.writePluginState.mockReset();
+  planeMocks.stagePluginBlob.mockReset();
+  planeMocks.readPluginBlobRange.mockReset();
+  planeMocks.listPluginBlobs.mockReset();
+  planeMocks.deletePluginBlob.mockReset();
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -496,6 +508,119 @@ describe('kernel-plane KV state (wire plugins.state.*)', () => {
     await expect(
       callHandler(session, 'storage.kv.set', { scope: 'user', key: 'a', value: 1 }),
     ).rejects.toMatchObject({ code: kernel.KernelErrorCode.REVISION_CONFLICT });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('kernel-plane blobs (wire plugins.blobs.*, M7 cluster 21a)', () => {
+  const blobId = '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824';
+
+  it('stages a put through the chunked wire family and never touches REST', async () => {
+    planeMocks.isKernelMode.mockReturnValue(true);
+    planeMocks.stagePluginBlob.mockResolvedValue({
+      blobId,
+      hash: blobId,
+      name: 'greeting.txt',
+      contentType: 'text/plain',
+      sizeBytes: 5,
+      createdAt: '2026-11-04T00:00:00Z',
+    });
+    const { ctx, session } = makeContext({ capabilities: ['storage.blobs'] });
+    attachStorage(ctx);
+    session.inboundStreams.set('in:1', [new Uint8Array([104, 101, 108, 108, 111])]);
+
+    const result = await callHandler(session, 'storage.blobs.put', {
+      streamId: 'in:1',
+      name: 'greeting.txt',
+      contentType: 'text/plain',
+    });
+
+    expect(planeMocks.stagePluginBlob).toHaveBeenCalledWith({
+      pluginId: 'plugin.test',
+      name: 'greeting.txt',
+      contentType: 'text/plain',
+      bytes: new Uint8Array([104, 101, 108, 108, 111]),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ blobId, hash: blobId, size: 5 });
+  });
+
+  it('serves a get as a bounded-range loop ending on eof', async () => {
+    planeMocks.isKernelMode.mockReturnValue(true);
+    planeMocks.readPluginBlobRange
+      .mockResolvedValueOnce({
+        blobId,
+        contentType: 'text/plain',
+        sizeBytes: 10,
+        offset: 0,
+        dataBase64: 'aGVsbG8=',
+        eof: false,
+      })
+      .mockResolvedValueOnce({
+        blobId,
+        contentType: 'text/plain',
+        sizeBytes: 10,
+        offset: 5,
+        dataBase64: 'd29ybGQ=',
+        eof: true,
+      });
+    const { ctx, session } = makeContext({ capabilities: ['storage.blobs'] });
+    attachStorage(ctx);
+
+    const result = (await callHandler(session, 'storage.blobs.get', { blobId })) as {
+      streamId: string;
+      contentType: string;
+      size: number;
+    };
+
+    expect(planeMocks.readPluginBlobRange).toHaveBeenNthCalledWith(1, {
+      pluginId: 'plugin.test',
+      blobId,
+      offset: 0,
+      length: 262144,
+    });
+    expect(planeMocks.readPluginBlobRange).toHaveBeenNthCalledWith(2, {
+      pluginId: 'plugin.test',
+      blobId,
+      offset: 5,
+      length: 262144,
+    });
+    const outbound = session.outbounds.at(-1)!;
+    expect(outbound.writes.map((chunk) => Array.from(chunk))).toEqual([
+      [104, 101, 108, 108, 111],
+      [119, 111, 114, 108, 100],
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ contentType: 'text/plain', size: 10 });
+  });
+
+  it('maps the wire list/delete results onto the sandbox shapes', async () => {
+    planeMocks.isKernelMode.mockReturnValue(true);
+    planeMocks.listPluginBlobs.mockResolvedValue({
+      items: [
+        {
+          blobId,
+          hash: blobId,
+          name: 'greeting.txt',
+          contentType: 'text/plain',
+          sizeBytes: 5,
+          createdAt: '2026-11-04T00:00:00Z',
+        },
+      ],
+    });
+    planeMocks.deletePluginBlob.mockResolvedValue({ deleted: true });
+    const { ctx, session } = makeContext({ capabilities: ['storage.blobs'] });
+    attachStorage(ctx);
+
+    const listed = (await callHandler(session, 'storage.blobs.list', {})) as {
+      items: Array<{ createdAt: number; size: number }>;
+    };
+    expect(listed.items).toHaveLength(1);
+    expect(listed.items[0]!.size).toBe(5);
+    expect(listed.items[0]!.createdAt).toBe(Date.parse('2026-11-04T00:00:00Z'));
+    expect(await callHandler(session, 'storage.blobs.delete', { blobId })).toEqual({
+      deleted: true,
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

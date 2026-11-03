@@ -10,6 +10,30 @@
 
 ### Added
 
+- **Plugin blobs reach the Product Wire (round 44/99).** Cutover-registry row
+  21a — the last binary route family inside the plugin sandbox — is now a
+  first-class wire family instead of a legacy HTTP store: `plugins.blobs.begin`,
+  `plugins.blobs.append`, `plugins.blobs.finish`, `plugins.blobs.list`,
+  `plugins.blobs.read` and `plugins.blobs.delete` (registry **150 ops**, schema
+  **v32** `plugin_blob_uploads` + `plugin_blobs`). The family follows the
+  ADR-0061 chunked-ingestion discipline (declared length is authoritative,
+  sequential indices, 24 h TTL, staged bytes outside the database) and adds
+  bounded 256 KiB range reads, because the legacy contract allows 8 MiB per
+  blob — far beyond one honest JSON response. Bytes are content-addressed at
+  `plugin-blobs/<pluginId>/<sha256>.bin`, so identical uploads dedupe and the
+  blob id *is* the digest. Security posture: every operation requires the
+  `storage.blobs` grant recorded at install **and** the upload row's plugin, so
+  holding another plugin's upload id or digest is useless; the 64-blob and
+  8 MiB caps are kernel-enforced. The React sandbox host
+  (`apps/web/src/plugins/kernel/storage.ts`) serves `storage.blobs.*` from the
+  kernel on the kernel plane and keeps the legacy route on the legacy plane —
+  no silent fallback either way. Evidence: 7 kernel tests
+  (`crates/runtime-kernel/tests/plugin_blobs.rs`), 3 web tests, and green
+  `contracts:check` / `kernel:dispatch:check` / `typecheck` / `clippy`.
+  Not claimed: no packaged-artifact walk yet, and the capability matrix has no
+  dedicated row for plugin blob storage (it rides `ui.plugins`), so nothing here
+  moves the Packaged count. `WIRE_SCHEMA_HASH` moves to `203d852a…68ed`.
+
 - **SillyTavern archive analysis over staged assets (round 43/99).** New wire
   operation `imports.sillytavern.analyze` removes the transport blocker that
   kept cutover-registry row 10 classified as "transport-blocked": the backup is

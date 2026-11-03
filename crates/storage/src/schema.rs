@@ -1298,6 +1298,59 @@ pub const MIGRATION_31_SQL: &str = migration_31_sql!();
 pub const MIGRATION_31_CHECKSUM: &str =
     "dcc2dd0cb415d0e763c93bc9012e038ddf07accafd236cb264c2e484ad793ce6";
 
+/// The plugin blob store (v32, Этап-4 cluster 21a): the canonical counterpart
+/// of the legacy `<root>/<pluginId>/<blobId>.{bin,json}` files. Bytes stay on
+/// the filesystem (`plugin-blobs/<pluginId>/<blobId>.bin`, content-addressed),
+/// so SQLite only carries metadata; `plugin_blob_uploads` is the chunked
+/// staging bookkeeping (ADR-0061 discipline: declared length, sequential
+/// index, TTL sweep) and `plugin_blobs` is the published metadata. Both cascade
+/// with the plugin row, so an uninstall can never leave orphan rows behind;
+/// the uninstall also sweeps `<data root>/plugin-blobs/<pluginId>` best-effort,
+/// and any orphan file stays reclaimable because its name is its digest.
+/// Additive and low risk: the
+/// previous revision has no such tables and never reads them.
+macro_rules! migration_32_sql {
+    () => {
+        r#"CREATE TABLE plugin_blob_uploads (
+  id TEXT NOT NULL PRIMARY KEY,
+  plugin_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  declared_bytes INTEGER NOT NULL,
+  received_bytes INTEGER NOT NULL DEFAULT 0,
+  next_index INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX idx_plugin_blob_uploads_plugin ON plugin_blob_uploads(plugin_id);
+CREATE TABLE plugin_blobs (
+  plugin_id TEXT NOT NULL,
+  blob_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (plugin_id, blob_id),
+  FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX idx_plugin_blobs_plugin ON plugin_blobs(plugin_id);"#
+    };
+}
+
+/// Name of the plugin blob store (v32) schema migration.
+pub const MIGRATION_32_NAME: &str = "032_plugin_blobs";
+
+/// Exact SQL of the plugin blob store schema migration (v32) — the
+/// `migration_32_sql!()` literal.
+pub const MIGRATION_32_SQL: &str = migration_32_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_32_SQL` string bytes (same
+/// computation as `MIGRATION_31_CHECKSUM`).
+pub const MIGRATION_32_CHECKSUM: &str =
+    "efaae0d87af321c2dc80520eb4f007b36f4712b17790bb342a8d64a3b4a719d8";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1365,7 +1418,10 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     migration_29_sql!(),
     "\n",
     migration_30_sql!(),
-    migration_31_sql!()
+    "\n",
+    migration_31_sql!(),
+    "\n",
+    migration_32_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

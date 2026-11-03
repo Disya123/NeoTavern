@@ -84,8 +84,9 @@ describe('product wire registry', () => {
     // (M7 cluster 18) adds events.poll, the plugin state KV slice adds three
     // ops (134), the plugin secret slice adds four more (138) and the ingestion
     // contract (ADR-0061) adds the chunked upload family (142), and the asset
-    // catalog adds `assets.list` (143).
-    expect(registry.operations).toHaveLength(144);
+    // catalog adds `assets.list` (143). The plugin blob slice (M7 cluster 21a)
+    // adds the chunked `plugins.blobs` family (150).
+    expect(registry.operations).toHaveLength(150);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -184,6 +185,12 @@ describe('product wire registry', () => {
       'plugins.state.get',
       'plugins.state.set',
       'plugins.state.delete',
+      'plugins.blobs.begin',
+      'plugins.blobs.append',
+      'plugins.blobs.finish',
+      'plugins.blobs.list',
+      'plugins.blobs.read',
+      'plugins.blobs.delete',
       'plugins.secrets.list',
       'plugins.secrets.set',
       'plugins.secrets.delete',

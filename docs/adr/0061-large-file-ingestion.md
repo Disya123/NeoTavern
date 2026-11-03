@@ -116,3 +116,26 @@ What this proves for the rest of the list (backup import, plugin blobs,
 sandbox assets, TTS audio): the contract is reusable as-is; only the
 consumer-side composition (chunk loop, progress, kind name) is per-feature
 work.
+
+## Consumer: plugin blobs (round 44)
+
+The second consumer is the plugin blob store (cutover-registry row 21a), and it
+tests the part of the contract wallpapers did not: **bounded reads**.
+
+- the bytes are staged by `plugins.blobs.begin|append|finish` — the same
+  declared-length/sequential-index/TTL discipline as the asset family, but the
+  namespace is the plugin, not the asset plane, because a plugin blob is never
+  addressable by another plugin (no shared asset id to leak through);
+- `finish` publishes to `plugin-blobs/<pluginId>/<sha256>.bin`, so the digest is
+  the address and re-uploading identical bytes refreshes metadata instead of
+  duplicating a file;
+- `plugins.blobs.read` returns at most 256 KiB of base64 per call plus `eof`,
+  which is the honest answer to "the sandbox streams an 8 MiB blob": the host
+  loops, the wire never carries the whole file, and no new binary body type had
+  to be invented;
+- the 64-blob/8 MiB caps and the `storage.blobs` grant are enforced by the
+  kernel, so the host is not the security boundary.
+
+What remains on the list: TTS audio, generated images, transcriptions
+(cluster 8 tail), the SillyTavern execute half (cluster 10) and sandbox package
+assets (row 20, host delivery by architecture).

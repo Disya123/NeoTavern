@@ -44,6 +44,7 @@ pub mod headless;
 pub mod imports;
 pub mod imports_st;
 pub mod local;
+pub mod plugin_blobs;
 pub mod plugin_secrets;
 pub mod plugin_state;
 pub mod plugins;
@@ -718,6 +719,15 @@ fn handle_unary(
         "plugins.state.get" => with_db_opt(db, |db| plugin_state::state_get(db, req)),
         "plugins.state.set" => with_db_opt(db, |db| plugin_state::state_set(db, req)),
         "plugins.state.delete" => with_db_opt(db, |db| plugin_state::state_delete(db, req)),
+        // M7 Etap-4 (cluster 21a): the plugin blob store — chunked staging
+        // (ADR-0061 discipline) plus bounded range reads, bounded by the
+        // `storage.blobs` grant and the upload row's owner.
+        "plugins.blobs.begin" => with_db_opt(db, |db| plugin_blobs::begin(db, req)),
+        "plugins.blobs.append" => with_db_opt(db, |db| plugin_blobs::append(db, req)),
+        "plugins.blobs.finish" => with_db_opt(db, |db| plugin_blobs::finish(db, req)),
+        "plugins.blobs.list" => with_db_opt(db, |db| plugin_blobs::list(db, req)),
+        "plugins.blobs.read" => with_db_opt(db, |db| plugin_blobs::read(db, req)),
+        "plugins.blobs.delete" => with_db_opt(db, |db| plugin_blobs::delete(db, req)),
         // M7 Etap-4 (cluster 21 part 2): the plugin's own secret store. Rows
         // carry only the opaque store reference; the plaintext is reachable
         // solely through `plugins.secrets.reveal` under the host exposure

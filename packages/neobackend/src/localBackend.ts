@@ -27,6 +27,12 @@ import {
   type GetAssetResultDto,
   type DeletePluginSecretResultDto,
   type DeletePluginStateResultDto,
+  type BeginPluginBlobResultDto,
+  type AppendPluginBlobResultDto,
+  type PluginBlobDto,
+  type ListPluginBlobsResultDto,
+  type ReadPluginBlobResultDto,
+  type DeletePluginBlobResultDto,
   type ListPluginSecretsResultDto,
   type PluginSecretDto,
   type RevealPluginSecretResultDto,
@@ -489,6 +495,17 @@ export class LocalBackend implements NeoBackend {
       stateSet: (req, opts) => this.invoke<SetPluginStateResultDto>('plugins.state.set', req, opts),
       stateDelete: (req, opts) =>
         this.invoke<DeletePluginStateResultDto>('plugins.state.delete', req, opts),
+      blobBegin: (req, opts) =>
+        this.invoke<BeginPluginBlobResultDto>('plugins.blobs.begin', req, opts),
+      blobAppend: (req, opts) =>
+        this.invoke<AppendPluginBlobResultDto>('plugins.blobs.append', req, opts),
+      blobFinish: (req, opts) => this.invoke<PluginBlobDto>('plugins.blobs.finish', req, opts),
+      blobsList: (req, opts) =>
+        this.invoke<ListPluginBlobsResultDto>('plugins.blobs.list', req, opts),
+      blobRead: (req, opts) =>
+        this.invoke<ReadPluginBlobResultDto>('plugins.blobs.read', req, opts),
+      blobDelete: (req, opts) =>
+        this.invoke<DeletePluginBlobResultDto>('plugins.blobs.delete', req, opts),
       secretsList: (req, opts) =>
         this.invoke<ListPluginSecretsResultDto>('plugins.secrets.list', req, opts),
       secretSet: (req, opts) => this.invoke<PluginSecretDto>('plugins.secrets.set', req, opts),

@@ -210,6 +210,16 @@ pub(crate) fn plugins_uninstall(
     if changed == 0 {
         return Err(plugin_not_found(&req.id));
     }
+    // Blob rows cascade with the plugin row, but their bytes live on the
+    // filesystem, so the uninstall is what reclaims them. Best-effort: a
+    // failed sweep must never resurrect the plugin or fail the uninstall —
+    // the directory name makes any leftover reclaimable by tooling.
+    let blob_dir = db.root().join("plugin-blobs").join(&req.id);
+    if let Err(err) = std::fs::remove_dir_all(&blob_dir) {
+        if err.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("plugins.uninstall: blob sweep failed for {}: {err}", req.id);
+        }
+    }
     encode_empty(&generated::ResultEmpty {})
 }
 

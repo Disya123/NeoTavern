@@ -83,6 +83,15 @@ import {
   type PluginStateDto,
   type PluginStateRequestDto,
   type SetPluginStateRequestDto,
+  type BeginPluginBlobResultDto,
+  type AppendPluginBlobRequestDto,
+  type PluginBlobDto,
+  type ListPluginBlobsRequestDto,
+  type ListPluginBlobsResultDto,
+  type ReadPluginBlobRequestDto,
+  type ReadPluginBlobResultDto,
+  type DeletePluginBlobRequestDto,
+  type DeletePluginBlobResultDto,
   type SetPluginStateResultDto,
   type DeletePluginStateResultDto,
   type MessageBlock,
@@ -1384,6 +1393,89 @@ export async function removePluginState(
     return backend.plugins.stateDelete(request);
   }
   throw new UnsupportedError('plugins.state.delete');
+}
+
+/** The maximum raw chunk one `plugins.blobs.append` carries (the wire request
+ * limit is 1 MiB and base64 costs 4/3, so 512 KiB is the honest ceiling). */
+const PLUGIN_BLOB_CHUNK_BYTES = 512 * 1024;
+
+/**
+ * Stage and publish one plugin blob over the chunked family (wire
+ * `plugins.blobs.begin|append|finish`, M7 Этап-4 cluster 21a). The caller
+ * already holds the bytes (the sandbox hands them over as a stream), so the
+ * loop is local; the kernel owns the digest, the quota and the ownership
+ * check. Kernel plane only — the legacy plane keeps `/plugins/:id/blobs`.
+ */
+export async function stagePluginBlob(input: {
+  pluginId: string;
+  name: string;
+  contentType: string;
+  bytes: Uint8Array;
+}): Promise<PluginBlobDto> {
+  if (!isKernelMode()) throw new UnsupportedError('plugins.blobs.begin');
+  const started: BeginPluginBlobResultDto = await backend.plugins.blobBegin({
+    pluginId: input.pluginId,
+    name: input.name,
+    contentType: input.contentType,
+    totalBytes: input.bytes.byteLength,
+  });
+  const chunk = Math.min(started.chunkSizeBytes, PLUGIN_BLOB_CHUNK_BYTES);
+  for (let index = 0, offset = 0; offset < input.bytes.byteLength; index += 1) {
+    const end = Math.min(offset + chunk, input.bytes.byteLength);
+    const request: AppendPluginBlobRequestDto = {
+      pluginId: input.pluginId,
+      uploadId: started.uploadId,
+      index,
+      contentBase64: base64FromBytes(input.bytes.subarray(offset, end)),
+    };
+    await backend.plugins.blobAppend(request);
+    offset = end;
+  }
+  return backend.plugins.blobFinish({
+    pluginId: input.pluginId,
+    uploadId: started.uploadId,
+  });
+}
+
+/** One bounded blob range (wire `plugins.blobs.read`). The caller loops until
+ * `eof`; nothing here ever materialises an 8 MiB blob in one response. */
+export async function readPluginBlobRange(
+  request: ReadPluginBlobRequestDto,
+): Promise<ReadPluginBlobResultDto> {
+  if (isKernelMode()) {
+    return backend.plugins.blobRead(request);
+  }
+  throw new UnsupportedError('plugins.blobs.read');
+}
+
+/** Every blob of one plugin, newest first (wire `plugins.blobs.list`). */
+export async function listPluginBlobs(
+  request: ListPluginBlobsRequestDto,
+): Promise<ListPluginBlobsResultDto> {
+  if (isKernelMode()) {
+    return backend.plugins.blobsList(request);
+  }
+  throw new UnsupportedError('plugins.blobs.list');
+}
+
+/** Remove one plugin blob (wire `plugins.blobs.delete`); idempotent. */
+export async function deletePluginBlob(
+  request: DeletePluginBlobRequestDto,
+): Promise<DeletePluginBlobResultDto> {
+  if (isKernelMode()) {
+    return backend.plugins.blobDelete(request);
+  }
+  throw new UnsupportedError('plugins.blobs.delete');
+}
+
+/** base64 of a byte range (the wire carries base64 because JSON has no bytes). */
+function base64FromBytes(bytes: Uint8Array): string {
+  let binary = '';
+  const step = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += step) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + step));
+  }
+  return btoa(binary);
 }
 /**
  * One page of the durable app-event log (wire `events.poll`, M7 Etap-4

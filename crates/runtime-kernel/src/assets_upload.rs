@@ -123,11 +123,11 @@ fn upload_incomplete(upload_id: &str, declared: i64, received: i64) -> KernelErr
     )
 }
 
-fn sqlite(err: rusqlite::Error, context: &str) -> KernelError {
+pub(crate) fn sqlite(err: rusqlite::Error, context: &str) -> KernelError {
     KernelError::from(StorageError::from_sqlite(err, context))
 }
 
-fn io_error(err: std::io::Error, context: &str) -> KernelError {
+pub(crate) fn io_error(err: std::io::Error, context: &str) -> KernelError {
     KernelError::new(
         crate::KernelErrorCode::Internal,
         format!("{context}: {err}"),
@@ -136,7 +136,7 @@ fn io_error(err: std::io::Error, context: &str) -> KernelError {
 
 /// Parse an RFC 3339 timestamp into epoch seconds (the storage crate writes
 /// `YYYY-MM-DDTHH:MM:SSZ`, so a fixed-shape parse is enough here).
-fn parse_utc_seconds(stamp: &str) -> Option<i64> {
+pub(crate) fn parse_utc_seconds(stamp: &str) -> Option<i64> {
     let bytes = stamp.as_bytes();
     if bytes.len() < 19 {
         return None;
@@ -214,7 +214,7 @@ fn expiry_of(row: &UploadRow) -> String {
 
 /// Inverse of the epoch-day computation (Howard Hinnant's algorithm, as used by
 /// the C++ `<chrono>` calendar conversions).
-fn civil_from_days(days: i64) -> (i64, i64, i64) {
+pub(crate) fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);
@@ -227,7 +227,7 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
-fn remove_dir_if_present(path: &Path) -> Result<(), KernelError> {
+pub(crate) fn remove_dir_if_present(path: &Path) -> Result<(), KernelError> {
     match fs::remove_dir_all(path) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),

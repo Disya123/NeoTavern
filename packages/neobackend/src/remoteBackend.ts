@@ -18,6 +18,18 @@ import type {
   GenerationRunDto,
   DeletePluginSecretResultDto,
   DeletePluginStateResultDto,
+  BeginPluginBlobRequestDto,
+  BeginPluginBlobResultDto,
+  AppendPluginBlobRequestDto,
+  AppendPluginBlobResultDto,
+  FinishPluginBlobRequestDto,
+  PluginBlobDto,
+  ListPluginBlobsRequestDto,
+  ListPluginBlobsResultDto,
+  ReadPluginBlobRequestDto,
+  ReadPluginBlobResultDto,
+  DeletePluginBlobRequestDto,
+  DeletePluginBlobResultDto,
   ListPluginSecretsResultDto,
   PluginSecretDto,
   RevealPluginSecretResultDto,
@@ -407,6 +419,30 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<SetPluginStateResultDto>('plugins.state.set', req, { signal: opts?.signal }),
     stateDelete: (req, opts) =>
       this.sdk.call<DeletePluginStateResultDto>('plugins.state.delete', req, {
+        signal: opts?.signal,
+      }),
+    blobBegin: (req: BeginPluginBlobRequestDto, opts) =>
+      this.sdk.call<BeginPluginBlobResultDto>('plugins.blobs.begin', req, {
+        signal: opts?.signal,
+      }),
+    blobAppend: (req: AppendPluginBlobRequestDto, opts) =>
+      this.sdk.call<AppendPluginBlobResultDto>('plugins.blobs.append', req, {
+        signal: opts?.signal,
+      }),
+    blobFinish: (req: FinishPluginBlobRequestDto, opts) =>
+      this.sdk.call<PluginBlobDto>('plugins.blobs.finish', req, {
+        signal: opts?.signal,
+      }),
+    blobsList: (req: ListPluginBlobsRequestDto, opts) =>
+      this.sdk.call<ListPluginBlobsResultDto>('plugins.blobs.list', req, {
+        signal: opts?.signal,
+      }),
+    blobRead: (req: ReadPluginBlobRequestDto, opts) =>
+      this.sdk.call<ReadPluginBlobResultDto>('plugins.blobs.read', req, {
+        signal: opts?.signal,
+      }),
+    blobDelete: (req: DeletePluginBlobRequestDto, opts) =>
+      this.sdk.call<DeletePluginBlobResultDto>('plugins.blobs.delete', req, {
         signal: opts?.signal,
       }),
     secretsList: (req, opts) =>

@@ -1759,6 +1759,99 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     1024,
     undefined,
   ),
+  // M7 Etap-4 (cluster 21a): the plugin blob store. The legacy routes
+  // (`/plugins/:id/blobs*`) carried up to 8 MiB per blob in one binary body,
+  // which no JSON request can honour, so the family is chunked exactly like
+  // ADR-0061: `begin|append|finish` stages and publishes content-addressed
+  // bytes under the plugin's own namespace, `read` serves bounded 256 KiB
+  // ranges (the host loops until `eof` while feeding the sandbox stream), and
+  // `list|delete` are the metadata half. Ownership is the `pluginId` plus the
+  // `storage.blobs` grant recorded at install — never a shared asset id — so
+  // one plugin cannot address another plugin's bytes.
+  op(
+    'plugins.blobs.begin',
+    'transactional',
+    'non-idempotent',
+    'safe',
+    'app.write',
+    'wire.request.plugins.blobs.begin',
+    'wire.result.plugins.blobs.begin',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
+  op(
+    'plugins.blobs.append',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.plugins.blobs.append',
+    'wire.result.plugins.blobs.append',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1048576,
+    1024,
+    undefined,
+  ),
+  op(
+    'plugins.blobs.finish',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.plugins.blobs.finish',
+    'wire.plugin-blob',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    2048,
+    undefined,
+  ),
+  op(
+    'plugins.blobs.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.plugins.blobs.list',
+    'wire.result.plugins.blobs.list',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    65536,
+    undefined,
+  ),
+  op(
+    'plugins.blobs.read',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.plugins.blobs.read',
+    'wire.result.plugins.blobs.read',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    524288,
+    undefined,
+  ),
+  op(
+    'plugins.blobs.delete',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.plugins.blobs.delete',
+    'wire.result.plugins.blobs.delete',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
   // M7 Etap-4 (cluster 21 part 2): the plugin's own secret store. Rows carry
   // only the opaque SecretStore reference; `masked` is derived from that
   // reference, and the plaintext crosses the wire through exactly one op
@@ -3386,6 +3479,35 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     pluginId: 'lorebook-searcher',
     scope: 'workspace',
   }),
+  fx('plugins-blobs-begin-request', 'plugins.blobs.begin', 'request', true, {
+    pluginId: 'lorebook-searcher',
+    name: 'index.bin',
+    contentType: 'application/octet-stream',
+    totalBytes: 1024,
+  }),
+  fx('plugins-blobs-append-request', 'plugins.blobs.append', 'request', true, {
+    pluginId: 'lorebook-searcher',
+    uploadId: UUID_AVATAR,
+    index: 0,
+    contentBase64: 'aGVsbG8=',
+  }),
+  fx('plugins-blobs-finish-request', 'plugins.blobs.finish', 'request', true, {
+    pluginId: 'lorebook-searcher',
+    uploadId: UUID_AVATAR,
+  }),
+  fx('plugins-blobs-list-request', 'plugins.blobs.list', 'request', true, {
+    pluginId: 'lorebook-searcher',
+  }),
+  fx('plugins-blobs-read-request', 'plugins.blobs.read', 'request', true, {
+    pluginId: 'lorebook-searcher',
+    blobId: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+    offset: 0,
+    length: 1024,
+  }),
+  fx('plugins-blobs-delete-request', 'plugins.blobs.delete', 'request', true, {
+    pluginId: 'lorebook-searcher',
+    blobId: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+  }),
   fx('themes-list-request', 'themes.list', 'request', true, {}),
   fx('themes-install-request', 'themes.install', 'request', true, THEME_INSTALL_REQUEST),
   fx('themes-uninstall-request', 'themes.uninstall', 'request', true, { id: 'wii-u-dark' }),
@@ -3902,6 +4024,47 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('plugins-state-delete-response', 'plugins.state.delete', 'response', true, {
     deleted: true,
   }),
+  fx('plugins-blobs-begin-response', 'plugins.blobs.begin', 'response', true, {
+    uploadId: UUID_AVATAR,
+    chunkSizeBytes: 524288,
+    expiresAt: '2026-11-04T00:00:00Z',
+  }),
+  fx('plugins-blobs-append-response', 'plugins.blobs.append', 'response', true, {
+    uploadId: UUID_AVATAR,
+    receivedBytes: 5,
+    nextIndex: 1,
+  }),
+  fx('plugins-blobs-finish-response', 'plugins.blobs.finish', 'response', true, {
+    blobId: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+    hash: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+    name: 'index.bin',
+    contentType: 'application/octet-stream',
+    sizeBytes: 5,
+    createdAt: '2026-11-04T00:00:00Z',
+  }),
+  fx('plugins-blobs-list-response', 'plugins.blobs.list', 'response', true, {
+    items: [
+      {
+        blobId: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+        hash: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+        name: 'index.bin',
+        contentType: 'application/octet-stream',
+        sizeBytes: 5,
+        createdAt: '2026-11-04T00:00:00Z',
+      },
+    ],
+  }),
+  fx('plugins-blobs-read-response', 'plugins.blobs.read', 'response', true, {
+    blobId: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+    contentType: 'application/octet-stream',
+    sizeBytes: 5,
+    offset: 0,
+    dataBase64: 'aGVsbG8=',
+    eof: true,
+  }),
+  fx('plugins-blobs-delete-response', 'plugins.blobs.delete', 'response', true, {
+    deleted: true,
+  }),
   fx('plugins-secrets-list-request', 'plugins.secrets.list', 'request', true, {
     pluginId: 'lorebook-searcher',
     scope: 'user',
@@ -3964,6 +4127,39 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-plugins-state-get-bad-plugin-id', 'plugins.state.get', 'request', false, {
     pluginId: 'Lorebook Searcher',
     scope: 'user',
+  }),
+  fx('neg-plugins-blobs-begin-bad-plugin-id', 'plugins.blobs.begin', 'request', false, {
+    pluginId: 'Lorebook Searcher',
+    name: 'index.bin',
+    contentType: 'application/octet-stream',
+    totalBytes: 1024,
+  }),
+  fx('neg-plugins-blobs-begin-over-cap', 'plugins.blobs.begin', 'request', false, {
+    pluginId: 'lorebook-searcher',
+    name: 'huge.bin',
+    contentType: 'application/octet-stream',
+    totalBytes: 8388609,
+  }),
+  fx('neg-plugins-blobs-append-bad-chunk', 'plugins.blobs.append', 'request', false, {
+    pluginId: 'lorebook-searcher',
+    uploadId: UUID_AVATAR,
+    index: 0,
+    contentBase64: 'not base64!',
+  }),
+  fx('neg-plugins-blobs-read-bad-blob-id', 'plugins.blobs.read', 'request', false, {
+    pluginId: 'lorebook-searcher',
+    blobId: 'index.bin',
+    offset: 0,
+    length: 1024,
+  }),
+  fx('neg-plugins-blobs-read-over-chunk', 'plugins.blobs.read', 'request', false, {
+    pluginId: 'lorebook-searcher',
+    blobId: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+    offset: 0,
+    length: 262145,
+  }),
+  fx('neg-plugins-blobs-finish-missing-upload', 'plugins.blobs.finish', 'response', false, {
+    blobId: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
   }),
   fx('themes-list-response', 'themes.list', 'response', true, { items: [THEME_VALUE] }),
   fx('themes-install-response', 'themes.install', 'response', true, { theme: THEME_VALUE }),

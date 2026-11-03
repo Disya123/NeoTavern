@@ -3399,6 +3399,172 @@ export const DeletePluginStateResultDtoSchema = Type.Object(
 export type DeletePluginStateResultDto = Static<typeof DeletePluginStateResultDtoSchema>;
 
 /**
+ * One plugin blob (`wire.plugin-blob`) — the canonical counterpart of the
+ * legacy `<root>/<pluginId>/<blobId>.json` sidecar (Этап-4 cluster 21a).
+ *
+ * Blobs are content-addressed per plugin: `blobId` IS the sha256 hex of the
+ * bytes (so identical bytes deduplicate), `name`/`contentType` are display
+ * metadata the caller may refresh by re-uploading the same bytes, and
+ * `sizeBytes` is the stored length. Bytes never ride one JSON response: the
+ * chunked family `plugins.blobs.begin|append|finish` stages them and
+ * `plugins.blobs.read` serves bounded ranges, because the legacy 8 MiB blob
+ * cap is far above any honest JSON body.
+ */
+export const PluginBlobDtoSchema = Type.Object(
+  {
+    blobId: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+    hash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+    name: Type.String({ minLength: 1, maxLength: 255 }),
+    contentType: Type.String({ minLength: 1, maxLength: 255 }),
+    sizeBytes: Type.Integer({ minimum: 0 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.plugin-blob', additionalProperties: false },
+);
+export type PluginBlobDto = Static<typeof PluginBlobDtoSchema>;
+
+/**
+ * Blob upload begin request (`wire.request.plugins.blobs.begin`).
+ *
+ * `totalBytes` is the declared size (the kernel refuses a chunk that would
+ * exceed it and only publishes an upload whose staged bytes equal the
+ * declaration) and is bounded by the rev4 8 MiB per-blob limit. Ownership is
+ * proven by the `pluginId` here plus the `storage.blobs` grant recorded at
+ * install, so the staged bytes are addressable only by the uploading plugin —
+ * that is what keeps one plugin from reading another plugin's blobs through
+ * the shared fragment/asset plane.
+ */
+export const BeginPluginBlobRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    name: Type.String({ minLength: 1, maxLength: 255 }),
+    contentType: Type.String({ minLength: 1, maxLength: 255 }),
+    totalBytes: Type.Integer({ minimum: 1, maximum: 8388608 }),
+  },
+  { $id: 'wire.request.plugins.blobs.begin', additionalProperties: false },
+);
+export type BeginPluginBlobRequestDto = Static<typeof BeginPluginBlobRequestDtoSchema>;
+
+/** Blob upload begin result (`wire.result.plugins.blobs.begin`). */
+export const BeginPluginBlobResultDtoSchema = Type.Object(
+  {
+    uploadId: Type.String({ format: 'uuid' }),
+    chunkSizeBytes: Type.Integer({ minimum: 1 }),
+    expiresAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.result.plugins.blobs.begin', additionalProperties: false },
+);
+export type BeginPluginBlobResultDto = Static<typeof BeginPluginBlobResultDtoSchema>;
+
+/**
+ * Blob upload append request (`wire.request.plugins.blobs.append`).
+ * `index` must equal the upload's `nextIndex` (sequential staging), and the
+ * base64 chunk must decode to at most `chunkSizeBytes` raw.
+ */
+export const AppendPluginBlobRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    uploadId: Type.String({ format: 'uuid' }),
+    index: Type.Integer({ minimum: 0 }),
+    contentBase64: Type.String({
+      pattern: '^[A-Za-z0-9+/]*={0,2}$',
+      minLength: 1,
+    }),
+  },
+  { $id: 'wire.request.plugins.blobs.append', additionalProperties: false },
+);
+export type AppendPluginBlobRequestDto = Static<typeof AppendPluginBlobRequestDtoSchema>;
+
+/** Blob upload append result (`wire.result.plugins.blobs.append`). */
+export const AppendPluginBlobResultDtoSchema = Type.Object(
+  {
+    uploadId: Type.String({ format: 'uuid' }),
+    receivedBytes: Type.Integer({ minimum: 0 }),
+    nextIndex: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.result.plugins.blobs.append', additionalProperties: false },
+);
+export type AppendPluginBlobResultDto = Static<typeof AppendPluginBlobResultDtoSchema>;
+
+/** Blob upload finish request (`wire.request.plugins.blobs.finish`). */
+export const FinishPluginBlobRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    uploadId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.plugins.blobs.finish', additionalProperties: false },
+);
+export type FinishPluginBlobRequestDto = Static<typeof FinishPluginBlobRequestDtoSchema>;
+
+/** Blob list request (`wire.request.plugins.blobs.list`). */
+export const ListPluginBlobsRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+  },
+  { $id: 'wire.request.plugins.blobs.list', additionalProperties: false },
+);
+export type ListPluginBlobsRequestDto = Static<typeof ListPluginBlobsRequestDtoSchema>;
+
+/** Blob list result (`wire.result.plugins.blobs.list`), newest first. */
+export const ListPluginBlobsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(PluginBlobDtoSchema, { maxItems: 64 }),
+  },
+  { $id: 'wire.result.plugins.blobs.list', additionalProperties: false },
+);
+export type ListPluginBlobsResultDto = Static<typeof ListPluginBlobsResultDtoSchema>;
+
+/**
+ * Bounded blob read (`wire.request.plugins.blobs.read`): at most 256 KiB of
+ * raw bytes per call, base64 on the wire. A caller loops until `eof`, which is
+ * what lets the host feed the sandbox's outbound stream without loading an
+ * 8 MiB blob into one response.
+ */
+export const ReadPluginBlobRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    blobId: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+    offset: Type.Integer({ minimum: 0 }),
+    length: Type.Integer({ minimum: 1, maximum: 262144 }),
+  },
+  { $id: 'wire.request.plugins.blobs.read', additionalProperties: false },
+);
+export type ReadPluginBlobRequestDto = Static<typeof ReadPluginBlobRequestDtoSchema>;
+
+/** Blob read result (`wire.result.plugins.blobs.read`). */
+export const ReadPluginBlobResultDtoSchema = Type.Object(
+  {
+    blobId: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+    contentType: Type.String({ minLength: 1, maxLength: 255 }),
+    sizeBytes: Type.Integer({ minimum: 0 }),
+    offset: Type.Integer({ minimum: 0 }),
+    dataBase64: Type.String({ pattern: '^[A-Za-z0-9+/]*={0,2}$' }),
+    eof: Type.Boolean(),
+  },
+  { $id: 'wire.result.plugins.blobs.read', additionalProperties: false },
+);
+export type ReadPluginBlobResultDto = Static<typeof ReadPluginBlobResultDtoSchema>;
+
+/** Blob delete request (`wire.request.plugins.blobs.delete`). */
+export const DeletePluginBlobRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    blobId: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+  },
+  { $id: 'wire.request.plugins.blobs.delete', additionalProperties: false },
+);
+export type DeletePluginBlobRequestDto = Static<typeof DeletePluginBlobRequestDtoSchema>;
+
+/** Blob delete result (`wire.result.plugins.blobs.delete`). */
+export const DeletePluginBlobResultDtoSchema = Type.Object(
+  {
+    deleted: Type.Boolean(),
+  },
+  { $id: 'wire.result.plugins.blobs.delete', additionalProperties: false },
+);
+export type DeletePluginBlobResultDto = Static<typeof DeletePluginBlobResultDtoSchema>;
+
+/**
  * Plugin secret DTO (`wire.plugin-secret`, ТЗ §54 / SEC-01) — one secret the
  * plugin itself owns (`/api/v2/plugins/:id/secrets`). The value is WRITE-ONLY:
  * the kernel stores it in the host `SecretStore` and this DTO carries only the
@@ -3952,6 +4118,18 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.plugins.state.set': SetPluginStateRequestDtoSchema,
   'wire.result.plugins.state.set': SetPluginStateResultDtoSchema,
   'wire.result.plugins.state.delete': DeletePluginStateResultDtoSchema,
+  'wire.plugin-blob': PluginBlobDtoSchema,
+  'wire.request.plugins.blobs.begin': BeginPluginBlobRequestDtoSchema,
+  'wire.result.plugins.blobs.begin': BeginPluginBlobResultDtoSchema,
+  'wire.request.plugins.blobs.append': AppendPluginBlobRequestDtoSchema,
+  'wire.result.plugins.blobs.append': AppendPluginBlobResultDtoSchema,
+  'wire.request.plugins.blobs.finish': FinishPluginBlobRequestDtoSchema,
+  'wire.request.plugins.blobs.list': ListPluginBlobsRequestDtoSchema,
+  'wire.result.plugins.blobs.list': ListPluginBlobsResultDtoSchema,
+  'wire.request.plugins.blobs.read': ReadPluginBlobRequestDtoSchema,
+  'wire.result.plugins.blobs.read': ReadPluginBlobResultDtoSchema,
+  'wire.request.plugins.blobs.delete': DeletePluginBlobRequestDtoSchema,
+  'wire.result.plugins.blobs.delete': DeletePluginBlobResultDtoSchema,
   'wire.plugin-secret': PluginSecretDtoSchema,
   'wire.request.plugins.secrets.list': ListPluginSecretsRequestDtoSchema,
   'wire.result.plugin-secrets': ListPluginSecretsResultDtoSchema,

@@ -285,7 +285,7 @@
     {
       "source": "adr/0061-large-file-ingestion.md",
       "target": "adr/0061-large-file-ingestion.md",
-      "sha256": "d445f8b6622d7aa14d3723c66b3dcee349795bc31ebd21bbdf14e7f68e300c9b"
+      "sha256": "9578525483a3d9e9eb8b73101036c539697c1d8c402ce13fe71b303e10c5885a"
     },
     {
       "source": "adr/0062-legacy-app-db-import-contract.md",
@@ -320,7 +320,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "1298d6fc349755fbb1cd86a3f95de076e854e5e6091cbdeb0b3981f1bd71bfb9"
+      "sha256": "b5389ca7426bd9bc9203b67475b0d04f41e251b9ad53e6b6639d35699ce93c51"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -355,7 +355,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "576c5078be8ff16540db45ed40babc06477d0c72d47940a67a8e0f1bb5f8d297"
+      "sha256": "ccfa758b5552891aed5c77f646975e7f8deadc0d732f32acc0b40af55aed3974"
     },
     {
       "source": "architecture/portable-data.md",
@@ -380,7 +380,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "271803fff94324a14136093612adea481a6dd04dfe234a237390209fa8aa3041"
+      "sha256": "fd4dcd24c642bfd005801d049c99f2e093323ee704fbf7dfaa94ab3588ce8100"
     },
     {
       "source": "architecture/resource-containment.md",
@@ -390,7 +390,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "dae28d36f766a01b91b048a5c8ea0bdc838b978a831120bbb42e122737b31b17"
+      "sha256": "0d2cc7f023abacbbdc7ec3dca02d581732b4b5d56f2a798c619076c034d7636a"
     },
     {
       "source": "architecture/version-axes.md",
@@ -435,7 +435,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "16a9275b18b2106fdd652fae0091469106d56925946d3abb0634a2602424052a"
+      "sha256": "37526fc21ff5872a2c36a18b2e4499a5a041e41044a8f3ac5e954abce7d88506"
     },
     {
       "source": "data/README.md",
