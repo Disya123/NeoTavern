@@ -293,9 +293,14 @@
       "sha256": "0c2e22e1025ed265cfd5695e18231f54f2f2ec7830cf3d58964d04f11fe967ce"
     },
     {
+      "source": "adr/0063-media-operations-exchange-assets.md",
+      "target": "adr/0063-media-operations-exchange-assets.md",
+      "sha256": "e1681c95511bf3eaafb8dff0cee130bf1fab3c3eca4cfcce8a9336362233171c"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "16b224c514180bc90671b23284be60f4e0e113e715bd4037dcbd62a5aeab8f30"
+      "sha256": "3f57ee9ef97cc3175b923c3838efddd1c51b0feac365b56adcafbbdb8852735c"
     },
     {
       "source": "android/README.md",
@@ -320,7 +325,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "7d2d9e07d2bdc3ba112cf293b07e887e134091cb08d6b7e6cfea7752b7a461b6"
+      "sha256": "02ba752e71ae9f9783711f31895e1e4ab94f860b7447c4ee739bbf3d0a8b2f85"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -380,7 +385,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "eb01abb36e70382ecddc388b85b87164022c17750b684115fefd9e5793ae137d"
+      "sha256": "20b6d3fae5d0f61ca694799fcaeb85cde25b97fe7175bebfd30ecdf68afcd3f3"
     },
     {
       "source": "architecture/resource-containment.md",

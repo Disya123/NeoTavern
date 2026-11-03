@@ -4,6 +4,19 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0063: Media operations exchange assets, never bytes
+
+**Proposed (draft, 2026-11-04).** The three remaining provider routes (TTS,
+image generation, transcription) are shape-starved, not logic-starved: their
+payloads are binary. ADR-0061 already answers the request half (stage bytes,
+pass an `assetId`), so this draft fixes the response half: a media op returns
+`AssetDto`s published into the content-addressed asset plane
+(`generated-audio` / `generated-image`) and never embeds media in a DTO. Inputs
+are staged assets, outputs are assets, caps are explicit (8 KiB text/prompt,
+4 images, 64 MiB per asset), streaming is a documented v1 limitation, and the
+`fake` provider keeps tests deterministic. Full decision:
+[ADR-0063](0063-media-operations-exchange-assets.md).
+
 ## ADR-0061: Large files enter through chunked upload on Product Wire
 
 **Proposed (kernel plane implemented, 2026-11-02).** Wire requests are JSON and
