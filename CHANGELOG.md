@@ -2,11 +2,25 @@
 
 ## Unreleased
 
-### Added
+### Changed
 
-# Changelog
-
-## Unreleased
+- **Capability-matrix evidence audit (round 46b/99).** Every `Packaged`
+  desktop cell in `docs/release-manifest.json` now cites the packaged step that
+  exercises it instead of a round number and "exit 0":
+  `scripts/smoke-desktop-shell.mjs` boots
+  `target/release/bundle/portable/*-portable/NeoTavern.exe` with
+  `NEOTA_DESKTOP_SMOKE=1 NEOTA_KERNEL=1`, and `run_kernel_smoke` /
+  `run_golden_smoke` (`apps/desktop/src-tauri/src/lib.rs`) dispatch the ops
+  through the real KernelHost envelope. One overclaim removed:
+  `security.plugin-package-trust` desktop **Packaged → Implemented** —
+  `crates/adapters/package-verify` has no call site outside its own crate, so
+  no packaged artifact verifies a package signature; smoke step 15b only proves
+  the kernel trust-*rank* fence. Four rows stay Packaged but now disclose the
+  ops the walk never touches: `chats.list` (chats.crud), `assets.upload.*`
+  (library.assets), `plugins.blobs.*` (ui.plugins) and `secrets.exposure`
+  (providers.secrets). Packaged count 33 → 32/44; the G6 row in
+  `docs/architecture/release-gate-status.md` carries the corrected numbers. No
+  product code changed.
 
 ### Added
 
