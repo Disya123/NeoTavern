@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Themes, profiles and profile export/import reach Packaged on desktop
+  (round 32/40).** The packaged golden smoke walks the full theme lifecycle
+  (declarative theme with a manifest-declared settings schema — settings
+  updates validate against it, undeclared keys refuse), the profile CRUD
+  family and a complete profile export → remap-import round trip
+  (18 records re-inserted with fresh ids, nothing invented). `ui.themes`,
+  `ui.profiles`, `ui.profile-export` promoted to Packaged. Desktop score:
+  26/43.
+
 - **Six more families reach Packaged on desktop (round 31/40).** The packaged
   golden smoke now walks backups end-to-end (create → the offline-restore
   writer swap → delete → list), the prompt-pipeline read family (prompt plan

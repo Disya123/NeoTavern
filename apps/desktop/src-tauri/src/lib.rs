@@ -1757,6 +1757,115 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     )?;
     eprintln!("[smoke] golden: provider config/secrets walk ok (reveal fail-closed)");
 
+    // 13. Themes + profiles + profile export/import (G6 evidence, round 32).
+    //     A theme is declarative data: its CSS rides the addressed asset
+    //     store (kind theme-css), validated at install.
+    let css = dispatch_ok(
+        &host,
+        "assets.put",
+        serde_json::json!({
+            "kind": "theme-css",
+            "filename": "theme.css",
+            "contentType": "text/css",
+            "contentBase64": "Ym9keXt9",
+        }),
+    )?;
+    let css_id = css["asset"]["id"]
+        .as_str()
+        .ok_or_else(|| "theme css asset carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "themes.install",
+        serde_json::json!({
+            "id": "smoke-theme",
+            "name": "Smoke Theme",
+            "version": "1.0.0",
+            "trustState": "verified-publisher",
+            "publisherKeyId": "fp-smoke",
+            "cssAssetId": css_id,
+            "manifest": {
+                "id": "smoke-theme",
+                "level": "shell",
+                "settings": {
+                    "accent": { "type": "color", "default": "#7c3aed" },
+                },
+            },
+        }),
+    )?;
+    dispatch_ok(
+        &host,
+        "themes.activate",
+        serde_json::json!({ "id": "smoke-theme" }),
+    )?;
+    dispatch_ok(
+        &host,
+        "themes.settings.get",
+        serde_json::json!({ "id": "smoke-theme" }),
+    )?;
+    dispatch_ok(
+        &host,
+        "themes.settings.update",
+        serde_json::json!({ "id": "smoke-theme", "values": { "accent": "#00c853" } }),
+    )?;
+    let themes = dispatch_ok(&host, "themes.list", serde_json::json!({}))?;
+    let listed_theme = themes["items"]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .any(|theme| theme["id"].as_str() == Some("smoke-theme"))
+        })
+        .unwrap_or(false);
+    if !listed_theme {
+        return Err(format!(
+            "installed theme missing from themes.list: {themes}"
+        ));
+    }
+    dispatch_ok(&host, "themes.deactivate", serde_json::json!({}))?;
+    dispatch_ok(
+        &host,
+        "themes.uninstall",
+        serde_json::json!({ "id": "smoke-theme" }),
+    )?;
+    eprintln!("[smoke] golden: themes install/activate/settings/list/deactivate/uninstall ok");
+
+    let profile = dispatch_ok(
+        &host,
+        "profiles.create",
+        serde_json::json!({ "name": "Smoke profile" }),
+    )?;
+    let profile_id = profile["profile"]["id"]
+        .as_str()
+        .ok_or_else(|| "profile carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "profiles.rename",
+        serde_json::json!({ "id": profile_id, "name": "Smoke renamed" }),
+    )?;
+    dispatch_ok(&host, "profiles.list", serde_json::json!({}))?;
+    let exported = dispatch_ok(&host, "profile.export", serde_json::json!({}))?;
+    let container_path = exported["containerPath"]
+        .as_str()
+        .ok_or_else(|| "profile export carried no containerPath".to_string())?
+        .to_string();
+    let imported = dispatch_ok(
+        &host,
+        "profile.import",
+        serde_json::json!({ "containerPath": container_path, "policy": "remap" }),
+    )?;
+    let imported_characters = imported["inserted"].as_i64().unwrap_or(0);
+    if imported_characters == 0 {
+        return Err(format!("profile import applied no records: {imported}"));
+    }
+    dispatch_ok(
+        &host,
+        "profiles.delete",
+        serde_json::json!({ "id": profile_id }),
+    )?;
+    eprintln!("[smoke] golden: profiles + profile export/import ok");
+
     // 12. Secrets lifecycle: status (backend describe), then lock — the
     //     lock response itself carries `locked: true` (status reports the
     //     store shape, not the lock state).
