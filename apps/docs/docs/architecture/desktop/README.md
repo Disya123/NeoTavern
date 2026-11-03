@@ -124,6 +124,18 @@ selects the native formats of the current OS. Native addons and the
 self-contained sidecar are always prepared on the same target runner;
 transferring built assets between OSes is not supported.
 
+`pnpm desktop:prepare` bundles the legacy sidecar with
+`pkg --no-bytecode --public`. The default V8-bytecode snapshot is not used:
+its bytecode pass spawns the fetched Node binary per module and stalled
+indefinitely on Windows (observed twice — a 0-byte then a truncated output
+with near-zero CPU and hours of wall time), which made every packaged build
+unreliable. The source-included snapshot completes in about 2.5 minutes and
+starts correctly; the sidecar is the legacy migration contour (ADR-0038) and
+its source is already public in this repository, so bytecode obfuscation
+adds nothing. If a future sidecar needs size or startup parity, re-test the
+bytecode path on a machine without aggressive file scanning before changing
+this recipe.
+
 ### Remote Access (Phase 9, optional)
 
 Remote Access lets another device or browser reach the **same embedded

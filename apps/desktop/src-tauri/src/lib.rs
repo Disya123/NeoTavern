@@ -1851,6 +1851,60 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         serde_json::json!({ "provider": "fake", "name": "local" }),
     )?;
     dispatch_ok(&host, "providers.config.list", serde_json::json!({}))?;
+    // 11b. Provider access walk (providers.access, round 41): model discovery
+    //      and the one-shot connectivity test run on the packaged artifact
+    //      against the built-in fake adapter — a local, keyless, deterministic
+    //      round trip that never touches the network, plus the fail-closed
+    //      answer for an unknown config id.
+    let discovered = dispatch_ok(
+        &host,
+        "providers.models",
+        serde_json::json!({ "providerId": config_id }),
+    )?;
+    let discovered_models = discovered["models"]
+        .as_array()
+        .ok_or_else(|| "providers.models carried no list".to_string())?;
+    if discovered_models.len() != 1
+        || discovered_models[0]["id"] != serde_json::json!("fake-1")
+        || discovered_models[0]["contextLimit"] != serde_json::json!(8192)
+    {
+        return Err(format!(
+            "providers.models did not enumerate the fake model set: {discovered}"
+        ));
+    }
+    let tested = dispatch_ok(
+        &host,
+        "providers.test",
+        serde_json::json!({
+            "providerId": config_id,
+            "message": "ping",
+            "model": "steps=1;tokens-per-step=6",
+        }),
+    )?;
+    let tested_text = tested["text"].as_str().unwrap_or_default();
+    if tested_text.chars().count() != 6
+        || tested["usage"]["steps"] != serde_json::json!(1)
+        || tested["usage"]["outputChars"] != serde_json::json!(6)
+    {
+        return Err(format!(
+            "providers.test returned an unexpected round trip: {tested}"
+        ));
+    }
+    let missing_config = dispatch_error(
+        &host,
+        "providers.models",
+        // The wire `uuid` format admits versions 1-5, so an unknown config id
+        // has to be a well-formed v4 to reach the kernel lookup.
+        serde_json::json!({ "providerId": "00000000-0000-4000-8000-000000000000" }),
+    )?;
+    if !missing_config.contains("PROVIDER_CONFIG_NOT_FOUND") {
+        return Err(format!(
+            "providers.models did not fail closed for an unknown config: {missing_config}"
+        ));
+    }
+    eprintln!(
+        "[smoke] golden: provider model discovery + one-shot test ok (unknown config fails closed)"
+    );
     let secret = dispatch_ok(
         &host,
         "providers.secrets.create",

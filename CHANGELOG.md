@@ -4,6 +4,23 @@
 
 ### Added
 
+- **Provider access reaches Packaged on desktop (round 41/99).**
+  `providers.access` (`providers.models` + `providers.test`) now has
+  packaged evidence: the golden smoke enumerates the built-in fake adapter's
+  deterministic model set (`fake-1`, context limit 8192) with no network and
+  no key, runs one non-streaming test message and asserts its exact
+  deterministic answer plus attempt accounting (steps 1 / outputChars 6), and
+  pins the fail-closed `PROVIDER_CONFIG_NOT_FOUND` for an unknown config id
+  (a well-formed v4 uuid — the wire `uuid` format admits versions 1-5).
+  Desktop score: **32/43**.
+- **The packaged sidecar is bundled without V8 bytecode (build reliability).**
+  `pnpm desktop:prepare` now calls `pkg --no-bytecode --public`. The default
+  bytecode snapshot stalled for hours on Windows twice (a 0-byte then a
+  truncated output, near-zero CPU), so packaged builds could not be produced
+  reliably; the source-included snapshot finishes in about 2.5 minutes. The
+  sidecar is the legacy migration contour (ADR-0038) and its source is public
+  in this repository, so bytecode obfuscation adds nothing.
+
 - **Card and chat exports reach Packaged on desktop (round 39/40).**
   `ui.card-exports` was the last Implemented row whose ops ride the
   already-Packaged library families. The packaged golden smoke now exports

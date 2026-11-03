@@ -380,7 +380,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "21966264273dcb5742cdfad4ac6456c0fb0536f7571f0f06dda871cb0429467d"
+      "sha256": "5d7621f01a4af5bdcda6cb22e705249ca4329c3ff78421a440c2b65ee154f810"
     },
     {
       "source": "architecture/resource-containment.md",
@@ -435,7 +435,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "944465cc20ff05c9ada646330362a4819e0d943aa9efb5f109c8127f4b2334b7"
+      "sha256": "920c678eff8bd44e5a7bc56f900c9461bb00f40425e26914d3e123afa7dfe01e"
     },
     {
       "source": "data/README.md",
@@ -445,7 +445,7 @@
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "7722febe24f4a353aaaadc86d8e655dd88dd60f2364a500298051996488d625a"
+      "sha256": "9a7522e1df4ea969a4d106dd7936c3c242962e032db8be392ec3f6842de7fefc"
     },
     {
       "source": "desktop/chat-ui-recipe.md",

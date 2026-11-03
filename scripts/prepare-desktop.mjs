@@ -315,12 +315,22 @@ await cp(
 );
 await mkdir(binaries, { recursive: true });
 
+// `--no-bytecode --public` instead of pkg's default V8-bytecode snapshot.
+// The bytecode pass spawns the fetched Node binary per module and can stall
+// indefinitely on Windows (observed twice: a 0-byte then truncated output,
+// near-zero CPU, hours of wall time) which turns every packaged build into a
+// stuck pipeline. pkg refuses `--no-bytecode` without source, so `--public`
+// rides along; the resulting snapshot finishes in ~2.5 minutes instead of
+// hanging. The sidecar is the legacy migration contour (ADR-0038) and its
+// source is already public in this repo, so bytecode obfuscation buys nothing.
 command('pnpm', [
   'exec',
   'pkg',
   'apps/server/package.json',
   '--targets',
   pkgTarget(target),
+  '--no-bytecode',
+  '--public',
   '--output',
   output,
 ]);
