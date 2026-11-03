@@ -24,7 +24,10 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   outputDir: shardOutputDir,
-  testIgnore: ['**/spikes/**', '**/legacy/**'],
+  // Visual regression runs in its OWN config (playwright.visual.config.ts):
+  // its baselines are only meaningful against a pristine data root, and the
+  // functional specs below deliberately mutate chats/presets/characters.
+  testIgnore: ['**/spikes/**', '**/legacy/**', '**/visual-shell.spec.ts'],
   forbidOnly: Boolean(process.env['CI']),
   retries: process.env['CI'] ? 2 : 0,
   reporter: [['list'], ['html', { open: 'never', outputFolder: resolve(shardReportDir) }]],

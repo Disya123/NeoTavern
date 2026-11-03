@@ -13,14 +13,19 @@
 - **Visual regression on the kernel plane (round 46/99).** G10's last open half —
   "visual regression is still not set up" — now has evidence on the canonical
   plane instead of inheriting the sidecar's snapshots: `e2e/visual-shell.spec.ts`
-  runs inside the kernel shard (`playwright.config.ts`) against
-  `apps/web/dist` + `neotavern-headless` over Product Wire and captures three
+  runs in its own config (`playwright.visual.config.ts`, `pnpm test:visual`)
+  against `apps/web/dist` + `neotavern-headless` over Product Wire — isolation
+  is deliberate: the first attempt inside the kernel shard passed alone but
+  failed in the full suite because the functional specs mutate chats, presets
+  and characters first. It captures three
   screens — light home, the Settings panel and the HIGH CONTRAST home (the
   profile the axe gate scans). Determinism is explicit: chats are cleared first
   (`clearChats`), fonts are awaited, images must be complete, animations/caret
   are disabled and the diff budget is 160 pixels. Baselines are committed under
-  `e2e/visual-shell.spec.ts-snapshots/`; two consecutive runs pass, including a
-  re-run after rebuilding the headless binary at schema v32. Honest limits:
+  `e2e/visual-shell.spec.ts-snapshots/`; the isolated suite passes repeatedly
+  (including after rebuilding the headless binary at schema v32, run log:
+  `applying migration 32`), and the functional kernel shard stays green with
+  the visual spec excluded (`6 passed, 1 skipped`). Honest limits:
   Windows/Chromium baselines only (a Linux runner needs its own committed
   snapshots) and the packaged portable exe is still not the runner.
 
