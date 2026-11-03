@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Declarative plugin lifecycle reaches Packaged on desktop (round 34/40).**
+  The packaged golden smoke walks the full data-driven plugin surface:
+  install with the consent-time grant list (the recorded grants ARE the
+  consent moment), enable, chat blocks attach/list/update/delete, plugin
+  state with optimistic expectedRevision, plugin secrets whose list
+  projection is asserted plaintext-free and whose reveal fails closed, then
+  disable + uninstall. `ui.plugins` promoted to Packaged for DECLARATIVE
+  plugins (ADR-0058: plugins ship data, never kernel-side code); the
+  sandboxed code executor and jobs stay the explicit follow-up. Desktop
+  score: 28/43.
+
 - **Character card import reaches Packaged on desktop (round 33/40).** The
   packaged golden smoke imports a SillyTavern-compatible V2 character card
   carried in a PNG `chara` tEXt chunk (published through assets.put kind

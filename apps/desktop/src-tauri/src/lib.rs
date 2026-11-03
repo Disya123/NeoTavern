@@ -1924,6 +1924,156 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         return Err(format!("card re-import created a duplicate: {reimported}"));
     }
     eprintln!("[smoke] golden: character card import + dedup ok ({card_character})");
+    // 15. Declarative plugin lifecycle (G6 evidence, round 34): the kernel
+    //     durably records the host-verified SEC-05 package and serves the
+    //     data-driven plugin families — state (optimistic revision),
+    //     secrets (masked projections; reveal stays fail-closed) and chat
+    //     blocks. No code executor: declarative plugins are DATA (ADR-0058).
+    dispatch_ok(
+        &host,
+        "plugins.install",
+        serde_json::json!({
+            "id": "smoke-plugin",
+            "name": "Smoke Plugin",
+            "version": "1.0.0",
+            "trustState": "verified-publisher",
+            "publisherKeyId": "fp-smoke",
+            "permissions": ["plugin.storage", "storage.user", "secrets.manageOwn", "secrets.reveal"],
+            "manifest": { "id": "smoke-plugin", "main": "dist/index.js" },
+        }),
+    )?;
+    dispatch_ok(
+        &host,
+        "plugins.enable",
+        serde_json::json!({ "id": "smoke-plugin" }),
+    )?;
+
+    let messages = dispatch_ok(
+        &host,
+        "chats.messages.list",
+        serde_json::json!({ "chatId": chat_id, "limit": 50 }),
+    )?;
+    let last_message_id = messages["items"]
+        .as_array()
+        .and_then(|items| items.last())
+        .and_then(|message| message["id"].as_str())
+        .ok_or_else(|| "chat has no messages for a block".to_string())?
+        .to_string();
+    let block = dispatch_ok(
+        &host,
+        "chats.blocks.attach",
+        serde_json::json!({
+            "chatId": chat_id,
+            "messageId": last_message_id,
+            "blockType": "meter",
+            "rendererId": "blk:meter",
+            "pluginId": "smoke-plugin",
+            "descriptor": { "title": "Smoke meter" },
+        }),
+    )?;
+    let block_id = block["id"]
+        .as_str()
+        .or_else(|| block["blockId"].as_str())
+        .ok_or_else(|| "block carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "chats.blocks.list",
+        serde_json::json!({ "chatId": chat_id, "messageIds": [last_message_id] }),
+    )?;
+    dispatch_ok(
+        &host,
+        "blocks.update",
+        serde_json::json!({ "blockId": block_id, "serializedState": { "count": 9 } }),
+    )?;
+    dispatch_ok(
+        &host,
+        "blocks.delete",
+        serde_json::json!({ "blockId": block_id }),
+    )?;
+
+    let state_set = dispatch_ok(
+        &host,
+        "plugins.state.set",
+        serde_json::json!({
+            "pluginId": "smoke-plugin",
+            "scope": "user",
+            "data": { "lastQuery": "smoke", "runs": 1 },
+        }),
+    )?;
+    let state_revision = state_set["revision"].as_i64().unwrap_or(0);
+    let state_get = dispatch_ok(
+        &host,
+        "plugins.state.get",
+        serde_json::json!({ "pluginId": "smoke-plugin", "scope": "user" }),
+    )?;
+    if state_get["data"]["runs"] != serde_json::json!(1) {
+        return Err(format!("plugin state round trip failed: {state_get}"));
+    }
+    dispatch_ok(
+        &host,
+        "plugins.state.set",
+        serde_json::json!({
+            "pluginId": "smoke-plugin",
+            "scope": "user",
+            "data": { "lastQuery": "smoke", "runs": 2 },
+            "expectedRevision": state_revision,
+        }),
+    )?;
+    dispatch_ok(
+        &host,
+        "plugins.state.delete",
+        serde_json::json!({ "pluginId": "smoke-plugin", "scope": "user" }),
+    )?;
+
+    dispatch_ok(
+        &host,
+        "plugins.secrets.set",
+        serde_json::json!({
+            "pluginId": "smoke-plugin",
+            "scope": "user",
+            "key": "apiKey",
+            "value": "sk-plugin-smoke",
+        }),
+    )?;
+    let secret_list = dispatch_ok(
+        &host,
+        "plugins.secrets.list",
+        serde_json::json!({ "pluginId": "smoke-plugin", "scope": "user" }),
+    )?;
+    let secret_listing = serde_json::to_string(&secret_list).unwrap_or_default();
+    if secret_listing.contains("sk-plugin-smoke") {
+        return Err(format!("secret listing leaked plaintext: {secret_list}"));
+    }
+    let plugin_reveal = dispatch_error(
+        &host,
+        "plugins.secrets.reveal",
+        serde_json::json!({ "pluginId": "smoke-plugin", "scope": "user", "key": "apiKey" }),
+    )?;
+    if !plugin_reveal.contains("SECRETS_EXPOSURE_DISABLED")
+        || plugin_reveal.contains("sk-plugin-smoke")
+    {
+        return Err(format!(
+            "plugin reveal did not fail closed: {plugin_reveal}"
+        ));
+    }
+    dispatch_ok(
+        &host,
+        "plugins.secrets.delete",
+        serde_json::json!({ "pluginId": "smoke-plugin", "scope": "user", "key": "apiKey" }),
+    )?;
+
+    dispatch_ok(
+        &host,
+        "plugins.disable",
+        serde_json::json!({ "id": "smoke-plugin" }),
+    )?;
+    dispatch_ok(
+        &host,
+        "plugins.uninstall",
+        serde_json::json!({ "id": "smoke-plugin" }),
+    )?;
+    eprintln!("[smoke] golden: declarative plugin lifecycle (state/secrets/blocks) ok");
     Ok(())
 }
 
