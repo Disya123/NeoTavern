@@ -325,7 +325,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "02ba752e71ae9f9783711f31895e1e4ab94f860b7447c4ee739bbf3d0a8b2f85"
+      "sha256": "25747508d7e205d9dac188fa7e473a4a133d3c9c78b83d2dd6bcfe54812ef8b4"
     },
     {
       "source": "architecture/generation-durability.md",

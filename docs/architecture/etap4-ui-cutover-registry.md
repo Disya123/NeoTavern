@@ -246,6 +246,20 @@ either direction. Evidence: 7 kernel tests
 bounded ranges, sequential staging, grant denial, cross-plugin refusal,
 64-blob quota) and 3 web tests (`plugins/kernel/storage.test.ts`).
 
+Per-surface note (round 46c, release-gate audit): the capability-matrix audit
+found that `crates/adapters/package-verify` has **no call site outside its own
+crate** — on the kernel/packaged plane nothing actually verifies a plugin
+package's publisher signature before `plugins.install` records it as
+`verified-publisher`; the only verifier in the product is the legacy
+`apps/server/src/lib/packageTrust.ts`, which the kernel plane never calls. That
+is why the matrix row `security.plugin-package-trust` was corrected to
+`Implemented` (it proves the trust-RANK fence, not signature verification).
+Stage 6 therefore cannot delete `apps/server` until the Tauri host adapter runs
+`package-verify` at install/first-load and the packaged smoke drives it; until
+then the honest reading of row 19's "install partial: host verifier" is that
+the verifier exists as a crate and as legacy code, not in the packaged kernel
+path.
+
 ### 4.1 Reassessment after cluster 21 part 2
 
 The plugin secret store closed the last family that was still parked behind a
