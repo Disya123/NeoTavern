@@ -606,7 +606,8 @@ fn setup_local_kernel_mode(
     }
 
     if std::env::var("NEOTA_DESKTOP_SMOKE").as_deref() == Ok("1") {
-        let smoke = run_kernel_smoke(app.handle()).and_then(|_| run_golden_smoke(app.handle()));
+        let smoke =
+            run_kernel_smoke(app.handle()).and_then(|_| run_golden_smoke(app.handle(), &data_dir));
         if let Err(error) = smoke {
             eprintln!("[smoke] FAILED: {error}");
             std::process::exit(1);
@@ -778,7 +779,7 @@ fn run_stream(
 /// No HTTP, no sidecar, no UI: this is the packaged host's own self-check,
 /// runnable headless via `NEOTA_DESKTOP_SMOKE=1`.
 #[cfg(desktop)]
-fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
+fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), String> {
     let host = app.state::<KernelHost>();
 
     // 1. Library + conversation setup (wire CRUD).
@@ -961,7 +962,11 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         .as_str()
         .ok_or_else(|| "throwaway chat carried no id".to_string())?
         .to_string();
-    dispatch_ok(&host, "chats.get", serde_json::json!({ "chatId": second_id }))?;
+    dispatch_ok(
+        &host,
+        "chats.get",
+        serde_json::json!({ "chatId": second_id }),
+    )?;
     dispatch_ok(
         &host,
         "chats.update",
@@ -995,7 +1000,11 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         "chats.reorder",
         serde_json::json!({ "characterId": character_id, "order": [chat_id, second_id] }),
     )?;
-    dispatch_ok(&host, "chats.delete", serde_json::json!({ "chatId": second_id }))?;
+    dispatch_ok(
+        &host,
+        "chats.delete",
+        serde_json::json!({ "chatId": second_id }),
+    )?;
     eprintln!("[smoke] golden: chats/messages CRUD full walk ok");
 
     // 5. Full library-cluster walks (G6 evidence, round 24): presets,
@@ -1010,14 +1019,22 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         .as_str()
         .ok_or_else(|| "preset carried no id".to_string())?
         .to_string();
-    dispatch_ok(&host, "presets.get", serde_json::json!({ "presetId": preset_id }))?;
+    dispatch_ok(
+        &host,
+        "presets.get",
+        serde_json::json!({ "presetId": preset_id }),
+    )?;
     dispatch_ok(
         &host,
         "presets.update",
         serde_json::json!({ "presetId": preset_id, "name": "Smoke preset v2" }),
     )?;
     dispatch_ok(&host, "presets.list", serde_json::json!({}))?;
-    dispatch_ok(&host, "presets.delete", serde_json::json!({ "presetId": preset_id }))?;
+    dispatch_ok(
+        &host,
+        "presets.delete",
+        serde_json::json!({ "presetId": preset_id }),
+    )?;
 
     let persona = dispatch_ok(
         &host,
@@ -1028,14 +1045,22 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         .as_str()
         .ok_or_else(|| "persona carried no id".to_string())?
         .to_string();
-    dispatch_ok(&host, "personas.get", serde_json::json!({ "personaId": persona_id }))?;
+    dispatch_ok(
+        &host,
+        "personas.get",
+        serde_json::json!({ "personaId": persona_id }),
+    )?;
     dispatch_ok(
         &host,
         "personas.update",
         serde_json::json!({ "personaId": persona_id, "name": "Smoke persona v2" }),
     )?;
     dispatch_ok(&host, "personas.list", serde_json::json!({}))?;
-    dispatch_ok(&host, "personas.delete", serde_json::json!({ "personaId": persona_id }))?;
+    dispatch_ok(
+        &host,
+        "personas.delete",
+        serde_json::json!({ "personaId": persona_id }),
+    )?;
 
     let memory = dispatch_ok(
         &host,
@@ -1057,7 +1082,11 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         serde_json::json!({ "memoryId": memory_id, "content": "Golden walk memory v2." }),
     )?;
     dispatch_ok(&host, "memories.list", serde_json::json!({}))?;
-    dispatch_ok(&host, "memories.delete", serde_json::json!({ "memoryId": memory_id }))?;
+    dispatch_ok(
+        &host,
+        "memories.delete",
+        serde_json::json!({ "memoryId": memory_id }),
+    )?;
 
     dispatch_ok(&host, "providers.list", serde_json::json!({}))?;
     dispatch_ok(&host, "providers.catalog", serde_json::json!({}))?;
@@ -1070,7 +1099,11 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
             "settings": [{ "key": "app.language", "value": { "locale": "en" } }]
         }),
     )?;
-    dispatch_ok(&host, "settings.instructformats.list", serde_json::json!({}))?;
+    dispatch_ok(
+        &host,
+        "settings.instructformats.list",
+        serde_json::json!({}),
+    )?;
 
     let lorebook = dispatch_ok(
         &host,
@@ -1086,7 +1119,11 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         .as_str()
         .ok_or_else(|| "lorebook carried no id".to_string())?
         .to_string();
-    dispatch_ok(&host, "lorebooks.get", serde_json::json!({ "lorebookId": lorebook_id }))?;
+    dispatch_ok(
+        &host,
+        "lorebooks.get",
+        serde_json::json!({ "lorebookId": lorebook_id }),
+    )?;
     dispatch_ok(&host, "lorebooks.list", serde_json::json!({}))?;
     dispatch_ok(
         &host,
@@ -1124,7 +1161,11 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         "lorebooks.entries.delete",
         serde_json::json!({ "lorebookId": lorebook_id, "entryId": entry_id }),
     )?;
-    dispatch_ok(&host, "lorebooks.delete", serde_json::json!({ "lorebookId": lorebook_id }))?;
+    dispatch_ok(
+        &host,
+        "lorebooks.delete",
+        serde_json::json!({ "lorebookId": lorebook_id }),
+    )?;
     eprintln!("[smoke] golden: library clusters full walk ok");
 
     // 6. Variants/revisions/drafts + snapshots + app events (G6 evidence,
@@ -1181,9 +1222,21 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         .as_str()
         .ok_or_else(|| "draft carried no id".to_string())?
         .to_string();
-    dispatch_ok(&host, "chats.messages.drafts.list", serde_json::json!({ "chatId": chat_id }))?;
-    dispatch_ok(&host, "chats.messages.drafts.get", serde_json::json!({ "chatId": chat_id, "draftId": draft_id }))?;
-    dispatch_ok(&host, "chats.messages.drafts.commit", serde_json::json!({ "chatId": chat_id, "draftId": draft_id }))?;
+    dispatch_ok(
+        &host,
+        "chats.messages.drafts.list",
+        serde_json::json!({ "chatId": chat_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "chats.messages.drafts.get",
+        serde_json::json!({ "chatId": chat_id, "draftId": draft_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "chats.messages.drafts.commit",
+        serde_json::json!({ "chatId": chat_id, "draftId": draft_id }),
+    )?;
     let draft_two = dispatch_ok(
         &host,
         "chats.messages.drafts.save",
@@ -1201,7 +1254,11 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         serde_json::json!({ "chatId": chat_id, "messageId": assistant_id, "kind": "checkpoint" }),
     )?;
     let _checkpoint_chat = checkpoint["chat"]["id"].as_str().unwrap_or("");
-    dispatch_ok(&host, "chats.snapshots.list", serde_json::json!({ "chatId": chat_id }))?;
+    dispatch_ok(
+        &host,
+        "chats.snapshots.list",
+        serde_json::json!({ "chatId": chat_id }),
+    )?;
     dispatch_ok(
         &host,
         "chats.snapshots.rollback",
@@ -1228,18 +1285,42 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         .as_str()
         .ok_or_else(|| "asset carried no id".to_string())?
         .to_string();
-    dispatch_ok(&host, "assets.get", serde_json::json!({ "assetId": asset_id }))?;
-    dispatch_ok(&host, "assets.content", serde_json::json!({ "assetId": asset_id }))?;
+    dispatch_ok(
+        &host,
+        "assets.get",
+        serde_json::json!({ "assetId": asset_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "assets.content",
+        serde_json::json!({ "assetId": asset_id }),
+    )?;
     dispatch_ok(
         &host,
         "assets.thumb",
         serde_json::json!({ "assetId": asset_id, "maxPx": 64 }),
     )?;
-    dispatch_ok(&host, "assets.list", serde_json::json!({ "kind": "avatar", "limit": 50 }))?;
-    dispatch_ok(&host, "assets.delete", serde_json::json!({ "assetId": asset_id }))?;
+    dispatch_ok(
+        &host,
+        "assets.list",
+        serde_json::json!({ "kind": "avatar", "limit": 50 }),
+    )?;
+    dispatch_ok(
+        &host,
+        "assets.delete",
+        serde_json::json!({ "assetId": asset_id }),
+    )?;
 
-    dispatch_ok(&host, "characters.get", serde_json::json!({ "characterId": character_id }))?;
-    dispatch_ok(&host, "characters.card.get", serde_json::json!({ "characterId": character_id }))?;
+    dispatch_ok(
+        &host,
+        "characters.get",
+        serde_json::json!({ "characterId": character_id }),
+    )?;
+    dispatch_ok(
+        &host,
+        "characters.card.get",
+        serde_json::json!({ "characterId": character_id }),
+    )?;
     dispatch_ok(
         &host,
         "characters.card.update",
@@ -1335,8 +1416,8 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
             Ok(())
         })
         .map_err(|failure| format!("transport failure: {failure:?}"))?;
-    let cancel_envelope: serde_json::Value =
-        serde_json::from_slice(&cancel_body).map_err(|_| "stream response was not JSON".to_string())?;
+    let cancel_envelope: serde_json::Value = serde_json::from_slice(&cancel_body)
+        .map_err(|_| "stream response was not JSON".to_string())?;
     let cancelled_id = cancel_envelope["result"]["streamId"]
         .as_str()
         .ok_or_else(|| "cancel stream carried no streamId".to_string())?
@@ -1450,7 +1531,9 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
     if discarded_status != "cancelled" {
         return Err(format!("discard changed the terminal status: {discarded}"));
     }
-    eprintln!("[smoke] golden: discard purged the cancelled journal (status kept: {discarded_status})");
+    eprintln!(
+        "[smoke] golden: discard purged the cancelled journal (status kept: {discarded_status})"
+    );
 
     // 9. Diagnostics + search walk (G6 evidence, round 27).
     dispatch_ok(&host, "search.rebuild", serde_json::json!({}))?;
@@ -1459,12 +1542,118 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         "search.query",
         serde_json::json!({ "q": "Aria", "scope": "characters", "sort": "relevance", "limit": 50 }),
     )?;
-    if hits["items"].as_array().map(|items| items.is_empty()).unwrap_or(true) {
-        return Err(format!("search found nothing for a known character: {hits}"));
+    if hits["items"]
+        .as_array()
+        .map(|items| items.is_empty())
+        .unwrap_or(true)
+    {
+        return Err(format!(
+            "search found nothing for a known character: {hits}"
+        ));
     }
     dispatch_ok(&host, "diagnostics.cache.clear", serde_json::json!({}))?;
     dispatch_ok(&host, "diagnostics.export", serde_json::json!({}))?;
     eprintln!("[smoke] golden: diagnostics/search walk ok");
+
+    // 10. Migration walk (G7/G8 packaged evidence, round 28): a legacy
+    //     Drizzle `app.db` goes through the ADR-0062 staged-root lifecycle
+    //     (plan -> stage -> validate -> activate -> rollback) against THIS
+    //     kernel's data root, inside the packaged process. The running kernel
+    //     keeps serving its open database; the pointer ends where it started.
+    use neotavern_storage::{activation, legacy_import};
+    let legacy_source = data_dir.join("smoke-legacy-app.db");
+    build_legacy_fixture(&legacy_source)?;
+
+    let previous = activation::active_root(data_dir)
+        .map_err(|error| format!("migration walk: active_root failed: {error}"))?;
+    let staged_plan = legacy_import::plan(&legacy_source)
+        .map_err(|error| format!("migration walk: plan failed: {error}"))?;
+    if !staged_plan.ready {
+        return Err("migration walk: plan refused the fixture".to_string());
+    }
+    let staged = legacy_import::stage(&legacy_source, data_dir)
+        .map_err(|error| format!("migration walk: stage failed: {error}"))?;
+    legacy_import::validate_staged(&staged)
+        .map_err(|error| format!("migration walk: validate failed: {error}"))?;
+    legacy_import::activate_staged(data_dir, &staged, &previous)
+        .map_err(|error| format!("migration walk: activation failed: {error}"))?;
+    let imported = activation::read_pointer(data_dir)
+        .map_err(|error| format!("migration walk: pointer read failed: {error}"))?
+        .ok_or_else(|| "migration walk: no pointer after activation".to_string())?;
+    if imported.root != staged.staged_root {
+        return Err(format!(
+            "migration walk: pointer did not move to the staged root: {:?}",
+            imported.root
+        ));
+    }
+    activation::rollback_to(data_dir, &previous)
+        .map_err(|error| format!("migration walk: rollback failed: {error}"))?;
+    let rolled_back = activation::read_pointer(data_dir)
+        .map_err(|error| format!("migration walk: pointer read failed: {error}"))?
+        .ok_or_else(|| "migration walk: no pointer after rollback".to_string())?;
+    if rolled_back.root != previous {
+        return Err(format!(
+            "migration walk: rollback did not restore the previous root: {:?}",
+            rolled_back.root
+        ));
+    }
+    let still_serving = dispatch_ok(&host, "characters.list", serde_json::json!({ "limit": 1 }))?;
+    if still_serving["items"].is_null() {
+        return Err("migration walk: the kernel stopped serving its open database".to_string());
+    }
+    eprintln!(
+        "[smoke] golden: migration walk staged {} and rolled back to the previous root",
+        staged.root_id
+    );
+    Ok(())
+}
+
+/// Builds a minimal legacy Drizzle-era `app.db` for the packaged migration
+/// walk (same table shapes the storage converter maps; mirrors the storage
+/// test fixture family).
+#[cfg(desktop)]
+fn build_legacy_fixture(source: &std::path::Path) -> Result<(), String> {
+    let conn = rusqlite::Connection::open(source)
+        .map_err(|error| format!("fixture open failed: {error}"))?;
+    conn.execute_batch(
+        "CREATE TABLE characters (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, avatar TEXT,
+            ext TEXT DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE chats (
+            id TEXT PRIMARY KEY, title TEXT, character_id TEXT,
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE messages (
+            id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, role TEXT, content TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE lorebooks (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE lore_entries (
+            id TEXT PRIMARY KEY, lorebook_id TEXT NOT NULL, keys_json TEXT, secondary_keys TEXT,
+            content TEXT NOT NULL, enabled INTEGER DEFAULT 1, position INTEGER DEFAULT 0,
+            constant INTEGER DEFAULT 0, selective INTEGER DEFAULT 0, metadata TEXT DEFAULT '{}',
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE presets (
+            id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, data TEXT DEFAULT '{}',
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );",
+    )
+    .map_err(|error| format!("fixture tables failed: {error}"))?;
+    for sql in [
+        "INSERT INTO characters (id, name, created_at, updated_at) VALUES ('leg-c1', 'Alice', 1, 2)",
+        "INSERT INTO chats (id, title, character_id, created_at, updated_at) VALUES ('leg-h1', 'Chat', 'leg-c1', 3, 4)",
+        "INSERT INTO messages (id, chat_id, role, content, created_at) VALUES ('leg-m1', 'leg-h1', 'user', 'Hello', 5)",
+        "INSERT INTO lorebooks (id, name, description, created_at, updated_at) VALUES ('leg-l1', 'Lore', 'd', 6, 7)",
+        "INSERT INTO presets (id, kind, name, data, created_at, updated_at) VALUES ('leg-p1', 'default', 'Preset', '{}', 8, 9)",
+    ] {
+        conn.execute(sql, [])
+            .map_err(|error| format!("fixture seed failed: {error}"))?;
+    }
     Ok(())
 }
 

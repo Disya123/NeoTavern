@@ -2118,7 +2118,9 @@ name = "neotavern-desktop"
 version = "0.1.0"
 dependencies = [
  "neotavern-host-tools",
+ "neotavern-storage",
  "neotavern-tauri-local",
+ "rusqlite",
  "serde",
  "serde_json",
  "tauri",

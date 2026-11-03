@@ -4,6 +4,16 @@
 
 ### Added
 
+- **The ADR-0062 migration walk now runs inside the packaged binary (round
+  28/40).** The packaged kernel self-smoke gained step 10: a legacy Drizzle
+  `app.db` is planned, staged into a versioned root, validated, activated
+  (pointer -> staged root) and rolled back (pointer -> previous root) against
+  the real kernel data root, in-process, while the running kernel keeps
+  serving its open database — the first app.db -> database.sqlite migration
+  and rollback evidence on a packaged artifact (release-gate G7/G8,
+  in-process half). The user-facing Settings-triggered import stays on the
+  roadmap.
+
 - **The generation.workflow family reaches Packaged on desktop (round 27/40).**
   The packaged golden smoke now walks every workflow op: a delayed run is
   cancelled mid-flight (status `cancelled`), a failed run is retried to

@@ -39,6 +39,10 @@ url = "2"
 # compilable without the feature).
 neotavern-tauri-local = { path = "../../../crates/adapters/tauri-local", features = ["tauri", "remote", "os-vault"] }
 neotavern-host-tools = { path = "../../../crates/adapters/host-tools" }
+# Round 28: the packaged self-smoke exercises the ADR-0062 migration walk
+# (staged-root legacy import + rollback) inside the packaged process.
+neotavern-storage = { path = "../../../crates/storage" }
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-updater = "2"
