@@ -2072,6 +2072,138 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         return Err(format!("card re-import created a duplicate: {reimported}"));
     }
     eprintln!("[smoke] golden: character card import + dedup ok ({card_character})");
+    // 14b. Card/chat export walk (ui.card-exports, round 39): the imported
+    //      character carries the original container — the json export must be
+    //      a verbatim round trip, the png export must re-embed the chara tEXt
+    //      chunk, and re-importing the exported png must parse (creating a
+    //      fresh character that is cleaned up afterwards). chats.export
+    //      serves the neotavern-chat-export container of the golden chat.
+    let card_character_id = imported_card["character"]["id"]
+        .as_str()
+        .ok_or_else(|| "card import carried no character id".to_string())?
+        .to_string();
+    let json_export = dispatch_ok(
+        &host,
+        "characters.export.card",
+        serde_json::json!({ "characterId": card_character_id, "format": "json" }),
+    )?;
+    let json_b64 = json_export["contentBase64"]
+        .as_str()
+        .ok_or_else(|| "json export carried no content".to_string())?;
+    use base64::Engine as _;
+    let json_bytes = base64::engine::general_purpose::STANDARD
+        .decode(json_b64)
+        .map_err(|e| format!("json export base64 did not decode: {e}"))?;
+    let card_json: serde_json::Value = serde_json::from_slice(&json_bytes)
+        .map_err(|e| format!("json export was not a card object: {e}"))?;
+    // The exporter round-trips the preserved container verbatim; a V2 card may
+    // carry its fields either flat next to `spec` or nested under `data`, so
+    // the walk accepts both shapes and checks spec + the card name.
+    let exported_card_name = card_json["name"]
+        .as_str()
+        .or_else(|| card_json["data"]["name"].as_str())
+        .unwrap_or_default()
+        .to_string();
+    if card_json["spec"] != serde_json::json!("chara_card_v2")
+        || exported_card_name != "Card Import"
+    {
+        return Err(format!(
+            "json export lost the verbatim container: {card_json}"
+        ));
+    }
+    if json_export["warnings"]
+        .as_array()
+        .map(|warnings| !warnings.is_empty())
+        .unwrap_or(false)
+    {
+        return Err(format!("verbatim json export must not warn: {json_export}"));
+    }
+    let png_export = dispatch_ok(
+        &host,
+        "characters.export.card",
+        serde_json::json!({ "characterId": card_character_id, "format": "png" }),
+    )?;
+    let png_b64 = png_export["contentBase64"]
+        .as_str()
+        .ok_or_else(|| "png export carried no content".to_string())?;
+    let png_bytes = base64::engine::general_purpose::STANDARD
+        .decode(png_b64)
+        .map_err(|e| format!("png export base64 did not decode: {e}"))?;
+    if !png_bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("png export lost the PNG signature".to_string());
+    }
+    if !png_bytes.windows(5).any(|window| window == b"chara") {
+        return Err("png export lost the chara tEXt chunk".to_string());
+    }
+    let reimport_asset = dispatch_ok(
+        &host,
+        "assets.put",
+        serde_json::json!({
+            "kind": "card",
+            "filename": "card-export-roundtrip.png",
+            "contentType": "image/png",
+            "contentBase64": png_b64,
+        }),
+    )?;
+    let reimport_asset_id = reimport_asset["asset"]["id"]
+        .as_str()
+        .ok_or_else(|| "re-import asset carried no id".to_string())?
+        .to_string();
+    let reimported_export = dispatch_ok(
+        &host,
+        "imports.character.card",
+        serde_json::json!({ "assetId": reimport_asset_id }),
+    )?;
+    if reimported_export["created"] != serde_json::json!(true) {
+        return Err(format!(
+            "exported png re-import failed: {reimported_export}"
+        ));
+    }
+    if reimported_export["character"]["name"] != serde_json::json!("Card Import") {
+        return Err(format!(
+            "exported png re-import lost the card name: {reimported_export}"
+        ));
+    }
+    let duplicate_id = reimported_export["character"]["id"]
+        .as_str()
+        .ok_or_else(|| "re-imported character carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "characters.delete",
+        serde_json::json!({ "characterId": duplicate_id }),
+    )?;
+    let chat_export = dispatch_ok(
+        &host,
+        "chats.export",
+        serde_json::json!({ "chatId": chat_id }),
+    )?;
+    let chat_b64 = chat_export["contentBase64"]
+        .as_str()
+        .ok_or_else(|| "chat export carried no content".to_string())?;
+    let chat_bytes = base64::engine::general_purpose::STANDARD
+        .decode(chat_b64)
+        .map_err(|e| format!("chat export base64 did not decode: {e}"))?;
+    let chat_container: serde_json::Value = serde_json::from_slice(&chat_bytes)
+        .map_err(|e| format!("chat export was not a container object: {e}"))?;
+    if chat_container["kind"] != serde_json::json!("neotavern-chat-export") {
+        return Err(format!(
+            "chat export carried the wrong container kind: {}",
+            chat_container["kind"]
+        ));
+    }
+    let exported_messages = chat_container["messages"]
+        .as_array()
+        .map(|messages| messages.len())
+        .unwrap_or(0);
+    if exported_messages < 3 {
+        return Err(format!(
+            "chat export dumped {exported_messages} messages, expected the full golden walk"
+        ));
+    }
+    eprintln!(
+        "[smoke] golden: card exports json-verbatim + png-chunk + re-import + chat export ok"
+    );
     // 15. Declarative plugin lifecycle (G6 evidence, round 34): the kernel
     //     durably records the host-verified SEC-05 package and serves the
     //     data-driven plugin families — state (optimistic revision),

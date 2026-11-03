@@ -2117,6 +2117,7 @@ dependencies = [
 name = "neotavern-desktop"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "neotavern-host-tools",
  "neotavern-storage",
  "neotavern-tauri-local",

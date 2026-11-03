@@ -4,6 +4,22 @@
 
 ### Added
 
+- **Card and chat exports reach Packaged on desktop (round 39/40).**
+  `ui.card-exports` was the last Implemented row whose ops ride the
+  already-Packaged library families. The packaged golden smoke now exports
+  and re-imports on the portable artifact: `characters.export.card`
+  format=json returns the preserved V2 container verbatim (`spec` intact,
+  card name round-tripped, warnings empty for a container-bearing
+  character), format=png returns a real PNG whose `chara` tEXt chunk
+  survives the asset round trip (PNG signature + chunk bytes asserted), the
+  exported PNG re-imports through `assets.put` + `imports.character.card`
+  as a fresh character carrying the same card name (the duplicate is deleted
+  by the walk), and `chats.export` serves the `neotavern-chat-export`
+  container of the golden chat with the full message dump. Desktop score:
+  **31/43**. Seven Implemented rows remain: 8-tail (speech/images/transcribe),
+  ST backup import, plugin blobs, assets of 20, sandbox executor/jobs and the
+  host-boundary families.
+
 - **The two G6 verdict rows reach Packaged on desktop (round 38/40).**
   `ui.message-editing` and `ui.run-transcript` — the last two app-layer
   Integrated rows — now walk on the packaged portable artifact through the
