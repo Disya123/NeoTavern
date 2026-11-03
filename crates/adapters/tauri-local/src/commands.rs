@@ -11,6 +11,8 @@
 //! errors (the JS transport maps them to typed transport errors, mirroring
 //! how the CLI separates stderr diagnostics from stdout envelopes).
 
+use std::path::Path;
+
 use super::{describe_failure, KernelHost};
 use tauri::ipc::Channel;
 use tauri::State;
@@ -133,4 +135,43 @@ pub fn kernel_remote_revoke(
     id: String,
 ) -> Result<bool, String> {
     state.0.revoke(&id).map_err(remote_error)
+}
+
+/// Legacy-import dry run (G7/G8 user-facing half, round 29): reads the
+/// user-picked legacy `app.db` and reports per-family counts + readiness.
+/// Writes nothing.
+#[tauri::command]
+pub fn legacy_import_plan(
+    _host: State<'_, crate::KernelHost>,
+    source_path: String,
+) -> Result<crate::legacy::LegacyImportPlanReport, String> {
+    crate::legacy::plan_import(Path::new(&source_path)).map_err(legacy_error)
+}
+
+/// Stages, validates and activates the import over the kernel data root.
+/// The root pointer moves immediately; the running kernel is untouched —
+/// the report carries `restart_required: true` and the rollback target.
+#[tauri::command]
+pub fn legacy_import_execute(
+    host: State<'_, crate::KernelHost>,
+    source_path: String,
+) -> Result<crate::legacy::LegacyImportExecuteReport, String> {
+    let data_root = crate::legacy::host_data_root(&host).map_err(legacy_error)?;
+    crate::legacy::execute_import(&data_root, Path::new(&source_path)).map_err(legacy_error)
+}
+
+/// Restores the root pointer to the previous root (the target of the last
+/// activation). Applies on the next app start.
+#[tauri::command]
+pub fn legacy_import_rollback(
+    host: State<'_, crate::KernelHost>,
+) -> Result<crate::legacy::LegacyRollbackReport, String> {
+    let data_root = crate::legacy::host_data_root(&host).map_err(legacy_error)?;
+    crate::legacy::rollback_import(&data_root).map_err(legacy_error)
+}
+
+/// Formats a legacy host-op failure as `CODE: message` — the frontend
+/// localizes the code (AGENTS §6).
+fn legacy_error(error: crate::legacy::LegacyOpError) -> String {
+    error.to_string()
 }

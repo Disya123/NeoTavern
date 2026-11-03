@@ -380,7 +380,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "396bddc7273dd688bec6bcc64b4a534fcc45c457ac8ee25939dbc9a36391f80f"
+      "sha256": "df64552494b802babfc11320c1512b0c877daeab599004845d1919520c7c2306"
     },
     {
       "source": "architecture/resource-containment.md",
@@ -445,7 +445,7 @@
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "8cd300fbebfcf9985225f54856ac668519750ec2be567a901cedc12723de049c"
+      "sha256": "c35218165033006d5a00597ddbaf984037209255cc0ecd5b91db952b8adaac07"
     },
     {
       "source": "desktop/chat-ui-recipe.md",

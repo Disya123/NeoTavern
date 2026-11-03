@@ -64,6 +64,32 @@ Runtime Kernel → SQLite` (ТЗ §11.1/§15.1).
   assistant message). No HTTP, no sidecar, no UI: the packaged host's own
   self-check, exits 0 only when every step and assertion holds.
 
+### Legacy data import (Settings → Data, kernel mode)
+
+Kernel-mode builds expose three host commands for the Settings → Data flow
+(release gates G7/G8, user-facing half; ADR-0062 staged-root lifecycle):
+
+- `legacy_import_plan(sourcePath)` — dry run: reads the user-picked legacy
+  `app.db` and reports per-family row counts + readiness. Writes nothing.
+- `legacy_import_execute(sourcePath)` — stages the conversion into a
+  versioned root, validates it, and activates it: the root pointer moves
+  immediately, the running kernel keeps serving the database it opened, and
+  the switch applies on the next app start (`restart_required: true`; the
+  report carries the rollback target).
+- `legacy_import_rollback()` — restores the root pointer to where the last
+  committed import switched from (the journal's `fromRoot`, which is the
+  flat data root for a first import). One rollback per import: a second
+  call refuses with `LEGACY_NO_ROLLBACK_TARGET`. Applies on the next start.
+
+Failure codes (the UI localizes them): `LEGACY_SOURCE_UNREADABLE`,
+`LEGACY_STORAGE`, `LEGACY_NO_ROLLBACK_TARGET`, `LEGACY_NO_DATA_ROOT`.
+The commands are Tauri IPC only — not Product Wire operations: they read a
+user-picked file and write only inside the kernel data root (host-boundary
+concern, ТЗ §2). Unit/integration coverage:
+`crates/adapters/tauri-local/tests/legacy_import.rs` (plan → execute →
+rollback round trip on a real kernel data root, refusal codes); the
+packaged smoke walks the same storage lifecycle in-process (smoke step 10).
+
 ### Legacy sidecar mode
 
 - The Fastify backend runs as a bundled Node.js sidecar (`neotavern-server`).

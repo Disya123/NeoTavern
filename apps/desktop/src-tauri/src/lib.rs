@@ -1700,6 +1700,12 @@ pub fn run() {
                 commands::kernel_dispatch,
                 commands::kernel_stream_start,
                 commands::kernel_stream_abort,
+                // G7/G8 user-facing half (round 29): the Settings → Data
+                // legacy import/rollback host commands over the ADR-0062
+                // staged-root lifecycle.
+                commands::legacy_import_plan,
+                commands::legacy_import_execute,
+                commands::legacy_import_rollback,
                 // Phase 9 Remote Access (ТЗ §10) — the desktop build always
                 // has the `remote` feature; the cfg guard keeps a
                 // tauri-only tauri-local configuration compiling.

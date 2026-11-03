@@ -2180,6 +2180,7 @@ dependencies = [
  "neotavern-desktop-remote",
  "neotavern-envelope",
  "neotavern-host-tools",
+ "neotavern-storage",
  "provider-sdk",
  "runtime-kernel",
  "secret-store",

@@ -35,6 +35,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// Desktop legacy-import host commands (G7/G8 user-facing half, ADR-0062).
+pub mod legacy;
 /// Host-provided secret seams (ТЗ §SEC-01, М5 slice 49): the writable
 /// session store and the execution-time resolver.
 pub mod secrets;
@@ -100,6 +102,10 @@ pub struct KernelHost {
     /// behavior). Writable so the shell can wire built-ins after `open`
     /// without rebuilding the host; pollers snapshot it per stream.
     tool_executor: Arc<Mutex<Option<Arc<dyn ToolExecutor>>>>,
+    /// The kernel data root this host owns (round 29): the legacy-import
+    /// host commands (ADR-0062, G7/G8) stage/activate/rollback against it.
+    /// `None` = the stateless host refuses those commands.
+    data_root: Option<std::path::PathBuf>,
 }
 
 /// Host secret backend selection (ТЗ §SEC-01): which explicit backend the
@@ -147,6 +153,9 @@ impl KernelHost {
     /// schema hash and FFI ABI version must equal the embedded manifest,
     /// enforced inside [`Kernel::open`].
     pub fn open(config: KernelHostConfig) -> Result<Self, KernelError> {
+        // Round 29: the host remembers the root it handed to the kernel —
+        // the legacy-import host commands (G7/G8) operate on the same root.
+        let data_root_slot = config.data_root.clone();
         let kernel = Kernel::open(KernelConfig {
             expected_schema_hash: contracts_generated::contract_schema_hash().to_string(),
             ffi_abi_version: runtime_kernel::FFI_ABI_VERSION,
@@ -172,7 +181,13 @@ impl KernelHost {
             kernel: Arc::new(Mutex::new(kernel)),
             streams: Arc::new(Mutex::new(HashMap::new())),
             tool_executor: Arc::new(Mutex::new(None)),
+            data_root: data_root_slot,
         })
+    }
+
+    /// The kernel data root this host owns, when it owns one.
+    pub fn data_root(&self) -> Option<&std::path::Path> {
+        self.data_root.as_deref()
     }
 
     /// Registers (or replaces) the host tool executor. Pollers snapshot the

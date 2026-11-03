@@ -22,6 +22,9 @@ neotavern-host-tools = { path = "../../adapters/host-tools" }
 # Shared envelope layer — the Tauri transport answers byte-identical
 # response envelopes to the CLI and the remote-http adapter (§6.3).
 neotavern-envelope = { path = "../envelope" }
+# Round 29 (G7/G8 user-facing half): the legacy-import host commands run the
+# ADR-0062 staged-root lifecycle over the kernel data root.
+neotavern-storage = { path = "../../storage" }
 # Phase 9 Remote Access host service (ТЗ §10, §15): wraps the remote-http
 # adapter behind a config-persisting service the Desktop shell manages as
 # Tauri state. Feature-gated so the workspace test/clippy jobs stay free of
@@ -46,3 +49,4 @@ os-vault = ["secret-store/os-vault"]
 
 [dev-dependencies]
 tempfile = "3"
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }

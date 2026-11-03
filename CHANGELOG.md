@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Legacy data import reaches the Desktop host surface (round 29/40).**
+  Kernel-mode builds expose legacy_import_plan / legacy_import_execute /
+  legacy_import_rollback Tauri commands over the ADR-0062 staged-root
+  lifecycle: dry-run with per-family counts, stage+validate+activate
+  (pointer moves, restart applies) and one-shot rollback to the journal
+  romRoot. Stable refusal codes (LEGACY_SOURCE_UNREADABLE,
+  LEGACY_NO_ROLLBACK_TARGET, …) localize on the UI side. Covered by
+  tauri-local integration tests (plan → execute → rollback on a real
+  kernel data root); G7/G8 user-facing half is now built, UI wiring and
+  Playwright coverage remain.
+
 - **The ADR-0062 migration walk now runs inside the packaged binary (round
   28/40).** The packaged kernel self-smoke gained step 10: a legacy Drizzle
   `app.db` is planned, staged into a versioned root, validated, activated
