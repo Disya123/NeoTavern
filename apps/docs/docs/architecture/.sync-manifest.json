@@ -295,7 +295,7 @@
     {
       "source": "adr/0063-media-operations-exchange-assets.md",
       "target": "adr/0063-media-operations-exchange-assets.md",
-      "sha256": "5940172f879946b5e9b9e94d0b8661fa780b0a5465a38b9e3d0bd8908da987c7"
+      "sha256": "d646b0c5e5a0c1517cd13aed4c8892b6f86ab5cb8b52ea6ed27a839e54c18bb3"
     },
     {
       "source": "adr/README.md",
@@ -325,7 +325,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "5443c66b7d0f2c9d1ff2019fb3d13d087a19eee914cfeb4295d8eff714132075"
+      "sha256": "be596fe882d45d9cc366427c5b1ac411210c2c9f0e0ad833027909fbed9e4452"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -440,7 +440,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "8513ace2cfe08d92aaf2a4800668a01d5bc6ab5591a56aaf277851afddca3b59"
+      "sha256": "86ee7ba4c718434c59206cfca126fbcc46804da37990516bc7548ee1a652f144"
     },
     {
       "source": "data/README.md",

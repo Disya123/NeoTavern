@@ -198,6 +198,8 @@ import type {
   UpdatePresetRequestDto,
   UpdateSettingsRequestDto,
   ProviderTranscribeRequestDto,
+  ProvidersSpeechRequestDto,
+  ProvidersSpeechResultDto,
   ProviderTranscribeResultDto,
 } from '@neotavern/contracts';
 
@@ -962,6 +964,15 @@ export interface ProvidersApi {
     req: ProviderTranscribeRequestDto,
     opts?: BackendCallOptions,
   ): Promise<ProviderTranscribeResultDto>;
+  /**
+   * Synthesizes speech (wire `providers.speech`, ADR-0063): text in, the
+   * produced audio staged as a `generated-audio` asset id out — bytes never ride
+   * the response.
+   */
+  speech(
+    req: ProvidersSpeechRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ProvidersSpeechResultDto>;
 }
 
 /**

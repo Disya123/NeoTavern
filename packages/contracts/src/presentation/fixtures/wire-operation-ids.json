@@ -134,6 +134,7 @@
   "providers.secrets.list",
   "providers.secrets.reveal",
   "providers.secrets.update",
+  "providers.speech",
   "providers.test",
   "providers.transcribe",
   "search.query",

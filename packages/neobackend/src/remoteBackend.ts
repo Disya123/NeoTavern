@@ -115,6 +115,7 @@ import type {
   FullBackupExecuteResultDto,
   ChatsExportResultDto,
   ProviderTranscribeResultDto,
+  ProvidersSpeechResultDto,
 } from '@neotavern/contracts';
 import type {
   BackendCallOptions,
@@ -404,6 +405,8 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<ProviderTranscribeResultDto>('providers.transcribe', req, {
         signal: opts?.signal,
       }),
+    speech: (req, opts) =>
+      this.sdk.call<ProvidersSpeechResultDto>('providers.speech', req, { signal: opts?.signal }),
   };
 
   readonly plugins: PluginsApi = {

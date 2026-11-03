@@ -22,11 +22,11 @@
 
 use std::time::Duration;
 
-use contracts_generated::generated::{self, ResultProviderTranscribe};
+use contracts_generated::generated::{self, ResultProviderTranscribe, ResultProvidersSpeech};
 use neotavern_storage::open::Database;
 use provider_sdk::policy::Deadline;
 use provider_sdk::secret::SecretResolver;
-use provider_sdk::TranscriptionRequest;
+use provider_sdk::{SpeechRequest, TranscriptionRequest};
 use rusqlite::OptionalExtension;
 
 use crate::provider_access::{config_model, provider_error, resolve_adapter};
@@ -39,6 +39,9 @@ use crate::{KernelError, KernelErrorCode};
 const TRANSCRIBE_TIMEOUT: Duration = Duration::from_secs(180);
 /// Hard cap on the audio handed to an adapter (ADR-0063).
 pub(crate) const MAX_AUDIO_BYTES: i64 = 64 * 1024 * 1024;
+/// Hard cap on produced speech (ADR-0063): identical to the op's response
+/// budget, so a provider cannot make the kernel stage an unbounded file.
+pub(crate) const MAX_SPEECH_BYTES: usize = 8 * 1024 * 1024;
 
 fn config_not_found(provider_id: &str) -> KernelError {
     KernelError::product(
@@ -169,5 +172,113 @@ pub(crate) fn transcribe(
         duration_ms: transcription.duration_ms.map(|value| value as i64),
     };
     crate::product::validate(&dto, generated::validate_result_provider_transcribe)?;
+    crate::product::encode(&dto)
+}
+
+fn empty_speech() -> KernelError {
+    KernelError::product(
+        "SPEECH_EMPTY_AUDIO".to_string(),
+        vec![(
+            "reason".to_string(),
+            "provider returned no bytes".to_string(),
+        )],
+    )
+}
+
+/// Wire enum → the token a provider expects. Keeping this explicit means a new
+/// format in the contract is a compile error here instead of a silent `""`.
+fn format_str(value: &generated::ProvidersSpeechFormat) -> &'static str {
+    use generated::ProvidersSpeechFormat as Format;
+    match value {
+        Format::Mp3 => "mp3",
+        Format::Opus => "opus",
+        Format::Aac => "aac",
+        Format::Flac => "flac",
+        Format::Wav => "wav",
+        Format::Pcm => "pcm",
+    }
+}
+
+/// Keeps the staged filename honest: the extension follows the content type the
+/// provider actually produced, never the requested format.
+fn extension_for(content_type: &str) -> &'static str {
+    match content_type {
+        "audio/mpeg" => "mp3",
+        "audio/ogg" | "audio/opus" => "opus",
+        "audio/aac" => "aac",
+        "audio/flac" => "flac",
+        "audio/wav" | "audio/x-wav" => "wav",
+        _ => "bin",
+    }
+}
+
+/// `providers.speech` — synthesize text and stage the produced audio.
+///
+/// The direction of travel is the opposite of transcription: the caller sends
+/// text, the kernel publishes the bytes as a `generated-audio` asset
+/// (`assets.publish_bytes`, content-addressed, so identical audio dedupes) and
+/// answers the asset id. A provider that cannot synthesize answers
+/// `CAPABILITY_UNAVAILABLE` through the adapter default; an empty body is a
+/// product error rather than a zero-byte asset.
+pub(crate) fn speech(
+    db: &mut Database,
+    registry: &ProviderRegistry,
+    resolver: Option<&dyn SecretResolver>,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_providers_speech(request)?;
+    let (provider, config) = providers_config::load_config_by_id(db.conn(), &req.provider_id)?
+        .ok_or_else(|| config_not_found(&req.provider_id))?;
+    let model = req
+        .model
+        .clone()
+        .or_else(|| config_model(&config))
+        .ok_or_else(|| model_required(&req.provider_id))?;
+    let adapter = resolve_adapter(registry, &provider, &config)?;
+    let api_key =
+        providers_config::resolve_config_api_key(db.conn(), resolver, &req.provider_id, &provider)?;
+
+    let audio = adapter
+        .synthesize(&SpeechRequest {
+            provider_id: &provider,
+            model: &model,
+            text: &req.text,
+            voice: req.voice.as_deref(),
+            format: req.format.as_ref().map(format_str),
+            deadline: Some(Deadline::after(TRANSCRIBE_TIMEOUT)),
+            api_key: api_key.as_deref(),
+        })
+        .map_err(|err| provider_error(&err))?;
+    if audio.bytes.is_empty() {
+        return Err(empty_speech());
+    }
+    if audio.bytes.len() > MAX_SPEECH_BYTES {
+        return Err(KernelError::product(
+            "AUDIO_TOO_LARGE".to_string(),
+            vec![
+                ("providerId".to_string(), req.provider_id.clone()),
+                ("sizeBytes".to_string(), audio.bytes.len().to_string()),
+                ("limitBytes".to_string(), MAX_SPEECH_BYTES.to_string()),
+            ],
+        ));
+    }
+
+    let filename = format!("speech.{}", extension_for(&audio.content_type));
+    let (asset_id, _) = crate::assets::publish_bytes(
+        db,
+        "generated-audio",
+        &filename,
+        &audio.bytes,
+        Some(&audio.content_type),
+    )?;
+
+    let dto = ResultProvidersSpeech {
+        asset_id,
+        content_type: audio.content_type,
+        size_bytes: audio.bytes.len() as i64,
+        model,
+        duration_ms: audio.duration_ms.map(|value| value as i64),
+    };
+    crate::product::validate(&dto, generated::validate_result_providers_speech)?;
     crate::product::encode(&dto)
 }

@@ -24,8 +24,8 @@ use provider_sdk::policy::Deadline;
 use provider_sdk::policy::Usage;
 use provider_sdk::{
     Availability, CancelToken, EmitStatus, ProviderAdapter, ProviderCapabilities, ProviderError,
-    ProviderErrorCode, ProviderEvent, ProviderModel, ProviderRequest, Transcription,
-    TranscriptionRequest,
+    ProviderErrorCode, ProviderEvent, ProviderModel, ProviderRequest, SpeechAudio, SpeechRequest,
+    Transcription, TranscriptionRequest,
 };
 use sha2::{Digest, Sha256};
 
@@ -358,6 +358,34 @@ impl ProviderAdapter for FakeProvider {
         Ok(Usage {
             steps: emitted_steps,
             output_chars,
+        })
+    }
+
+    /// Deterministic synthesis: a valid 16 kHz mono PCM WAV of silence whose
+    /// length is derived from the text (10 ms per character, statsig-free and
+    /// clock-free), so the staging path is testable without a provider.
+    fn synthesize(&self, request: &SpeechRequest<'_>) -> Result<SpeechAudio, ProviderError> {
+        const SAMPLE_RATE: u32 = 16_000;
+        let samples = (request.text.chars().count() as u32).clamp(1, 4_096) * 160;
+        let data_len = samples * 2;
+        let mut bytes = Vec::with_capacity(44 + data_len as usize);
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        bytes.extend_from_slice(&1u16.to_le_bytes()); // mono
+        bytes.extend_from_slice(&SAMPLE_RATE.to_le_bytes());
+        bytes.extend_from_slice(&(SAMPLE_RATE * 2).to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_len.to_le_bytes());
+        bytes.resize(44 + data_len as usize, 0);
+        Ok(SpeechAudio {
+            bytes,
+            content_type: "audio/wav".to_string(),
+            duration_ms: Some(u64::from(samples) * 1_000 / u64::from(SAMPLE_RATE)),
         })
     }
 

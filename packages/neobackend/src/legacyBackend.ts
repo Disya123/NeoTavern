@@ -301,6 +301,7 @@ export class LegacyBackend implements NeoBackend {
     models: () => this.unsupported('providers.models'),
     test: () => this.unsupported('providers.test'),
     transcribe: () => this.unsupported('providers.transcribe'),
+    speech: () => this.unsupported('providers.speech'),
   };
 
   /**

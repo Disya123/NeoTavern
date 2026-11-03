@@ -351,6 +351,56 @@ export const FullBackupExecuteResultDtoSchema = Type.Object(
 );
 export type FullBackupExecuteResultDto = Static<typeof FullBackupExecuteResultDtoSchema>;
 
+/** Container/codec a speech request asks for (`wire.providers-speech.format`). */
+export const WireSpeechFormat = Type.Union(
+  [
+    Type.Literal('mp3'),
+    Type.Literal('opus'),
+    Type.Literal('aac'),
+    Type.Literal('flac'),
+    Type.Literal('wav'),
+    Type.Literal('pcm'),
+  ],
+  { $id: 'wire.providers-speech.format', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WireSpeechFormat = Static<typeof WireSpeechFormat>;
+
+/**
+ * Speech synthesis request (`wire.request.providers-speech`, ADR-0063): text in,
+ * nothing binary in the request. `voice` and `format` are provider-facing knobs
+ * the kernel passes through verbatim (the kernel does not normalize voice names);
+ * `model` overrides the config's model, mirroring transcription.
+ */
+export const ProvidersSpeechRequestDtoSchema = Type.Object(
+  {
+    providerId: Type.String({ format: 'uuid' }),
+    text: Type.String({ minLength: 1, maxLength: 4096 }),
+    voice: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+    format: Type.Optional(WireSpeechFormat),
+    model: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  },
+  { $id: 'wire.request.providers-speech', additionalProperties: false },
+);
+export type ProvidersSpeechRequestDto = Static<typeof ProvidersSpeechRequestDtoSchema>;
+
+/**
+ * Speech synthesis result (`wire.result.providers-speech`): the produced audio is
+ * STAGED as a `generated-audio` asset and the caller gets its id — bytes never
+ * ride the response (ADR-0063). `contentType` repeats what the store recorded so
+ * a client can pick a player without a second round-trip.
+ */
+export const ProvidersSpeechResultDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+    contentType: Type.String({ minLength: 1, maxLength: 128 }),
+    sizeBytes: Type.Integer({ minimum: 0 }),
+    model: Type.String({ minLength: 1, maxLength: 200 }),
+    durationMs: Type.Optional(Type.Integer({ minimum: 0 })),
+  },
+  { $id: 'wire.result.providers-speech', additionalProperties: false },
+);
+export type ProvidersSpeechResultDto = Static<typeof ProvidersSpeechResultDtoSchema>;
+
 /**
  * Transcription request (`wire.request.provider-transcribe`, ADR-0063): the
  * audio is a STAGED asset (ADR-0061), so the bytes never ride a JSON request and
@@ -4237,6 +4287,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.provider-test': ProviderTestRequestDtoSchema,
   'wire.provider-test.usage': ProviderTestUsageDtoSchema,
   'wire.result.provider-test': ProviderTestResultDtoSchema,
+  'wire.request.providers-speech': ProvidersSpeechRequestDtoSchema,
+  'wire.result.providers-speech': ProvidersSpeechResultDtoSchema,
   'wire.request.provider-transcribe': ProviderTranscribeRequestDtoSchema,
   'wire.result.provider-transcribe': ProviderTranscribeResultDtoSchema,
   'wire.request.profile-export': ProfileExportRequestDtoSchema,
@@ -4294,6 +4346,7 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.imports.fullbackup.totals': FullBackupExecuteTotalsDtoSchema,
   'wire.imports.fullbackup.warning': FullBackupWarningDtoSchema,
   'wire.card.export.format': WireCardExportFormat,
+  'wire.providers-speech.format': WireSpeechFormat,
   'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,
   'wire.result.characters.export.card': CharacterCardExportResultDtoSchema,
   'wire.request.characters.card.get': CharacterCardGetRequestDtoSchema,

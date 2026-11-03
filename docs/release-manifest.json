@@ -366,8 +366,8 @@
     },
     {
       "id": "providers.media",
-      "title": "Media operations over staged assets (transcription)",
-      "wireOps": ["providers.transcribe"],
+      "title": "Media operations over staged assets (transcription, speech)",
+      "wireOps": ["providers.transcribe", "providers.speech"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",

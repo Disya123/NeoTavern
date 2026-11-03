@@ -1367,6 +1367,34 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
 
+  // ADR-0063: speech synthesis travels the other way — text in, a
+  // `generated-audio` asset id out. The legacy cap is 4 MiB of audio per call,
+  // so 8 MiB is a hard ceiling here, not a budget the provider may exceed.
+  op(
+    'providers.speech',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.providers-speech',
+    'wire.result.providers-speech',
+    undefined,
+    [
+      'INTERNAL',
+      'VALIDATION',
+      'NOT_FOUND',
+      'UNAUTHORIZED',
+      'RATE_LIMITED',
+      'PROVIDER_ERROR',
+      'CAPABILITY_UNAVAILABLE',
+      'CANCELLED',
+      'CONTRACT_VIOLATION',
+      'OUTCOME_UNKNOWN',
+    ],
+    8192,
+    8192,
+    undefined,
+  ),
   // ADR-0063 media operations: transcription is the first one ported. The
   // audio is an asset id (ADR-0061), the provider is one stored config, and a
   // provider that cannot transcribe answers CAPABILITY_UNAVAILABLE through the
@@ -3631,6 +3659,28 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     secretId: UUID_PROVIDER_SECRET,
   }),
   fx('secrets-exposure-request', 'secrets.exposure', 'request', true, {}),
+  fx('providers-speech-request', 'providers.speech', 'request', true, {
+    providerId: UUID_AVATAR,
+    text: 'Hello there.',
+    voice: 'alloy',
+    format: 'mp3',
+  }),
+  fx('providers-speech-response', 'providers.speech', 'response', true, {
+    assetId: UUID_PRESET,
+    contentType: 'audio/mpeg',
+    sizeBytes: 2048,
+    model: 'fake-1',
+    durationMs: 1200,
+  }),
+  fx('neg-providers-speech-empty-text', 'providers.speech', 'request', false, {
+    providerId: UUID_AVATAR,
+    text: '',
+  }),
+  fx('neg-providers-speech-bad-format', 'providers.speech', 'request', false, {
+    providerId: UUID_AVATAR,
+    text: 'Hello there.',
+    format: 'ogg',
+  }),
   fx('provider-transcribe-request', 'providers.transcribe', 'request', true, {
     providerId: UUID_AVATAR,
     audioAssetId: UUID_PRESET,

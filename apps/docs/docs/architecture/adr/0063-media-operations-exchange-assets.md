@@ -4,8 +4,9 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/0063-media-ope
 
 # ADR-0063 — Media operations exchange assets, never bytes
 
-**Status:** accepted; implemented for `providers.transcribe` (round 52) —
-`providers.speech` / `providers.images` remain open on the same exchange
+**Status:** accepted; implemented for `providers.transcribe` and
+`providers.speech` (rounds 52–53) — `providers.images` remains open on the same
+exchange
 **Date:** 2026-11-04
 **Supersedes:** nothing. **Related:** ADR-0061 (chunked ingestion), ADR-0038
 (kernel owns product state, no second backend surface), ADR-0059 (React-primary,
@@ -130,3 +131,23 @@ Speech and images reuse the exchange with the opposite direction of travel
 (kernel stages the produced bytes as `generated-audio` / `generated-image` and
 returns the asset id); they need the two adapters to declare the capability
 before they can be claimed.
+
+## Speech: the other direction (round 53)
+
+`providers.speech` is the mirror image and it exercises the outbound half of the
+exchange:
+
+- text in, nothing binary in the request; `voice`/`format` are passed through as
+  the caller wrote them (the kernel does not maintain a voice registry);
+- the adapter returns bytes plus the content type it ACTUALLY produced, and the
+  kernel stages them with `assets.publish_bytes(kind = "generated-audio",
+filename = speech.<ext>)` — the extension follows the content type, not the
+  requested format, so a provider that answers `audio/wav` to an `mp3` request
+  is filed honestly;
+- content-addressed publish means identical audio dedupes to one row (pinned by
+  a test), and the response carries the asset id + content type + size, so a
+  client can address the bytes without a second metadata round-trip;
+- an empty body is `SPEECH_EMPTY_AUDIO` (not a zero-byte asset) and anything over
+  8 MiB is `AUDIO_TOO_LARGE` — the same ceiling as the op's response budget;
+- a provider without the capability answers `CAPABILITY_UNAVAILABLE` through the
+  adapter default, exactly like transcription.

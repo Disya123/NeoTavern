@@ -322,6 +322,38 @@ impl ProviderCapabilities {
     }
 }
 
+/// One speech synthesis request (media operations, ADR-0063).
+///
+/// Text in, bytes out: the kernel stages the produced audio as a
+/// `generated-audio` asset, so the adapter never sees a product table and the
+/// wire never carries the audio inline.
+pub struct SpeechRequest<'a> {
+    /// Provider identifier used on the wire.
+    pub provider_id: &'a str,
+    /// Model the config addresses.
+    pub model: &'a str,
+    /// The text to speak.
+    pub text: &'a str,
+    /// Provider-facing voice name, passed through verbatim.
+    pub voice: Option<&'a str>,
+    /// Requested container/codec (`mp3`, `wav`, …), when the caller has one.
+    pub format: Option<&'a str>,
+    /// Bounds the whole call.
+    pub deadline: Option<policy::Deadline>,
+    /// Resolved API key, when the config has one.
+    pub api_key: Option<&'a str>,
+}
+
+/// Produced audio and the content type it is encoded as.
+pub struct SpeechAudio {
+    /// The encoded audio bytes.
+    pub bytes: Vec<u8>,
+    /// Content type the bytes are actually in (`audio/mpeg`, `audio/wav`, …).
+    pub content_type: String,
+    /// Duration the provider reports, when it reports one.
+    pub duration_ms: Option<u64>,
+}
+
 /// One transcription request (media operations, ADR-0063).
 ///
 /// The caller stages the audio as an asset and the kernel hands the adapter the
@@ -393,6 +425,20 @@ pub trait ProviderAdapter: Send + Sync {
         Err(ProviderError::with(
             ProviderErrorCode::CapabilityUnavailable,
             "this provider does not support live model discovery",
+            vec![("provider".to_string(), self.id().to_string())],
+        ))
+    }
+
+    /// Synthesizes speech (media operations, ADR-0063).
+    ///
+    /// Optional capability with an honest default, mirroring [`Self::transcribe`]:
+    /// a provider that cannot synthesize refuses instead of answering empty
+    /// audio. The bytes are staged by the kernel, so implementations must not
+    /// persist anything themselves.
+    fn synthesize(&self, _request: &SpeechRequest<'_>) -> Result<SpeechAudio, ProviderError> {
+        Err(ProviderError::with(
+            ProviderErrorCode::CapabilityUnavailable,
+            "this provider does not support speech synthesis",
             vec![("provider".to_string(), self.id().to_string())],
         ))
     }

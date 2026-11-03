@@ -24,6 +24,25 @@
 
 ### Added
 
+- **`providers.speech` — synthesis stages a `generated-audio` asset (round
+  53/99, ADR-0063).** Text in, asset id out: `providerId` + `text` (+ optional
+  voice/format/model) answered with `{ assetId, contentType, sizeBytes, model,
+  durationMs? }`. The kernel resolves the addressed config, checks the produced
+  size (8 MiB ceiling, `SPEECH_EMPTY_AUDIO` for an empty body), and publishes the
+  bytes through `assets.publish_bytes` so identical audio dedupes to one
+  content-addressed row; the staged filename follows the content type the
+  provider actually produced, not the requested format. `ProviderAdapter::synthesize`
+  defaults to `CAPABILITY_UNAVAILABLE`, so a non-media provider refuses instead of
+  answering silence; the fake provider emits a valid 16 kHz mono WAV whose length
+  derives from the text, which is how the staging path is tested without a
+  network. Facade: `backend.providers.speech`; legacy plane answers
+  `UnsupportedError`. Registry: 153 ops; capability `providers.media` now covers
+  both ops (still Implemented, not Packaged — no packaged smoke step walks them).
+  Verified: `cargo test -p runtime-kernel --test provider_media` 8/8,
+  clippy `-D warnings`, codegen/dispatch/docs:check, `tsc -b`.
+
+### Added
+
 - **`providers.transcribe` — the first media operation on the wire (round
   52/99, ADR-0063).** Audio is a STAGED asset (ADR-0061), never bytes in a JSON
   request: the op takes `providerId` + `audioAssetId` (+ optional model/language)

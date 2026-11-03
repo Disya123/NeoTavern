@@ -696,6 +696,9 @@ fn handle_unary(
         "providers.transcribe" => with_db_opt(db, |db| {
             provider_media::transcribe(db, &state.registry, state.secret_resolver.as_deref(), req)
         }),
+        "providers.speech" => with_db_opt(db, |db| {
+            provider_media::speech(db, &state.registry, state.secret_resolver.as_deref(), req)
+        }),
         // Этап 4 slice 5 remainder: canonical content-addressed AssetStore.
         "assets.put" => with_db_opt(db, |db| assets::assets_put(db, req)),
         // ADR-0061: chunked upload for files larger than the assets.put cap.
