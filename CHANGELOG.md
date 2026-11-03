@@ -10,6 +10,20 @@
 
 ### Added
 
+- **Visual regression on the kernel plane (round 46/99).** G10's last open half —
+  "visual regression is still not set up" — now has evidence on the canonical
+  plane instead of inheriting the sidecar's snapshots: `e2e/visual-shell.spec.ts`
+  runs inside the kernel shard (`playwright.config.ts`) against
+  `apps/web/dist` + `neotavern-headless` over Product Wire and captures three
+  screens — light home, the Settings panel and the HIGH CONTRAST home (the
+  profile the axe gate scans). Determinism is explicit: chats are cleared first
+  (`clearChats`), fonts are awaited, images must be complete, animations/caret
+  are disabled and the diff budget is 160 pixels. Baselines are committed under
+  `e2e/visual-shell.spec.ts-snapshots/`; two consecutive runs pass, including a
+  re-run after rebuilding the headless binary at schema v32. Honest limits:
+  Windows/Chromium baselines only (a Linux runner needs its own committed
+  snapshots) and the packaged portable exe is still not the runner.
+
 - **Plugin blobs reach the Product Wire (round 44/99).** Cutover-registry row
   21a — the last binary route family inside the plugin sandbox — is now a
   first-class wire family instead of a legacy HTTP store: `plugins.blobs.begin`,
