@@ -462,6 +462,13 @@ pub(crate) fn finish(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kerne
         require_capability(conn, &req.plugin_id, BLOB_CAPABILITY)?;
     }
     let row = load_owned_upload(db, &req.plugin_id, &req.upload_id)?;
+    // Same TTL rule as `append`: an upload that outlived its window must not
+    // publish (the sweep may simply not have run since it expired).
+    if parse_utc_seconds(&now()).unwrap_or(0) - parse_utc_seconds(&row.updated_at).unwrap_or(0)
+        > UPLOAD_TTL_SECONDS
+    {
+        return Err(upload_expired(&req.upload_id, &row.expires_at()));
+    }
     if row.received_bytes != row.declared_bytes {
         return Err(upload_incomplete(
             &req.upload_id,
