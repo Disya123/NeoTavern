@@ -4,6 +4,26 @@
 
 ### Added
 
+- **The two G6 verdict rows reach Packaged on desktop (round 38/40).**
+  `ui.message-editing` and `ui.run-transcript` — the last two app-layer
+  Integrated rows — now walk on the packaged portable artifact through the
+  golden shell smoke. Message editing: `chats.messages.update` echoes the
+  edited content plus the free-object `meta`; the checkpoint lifecycle runs
+  end-to-end (`chats.snapshots.create` with kind `checkpoint` copying the
+  full prefix, `chats.snapshots.list` returning the child, the
+  `clearCheckpointChatId` delete-checkpoint branch dropping the source
+  link, child chat cleanup). Run transcript: the last assistant message
+  carries the durable `generationRunId` (matched against the tool run) and
+  `generation.events` serves the transcript reads the panel performs —
+  limit paging and the `afterSequence` cursor (page 1 = 2 envelopes,
+  continuation = 5 more, step envelopes past page one; lifecycle envelopes
+  interleave by contract and are filtered on the bridge). Desktop score:
+  **30/43**. The remaining 8 Implemented rows are the heavy follow-ups:
+  8-tail (speech/images/transcribe), ST backup import, plugin blobs,
+  assets of 20, sandbox executor/jobs and host-boundary families.
+
+### Added
+
 - **Declarative plugin lifecycle reaches Packaged on desktop (round 34/40).**
   The packaged golden smoke walks the full data-driven plugin surface:
   install with the consent-time grant list (the recorded grants ARE the

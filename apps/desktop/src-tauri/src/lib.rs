@@ -979,6 +979,75 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     }
     eprintln!("[smoke] golden: tool round trip completed, two assistant messages saved");
 
+    // 3b. Run-transcript walk (ui.run-transcript, round 38): the last
+    //     assistant message carries the durable run id at the top level and
+    //     `generation.events` serves the step timeline the transcript panel
+    //     renders — including the afterSequence paging it performs.
+    let transcript = dispatch_ok(
+        &host,
+        "chats.messages.list",
+        serde_json::json!({ "chatId": chat_id, "limit": 200 }),
+    )?;
+    let transcript_run_id = transcript["items"]
+        .as_array()
+        .and_then(|items| items.iter().rev().find(|m| m["role"] == "assistant"))
+        .and_then(|m| m["generationRunId"].as_str())
+        .ok_or_else(|| "last assistant message carries no generationRunId".to_string())?
+        .to_string();
+    if transcript_run_id != tool_run_id {
+        return Err(format!(
+            "assistant run id {transcript_run_id} does not match the tool run {tool_run_id}"
+        ));
+    }
+    let page_one = dispatch_ok(
+        &host,
+        "generation.events",
+        serde_json::json!({ "workflowId": tool_run_id, "limit": 2 }),
+    )?;
+    let first_items = page_one["items"]
+        .as_array()
+        .ok_or_else(|| "transcript page one carried no items".to_string())?;
+    if first_items.len() != 2 {
+        return Err(format!(
+            "transcript first page must honor the limit=2, got {}",
+            first_items.len()
+        ));
+    }
+    let last_sequence = first_items
+        .last()
+        .and_then(|envelope| envelope["sequence"].as_i64())
+        .ok_or_else(|| "transcript envelope carried no sequence".to_string())?;
+    let page_two = dispatch_ok(
+        &host,
+        "generation.events",
+        serde_json::json!({
+            "workflowId": tool_run_id,
+            "afterSequence": last_sequence,
+            "limit": 200,
+        }),
+    )?;
+    let second_items = page_two["items"]
+        .as_array()
+        .ok_or_else(|| "transcript page two carried no items".to_string())?;
+    if second_items.is_empty() {
+        return Err("afterSequence transcript page was empty".to_string());
+    }
+    // The durable journal interleaves lifecycle envelopes with steps; the
+    // transcript panel filters to generation.step on the bridge. Assert the
+    // paged continuation actually serves step envelopes (the tool result and
+    // the resumed turn live past the first page).
+    if !second_items
+        .iter()
+        .any(|envelope| envelope["type"] == "generation.step")
+    {
+        return Err("afterSequence transcript page served no step envelopes".to_string());
+    }
+    eprintln!(
+        "[smoke] golden: run transcript walk ok ({} paged steps + {} after sequence {last_sequence})",
+        first_items.len(),
+        second_items.len()
+    );
+
     // 4. Full chats.crud + chats.messages.crud walk (G6 evidence, round 23:
     //    every op of both capabilities runs on the packaged artifact, on a
     //    throwaway chat that is deleted afterwards).
@@ -1010,15 +1079,23 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         .as_str()
         .ok_or_else(|| "throwaway message carried no id".to_string())?
         .to_string();
-    dispatch_ok(
+    let edited = dispatch_ok(
         &host,
         "chats.messages.update",
         serde_json::json!({
             "chatId": second_id,
             "messageId": throwaway_message,
             "content": "edited",
+            "meta": { "smokeNote": "meta-edit" },
         }),
     )?;
+    if edited["content"] != serde_json::json!("edited")
+        || edited["meta"]["smokeNote"] != serde_json::json!("meta-edit")
+    {
+        return Err(format!(
+            "messages.update did not echo content+meta: {edited}"
+        ));
+    }
     dispatch_ok(
         &host,
         "chats.messages.delete",
@@ -1035,6 +1112,77 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         serde_json::json!({ "chatId": second_id }),
     )?;
     eprintln!("[smoke] golden: chats/messages CRUD full walk ok");
+
+    // 4b. Message-editing verdict walk (ui.message-editing, round 38): the
+    //     checkpoint/branch snapshot link and the delete-checkpoint clear run
+    //     on the packaged artifact against the main golden chat.
+    let pre_snapshot = dispatch_ok(
+        &host,
+        "chats.messages.list",
+        serde_json::json!({ "chatId": chat_id, "limit": 200 }),
+    )?;
+    let checkpoint_source = pre_snapshot["items"]
+        .as_array()
+        .and_then(|items| items.iter().rev().find(|m| m["role"] == "assistant"))
+        .and_then(|m| m["id"].as_str())
+        .ok_or_else(|| "no assistant message for the checkpoint source".to_string())?
+        .to_string();
+    let snapshot = dispatch_ok(
+        &host,
+        "chats.snapshots.create",
+        serde_json::json!({
+            "chatId": chat_id,
+            "messageId": checkpoint_source,
+            "kind": "checkpoint",
+        }),
+    )?;
+    let child_id = snapshot["chat"]["id"]
+        .as_str()
+        .ok_or_else(|| "snapshot child carried no id".to_string())?
+        .to_string();
+    let copied = snapshot["copiedMessages"].as_i64().unwrap_or(0);
+    if copied < 2 {
+        return Err(format!(
+            "checkpoint snapshot copied {copied} messages, expected the full prefix"
+        ));
+    }
+    let snapshots = dispatch_ok(
+        &host,
+        "chats.snapshots.list",
+        serde_json::json!({ "chatId": chat_id }),
+    )?;
+    let listed = snapshots["items"]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .any(|chat| chat["id"].as_str() == Some(child_id.as_str()))
+        })
+        .unwrap_or(false);
+    if !listed {
+        return Err(format!("snapshot list did not return the child {child_id}"));
+    }
+    let cleared = dispatch_ok(
+        &host,
+        "chats.messages.update",
+        serde_json::json!({
+            "chatId": chat_id,
+            "messageId": checkpoint_source,
+            "clearCheckpointChatId": true,
+        }),
+    )?;
+    if !cleared["checkpointChatId"].is_null() {
+        return Err(format!(
+            "clearCheckpointChatId must drop the link, got: {}",
+            cleared["checkpointChatId"]
+        ));
+    }
+    dispatch_ok(
+        &host,
+        "chats.delete",
+        serde_json::json!({ "chatId": child_id }),
+    )?;
+    eprintln!("[smoke] golden: checkpoint snapshot created/listed/cleared ok");
 
     // 5. Full library-cluster walks (G6 evidence, round 24): presets,
     //    personas, memories, lorebooks (+entries), providers.list, settings вЂ”
