@@ -36,7 +36,11 @@ import type {
   PromptContextPreviewRequest,
   PromptContextPreviewResponse,
   ChatPromptPreviewRequestDto,
+  DataImportCounts,
+  DataImportEntityCount,
+  DataImportWarning,
   SillyTavernImportAnalysis,
+  SillyTavernImportCategoryAnalysis,
   SillyTavernImportExecute,
   SillyTavernImportResult,
   PluginActivateRequest,
@@ -796,15 +800,20 @@ const BACKGROUND_UPLOAD_KIND = 'background';
  * that `assets.list` then enumerates. The declared length is authoritative, so
  * a truncated upload fails instead of publishing a partial image.
  */
-async function uploadBackgroundFile(file: File): Promise<BackgroundItem> {
-  // The file is read once as base64 (`readFileBase64`), which is exactly the
-  // wire spelling of a chunk body, so the loop slices the encoded string on
-  // 4-character (3-byte) boundaries and never copies the whole image twice.
+/**
+ * Stage one file through the ADR-0061 chunked contract and publish it as ONE
+ * immutable asset. The file is read once as base64 (`readFileBase64`), which is
+ * exactly the wire spelling of a chunk body, so the loop slices the encoded
+ * string on 4-character (3-byte) boundaries and never copies the file twice.
+ * `begin` negotiates `chunkSizeBytes`, `append` requires sequential indexes and
+ * the declared length is authoritative, so a truncated transfer never publishes.
+ */
+async function stageFileChunked(file: File, kind: string, fallbackName: string) {
   const base64 = await readFileBase64(file);
   const totalBytes = base64ByteLength(base64);
   const begun = await backend.assets.uploadBegin({
-    kind: BACKGROUND_UPLOAD_KIND,
-    filename: file.name || 'wallpaper.png',
+    kind,
+    filename: file.name || fallbackName,
     ...(file.type ? { contentType: file.type } : {}),
     totalBytes: totalBytes > 0 ? totalBytes : 1,
   });
@@ -821,7 +830,11 @@ async function uploadBackgroundFile(file: File): Promise<BackgroundItem> {
     });
     index += 1;
   }
-  const published = await backend.assets.uploadFinish({ uploadId: begun.uploadId });
+  return backend.assets.uploadFinish({ uploadId: begun.uploadId });
+}
+
+async function uploadBackgroundFile(file: File): Promise<BackgroundItem> {
+  const published = await stageFileChunked(file, BACKGROUND_UPLOAD_KIND, 'wallpaper.png');
   return backgroundFromAsset(published.asset);
 }
 
@@ -1327,15 +1340,140 @@ export function usePluginAuthRevoke() {
 
 /* Complete data migration -------------------------------------------------- */
 
+const ARCHIVE_UPLOAD_KIND = 'import-archive';
+/** File names of staged archives, so execute can echo the name the user picked
+ * (the wire result does not carry a display name — the asset plane is
+ * content-addressed). Keyed by the staged asset id, which IS the analysis id. */
+const stagedArchiveNames = new Map<string, string>();
+
+export function importCategoryFromWire(category: {
+  id: SillyTavernImportCategoryAnalysis['id'];
+  discovered: number;
+  dependentRecords: number;
+  invalid: number;
+  sizeBytes: number;
+}): SillyTavernImportCategoryAnalysis {
+  return {
+    id: category.id,
+    discovered: category.discovered,
+    dependentRecords: category.dependentRecords,
+    invalid: category.invalid,
+    // The wire analyzer reports no conflicts on purpose: a conflict depends on
+    // the policy chosen at execute time, so reporting them before that choice
+    // would be a guess.
+    conflicts: 0,
+    sizeBytes: category.sizeBytes,
+  };
+}
+
+function warningsFromWire(
+  warnings: ReadonlyArray<{ code: string; path?: string }>,
+): DataImportWarning[] {
+  return warnings.map((warning) => ({
+    code: warning.code,
+    ...(warning.path === undefined ? {} : { path: warning.path }),
+  }));
+}
+
+function zeroEntityCount(): DataImportEntityCount {
+  return { imported: 0, reused: 0, skipped: 0 };
+}
+
+/**
+ * Map `wire.result.imports.sillytavern.execute` onto the legacy result shape the
+ * migration panel renders. Two honest gaps instead of fabricated values:
+ * `safetyBackupId` is empty (the kernel recovers through `import_receipts` and
+ * `character_versions`, not through a legacy backup container), and
+ * `legacyExtensions` is always zero because requesting it is refused (ADR-0059).
+ */
+export function importResultFromWire(
+  dto: {
+    runId: string;
+    sourceHash: string;
+    conflictPolicy: SillyTavernImportExecute['conflictPolicy'];
+    archiveAlreadyImported: boolean;
+    categories: ReadonlyArray<{
+      id: SillyTavernImportCategoryAnalysis['id'];
+      imported: number;
+      reused: number;
+      skipped: number;
+      dependentImported: number;
+    }>;
+    warningCount: number;
+    warnings: ReadonlyArray<{ code: string; path?: string }>;
+  },
+  input: SillyTavernImportExecute,
+  selected: SillyTavernImportExecute['categories'],
+): SillyTavernImportResult {
+  const byId = new Map(dto.categories.map((category) => [category.id, category]));
+  const pick = (id: SillyTavernImportCategoryAnalysis['id']): DataImportEntityCount => {
+    const category = byId.get(id);
+    return category === undefined
+      ? zeroEntityCount()
+      : { imported: category.imported, reused: category.reused, skipped: category.skipped };
+  };
+  const dependent = (id: SillyTavernImportCategoryAnalysis['id']): DataImportEntityCount => ({
+    imported: byId.get(id)?.dependentImported ?? 0,
+    reused: 0,
+    skipped: 0,
+  });
+  const counts: DataImportCounts = {
+    characters: pick('characters'),
+    chats: pick('chats'),
+    messages: dependent('chats'),
+    personas: pick('personas'),
+    lorebooks: pick('lorebooks'),
+    loreEntries: dependent('lorebooks'),
+    presets: pick('presets'),
+    groups: pick('groups'),
+    backgrounds: pick('backgrounds'),
+    extensionSettings: pick('extensionSettings'),
+    apiSettings: pick('apiSettings'),
+    legacyExtensions: zeroEntityCount(),
+    themes: pick('themes'),
+  };
+  return {
+    jobId: dto.runId,
+    sourceHash: dto.sourceHash,
+    sourceName: stagedArchiveNames.get(dto.runId) ?? '',
+    safetyBackupId: '',
+    reusedArchive: dto.archiveAlreadyImported,
+    selectedCategories: [...selected],
+    conflictPolicy: dto.conflictPolicy,
+    counts,
+    warningCount: dto.warningCount,
+    warnings: warningsFromWire(dto.warnings),
+  };
+}
+
 export function useAnalyzeSillyTavern() {
   return useMutation({
-    mutationFn: ({ file, signal }: { file: File; signal: AbortSignal }) => {
-      // Kernel plane: SillyTavern archive import is a legacy sidecar contour
-      // (staged analyze/execute over `app.db` era data) — honest
-      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy request
-      // (ARC-02).
+    mutationFn: async ({ file, signal }: { file: File; signal: AbortSignal }) => {
+      // Kernel plane: stage the archive once through the chunked ingestion
+      // contract (ADR-0061) and analyse it by asset id. The staged asset id IS
+      // the analysis handle, so execute addresses the same bytes without a
+      // second upload or a staging tuple.
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('imports.sillytavern.analyze'));
+        const published = await stageFileChunked(file, ARCHIVE_UPLOAD_KIND, 'backup.zip');
+        const assetId = published.asset.id;
+        stagedArchiveNames.set(assetId, file.name || 'backup.zip');
+        const dto = await backend.imports.sillyTavernAnalyze(assetId, { signal });
+        return {
+          analysisId: assetId,
+          sourceHash: dto.sourceHash,
+          sourceName: stagedArchiveNames.get(assetId) ?? 'backup.zip',
+          // The asset plane owns the lifetime; no staging TTL is promised.
+          expiresAt: 0,
+          // Receipts answer this at execute time, not before.
+          archiveAlreadyImported: false,
+          totalCompressedBytes: dto.totalCompressedBytes,
+          totalExpandedBytes: dto.totalExpandedBytes,
+          categories: dto.categories.map(importCategoryFromWire),
+          conflictCount: 0,
+          conflicts: [],
+          warningCount: dto.warningCount,
+          warnings: warningsFromWire(dto.warnings),
+        } satisfies SillyTavernImportAnalysis;
       }
       return api.upload<SillyTavernImportAnalysis>('/imports/sillytavern/analyze', file, signal);
     },
@@ -1345,7 +1483,7 @@ export function useAnalyzeSillyTavern() {
 export function useExecuteSillyTavernImport() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       analysisId,
       input,
       signal,
@@ -1354,9 +1492,24 @@ export function useExecuteSillyTavernImport() {
       input: SillyTavernImportExecute;
       signal: AbortSignal;
     }) => {
-      // Kernel plane: same honest CAPABILITY_UNAVAILABLE as analyze.
+      // Kernel plane: the same staged archive, an explicit conflict policy and
+      // receipts-backed idempotency. legacyExtensions is never importable
+      // (ADR-0059) — the wire refuses it, so it is dropped from the selection
+      // instead of sending a request that can only fail.
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('imports.sillytavern.execute'));
+        const selected = input.categories.filter((id) => id !== 'legacyExtensions');
+        const dto = await backend.imports.sillyTavernExecute(
+          {
+            assetId: analysisId,
+            ...(selected.length > 0 ? { categories: selected } : {}),
+            conflictPolicy: input.conflictPolicy,
+          },
+          { signal },
+        );
+        // The wire echoes the run id, not the asset id; keep the name reachable.
+        stagedArchiveNames.set(dto.runId, stagedArchiveNames.get(analysisId) ?? '');
+        const result = importResultFromWire(dto, input, selected);
+        return { ...result, sourceName: stagedArchiveNames.get(dto.runId) ?? '' };
       }
       return api.post<SillyTavernImportResult>(
         `/imports/sillytavern/${analysisId}/execute`,
@@ -1378,10 +1531,14 @@ export function useExecuteSillyTavernImport() {
 
 export function useDiscardSillyTavernAnalysis() {
   return useMutation({
-    mutationFn: (analysisId: string) => {
-      // Kernel plane: same honest CAPABILITY_UNAVAILABLE as analyze.
+    mutationFn: async (analysisId: string) => {
+      // Kernel plane: discarding drops the staged archive asset. Receipts and
+      // imported rows are untouched — the import already happened or did not,
+      // and the archive is content-addressed, so re-uploading it re-analyses.
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('imports.sillytavern.discard'));
+        await backend.assets.del(analysisId);
+        stagedArchiveNames.delete(analysisId);
+        return;
       }
       return api.del<void>(`/imports/sillytavern/${analysisId}`);
     },
