@@ -128,6 +128,40 @@ New code should go into the narrowest suitable package. Do not create circular d
 - Do not leave TODOs instead of the required implementation without an explicit explanation.
 - Do not consider a task complete if a behavior, API, or architecture change is not reflected in the documentation.
 
+## 4.1 Local toolchain (Windows/MSYS) and the round gate
+
+This repository is developed on Windows through Git-Bash/MSYS on some machines,
+and the naive commands break there in ways that look like code failures. Use the
+wrappers instead of rediscovering them:
+
+- **pnpm** — the corepack shim on PATH resolves MSYS paths against the current
+  drive and dies with `MODULE_NOT_FOUND`, and it refuses non-tty contexts
+  ("stdin is not a tty"). Always call `node tools/dev/pnpm.mjs <args>` (or the
+  `pnpm run dev:pnpm -- <args>` script). It resolves corepack's real `pnpm.js`
+  from the running Node installation and forwards stdio unchanged.
+- **Background processes** — a node child launched without a terminal can print
+  `stdin is not a tty` and exit 0 without doing any work. Long-running gates must
+  run with a pty (the `terminal` tool's `pty: true`) or in the foreground.
+- **Packaging** — `scripts/package-portable-windows.mjs` shells out to Windows
+  `tar.exe`; with MSYS first on PATH it picks up GNU tar and fails with
+  `Cannot connect to E: resolve failed`. Prepend `C:/Windows/System32` to PATH
+  for that script.
+- **Git worktrees** — pass native `E:/...` paths to `git worktree add`; MSYS
+  `/e/...` arguments are interpreted relative to the current drive and the
+  worktree silently lands in `E:\e\...`.
+
+Every slice uses the same gate bundle instead of an ad-hoc list:
+
+```bash
+node tools/dev/round-gate.mjs --cargo-test <suite> --web <path>   # fast gate
+node tools/dev/round-gate.mjs --full                              # pre-merge
+```
+
+The fast gate runs the contract/codegen check, the kernel dispatch check, rust
+formatting, the named kernel integration suites, the TypeScript builds and
+Prettier on the touched files; `--full` adds the whole kernel suite, the web
+vitest suite and `docs:check`. A red gate is never committed around.
+
 ## 5. TypeScript
 
 - Strict mode is enabled.

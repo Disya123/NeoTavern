@@ -68,7 +68,9 @@
     "upgrade:drill": "node scripts/upgrade-drill.mjs",
     "clean": "node scripts/clean.mjs",
     "kernel:dispatch:check": "node scripts/check-kernel-dispatch.mjs",
-    "test:visual": "pnpm --filter @neotavern/web build && cargo build --manifest-path crates/Cargo.toml -p neotavern-headless && pnpm exec playwright test -c playwright.visual.config.ts"
+    "test:visual": "pnpm --filter @neotavern/web build && cargo build --manifest-path crates/Cargo.toml -p neotavern-headless && pnpm exec playwright test -c playwright.visual.config.ts",
+    "dev:pnpm": "node tools/dev/pnpm.mjs",
+    "gate:round": "node tools/dev/round-gate.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
