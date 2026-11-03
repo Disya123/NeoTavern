@@ -100,15 +100,26 @@ run(
 );
 
 // ── 4: kernel tests ---------------------------------------------------------
+// nextest runs test binaries in parallel and is typically 3-5x faster than
+// `cargo test` on this suite; fall back to cargo test when it is not installed
+// so a fresh machine can still gate.
+const hasNextest = (() => {
+  const probe = spawnSync('cargo', ['nextest', '--version'], { encoding: 'utf8' });
+  return probe.status === 0;
+})();
+const kernelRunner = hasNextest
+  ? (args) => ['cargo', ['nextest', 'run', '-p', 'runtime-kernel', ...args]]
+  : (args) => ['cargo', ['test', '-p', 'runtime-kernel', ...args]];
+
 if (full) {
-  run('kernel tests (full)', 'cargo', ['test', '-p', 'runtime-kernel'], {
+  run('kernel tests (full)', ...kernelRunner([]), {
     cwd: resolve(ROOT, 'crates'),
   });
 } else if (cargoTests.length === 0) {
   process.stdout.write('\n[gate] no --cargo-test suites requested; skipping kernel tests\n');
 } else {
   for (const suite of cargoTests) {
-    run(`kernel test ${suite}`, 'cargo', ['test', '-p', 'runtime-kernel', '--test', suite], {
+    run(`kernel test ${suite}`, ...kernelRunner(['--test', suite]), {
       cwd: resolve(ROOT, 'crates'),
     });
   }

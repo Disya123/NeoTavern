@@ -162,6 +162,11 @@ formatting, the named kernel integration suites, the TypeScript builds and
 Prettier on the touched files; `--full` adds the whole kernel suite, the web
 vitest suite and `docs:check`. A red gate is never committed around.
 
+Kernel suites run through `cargo nextest` when it is installed (parallel test
+binaries; the full kernel suite drops from ~20 minutes to a few) and fall back to
+`cargo test` otherwise — the gate probes for it, so a fresh machine needs no
+setup and CI keeps the same command.
+
 ## 5. TypeScript
 
 - Strict mode is enabled.
