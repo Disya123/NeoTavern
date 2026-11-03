@@ -358,6 +358,6 @@ Platform rules for plugin fragments (normative):
   needing more either grows the IR through a versioned extension or shows
   an honest `CAPABILITY_UNAVAILABLE` вЂ” never an embedded engine.
 
-Legacy SillyTavern web extensions (DOM/JQuery/`window.SillyTavern`) run
+Legacy legacy web extensions (DOM/JQuery/`window.legacy`) run
 only in the React/legacy contour (AGENTS В§18) for its remaining lifetime;
 the migration guide to this surface is part of the ADR-0058 program.

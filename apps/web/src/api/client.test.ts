@@ -59,7 +59,7 @@ describe('json handling', () => {
 
   it('forwards an abort signal to fetch', async () => {
     const controller = new AbortController();
-    await api.post('/imports/sillytavern/execute', { all: true }, controller.signal);
+    await api.post('/imports/fullbackup/execute', { all: true }, controller.signal);
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBe(controller.signal);
   });
 });

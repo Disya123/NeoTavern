@@ -47,7 +47,7 @@ User input
 ## Stages
 
 - **Character/persona** — the chat's character card contributes a
-  `character` block (description) and a `persona` block (the SillyTavern
+  `character` block (description) and a `persona` block (the legacy
   card field `ext_json.personality`/`persona` when the host preserved it).
   All system blocks merge into the single leading `system` message.
 - **Lorebook** — activation mirrors the legacy retrieval rules

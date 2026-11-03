@@ -222,8 +222,8 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
 `(kind,name)`). All slice-3 additions are `transactional`, strict
 `additionalProperties: false`, ARC-07. The M7 Этап-4 clusters then grew the
-registry to **144 ops** (the latest addition is the cluster-10 SillyTavern
-archive read `imports.sillytavern.analyze` — it takes a staged `assetId` from
+registry to **144 ops** (the latest addition is the cluster-10 legacy
+archive read `imports.fullbackup.analyze` — it takes a staged `assetId` from
 the chunked upload family and walks the ZIP read-only: eleven categories with
 `discovered`/`dependentRecords`/`invalid`/`sizeBytes`, archive totals, the
 archive sha256 and a bounded warning sample; it is `transactional` /
@@ -439,7 +439,7 @@ other paged lists.
 ### Large-file ingestion: chunked upload (`assets.upload.*`)
 
 The request envelope caps a body at 1 MiB, so a character card, a wallpaper, an
-audio input or a SillyTavern backup (up to 4 GiB) cannot ride a single
+audio input or a full-data backup (up to 4 GiB) cannot ride a single
 operation. [ADR-0061](../adr/0061-large-file-ingestion.md) resolves this with a
 four-operation family instead of a second transport:
 

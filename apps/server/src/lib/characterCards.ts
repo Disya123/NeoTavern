@@ -264,7 +264,7 @@ function pngChunk(type: string, data: Buffer): Buffer {
 }
 
 /**
- * Embeds a V2 character card in the SillyTavern-compatible `chara` PNG tEXt
+ * Embeds a V2 character card in the legacy-compatible `chara` PNG tEXt
  * chunk. The input must already be normalized to PNG so stale source metadata
  * cannot leak into the exported card.
  */

@@ -45,7 +45,7 @@ use crate::KernelError;
 pub(crate) const CHUNK_SIZE_BYTES: i64 = 524_288;
 
 /// Hard ceiling for one upload (matches the DTO's `totalBytes` maximum: the
-/// legacy SillyTavern backup cap is 4 GiB).
+/// legacy full-data backup cap is 4 GiB).
 pub(crate) const MAX_UPLOAD_BYTES: i64 = 4_294_967_296;
 
 /// How long a partially uploaded file is kept before the sweep reclaims it.

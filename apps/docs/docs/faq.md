@@ -47,10 +47,10 @@ Yes. NeoTavern imports standard character cards, including PNG cards with
 embedded JSON, so characters from other chat apps and from the community
 character gallery work out of the box. See [Characters](./user-guide/characters).
 
-## Can I Migrate My SillyTavern-Era Plugins?
+## Can I Migrate My legacy-Era Plugins?
 
-No. SillyTavern-era plugin compatibility was removed by owner decision
-(2026-10-31): plugins written against the SillyTavern environment do not run
+No. legacy-era plugin compatibility was removed by owner decision
+(2026-10-31): plugins written against the legacy environment do not run
 in NeoTavern. Your data is not affected — characters, chats, and backups
 migrate via Settings → Data. New plugins target the
 [Plugin SDK](./developers/plugin-sdk/).

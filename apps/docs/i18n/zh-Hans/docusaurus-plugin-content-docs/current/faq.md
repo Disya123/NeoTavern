@@ -41,10 +41,10 @@ sidebar_position: 2
 可以。NeoTavern 导入标准角色卡，包括内嵌 JSON 的 PNG 卡片，因此来自其他
 聊天应用和社区角色画廊的角色开箱即用。请参阅[角色](./user-guide/characters)。
 
-## 我可以迁移 SillyTavern 时代的插件吗？
+## 我可以迁移 legacy 时代的插件吗？
 
-不可以。SillyTavern 时代的插件兼容已根据所有者的决定（2026-10-31）移除：
-针对 SillyTavern 环境编写的插件无法在 NeoTavern 中运行。你的数据不受影响 ——
+不可以。legacy 时代的插件兼容已根据所有者的决定（2026-10-31）移除：
+针对 legacy 环境编写的插件无法在 NeoTavern 中运行。你的数据不受影响 ——
 角色、聊天记录和备份可通过"设置 → 数据"迁移。新插件请面向
 [插件 SDK](./developers/plugin-sdk/) 开发。
 

@@ -1,7 +1,7 @@
 # NeoTavern
 
 **Local-first AI chat and roleplay platform.** NeoTavern is the successor of the
-SillyTavern 2 project: a fast, self-hosted chat frontend and backend that runs
+legacy 2 project: a fast, self-hosted chat frontend and backend that runs
 entirely on your machine — no cloud, no account, no telemetry.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
@@ -15,7 +15,7 @@ entirely on your machine — no cloud, no account, no telemetry.
 NeoTavern is a local-first AI chat platform built around one idea: your data and
 your conversations stay on your computer. It ships as a desktop application
 (Windows, macOS, Linux), a native Android app, and an installable Web Client
-that talks to a local or remote backend. SillyTavern-era plugin compatibility
+that talks to a local or remote backend. legacy-era plugin compatibility
 is preserved through a dedicated legacy layer.
 
 One product, several hosts: the Desktop app runs fully local (public builds
@@ -96,9 +96,9 @@ Public Contracts (TypeBox wire schemas → TS types + generated Rust DTO)
 - **Backup and recovery.** Consistent SQLite snapshot + pinned immutable
   assets, staged restore with atomic activation, versioned Portable Export and
   recoverable import, read-only Recovery Mode, cross-platform fixtures.
-- **Legacy compatibility.** `window.SillyTavern`, `eventSource`,
+- **Legacy compatibility.** `window.legacy`, `eventSource`,
   `extension_settings`, jQuery islands, and an Express compatibility host keep
-  documented SillyTavern-era extensions working — gated by explicit consent.
+  documented legacy-era extensions working — gated by explicit consent.
 - **Accessible and localized.** English and Russian UI, i18next namespaces,
   RTL support, WCAG 2.2 AA baseline theme.
 - **Modern stack.** Fastify 5 + TypeBox, React 19 + Vite 8, SQLite via
@@ -161,7 +161,7 @@ packages/
 ├── theme-sdk       Design tokens, component skin, shell layout contract
 ├── ui              Headless React primitives (Radix-based)
 ├── i18n            English/Russian UI resources
-├── legacy-compat   Documented SillyTavern-era compatibility layer
+├── legacy-compat   Documented legacy-era compatibility layer
 ├── shared          Shared utilities, errors, macros
 └── gestures        Pointer-gesture primitives
 

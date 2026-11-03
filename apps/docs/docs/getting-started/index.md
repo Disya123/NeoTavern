@@ -35,7 +35,7 @@ machine.
 - A provider to generate replies: a local model server or a remote API with
   your key. The built-in Echo provider lets you verify the whole flow
   offline, without any external service.
-- Optional but useful: an existing SillyTavern data backup to migrate your
+- Optional but useful: an existing legacy data backup to migrate your
   characters, chats, lorebooks, and personas.
 
 ## Where to Go Next

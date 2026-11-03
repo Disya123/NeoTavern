@@ -3,7 +3,7 @@
  * testable: given the candidate entries (already scoped to the character and
  * global books) and the scan context text, returns the blocks to inject.
  *
- * Activation rules (SillyTavern world-info semantics):
+ * Activation rules (legacy world-info semantics):
  * - constant entries are always injected as required (pinned) blocks;
  * - an entry activates when any primary key appears in the context text
  *   (case-insensitive substring match);

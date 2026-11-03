@@ -1,4 +1,4 @@
-/** Complete SillyTavern user-data archive migration endpoint. */
+/** Complete legacy user-data archive migration endpoint. */
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdtemp, open, readdir, rm, stat } from 'node:fs/promises';
@@ -8,28 +8,28 @@ import { pipeline } from 'node:stream/promises';
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import {
-  SillyTavernImportAnalysisSchema,
-  SillyTavernImportExecuteSchema,
-  SillyTavernImportResultSchema,
-  type SillyTavernImportAnalysis,
-  type SillyTavernImportExecute,
-  type SillyTavernImportResult,
+  FullBackupAnalysisSchema,
+  FullBackupExecuteSchema,
+  FullBackupImportResultSchema,
+  type FullBackupAnalysis,
+  type FullBackupExecute,
+  type FullBackupImportResult,
 } from '@neotavern/contracts';
 import { AppError, ErrorCodes, isAppError, uuidv7 } from '@neotavern/shared';
 import { extractPackageArchive } from '../lib/packageArchive.js';
-import { analyzeSillyTavernData, importSillyTavernData } from '../lib/sillyTavernImport.js';
+import { analyzelegacyData, importlegacyData } from '../lib/fullBackupImport.js';
 import type { AppContext, TypedApp } from '../types.js';
 
-export const MAX_SILLYTAVERN_ARCHIVE_BYTES = 4 * 1024 * 1024 * 1024;
+export const MAX_FULLBACKUP_ARCHIVE_BYTES = 4 * 1024 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 16 * 1024 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES = 500_000;
 const MAX_ENTRY_BYTES = 1024 * 1024 * 1024;
-const ANALYSIS_CACHE_PREFIX = 'sillytavern-analysis-';
-export const SILLYTAVERN_ANALYSIS_TTL_MS = 30 * 60 * 1000;
+const ANALYSIS_CACHE_PREFIX = 'fullbackup-analysis-';
+export const FULLBACKUP_ANALYSIS_TTL_MS = 30 * 60 * 1000;
 const MAX_STAGED_ANALYSES = 3;
 
 interface StagedAnalysis {
-  response: SillyTavernImportAnalysis;
+  response: FullBackupAnalysis;
   temporaryRoot: string;
   extractedRoot: string;
   executing: boolean;
@@ -60,7 +60,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
     () => {
       void sweepExpired();
     },
-    Math.min(60_000, SILLYTAVERN_ANALYSIS_TTL_MS),
+    Math.min(60_000, FULLBACKUP_ANALYSIS_TTL_MS),
   );
   sweepTimer.unref();
   app.addHook('onClose', async () => {
@@ -69,10 +69,10 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
   });
 
   app.post(
-    '/api/v2/imports/sillytavern/analyze',
+    '/api/v2/imports/fullbackup/analyze',
     {
       schema: {
-        response: { 200: SillyTavernImportAnalysisSchema },
+        response: { 200: FullBackupAnalysisSchema },
       },
     },
     async (request) => {
@@ -99,7 +99,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
       try {
         const upload = await request.file({
           throwFileSizeLimit: false,
-          limits: { fileSize: MAX_SILLYTAVERN_ARCHIVE_BYTES },
+          limits: { fileSize: MAX_FULLBACKUP_ARCHIVE_BYTES },
         });
         if (!upload) {
           throw new AppError({
@@ -127,36 +127,36 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
         if (upload.file.truncated) {
           throw new AppError({
             code: ErrorCodes.FILE_TOO_LARGE,
-            params: { limitBytes: MAX_SILLYTAVERN_ARCHIVE_BYTES },
+            params: { limitBytes: MAX_FULLBACKUP_ARCHIVE_BYTES },
           });
         }
         await assertZipSignature(archivePath);
 
         const sourceHash = hash.digest('hex');
-        const sourceName = basename(upload.filename || 'sillytavern-data.zip');
+        const sourceName = basename(upload.filename || 'legacy-data.zip');
         const archiveInfo = await stat(archivePath);
         const extracted = await extractPackageArchive(
           archivePath,
           extractedRoot,
           {
-            maxArchiveBytes: MAX_SILLYTAVERN_ARCHIVE_BYTES,
+            maxArchiveBytes: MAX_FULLBACKUP_ARCHIVE_BYTES,
             maxEntries: MAX_ARCHIVE_ENTRIES,
             maxEntryBytes: MAX_ENTRY_BYTES,
             maxExpandedBytes: MAX_EXPANDED_BYTES,
           },
           controller.signal,
         );
-        const inspection = await analyzeSillyTavernData({
+        const inspection = await analyzelegacyData({
           repository: ctx.database.repos.dataImports,
           extractedRoot,
           signal: controller.signal,
         });
         const analysisId = uuidv7();
-        const response: SillyTavernImportAnalysis = {
+        const response: FullBackupAnalysis = {
           analysisId,
           sourceHash,
           sourceName,
-          expiresAt: Date.now() + SILLYTAVERN_ANALYSIS_TTL_MS,
+          expiresAt: Date.now() + FULLBACKUP_ANALYSIS_TTL_MS,
           archiveAlreadyImported: Boolean(
             ctx.database.repos.dataImports.findCompletedJob(sourceHash),
           ),
@@ -189,12 +189,12 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
   );
 
   app.post(
-    '/api/v2/imports/sillytavern/:analysisId/execute',
+    '/api/v2/imports/fullbackup/:analysisId/execute',
     {
       schema: {
         params: Type.Object({ analysisId: Type.String() }),
-        body: SillyTavernImportExecuteSchema,
-        response: { 200: SillyTavernImportResultSchema },
+        body: FullBackupExecuteSchema,
+        response: { 200: FullBackupImportResultSchema },
       },
     },
     async (request) => {
@@ -213,7 +213,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
         });
       }
 
-      const input: SillyTavernImportExecute = request.body;
+      const input: FullBackupExecute = request.body;
       importActive = true;
       stage.executing = true;
       const controller = new AbortController();
@@ -225,7 +225,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
         jobId = ctx.database.repos.dataImports.startJob(
           stage.response.sourceHash,
           stage.response.sourceName,
-          'sillytavern-data-zip',
+          'legacy-data-zip',
         );
         const safetyBackupId = `pre-import-${jobId}`;
         try {
@@ -238,7 +238,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
           });
         }
 
-        const imported = await importSillyTavernData({
+        const imported = await importlegacyData({
           repository: ctx.database.repos.dataImports,
           paths: ctx.paths,
           extractedRoot: stage.extractedRoot,
@@ -250,7 +250,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
           plugins: ctx.database.repos.plugins,
           providerConfigs: ctx.database.repos.providerConfigs,
         });
-        const result: SillyTavernImportResult = {
+        const result: FullBackupImportResult = {
           jobId,
           sourceHash: stage.response.sourceHash,
           sourceName: stage.response.sourceName,
@@ -282,7 +282,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
   );
 
   app.delete(
-    '/api/v2/imports/sillytavern/:analysisId',
+    '/api/v2/imports/fullbackup/:analysisId',
     {
       schema: {
         params: Type.Object({ analysisId: Type.String() }),
@@ -308,10 +308,10 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
   );
 
   app.post(
-    '/api/v2/imports/sillytavern',
+    '/api/v2/imports/fullbackup',
     {
       schema: {
-        response: { 200: SillyTavernImportResultSchema },
+        response: { 200: FullBackupImportResultSchema },
       },
     },
     async (request) => {
@@ -331,7 +331,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
       try {
         const upload = await request.file({
           throwFileSizeLimit: false,
-          limits: { fileSize: MAX_SILLYTAVERN_ARCHIVE_BYTES },
+          limits: { fileSize: MAX_FULLBACKUP_ARCHIVE_BYTES },
         });
         if (!upload) {
           throw new AppError({
@@ -340,7 +340,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
           });
         }
 
-        temporaryRoot = await mkdtemp(join(ctx.paths.cache, 'sillytavern-import-'));
+        temporaryRoot = await mkdtemp(join(ctx.paths.cache, 'fullbackup-import-'));
         const archivePath = join(temporaryRoot, 'source.zip');
         const extractedRoot = join(temporaryRoot, 'extracted');
         const hash = createHash('sha256');
@@ -359,37 +359,33 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
         if (upload.file.truncated) {
           throw new AppError({
             code: ErrorCodes.FILE_TOO_LARGE,
-            params: { limitBytes: MAX_SILLYTAVERN_ARCHIVE_BYTES },
+            params: { limitBytes: MAX_FULLBACKUP_ARCHIVE_BYTES },
           });
         }
         await assertZipSignature(archivePath);
 
         const sourceHash = hash.digest('hex');
-        const sourceName = basename(upload.filename || 'sillytavern-data.zip');
+        const sourceName = basename(upload.filename || 'legacy-data.zip');
         const previous = ctx.database.repos.dataImports.findCompletedJob(sourceHash);
         if (previous) {
-          if (!Value.Check(SillyTavernImportResultSchema, previous.summary)) {
+          if (!Value.Check(FullBackupImportResultSchema, previous.summary)) {
             throw new AppError({
               code: ErrorCodes.MIGRATION_FAILED,
               params: { reason: 'CORRUPT_IMPORT_JOB_SUMMARY', jobId: previous.id },
             });
           }
           return {
-            ...(previous.summary as SillyTavernImportResult),
+            ...(previous.summary as FullBackupImportResult),
             reusedArchive: true,
           };
         }
 
-        jobId = ctx.database.repos.dataImports.startJob(
-          sourceHash,
-          sourceName,
-          'sillytavern-data-zip',
-        );
+        jobId = ctx.database.repos.dataImports.startJob(sourceHash, sourceName, 'legacy-data-zip');
         await extractPackageArchive(
           archivePath,
           extractedRoot,
           {
-            maxArchiveBytes: MAX_SILLYTAVERN_ARCHIVE_BYTES,
+            maxArchiveBytes: MAX_FULLBACKUP_ARCHIVE_BYTES,
             maxEntries: MAX_ARCHIVE_ENTRIES,
             maxEntryBytes: MAX_ENTRY_BYTES,
             maxExpandedBytes: MAX_EXPANDED_BYTES,
@@ -406,7 +402,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
             cause,
           });
         }
-        const imported = await importSillyTavernData({
+        const imported = await importlegacyData({
           repository: ctx.database.repos.dataImports,
           paths: ctx.paths,
           extractedRoot,
@@ -415,7 +411,7 @@ export async function registerDataImportRoutes(app: TypedApp, ctx: AppContext): 
           plugins: ctx.database.repos.plugins,
           providerConfigs: ctx.database.repos.providerConfigs,
         });
-        const result: SillyTavernImportResult = {
+        const result: FullBackupImportResult = {
           jobId,
           sourceHash,
           sourceName,
@@ -471,7 +467,7 @@ async function assertZipSignature(path: string): Promise<void> {
 
 async function cleanupAbandonedAnalyses(cacheRoot: string): Promise<void> {
   const entries = await readdir(cacheRoot, { withFileTypes: true }).catch(() => []);
-  const cutoff = Date.now() - SILLYTAVERN_ANALYSIS_TTL_MS;
+  const cutoff = Date.now() - FULLBACKUP_ANALYSIS_TTL_MS;
   await Promise.all(
     entries
       .filter((entry) => entry.isDirectory() && entry.name.startsWith(ANALYSIS_CACHE_PREFIX))

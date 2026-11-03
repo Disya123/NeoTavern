@@ -92,9 +92,9 @@ import {
   type PagedAssetsDto,
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
-  type SillyTavernAnalyzeResultDto,
-  type SillyTavernExecuteRequestDto,
-  type SillyTavernExecuteResultDto,
+  type FullBackupAnalyzeResultDto,
+  type FullBackupExecuteRequestDto,
+  type FullBackupExecuteResultDto,
   type SearchResultDto,
   type ChatsExportResultDto,
   type InstructFormatsResultDto,
@@ -574,10 +574,10 @@ export class LocalBackend implements NeoBackend {
     this.imports = {
       characterCard: (assetId, opts) =>
         this.invoke<CharacterCardImportResultDto>('imports.character.card', { assetId }, opts),
-      sillyTavernAnalyze: (assetId, opts) =>
-        this.invoke<SillyTavernAnalyzeResultDto>('imports.sillytavern.analyze', { assetId }, opts),
-      sillyTavernExecute: (req, opts) =>
-        this.invoke<SillyTavernExecuteResultDto>('imports.sillytavern.execute', req, opts),
+      fullBackupAnalyze: (assetId, opts) =>
+        this.invoke<FullBackupAnalyzeResultDto>('imports.fullbackup.analyze', { assetId }, opts),
+      fullBackupExecute: (req, opts) =>
+        this.invoke<FullBackupExecuteResultDto>('imports.fullbackup.execute', req, opts),
     };
     this.search = {
       query: (req, opts) => this.invoke<SearchResultDto>('search.query', req, opts),

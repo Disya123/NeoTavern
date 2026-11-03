@@ -53,7 +53,7 @@ const EMPTY_ADDITIONAL_PARAMS: AdditionalParamsValue = {
 };
 
 /**
- * Top-level API selector (classic SillyTavern `main_api`): a backend is either a
+ * Top-level API selector (classic legacy `main_api`): a backend is either a
  * Chat Completion source or a Text Completion source. Derived from the catalog
  * entry's `adapterKind` — text adapters are {@link TextAdapterKinds}, everything
  * else is a chat adapter. The Source ("API Type") select is filtered by this.
@@ -119,7 +119,7 @@ export function ProviderProfileEditor({ surface = 'panel' }: ProviderProfileEdit
   const hasActiveKey = draft.hasStoredApiKey || activeSecretId.length > 0;
 
   /**
-   * Effective profile name. Like classic SillyTavern, the API tab does not force
+   * Effective profile name. Like classic legacy, the API tab does not force
    * the user to name a connection — the chosen source *is* the identity. A manual
    * name (page surface) wins when provided; otherwise the source label is used,
    * so pasting a key and saving never stalls on an empty Name field.
@@ -262,7 +262,7 @@ export function ProviderProfileEditor({ surface = 'panel' }: ProviderProfileEdit
 
   /**
    * Persist the key (if any) and fetch `/v1/models` so the Model field becomes a
-   * populated dropdown — SillyTavern's "available models" affordance, placed next
+   * populated dropdown — legacy's "available models" affordance, placed next
    * to the field instead of behind the far-away Connect button. Discovery needs a
    * saved credential for key-required sources, so this saves first.
    */
@@ -358,7 +358,7 @@ export function ProviderProfileEditor({ surface = 'panel' }: ProviderProfileEdit
 
   /**
    * Switch the top-level API (Chat/Text Completions) and reset the Source select
-   * to the first source of that mode — mirrors SillyTavern's `main_api` behaviour
+   * to the first source of that mode — mirrors legacy's `main_api` behaviour
    * where changing the API repopulates the source list.
    */
   const changeApiMode = (mode: ApiMode): void => {
@@ -499,7 +499,7 @@ export function ProviderProfileEditor({ surface = 'panel' }: ProviderProfileEdit
         )}
 
         {/* The panel hides Name once a source is chosen (the source is the
-            identity, SillyTavern-style); the page surface keeps it as an
+            identity, legacy-style); the page surface keeps it as an
             optional override with the auto-derived name as placeholder. */}
         {surface === 'panel' && draft.source ? null : (
           <label className={`${styles.field} ${styles.formFieldFull}`} data-part="provider-name">

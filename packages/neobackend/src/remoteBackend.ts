@@ -110,9 +110,9 @@ import type {
   GalleryDeleteResultDto,
   CharacterVersionsResultDto,
   CharacterCardImportResultDto,
-  SillyTavernAnalyzeResultDto,
-  SillyTavernExecuteRequestDto,
-  SillyTavernExecuteResultDto,
+  FullBackupAnalyzeResultDto,
+  FullBackupExecuteRequestDto,
+  FullBackupExecuteResultDto,
   ChatsExportResultDto,
 } from '@neotavern/contracts';
 import type {
@@ -578,14 +578,14 @@ export class RemoteBackend implements NeoBackend {
         { assetId },
         { signal: opts?.signal },
       ),
-    sillyTavernAnalyze: (assetId, opts) =>
-      this.sdk.call<SillyTavernAnalyzeResultDto>(
-        'imports.sillytavern.analyze',
+    fullBackupAnalyze: (assetId, opts) =>
+      this.sdk.call<FullBackupAnalyzeResultDto>(
+        'imports.fullbackup.analyze',
         { assetId },
         { signal: opts?.signal },
       ),
-    sillyTavernExecute: (req, opts) =>
-      this.sdk.call<SillyTavernExecuteResultDto>('imports.sillytavern.execute', req, {
+    fullBackupExecute: (req, opts) =>
+      this.sdk.call<FullBackupExecuteResultDto>('imports.fullbackup.execute', req, {
         signal: opts?.signal,
       }),
   };

@@ -24,7 +24,7 @@ sidebar_position: 1
   停止和消息快照。想理解核心交互的话，从这里开始。
 - [角色](user-guide/characters) —— 带搜索和筛选的角色画廊、角色卡字段，以及以 PNG
   或 JSON 格式导入或导出卡片。
-- [群组](user-guide/groups) —— 多角色对话：目前已有的功能、SillyTavern 群组聊天
+- [群组](user-guide/groups) —— 多角色对话：目前已有的功能、legacy 群组聊天
   如何通过迁移到达，以及计划中的内容。
 - [设定集](user-guide/lorebook) —— 当激活关键词匹配时注入提示词的世界知识、
   条目设置、插入顺序，以及将书绑定到角色。
@@ -37,7 +37,7 @@ sidebar_position: 1
 - [扩展与插件](user-guide/extensions) —— 安装插件、权限与同意流程、管理和卸载，
   以及插件安全。
 - [数据与备份](user-guide/data-and-backups) —— 数据目录布局、导出和导入、
-  SillyTavern 迁移，以及创建和恢复备份。
+  legacy 迁移，以及创建和恢复备份。
 - [键盘快捷键](user-guide/keyboard-shortcuts) —— 编辑器、编辑、导航和聊天操作的
   默认快捷键一览表。
 

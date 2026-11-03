@@ -28,7 +28,7 @@ The pages build on each other in a loose order:
   filters, the character card fields, and importing or exporting cards as
   PNG or JSON.
 - [Groups](user-guide/groups) — multi-character conversations: what exists today,
-  how SillyTavern group chats arrive through migration, and what is
+  how legacy group chats arrive through migration, and what is
   planned.
 - [Lorebooks](user-guide/lorebook) — world knowledge injected into the prompt when
   activation keywords match, entry settings, insertion order, and binding
@@ -42,7 +42,7 @@ The pages build on each other in a loose order:
 - [Extensions & Plugins](user-guide/extensions) — installing plugins, the permission
   and consent flow, managing and uninstalling them, and plugin safety.
 - [Data & Backups](user-guide/data-and-backups) — the data directory layout, export
-  and import, SillyTavern migration, and creating and restoring backups.
+  and import, legacy migration, and creating and restoring backups.
 - [Keyboard Shortcuts](user-guide/keyboard-shortcuts) — the default shortcuts for the
   composer, editing, navigation, and chat actions in one table.
 

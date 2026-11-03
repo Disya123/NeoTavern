@@ -22,7 +22,25 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
-### Added
+### Changed
+
+- **The data-import surface is named after the data, not the previous app
+  (round 51/99).** Per owner decision the source-product name is gone from the
+  product and the canonical contract: wire operations are now
+  `imports.fullbackup.analyze|execute` (schema ids, fixtures and the generated
+  Rust/TS types follow), the kernel modules are `imports_full_backup*`, the
+  facade exposes `fullBackupAnalyze/fullBackupExecute`, the React hooks are
+  `useAnalyzeFullBackup` / `useExecuteFullBackupImport` /
+  `useDiscardFullBackupAnalysis`, the legacy Fastify routes moved to
+  `/api/v2/imports/fullbackup/*` (server module renamed `fullBackupImport.ts`),
+  and the Settings copy in en/ru says "full-data backup" instead of naming the
+  previous app. The capability id is `library.fullBackupImport`; persisted
+  receipt families and settings keys are `fullbackup.*`. Registry/capability
+  matrix/release-gate docs swept to match. Historical ADRs and past CHANGELOG
+  entries keep the original name — they record what was decided then.
+  Verified: contracts + neobackend 233/233, web 872/872, legacy server 623/624
+  (one generation-timing test flaked, green on rerun), round gate green,
+  docs:check green.
 
 - **SillyTavern backup import: the destructive half is on the wire (round 49/99).**
   `imports.sillytavern.execute` closes the logic half of cutover-registry row 10.

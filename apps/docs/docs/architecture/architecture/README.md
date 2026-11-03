@@ -57,7 +57,7 @@ PostgreSQL/Redis/Docker.
 - SQLite via better-sqlite3 + Drizzle ORM, WAL, FTS5.
 - Radix Primitives, CSS Modules + Custom Properties + Cascade Layers.
 - i18next, TanStack Query, Zustand.
-- In-house Plugin SDK and Theme SDK. (The SillyTavern-era plugin
+- In-house Plugin SDK and Theme SDK. (The legacy-era plugin
   compatibility layer was removed 2026-10-31, ADR-0059 slice.)
 
 ## Monorepo structure
@@ -172,7 +172,7 @@ to browser storage.
 ## API connection surface
 
 The provider editor (panel and page) reproduces the behavior of the classic
-SillyTavern API tab on top of the in-house stack: source selection from the
+legacy API tab on top of the in-house stack: source selection from the
 catalog, keys via the secret manager, model discovery, "Connect", message
 test, connection status. Additionally:
 
@@ -385,7 +385,7 @@ gate passes.
   (the five frozen ids, host-side re-validation, permission gating,
   priority ordering, zero layout change when nothing renders),
   app-level `extensions.legacyFrontend` gate (default off; the legacy
-  SillyTavern `<script>` injection path and the `legacy.trusted` consent
+  legacy `<script>` injection path and the `legacy.trusted` consent
   it gated were removed outright on 2026-10-31, ADR-0059 slice),
   theme activation rollback + last-working boot
   fallback + responsive `density`/`motion` semantics, manifest `engines`

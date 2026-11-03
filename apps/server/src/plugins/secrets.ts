@@ -5,7 +5,7 @@
  * database: it is stored in the SecretStore and the database keeps only an
  * opaque reference. List responses are masked; the plaintext is returned only
  * by `/reveal`, and only when secrets exposure is enabled server-side
- * (`NEOTA_ALLOW_SECRETS_EXPOSURE`, default off). Mirrors SillyTavern's
+ * (`NEOTA_ALLOW_SECRETS_EXPOSURE`, default off). Mirrors legacy's
  * `allowKeysExposure` gate (AGENTS.md §4, §11).
  */
 import {

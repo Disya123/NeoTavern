@@ -38,7 +38,7 @@ export interface ServerConfig {
   safeMode: boolean;
   /**
    * Allow revealing stored provider secret values via the API. Off by default;
-   * mirrors SillyTavern's `allowKeysExposure`. Secrets stay write-only unless
+   * mirrors legacy's `allowKeysExposure`. Secrets stay write-only unless
    * this is explicitly enabled (AGENTS.md §4).
    */
   allowSecretsExposure: boolean;

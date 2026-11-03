@@ -1,5 +1,5 @@
 /**
- * Wire → legacy-shape mappers for cutover-registry row 10 (SillyTavern data
+ * Wire → legacy-shape mappers for cutover-registry row 10 (legacy data
  * import). The panel renders the legacy DTOs, so the kernel plane must translate
  * honestly: every count comes from the kernel's per-category arithmetic, and the
  * two fields the wire deliberately does not model (`safetyBackupId`,

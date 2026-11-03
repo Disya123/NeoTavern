@@ -24,7 +24,7 @@ today instead.
 
 ## Imported Group Chats
 
-When you migrate a SillyTavern backup through Settings → Data, group chats
+When you migrate a full-data backup through Settings → Data, group chats
 are handled safely:
 
 - Group definitions and their transcripts are imported as regular chats,

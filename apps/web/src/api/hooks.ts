@@ -39,10 +39,10 @@ import type {
   DataImportCounts,
   DataImportEntityCount,
   DataImportWarning,
-  SillyTavernImportAnalysis,
-  SillyTavernImportCategoryAnalysis,
-  SillyTavernImportExecute,
-  SillyTavernImportResult,
+  FullBackupAnalysis,
+  FullBackupCategoryAnalysis,
+  FullBackupExecute,
+  FullBackupImportResult,
   PluginActivateRequest,
   PluginAuthConnectRequest,
   PluginAuthRevokeRequest,
@@ -1347,12 +1347,12 @@ const ARCHIVE_UPLOAD_KIND = 'import-archive';
 const stagedArchiveNames = new Map<string, string>();
 
 export function importCategoryFromWire(category: {
-  id: SillyTavernImportCategoryAnalysis['id'];
+  id: FullBackupCategoryAnalysis['id'];
   discovered: number;
   dependentRecords: number;
   invalid: number;
   sizeBytes: number;
-}): SillyTavernImportCategoryAnalysis {
+}): FullBackupCategoryAnalysis {
   return {
     id: category.id,
     discovered: category.discovered,
@@ -1380,7 +1380,7 @@ function zeroEntityCount(): DataImportEntityCount {
 }
 
 /**
- * Map `wire.result.imports.sillytavern.execute` onto the legacy result shape the
+ * Map `wire.result.imports.fullbackup.execute` onto the legacy result shape the
  * migration panel renders. Two honest gaps instead of fabricated values:
  * `safetyBackupId` is empty (the kernel recovers through `import_receipts` and
  * `character_versions`, not through a legacy backup container), and
@@ -1390,10 +1390,10 @@ export function importResultFromWire(
   dto: {
     runId: string;
     sourceHash: string;
-    conflictPolicy: SillyTavernImportExecute['conflictPolicy'];
+    conflictPolicy: FullBackupExecute['conflictPolicy'];
     archiveAlreadyImported: boolean;
     categories: ReadonlyArray<{
-      id: SillyTavernImportCategoryAnalysis['id'];
+      id: FullBackupCategoryAnalysis['id'];
       imported: number;
       reused: number;
       skipped: number;
@@ -1402,17 +1402,17 @@ export function importResultFromWire(
     warningCount: number;
     warnings: ReadonlyArray<{ code: string; path?: string }>;
   },
-  input: SillyTavernImportExecute,
-  selected: SillyTavernImportExecute['categories'],
-): SillyTavernImportResult {
+  input: FullBackupExecute,
+  selected: FullBackupExecute['categories'],
+): FullBackupImportResult {
   const byId = new Map(dto.categories.map((category) => [category.id, category]));
-  const pick = (id: SillyTavernImportCategoryAnalysis['id']): DataImportEntityCount => {
+  const pick = (id: FullBackupCategoryAnalysis['id']): DataImportEntityCount => {
     const category = byId.get(id);
     return category === undefined
       ? zeroEntityCount()
       : { imported: category.imported, reused: category.reused, skipped: category.skipped };
   };
-  const dependent = (id: SillyTavernImportCategoryAnalysis['id']): DataImportEntityCount => ({
+  const dependent = (id: FullBackupCategoryAnalysis['id']): DataImportEntityCount => ({
     imported: byId.get(id)?.dependentImported ?? 0,
     reused: 0,
     skipped: 0,
@@ -1446,7 +1446,7 @@ export function importResultFromWire(
   };
 }
 
-export function useAnalyzeSillyTavern() {
+export function useAnalyzeFullBackup() {
   return useMutation({
     mutationFn: async ({ file, signal }: { file: File; signal: AbortSignal }) => {
       // Kernel plane: stage the archive once through the chunked ingestion
@@ -1457,7 +1457,7 @@ export function useAnalyzeSillyTavern() {
         const published = await stageFileChunked(file, ARCHIVE_UPLOAD_KIND, 'backup.zip');
         const assetId = published.asset.id;
         stagedArchiveNames.set(assetId, file.name || 'backup.zip');
-        const dto = await backend.imports.sillyTavernAnalyze(assetId, { signal });
+        const dto = await backend.imports.fullBackupAnalyze(assetId, { signal });
         return {
           analysisId: assetId,
           sourceHash: dto.sourceHash,
@@ -1473,14 +1473,14 @@ export function useAnalyzeSillyTavern() {
           conflicts: [],
           warningCount: dto.warningCount,
           warnings: warningsFromWire(dto.warnings),
-        } satisfies SillyTavernImportAnalysis;
+        } satisfies FullBackupAnalysis;
       }
-      return api.upload<SillyTavernImportAnalysis>('/imports/sillytavern/analyze', file, signal);
+      return api.upload<FullBackupAnalysis>('/imports/fullbackup/analyze', file, signal);
     },
   });
 }
 
-export function useExecuteSillyTavernImport() {
+export function useExecuteFullBackupImport() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -1489,7 +1489,7 @@ export function useExecuteSillyTavernImport() {
       signal,
     }: {
       analysisId: string;
-      input: SillyTavernImportExecute;
+      input: FullBackupExecute;
       signal: AbortSignal;
     }) => {
       // Kernel plane: the same staged archive, an explicit conflict policy and
@@ -1498,7 +1498,7 @@ export function useExecuteSillyTavernImport() {
       // instead of sending a request that can only fail.
       if (isKernelMode()) {
         const selected = input.categories.filter((id) => id !== 'legacyExtensions');
-        const dto = await backend.imports.sillyTavernExecute(
+        const dto = await backend.imports.fullBackupExecute(
           {
             assetId: analysisId,
             ...(selected.length > 0 ? { categories: selected } : {}),
@@ -1511,8 +1511,8 @@ export function useExecuteSillyTavernImport() {
         const result = importResultFromWire(dto, input, selected);
         return { ...result, sourceName: stagedArchiveNames.get(dto.runId) ?? '' };
       }
-      return api.post<SillyTavernImportResult>(
-        `/imports/sillytavern/${analysisId}/execute`,
+      return api.post<FullBackupImportResult>(
+        `/imports/fullbackup/${analysisId}/execute`,
         input,
         signal,
       );
@@ -1529,7 +1529,7 @@ export function useExecuteSillyTavernImport() {
   });
 }
 
-export function useDiscardSillyTavernAnalysis() {
+export function useDiscardFullBackupAnalysis() {
   return useMutation({
     mutationFn: async (analysisId: string) => {
       // Kernel plane: discarding drops the staged archive asset. Receipts and
@@ -1540,7 +1540,7 @@ export function useDiscardSillyTavernAnalysis() {
         stagedArchiveNames.delete(analysisId);
         return;
       }
-      return api.del<void>(`/imports/sillytavern/${analysisId}`);
+      return api.del<void>(`/imports/fullbackup/${analysisId}`);
     },
   });
 }

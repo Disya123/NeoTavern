@@ -108,8 +108,8 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "assets.thumb" => Some(1024),
         "assets.delete" => Some(1024),
         "imports.character.card" => Some(1024),
-        "imports.sillytavern.analyze" => Some(1024),
-        "imports.sillytavern.execute" => Some(1024),
+        "imports.fullbackup.analyze" => Some(1024),
+        "imports.fullbackup.execute" => Some(1024),
         "plugins.list" => Some(1024),
         "plugins.install" => Some(65536),
         "plugins.uninstall" => Some(1024),
@@ -267,8 +267,8 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "assets.thumb" => Some(3145728),
         "assets.delete" => Some(1024),
         "imports.character.card" => Some(262144),
-        "imports.sillytavern.analyze" => Some(262144),
-        "imports.sillytavern.execute" => Some(262144),
+        "imports.fullbackup.analyze" => Some(262144),
+        "imports.fullbackup.execute" => Some(262144),
         "plugins.list" => Some(262144),
         "plugins.install" => Some(262144),
         "plugins.uninstall" => Some(1024),
@@ -7903,12 +7903,12 @@ pub fn decode_request_imports_character_card(bytes: &[u8]) -> Result<RequestImpo
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RequestImportsSillytavernAnalyze {
+pub struct RequestImportsFullbackupAnalyze {
     #[serde(rename = "assetId")]
     pub asset_id: String,
 }
 
-pub(crate) fn check_request_imports_sillytavern_analyze(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+pub(crate) fn check_request_imports_fullbackup_analyze(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
@@ -7938,32 +7938,32 @@ pub(crate) fn check_request_imports_sillytavern_analyze(value: &Value, path: &st
     }
 }
 
-pub fn validate_request_imports_sillytavern_analyze(value: &Value) -> Result<(), Vec<Issue>> {
+pub fn validate_request_imports_fullbackup_analyze(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
-    check_request_imports_sillytavern_analyze(value, "", &mut issues);
+    check_request_imports_fullbackup_analyze(value, "", &mut issues);
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-pub fn decode_request_imports_sillytavern_analyze(bytes: &[u8]) -> Result<RequestImportsSillytavernAnalyze, WireError> {
-    crate::decode::<RequestImportsSillytavernAnalyze>(validate_request_imports_sillytavern_analyze, bytes)
+pub fn decode_request_imports_fullbackup_analyze(bytes: &[u8]) -> Result<RequestImportsFullbackupAnalyze, WireError> {
+    crate::decode::<RequestImportsFullbackupAnalyze>(validate_request_imports_fullbackup_analyze, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ResultImportsSillytavernAnalyze {
+pub struct ResultImportsFullbackupAnalyze {
     #[serde(rename = "sourceHash")]
     pub source_hash: String,
     #[serde(rename = "totalCompressedBytes")]
     pub total_compressed_bytes: i64,
     #[serde(rename = "totalExpandedBytes")]
     pub total_expanded_bytes: i64,
-    pub categories: Vec<ImportsSillytavernCategoryAnalysis>,
+    pub categories: Vec<ImportsFullbackupCategoryAnalysis>,
     #[serde(rename = "warningCount")]
     pub warning_count: i64,
-    pub warnings: Vec<ImportsSillytavernWarning>,
+    pub warnings: Vec<ImportsFullbackupWarning>,
 }
 
-pub(crate) fn check_result_imports_sillytavern_analyze(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+pub(crate) fn check_result_imports_fullbackup_analyze(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-f0-9]{64}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
@@ -8032,7 +8032,7 @@ pub(crate) fn check_result_imports_sillytavern_analyze(value: &Value, path: &str
                 }
                 for (i, item) in arr.iter().enumerate() {
                     let item_path = format!("{}[{}]", child_path, i);
-                    check_imports_sillytavern_category_analysis(item, &item_path, issues);
+                    check_imports_fullbackup_category_analysis(item, &item_path, issues);
                 }
             }
         }
@@ -8057,7 +8057,7 @@ pub(crate) fn check_result_imports_sillytavern_analyze(value: &Value, path: &str
                 }
                 for (i, item) in arr.iter().enumerate() {
                     let item_path = format!("{}[{}]", child_path, i);
-                    check_imports_sillytavern_warning(item, &item_path, issues);
+                    check_imports_fullbackup_warning(item, &item_path, issues);
                 }
             }
         }
@@ -8072,28 +8072,28 @@ pub(crate) fn check_result_imports_sillytavern_analyze(value: &Value, path: &str
     }
 }
 
-pub fn validate_result_imports_sillytavern_analyze(value: &Value) -> Result<(), Vec<Issue>> {
+pub fn validate_result_imports_fullbackup_analyze(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
-    check_result_imports_sillytavern_analyze(value, "", &mut issues);
+    check_result_imports_fullbackup_analyze(value, "", &mut issues);
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-pub fn decode_result_imports_sillytavern_analyze(bytes: &[u8]) -> Result<ResultImportsSillytavernAnalyze, WireError> {
-    crate::decode::<ResultImportsSillytavernAnalyze>(validate_result_imports_sillytavern_analyze, bytes)
+pub fn decode_result_imports_fullbackup_analyze(bytes: &[u8]) -> Result<ResultImportsFullbackupAnalyze, WireError> {
+    crate::decode::<ResultImportsFullbackupAnalyze>(validate_result_imports_fullbackup_analyze, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RequestImportsSillytavernExecute {
+pub struct RequestImportsFullbackupExecute {
     #[serde(rename = "assetId")]
     pub asset_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub categories: Option<Vec<ImportsSillytavernCategory>>,
+    pub categories: Option<Vec<ImportsFullbackupCategory>>,
     #[serde(rename = "conflictPolicy")]
-    pub conflict_policy: ImportsSillytavernConflictPolicy,
+    pub conflict_policy: ImportsFullbackupConflictPolicy,
 }
 
-pub(crate) fn check_request_imports_sillytavern_execute(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+pub(crate) fn check_request_imports_fullbackup_execute(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
@@ -8128,13 +8128,13 @@ pub(crate) fn check_request_imports_sillytavern_execute(value: &Value, path: &st
                 }
                 for (i, item) in arr.iter().enumerate() {
                     let item_path = format!("{}[{}]", child_path, i);
-                    check_imports_sillytavern_category(item, &item_path, issues);
+                    check_imports_fullbackup_category(item, &item_path, issues);
                 }
             }
         }
         if let Some(child) = value.get("conflictPolicy") {
             let child_path = join_path(path, "conflictPolicy");
-            check_imports_sillytavern_conflict_policy(child, &child_path, issues);
+            check_imports_fullbackup_conflict_policy(child, &child_path, issues);
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
@@ -8147,35 +8147,35 @@ pub(crate) fn check_request_imports_sillytavern_execute(value: &Value, path: &st
     }
 }
 
-pub fn validate_request_imports_sillytavern_execute(value: &Value) -> Result<(), Vec<Issue>> {
+pub fn validate_request_imports_fullbackup_execute(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
-    check_request_imports_sillytavern_execute(value, "", &mut issues);
+    check_request_imports_fullbackup_execute(value, "", &mut issues);
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-pub fn decode_request_imports_sillytavern_execute(bytes: &[u8]) -> Result<RequestImportsSillytavernExecute, WireError> {
-    crate::decode::<RequestImportsSillytavernExecute>(validate_request_imports_sillytavern_execute, bytes)
+pub fn decode_request_imports_fullbackup_execute(bytes: &[u8]) -> Result<RequestImportsFullbackupExecute, WireError> {
+    crate::decode::<RequestImportsFullbackupExecute>(validate_request_imports_fullbackup_execute, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ResultImportsSillytavernExecute {
+pub struct ResultImportsFullbackupExecute {
     #[serde(rename = "runId")]
     pub run_id: String,
     #[serde(rename = "sourceHash")]
     pub source_hash: String,
     #[serde(rename = "conflictPolicy")]
-    pub conflict_policy: ImportsSillytavernConflictPolicy,
+    pub conflict_policy: ImportsFullbackupConflictPolicy,
     #[serde(rename = "archiveAlreadyImported")]
     pub archive_already_imported: bool,
-    pub categories: Vec<ImportsSillytavernCategoryExecute>,
-    pub totals: ImportsSillytavernTotals,
+    pub categories: Vec<ImportsFullbackupCategoryExecute>,
+    pub totals: ImportsFullbackupTotals,
     #[serde(rename = "warningCount")]
     pub warning_count: i64,
-    pub warnings: Vec<ImportsSillytavernWarning>,
+    pub warnings: Vec<ImportsFullbackupWarning>,
 }
 
-pub(crate) fn check_result_imports_sillytavern_execute(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+pub(crate) fn check_result_imports_fullbackup_execute(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-f0-9]{64}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
@@ -8229,7 +8229,7 @@ pub(crate) fn check_result_imports_sillytavern_execute(value: &Value, path: &str
         }
         if let Some(child) = value.get("conflictPolicy") {
             let child_path = join_path(path, "conflictPolicy");
-            check_imports_sillytavern_conflict_policy(child, &child_path, issues);
+            check_imports_fullbackup_conflict_policy(child, &child_path, issues);
         }
         if let Some(child) = value.get("archiveAlreadyImported") {
             let child_path = join_path(path, "archiveAlreadyImported");
@@ -8250,13 +8250,13 @@ pub(crate) fn check_result_imports_sillytavern_execute(value: &Value, path: &str
                 }
                 for (i, item) in arr.iter().enumerate() {
                     let item_path = format!("{}[{}]", child_path, i);
-                    check_imports_sillytavern_category_execute(item, &item_path, issues);
+                    check_imports_fullbackup_category_execute(item, &item_path, issues);
                 }
             }
         }
         if let Some(child) = value.get("totals") {
             let child_path = join_path(path, "totals");
-            check_imports_sillytavern_totals(child, &child_path, issues);
+            check_imports_fullbackup_totals(child, &child_path, issues);
         }
         if let Some(child) = value.get("warningCount") {
             let child_path = join_path(path, "warningCount");
@@ -8279,7 +8279,7 @@ pub(crate) fn check_result_imports_sillytavern_execute(value: &Value, path: &str
                 }
                 for (i, item) in arr.iter().enumerate() {
                     let item_path = format!("{}[{}]", child_path, i);
-                    check_imports_sillytavern_warning(item, &item_path, issues);
+                    check_imports_fullbackup_warning(item, &item_path, issues);
                 }
             }
         }
@@ -8294,18 +8294,18 @@ pub(crate) fn check_result_imports_sillytavern_execute(value: &Value, path: &str
     }
 }
 
-pub fn validate_result_imports_sillytavern_execute(value: &Value) -> Result<(), Vec<Issue>> {
+pub fn validate_result_imports_fullbackup_execute(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
-    check_result_imports_sillytavern_execute(value, "", &mut issues);
+    check_result_imports_fullbackup_execute(value, "", &mut issues);
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-pub fn decode_result_imports_sillytavern_execute(bytes: &[u8]) -> Result<ResultImportsSillytavernExecute, WireError> {
-    crate::decode::<ResultImportsSillytavernExecute>(validate_result_imports_sillytavern_execute, bytes)
+pub fn decode_result_imports_fullbackup_execute(bytes: &[u8]) -> Result<ResultImportsFullbackupExecute, WireError> {
+    crate::decode::<ResultImportsFullbackupExecute>(validate_result_imports_fullbackup_execute, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ImportsSillytavernCategory {
+pub enum ImportsFullbackupCategory {
     #[serde(rename = "characters")] Characters,
     #[serde(rename = "chats")] Chats,
     #[serde(rename = "personas")] Personas,
@@ -8319,7 +8319,7 @@ pub enum ImportsSillytavernCategory {
     #[serde(rename = "themes")] Themes,
 }
 
-pub(crate) fn check_imports_sillytavern_category(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+pub(crate) fn check_imports_fullbackup_category(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     match value.as_str() {
         Some(s) => {
             if !matches!(s, "characters" | "chats" | "personas" | "lorebooks" | "presets" | "groups" | "backgrounds" | "extensionSettings" | "apiSettings" | "legacyExtensions" | "themes") {
@@ -8330,20 +8330,20 @@ pub(crate) fn check_imports_sillytavern_category(value: &Value, path: &str, issu
     }
 }
 
-pub fn validate_imports_sillytavern_category(value: &Value) -> Result<(), Vec<Issue>> {
+pub fn validate_imports_fullbackup_category(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
-    check_imports_sillytavern_category(value, "", &mut issues);
+    check_imports_fullbackup_category(value, "", &mut issues);
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-pub fn decode_imports_sillytavern_category(bytes: &[u8]) -> Result<ImportsSillytavernCategory, WireError> {
-    crate::decode::<ImportsSillytavernCategory>(validate_imports_sillytavern_category, bytes)
+pub fn decode_imports_fullbackup_category(bytes: &[u8]) -> Result<ImportsFullbackupCategory, WireError> {
+    crate::decode::<ImportsFullbackupCategory>(validate_imports_fullbackup_category, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ImportsSillytavernCategoryAnalysis {
-    pub id: ImportsSillytavernCategory,
+pub struct ImportsFullbackupCategoryAnalysis {
+    pub id: ImportsFullbackupCategory,
     pub discovered: i64,
     #[serde(rename = "dependentRecords")]
     pub dependent_records: i64,
@@ -8352,7 +8352,7 @@ pub struct ImportsSillytavernCategoryAnalysis {
     pub size_bytes: i64,
 }
 
-pub(crate) fn check_imports_sillytavern_category_analysis(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+pub(crate) fn check_imports_fullbackup_category_analysis(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -8373,7 +8373,7 @@ pub(crate) fn check_imports_sillytavern_category_analysis(value: &Value, path: &
         }
         if let Some(child) = value.get("id") {
             let child_path = join_path(path, "id");
-            check_imports_sillytavern_category(child, &child_path, issues);
+            check_imports_fullbackup_category(child, &child_path, issues);
         }
         if let Some(child) = value.get("discovered") {
             let child_path = join_path(path, "discovered");
@@ -8430,20 +8430,20 @@ pub(crate) fn check_imports_sillytavern_category_analysis(value: &Value, path: &
     }
 }
 
-pub fn validate_imports_sillytavern_category_analysis(value: &Value) -> Result<(), Vec<Issue>> {
+pub fn validate_imports_fullbackup_category_analysis(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
-    check_imports_sillytavern_category_analysis(value, "", &mut issues);
+    check_imports_fullbackup_category_analysis(value, "", &mut issues);
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-pub fn decode_imports_sillytavern_category_analysis(bytes: &[u8]) -> Result<ImportsSillytavernCategoryAnalysis, WireError> {
-    crate::decode::<ImportsSillytavernCategoryAnalysis>(validate_imports_sillytavern_category_analysis, bytes)
+pub fn decode_imports_fullbackup_category_analysis(bytes: &[u8]) -> Result<ImportsFullbackupCategoryAnalysis, WireError> {
+    crate::decode::<ImportsFullbackupCategoryAnalysis>(validate_imports_fullbackup_category_analysis, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ImportsSillytavernCategoryExecute {
-    pub id: ImportsSillytavernCategory,
+pub struct ImportsFullbackupCategoryExecute {
+    pub id: ImportsFullbackupCategory,
     pub imported: i64,
     pub reused: i64,
     pub skipped: i64,
@@ -8453,7 +8453,7 @@ pub struct ImportsSillytavernCategoryExecute {
     pub dependent_imported: i64,
 }
 
-pub(crate) fn check_imports_sillytavern_category_execute(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+pub(crate) fn check_imports_fullbackup_category_execute(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -8480,7 +8480,7 @@ pub(crate) fn check_imports_sillytavern_category_execute(value: &Value, path: &s
         }
         if let Some(child) = value.get("id") {
             let child_path = join_path(path, "id");
-            check_imports_sillytavern_category(child, &child_path, issues);
+            check_imports_fullbackup_category(child, &child_path, issues);
         }
         if let Some(child) = value.get("imported") {
             let child_path = join_path(path, "imported");
@@ -8559,25 +8559,25 @@ pub(crate) fn check_imports_sillytavern_category_execute(value: &Value, path: &s
     }
 }
 
-pub fn validate_imports_sillytavern_category_execute(value: &Value) -> Result<(), Vec<Issue>> {
+pub fn validate_imports_fullbackup_category_execute(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
-    check_imports_sillytavern_category_execute(value, "", &mut issues);
+    check_imports_fullbackup_category_execute(value, "", &mut issues);
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-pub fn decode_imports_sillytavern_category_execute(bytes: &[u8]) -> Result<ImportsSillytavernCategoryExecute, WireError> {
-    crate::decode::<ImportsSillytavernCategoryExecute>(validate_imports_sillytavern_category_execute, bytes)
+pub fn decode_imports_fullbackup_category_execute(bytes: &[u8]) -> Result<ImportsFullbackupCategoryExecute, WireError> {
+    crate::decode::<ImportsFullbackupCategoryExecute>(validate_imports_fullbackup_category_execute, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ImportsSillytavernConflictPolicy {
+pub enum ImportsFullbackupConflictPolicy {
     #[serde(rename = "skip")] Skip,
     #[serde(rename = "copy")] Copy,
     #[serde(rename = "merge")] Merge,
     #[serde(rename = "replace")] Replace,
 }
 
-pub(crate) fn check_imports_sillytavern_conflict_policy(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+pub(crate) fn check_imports_fullbackup_conflict_policy(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     match value.as_str() {
         Some(s) => {
             if !matches!(s, "skip" | "copy" | "merge" | "replace") {
@@ -8588,19 +8588,19 @@ pub(crate) fn check_imports_sillytavern_conflict_policy(value: &Value, path: &st
     }
 }
 
-pub fn validate_imports_sillytavern_conflict_policy(value: &Value) -> Result<(), Vec<Issue>> {
+pub fn validate_imports_fullbackup_conflict_policy(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
-    check_imports_sillytavern_conflict_policy(value, "", &mut issues);
+    check_imports_fullbackup_conflict_policy(value, "", &mut issues);
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-pub fn decode_imports_sillytavern_conflict_policy(bytes: &[u8]) -> Result<ImportsSillytavernConflictPolicy, WireError> {
-    crate::decode::<ImportsSillytavernConflictPolicy>(validate_imports_sillytavern_conflict_policy, bytes)
+pub fn decode_imports_fullbackup_conflict_policy(bytes: &[u8]) -> Result<ImportsFullbackupConflictPolicy, WireError> {
+    crate::decode::<ImportsFullbackupConflictPolicy>(validate_imports_fullbackup_conflict_policy, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ImportsSillytavernTotals {
+pub struct ImportsFullbackupTotals {
     pub imported: i64,
     pub reused: i64,
     pub skipped: i64,
@@ -8608,7 +8608,7 @@ pub struct ImportsSillytavernTotals {
     pub invalid: i64,
 }
 
-pub(crate) fn check_imports_sillytavern_totals(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+pub(crate) fn check_imports_fullbackup_totals(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -8693,25 +8693,25 @@ pub(crate) fn check_imports_sillytavern_totals(value: &Value, path: &str, issues
     }
 }
 
-pub fn validate_imports_sillytavern_totals(value: &Value) -> Result<(), Vec<Issue>> {
+pub fn validate_imports_fullbackup_totals(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
-    check_imports_sillytavern_totals(value, "", &mut issues);
+    check_imports_fullbackup_totals(value, "", &mut issues);
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-pub fn decode_imports_sillytavern_totals(bytes: &[u8]) -> Result<ImportsSillytavernTotals, WireError> {
-    crate::decode::<ImportsSillytavernTotals>(validate_imports_sillytavern_totals, bytes)
+pub fn decode_imports_fullbackup_totals(bytes: &[u8]) -> Result<ImportsFullbackupTotals, WireError> {
+    crate::decode::<ImportsFullbackupTotals>(validate_imports_fullbackup_totals, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ImportsSillytavernWarning {
+pub struct ImportsFullbackupWarning {
     pub code: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
 }
 
-pub(crate) fn check_imports_sillytavern_warning(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+pub(crate) fn check_imports_fullbackup_warning(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[A-Z][A-Z0-9_]*$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
@@ -8757,14 +8757,14 @@ pub(crate) fn check_imports_sillytavern_warning(value: &Value, path: &str, issue
     }
 }
 
-pub fn validate_imports_sillytavern_warning(value: &Value) -> Result<(), Vec<Issue>> {
+pub fn validate_imports_fullbackup_warning(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
-    check_imports_sillytavern_warning(value, "", &mut issues);
+    check_imports_fullbackup_warning(value, "", &mut issues);
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-pub fn decode_imports_sillytavern_warning(bytes: &[u8]) -> Result<ImportsSillytavernWarning, WireError> {
-    crate::decode::<ImportsSillytavernWarning>(validate_imports_sillytavern_warning, bytes)
+pub fn decode_imports_fullbackup_warning(bytes: &[u8]) -> Result<ImportsFullbackupWarning, WireError> {
+    crate::decode::<ImportsFullbackupWarning>(validate_imports_fullbackup_warning, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

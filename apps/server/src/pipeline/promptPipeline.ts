@@ -106,7 +106,7 @@ export interface PipelineInput {
    */
   providerKind?: string;
   /**
-   * SillyTavern-style prompt post-processing applied to the structured message
+   * legacy-style prompt post-processing applied to the structured message
    * array in chat mode (`serializeAsText=false`): merge/semi/strict/single and
    * their `_tools` variants. Ignored when the prompt is serialized as text.
    */
@@ -346,7 +346,7 @@ export async function runPromptPipeline(input: PipelineInput): Promise<PipelineR
     providerMessages = [{ role: 'user', content: instructPrompt }];
   } else {
     // Chat mode: optionally reshape the structured message array per the
-    // SillyTavern-style post-processing mode before serialization.
+    // legacy-style post-processing mode before serialization.
     providerMessages = postProcessMessages(messages, input.promptPostProcessing, input.promptNames);
     if (input.promptPostProcessing && input.promptPostProcessing.length > 0) {
       diagnostics.push(`prompt post-processing "${input.promptPostProcessing}" applied`);

@@ -1,5 +1,5 @@
-//! Этап 4.5 cluster 10: SillyTavern archive analysis
-//! (`imports.sillytavern.analyze`).
+//! Этап 4.5 cluster 10: legacy full-data archive analysis
+//! (`imports.fullbackup.analyze`).
 //!
 //! The archive is staged through `assets.put` (kind `backup`) — the same
 //! staged-asset path a multi-gigabyte backup takes through the chunked
@@ -68,10 +68,10 @@ fn put_backup_asset(kernel: &Kernel, bytes: &[u8]) -> String {
 fn analyze(kernel: &Kernel, asset_id: &str) -> Value {
     dispatch(
         kernel,
-        "imports.sillytavern.analyze",
+        "imports.fullbackup.analyze",
         json!({ "assetId": asset_id }),
     )
-    .expect("imports.sillytavern.analyze must succeed")
+    .expect("imports.fullbackup.analyze must succeed")
 }
 
 fn category<'a>(result: &'a Value, id: &str) -> &'a Value {
@@ -222,13 +222,13 @@ fn analyze_rejects_a_non_zip_asset() {
 
     let error = dispatch(
         &kernel,
-        "imports.sillytavern.analyze",
+        "imports.fullbackup.analyze",
         json!({ "assetId": asset_id }),
     )
     .expect_err("a non-zip asset must be refused");
     let message = format!("{error:?}");
     assert!(
-        message.contains("SILLYTAVERN_ARCHIVE_INVALID"),
+        message.contains("FULLBACKUP_ARCHIVE_INVALID"),
         "unexpected error: {message}"
     );
 }
@@ -240,7 +240,7 @@ fn analyze_rejects_an_unknown_asset() {
 
     let error = dispatch(
         &kernel,
-        "imports.sillytavern.analyze",
+        "imports.fullbackup.analyze",
         json!({ "assetId": "00000000-0000-4000-8000-000000000000" }),
     )
     .expect_err("an unknown asset must be refused");
@@ -289,7 +289,7 @@ fn analyze_finds_the_user_root_under_a_backup_wrapper() {
     assert_eq!(category(&result, "chats")["dependentRecords"], json!(2));
 }
 
-// --- imports.sillytavern.execute (the destructive half) ---------------------
+// --- imports.fullbackup.execute (the destructive half) ---------------------
 
 /// One archive that exercises every supported category at least once.
 const EXEC_CHAT: &str =
@@ -335,7 +335,7 @@ fn execute(
 ) -> Result<Value, runtime_kernel::KernelError> {
     dispatch(
         kernel,
-        "imports.sillytavern.execute",
+        "imports.fullbackup.execute",
         json!({ "assetId": asset_id, "conflictPolicy": policy }),
     )
 }
@@ -450,14 +450,14 @@ fn execute_imports_every_supported_category() {
     let settings = dispatch(
         &kernel,
         "settings.get",
-        json!({ "keys": ["sillytavern.groups", "sillytavern.extension_settings", "sillytavern.api_settings"] }),
+        json!({ "keys": ["fullbackup.groups", "fullbackup.extension_settings", "fullbackup.api_settings"] }),
     )
     .expect("settings.get");
     let documents = settings["items"].as_array().expect("settings items");
     assert_eq!(documents.len(), 3, "{settings}");
     let groups = documents
         .iter()
-        .find(|item| item["key"] == json!("sillytavern.groups"))
+        .find(|item| item["key"] == json!("fullbackup.groups"))
         .expect("groups document");
     assert_eq!(groups["value"]["g1"]["name"], json!("Group"));
 }
@@ -572,7 +572,7 @@ fn execute_rejects_a_non_zip_asset_as_validation() {
     let debug = format!("{error:?}");
     assert!(debug.contains("VALIDATION"), "unexpected error: {debug}");
     assert!(
-        debug.contains("SILLYTAVERN_ARCHIVE_INVALID"),
+        debug.contains("FULLBACKUP_ARCHIVE_INVALID"),
         "unexpected error: {debug}"
     );
 }
@@ -585,7 +585,7 @@ fn execute_refuses_legacy_extensions_explicitly() {
 
     let error = dispatch(
         &kernel,
-        "imports.sillytavern.execute",
+        "imports.fullbackup.execute",
         json!({
             "assetId": asset_id,
             "conflictPolicy": "skip",
@@ -595,7 +595,7 @@ fn execute_refuses_legacy_extensions_explicitly() {
     .expect_err("legacy extensions are not importable");
     let debug = format!("{error:?}");
     assert!(
-        debug.contains("SILLYTAVERN_CATEGORY_UNSUPPORTED"),
+        debug.contains("FULLBACKUP_CATEGORY_UNSUPPORTED"),
         "unexpected error: {debug}"
     );
 }

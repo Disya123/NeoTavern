@@ -1,12 +1,12 @@
 /**
  * Connection Profiles — a saved, named bundle of connection settings layered
- * over provider configs (the classic SillyTavern "Connection Profiles" manager,
+ * over provider configs (the classic the legacy app "Connection Profiles" manager,
  * extended as a first-class NeoTavern entity).
  *
  * A profile carries *references* (provider config / secret / generation preset)
  * plus formatting overrides (prompt post-processing, additional parameters,
  * stop strings, start-reply-with). `exclude` lists bundle fields that must be
- * skipped when the profile is applied, mirroring SillyTavern's per-field exclude
+ * skipped when the profile is applied, mirroring the legacy app's per-field exclude
  * checkboxes. Applying a profile writes the referenced/overridden values into
  * the live app settings and the target provider config (see
  * `/api/v2/connection-profiles/:id/apply`).

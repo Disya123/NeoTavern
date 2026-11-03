@@ -242,7 +242,7 @@ export function validateManifest(input: unknown): Result<PluginManifest> {
     }
   }
 
-  // SillyTavern legacy entry points were removed (ADR-0059 slice, owner
+  // legacy legacy entry points were removed (ADR-0059 slice, owner
   // decision 2026-10-31): a manifest carrying the block is rejected instead
   // of being silently ignored.
   if (input['legacy'] !== undefined) {

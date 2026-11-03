@@ -1630,13 +1630,13 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
-    'imports.sillytavern.analyze',
+    'imports.fullbackup.analyze',
     'transactional',
     'idempotent',
     'safe',
     'app.read',
-    'wire.request.imports.sillytavern.analyze',
-    'wire.result.imports.sillytavern.analyze',
+    'wire.request.imports.fullbackup.analyze',
+    'wire.result.imports.fullbackup.analyze',
     undefined,
     ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION'],
     1024,
@@ -1644,13 +1644,13 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
-    'imports.sillytavern.execute',
+    'imports.fullbackup.execute',
     'transactional',
     'non-idempotent',
     'safe',
     'app.write',
-    'wire.request.imports.sillytavern.execute',
-    'wire.result.imports.sillytavern.execute',
+    'wire.request.imports.fullbackup.execute',
+    'wire.result.imports.fullbackup.execute',
     undefined,
     ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
     1024,
@@ -3946,10 +3946,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     assetId: UUID_AVATAR,
   }),
 
-  fx('imports-sillytavern-analyze-request', 'imports.sillytavern.analyze', 'request', true, {
+  fx('imports-fullbackup-analyze-request', 'imports.fullbackup.analyze', 'request', true, {
     assetId: UUID_AVATAR,
   }),
-  fx('imports-sillytavern-analyze-response', 'imports.sillytavern.analyze', 'response', true, {
+  fx('imports-fullbackup-analyze-response', 'imports.fullbackup.analyze', 'response', true, {
     sourceHash: IMPORT_SHA256,
     totalCompressedBytes: 4096,
     totalExpandedBytes: 65536,
@@ -3972,8 +3972,8 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
       { code: 'LEGACY_EXTENSIONS_SKIPPED', path: 'backup/default-user/extensions' },
     ],
   }),
-  fx('neg-imports-sillytavern-missing-asset', 'imports.sillytavern.analyze', 'request', false, {}),
-  fx('neg-imports-sillytavern-bad-category', 'imports.sillytavern.analyze', 'response', false, {
+  fx('neg-imports-fullbackup-missing-asset', 'imports.fullbackup.analyze', 'request', false, {}),
+  fx('neg-imports-fullbackup-bad-category', 'imports.fullbackup.analyze', 'response', false, {
     sourceHash: IMPORT_SHA256,
     totalCompressedBytes: 4096,
     totalExpandedBytes: 65536,
@@ -3984,8 +3984,8 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     warnings: [],
   }),
   fx(
-    'neg-imports-sillytavern-short-category-list',
-    'imports.sillytavern.analyze',
+    'neg-imports-fullbackup-short-category-list',
+    'imports.fullbackup.analyze',
     'response',
     false,
     {
@@ -3999,12 +3999,12 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
       warnings: [],
     },
   ),
-  fx('imports-sillytavern-execute-request', 'imports.sillytavern.execute', 'request', true, {
+  fx('imports-fullbackup-execute-request', 'imports.fullbackup.execute', 'request', true, {
     assetId: UUID_AVATAR,
     categories: ['characters', 'chats', 'lorebooks'],
     conflictPolicy: 'skip',
   }),
-  fx('imports-sillytavern-execute-response', 'imports.sillytavern.execute', 'response', true, {
+  fx('imports-fullbackup-execute-response', 'imports.fullbackup.execute', 'response', true, {
     runId: UUID_AVATAR,
     sourceHash: IMPORT_SHA256,
     conflictPolicy: 'skip',
@@ -4118,27 +4118,21 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     ],
   }),
   fx(
-    'neg-imports-sillytavern-execute-missing-policy',
-    'imports.sillytavern.execute',
+    'neg-imports-fullbackup-execute-missing-policy',
+    'imports.fullbackup.execute',
     'request',
     false,
     {
       assetId: UUID_AVATAR,
     },
   ),
+  fx('neg-imports-fullbackup-execute-bad-policy', 'imports.fullbackup.execute', 'request', false, {
+    assetId: UUID_AVATAR,
+    conflictPolicy: 'overwrite',
+  }),
   fx(
-    'neg-imports-sillytavern-execute-bad-policy',
-    'imports.sillytavern.execute',
-    'request',
-    false,
-    {
-      assetId: UUID_AVATAR,
-      conflictPolicy: 'overwrite',
-    },
-  ),
-  fx(
-    'neg-imports-sillytavern-execute-short-category-list',
-    'imports.sillytavern.execute',
+    'neg-imports-fullbackup-execute-short-category-list',
+    'imports.fullbackup.execute',
     'response',
     false,
     {
@@ -4163,8 +4157,8 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     },
   ),
   fx(
-    'neg-imports-sillytavern-execute-negative-count',
-    'imports.sillytavern.execute',
+    'neg-imports-fullbackup-execute-negative-count',
+    'imports.fullbackup.execute',
     'response',
     false,
     {

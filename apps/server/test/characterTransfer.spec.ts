@@ -59,7 +59,7 @@ function pngImage(width: number, height: number, pixel: [number, number, number,
   ]);
 }
 
-/** PNG with a base64 `chara` tEXt chunk (the SillyTavern card convention). */
+/** PNG with a base64 `chara` tEXt chunk (the legacy card convention). */
 function pngCard(card: unknown): Buffer {
   const encoded = Buffer.from(JSON.stringify(card), 'utf8').toString('base64');
   const text = Buffer.concat([

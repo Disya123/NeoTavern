@@ -1,5 +1,5 @@
 /**
- * Contracts for importing a complete SillyTavern user-data archive.
+ * Contracts for importing a complete full-data archive.
  *
  * Warnings use stable machine codes and parameters; localization remains a
  * frontend concern. Only a bounded warning sample is returned, while
@@ -8,7 +8,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { IdSchema } from './common.js';
 
-export const SillyTavernImportCategoryIdSchema = Type.Union([
+export const FullBackupCategoryIdSchema = Type.Union([
   Type.Literal('characters'),
   Type.Literal('chats'),
   Type.Literal('personas'),
@@ -21,7 +21,7 @@ export const SillyTavernImportCategoryIdSchema = Type.Union([
   Type.Literal('legacyExtensions'),
   Type.Literal('themes'),
 ]);
-export type SillyTavernImportCategoryId = Static<typeof SillyTavernImportCategoryIdSchema>;
+export type FullBackupCategoryId = Static<typeof FullBackupCategoryIdSchema>;
 
 export const DataImportConflictPolicySchema = Type.Union([
   Type.Literal('skip'),
@@ -62,20 +62,18 @@ export const DataImportWarningSchema = Type.Object({
 });
 export type DataImportWarning = Static<typeof DataImportWarningSchema>;
 
-export const SillyTavernImportCategoryAnalysisSchema = Type.Object({
-  id: SillyTavernImportCategoryIdSchema,
+export const FullBackupCategoryAnalysisSchema = Type.Object({
+  id: FullBackupCategoryIdSchema,
   discovered: Type.Integer({ minimum: 0 }),
   dependentRecords: Type.Integer({ minimum: 0 }),
   invalid: Type.Integer({ minimum: 0 }),
   conflicts: Type.Integer({ minimum: 0 }),
   sizeBytes: Type.Integer({ minimum: 0 }),
 });
-export type SillyTavernImportCategoryAnalysis = Static<
-  typeof SillyTavernImportCategoryAnalysisSchema
->;
+export type FullBackupCategoryAnalysis = Static<typeof FullBackupCategoryAnalysisSchema>;
 
 export const DataImportConflictSchema = Type.Object({
-  category: SillyTavernImportCategoryIdSchema,
+  category: FullBackupCategoryIdSchema,
   sourceKey: Type.String(),
   path: Type.Optional(Type.String()),
   kind: Type.Union([Type.Literal('artifact'), Type.Literal('name')]),
@@ -85,7 +83,7 @@ export const DataImportConflictSchema = Type.Object({
 });
 export type DataImportConflict = Static<typeof DataImportConflictSchema>;
 
-export const SillyTavernImportAnalysisSchema = Type.Object({
+export const FullBackupAnalysisSchema = Type.Object({
   analysisId: IdSchema,
   sourceHash: Type.String({ pattern: '^[0-9a-f]{64}$' }),
   sourceName: Type.String(),
@@ -93,33 +91,33 @@ export const SillyTavernImportAnalysisSchema = Type.Object({
   archiveAlreadyImported: Type.Boolean(),
   totalCompressedBytes: Type.Integer({ minimum: 0 }),
   totalExpandedBytes: Type.Integer({ minimum: 0 }),
-  categories: Type.Array(SillyTavernImportCategoryAnalysisSchema),
+  categories: Type.Array(FullBackupCategoryAnalysisSchema),
   conflictCount: Type.Integer({ minimum: 0 }),
   conflicts: Type.Array(DataImportConflictSchema),
   warningCount: Type.Integer({ minimum: 0 }),
   warnings: Type.Array(DataImportWarningSchema),
 });
-export type SillyTavernImportAnalysis = Static<typeof SillyTavernImportAnalysisSchema>;
+export type FullBackupAnalysis = Static<typeof FullBackupAnalysisSchema>;
 
-export const SillyTavernImportExecuteSchema = Type.Object({
-  categories: Type.Array(SillyTavernImportCategoryIdSchema, {
+export const FullBackupExecuteSchema = Type.Object({
+  categories: Type.Array(FullBackupCategoryIdSchema, {
     minItems: 1,
     uniqueItems: true,
   }),
   conflictPolicy: DataImportConflictPolicySchema,
 });
-export type SillyTavernImportExecute = Static<typeof SillyTavernImportExecuteSchema>;
+export type FullBackupExecute = Static<typeof FullBackupExecuteSchema>;
 
-export const SillyTavernImportResultSchema = Type.Object({
+export const FullBackupImportResultSchema = Type.Object({
   jobId: IdSchema,
   sourceHash: Type.String({ pattern: '^[0-9a-f]{64}$' }),
   sourceName: Type.String(),
   safetyBackupId: Type.String(),
   reusedArchive: Type.Boolean(),
-  selectedCategories: Type.Optional(Type.Array(SillyTavernImportCategoryIdSchema)),
+  selectedCategories: Type.Optional(Type.Array(FullBackupCategoryIdSchema)),
   conflictPolicy: Type.Optional(DataImportConflictPolicySchema),
   counts: DataImportCountsSchema,
   warningCount: Type.Integer({ minimum: 0 }),
   warnings: Type.Array(DataImportWarningSchema),
 });
-export type SillyTavernImportResult = Static<typeof SillyTavernImportResultSchema>;
+export type FullBackupImportResult = Static<typeof FullBackupImportResultSchema>;

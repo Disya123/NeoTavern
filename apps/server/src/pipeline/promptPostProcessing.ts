@@ -1,9 +1,9 @@
 /**
- * SillyTavern-style prompt post-processing (classic "Prompt Post-Processing"
+ * legacy-style prompt post-processing (classic "Prompt Post-Processing"
  * setting). Reshapes the structured chat-message array right before provider
  * serialization so backends that require a particular turn shape receive one.
  *
- * Faithful port of SillyTavern's `mergeMessages` / `postProcessPrompt`
+ * Faithful port of legacy's `mergeMessages` / `postProcessPrompt`
  * (`src/prompt-converters.js`), adapted to NeoTavern's `GenerationMessage`
  * (`{ role, content, name? }`, string content). Applies only in chat mode
  * (`serializeAsText=false`); text-completion providers already receive a single
@@ -57,7 +57,7 @@ function toMessage(role: MessageRole, content: string): GenerationMessage {
 
 /**
  * Merge messages with the same consecutive role, folding `name` into content.
- * Mirrors SillyTavern's `mergeMessages`, including the strict-mode recursion
+ * Mirrors legacy's `mergeMessages`, including the strict-mode recursion
  * that re-squashes after role rewrites.
  */
 export function mergeMessages(

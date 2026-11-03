@@ -17,7 +17,7 @@ export const ContextStrategyIdSchema = Type.String({
 export type ContextStrategyId = Static<typeof ContextStrategyIdSchema>;
 
 /**
- * Prompt post-processing modes (mirrors the classic SillyTavern
+ * Prompt post-processing modes (mirrors the classic legacy
  * `custom_prompt_post_processing` select). Each mode reshapes the clean message
  * array right before instruct rendering / provider serialization. The `_tools`
  * variants keep tool-call/tool-result pairs intact; the plain variants drop
@@ -101,7 +101,7 @@ export const AppSettingsSchema = Type.Object({
   instructFormatId: Type.Union([Type.String({ minLength: 1, maxLength: 128 }), Type.Null()]),
   /**
    * When true, the client re-validates and restores {@link lastServer} on launch
-   * (the classic SillyTavern "Auto-connect to Last Server" toggle). Optional and
+   * (the classic legacy "Auto-connect to Last Server" toggle). Optional and
    * UI-driven; absent means the feature is off. This is application behaviour,
    * not layout, so it lives here rather than in `ui`.
    */
@@ -115,7 +115,7 @@ export const AppSettingsSchema = Type.Object({
   /** Free-form, UI-owned settings (panel layout, etc.). */
   ui: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   /**
-   * Phase 10: app-level gate for legacy SillyTavern frontend entrypoints
+   * Phase 10: app-level gate for legacy legacy frontend entrypoints
    * (`/api/v2/plugins/:id/legacy.js` script injection into the main
    * document). Flat dotted key (same convention as `theme.settings.*`).
    * Default off: legacy frontend plugins additionally require the admin-only

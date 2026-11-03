@@ -47,7 +47,7 @@ sidebar_position: 7
 ## 旧版入口点（已移除）
 
 旧版入口点（`legacy.frontend` / `legacy.backend`）和 `legacy.trusted` 权限已
-根据所有者的决定（2026-10-31）被移除；不再有面向 SillyTavern 扩展的兼容模式。
+根据所有者的决定（2026-10-31）被移除；不再有面向 legacy 扩展的兼容模式。
 只存在沙箱化的 SDK 路径：前端插件界面在沙箱化 iframe 中运行，后端插件在
 上文所述的受限进程中运行。
 

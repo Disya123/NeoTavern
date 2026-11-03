@@ -1,5 +1,5 @@
-//! Этап 4.5 cluster 10: SillyTavern user-data archive import
-//! (`imports.sillytavern.execute`) — the destructive half of cutover-registry
+//! Этап 4.5 cluster 10: full-data archive import
+//! (`imports.fullbackup.execute`) — the destructive half of cutover-registry
 //! row 10.
 //!
 //! The archive is the SAME staged asset the analysis read (`assetId` produced
@@ -17,10 +17,10 @@
 //! | personas | `personas` (+ `avatar` asset) |
 //! | lorebooks | `lorebooks` (`entries_json` keeps every entry object) |
 //! | presets | `presets` (legacy directory → kind map, settings verbatim) |
-//! | groups | `settings` document `sillytavern.groups` (no kernel group model) |
+//! | groups | `settings` document `fullbackup.groups` (no kernel group model) |
 //! | backgrounds | `background` assets (the canonical wallpaper kind) |
-//! | extensionSettings | `settings` document `sillytavern.extension_settings` |
-//! | apiSettings | `settings` document `sillytavern.api_settings` (never secrets) |
+//! | extensionSettings | `settings` document `fullbackup.extension_settings` |
+//! | apiSettings | `settings` document `fullbackup.api_settings` (never secrets) |
 //! | themes | `theme-css` / `theme-json` assets, ready for `themes.install` |
 //! | legacyExtensions | NOT imported (ADR-0059) — analysis warning only |
 //!
@@ -64,7 +64,7 @@
 //! Every discovered entity lands in exactly one of `imported` / `reused` /
 //! `skipped` / `invalid`, so `discovered == imported + reused + skipped +
 //! invalid` holds per category and the counters reconcile against
-//! `imports.sillytavern.analyze`. `conflicted` is an overlay (it may overlap
+//! `imports.fullbackup.analyze`. `conflicted` is an overlay (it may overlap
 //! `imported`), `dependentImported` counts nested rows, and every entity that
 //! could not be imported as-is raises a stable warning code (the response keeps
 //! a bounded 64-entry sample plus the full `warningCount`).
@@ -73,8 +73,8 @@
 //!
 //! - Secrets are never imported: `secrets.json` is skipped with
 //!   `SECRETS_SKIPPED` (the kernel has its own secret store, ТЗ §9.4).
-//! - SillyTavern-era extensions are never installed (ADR-0059).
-//! - Message timestamps fall back to the import time when SillyTavern's
+//! - legacy full-data-era extensions are never installed (ADR-0059).
+//! - Message timestamps fall back to the import time when legacy full-data's
 //!   `send_date` is not RFC 3339 (its format is locale-dependent); transcript
 //!   ORDER is always preserved by `messages.sequence`.
 //! - The transaction boundary is one entity, not one archive: a 4 GiB import
@@ -86,9 +86,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 
 use contracts_generated::generated::{
-    self, ImportsSillytavernCategory, ImportsSillytavernCategoryExecute,
-    ImportsSillytavernConflictPolicy, ImportsSillytavernTotals, ImportsSillytavernWarning,
-    ResultImportsSillytavernExecute,
+    self, ImportsFullbackupCategory, ImportsFullbackupCategoryExecute,
+    ImportsFullbackupConflictPolicy, ImportsFullbackupTotals, ImportsFullbackupWarning,
+    ResultImportsFullbackupExecute,
 };
 use neotavern_storage::open::Database;
 use neotavern_storage::{StorageError, StorageErrorCode};
@@ -97,7 +97,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use zip::ZipArchive;
 
-use crate::imports_st::{
+use crate::imports_full_backup::{
     category_index, data_root_missing, detect_root, index_archive, is_unsafe_path, storage, Entry,
     CATEGORY_ORDER, IMAGE_EXTENSIONS, MAX_BACKGROUND_BYTES, MAX_CHARACTER_BYTES,
     MAX_CHAT_LINE_CHARS, MAX_PRESET_BYTES, MAX_SETTINGS_BYTES, MAX_WARNING_SAMPLE, MAX_WORLD_BYTES,
@@ -108,16 +108,16 @@ use crate::{KernelError, KernelErrorCode};
 /// Receipt families. Prefixed so they can never be confused with the legacy
 /// `app.db` conversion families the same ledger records (ADR-0062), whose
 /// `source_id` is `family:<name>`.
-const RECEIPT_CHARACTER: &str = "sillytavern.character";
-const RECEIPT_CHAT: &str = "sillytavern.chat";
-const RECEIPT_PERSONA: &str = "sillytavern.persona";
-const RECEIPT_LOREBOOK: &str = "sillytavern.lorebook";
-const RECEIPT_PRESET: &str = "sillytavern.preset";
+const RECEIPT_CHARACTER: &str = "fullbackup.character";
+const RECEIPT_CHAT: &str = "fullbackup.chat";
+const RECEIPT_PERSONA: &str = "fullbackup.persona";
+const RECEIPT_LOREBOOK: &str = "fullbackup.lorebook";
+const RECEIPT_PRESET: &str = "fullbackup.preset";
 
 /// Non-secret settings documents for the categories the kernel does not model.
-const SETTINGS_GROUPS: &str = "sillytavern.groups";
-const SETTINGS_EXTENSION_SETTINGS: &str = "sillytavern.extension_settings";
-const SETTINGS_API_SETTINGS: &str = "sillytavern.api_settings";
+const SETTINGS_GROUPS: &str = "fullbackup.groups";
+const SETTINGS_EXTENSION_SETTINGS: &str = "fullbackup.extension_settings";
+const SETTINGS_API_SETTINGS: &str = "fullbackup.api_settings";
 
 /// Legacy preset directory → kernel `presets.kind` (same map the analyzer and
 /// the legacy importer use).
@@ -145,24 +145,24 @@ enum Outcome {
 /// Import state for one run: counters, bounded warnings and the receipt group.
 struct Execution {
     run_id: String,
-    policy: ImportsSillytavernConflictPolicy,
+    policy: ImportsFullbackupConflictPolicy,
     now: String,
     selected: [bool; 11],
-    categories: [ImportsSillytavernCategoryExecute; 11],
-    warnings: Vec<ImportsSillytavernWarning>,
+    categories: [ImportsFullbackupCategoryExecute; 11],
+    warnings: Vec<ImportsFullbackupWarning>,
     warning_count: i64,
     wrote: bool,
     saw: bool,
 }
 
 impl Execution {
-    fn new(policy: ImportsSillytavernConflictPolicy, selected: [bool; 11]) -> Self {
+    fn new(policy: ImportsFullbackupConflictPolicy, selected: [bool; 11]) -> Self {
         Self {
             run_id: crate::product::new_id(),
             policy,
             now: neotavern_storage::now_utc_rfc3339(),
             selected,
-            categories: CATEGORY_ORDER.map(|id| ImportsSillytavernCategoryExecute {
+            categories: CATEGORY_ORDER.map(|id| ImportsFullbackupCategoryExecute {
                 id,
                 imported: 0,
                 reused: 0,
@@ -178,11 +178,11 @@ impl Execution {
         }
     }
 
-    fn selected(&self, id: ImportsSillytavernCategory) -> bool {
+    fn selected(&self, id: ImportsFullbackupCategory) -> bool {
         self.selected[category_index(id)]
     }
 
-    fn bump(&mut self, id: ImportsSillytavernCategory, outcome: Outcome) {
+    fn bump(&mut self, id: ImportsFullbackupCategory, outcome: Outcome) {
         self.saw = true;
         let row = &mut self.categories[category_index(id)];
         match outcome {
@@ -196,27 +196,27 @@ impl Execution {
         }
     }
 
-    fn conflict(&mut self, id: ImportsSillytavernCategory) {
+    fn conflict(&mut self, id: ImportsFullbackupCategory) {
         self.saw = true;
         self.categories[category_index(id)].conflicted += 1;
     }
 
-    fn dependent(&mut self, id: ImportsSillytavernCategory, count: i64) {
+    fn dependent(&mut self, id: ImportsFullbackupCategory, count: i64) {
         self.categories[category_index(id)].dependent_imported += count;
     }
 
     fn warn(&mut self, code: &str, path: Option<&str>) {
         self.warning_count += 1;
         if self.warnings.len() < MAX_WARNING_SAMPLE {
-            self.warnings.push(ImportsSillytavernWarning {
+            self.warnings.push(ImportsFullbackupWarning {
                 code: code.to_string(),
                 path: path.map(str::to_string),
             });
         }
     }
 
-    fn totals(&self) -> ImportsSillytavernTotals {
-        let mut totals = ImportsSillytavernTotals {
+    fn totals(&self) -> ImportsFullbackupTotals {
+        let mut totals = ImportsFullbackupTotals {
             imported: 0,
             reused: 0,
             skipped: 0,
@@ -234,20 +234,20 @@ impl Execution {
     }
 }
 
-/// `imports.sillytavern.execute` — import a staged SillyTavern user-data
+/// `imports.fullbackup.execute` — import a staged legacy full-data user-data
 /// archive into the canonical product tables.
 ///
 /// Errors: `ASSET_NOT_FOUND` for an unknown staged asset, `VALIDATION` for a
-/// non-ZIP archive (`reason: SILLYTAVERN_ARCHIVE_INVALID`) or an explicitly
-/// requested unsupported category (`reason: SILLYTAVERN_CATEGORY_UNSUPPORTED`),
-/// and `SILLYTAVERN_DATA_ROOT_NOT_FOUND` when the archive has no recognisable
+/// non-ZIP archive (`reason: FULLBACKUP_ARCHIVE_INVALID`) or an explicitly
+/// requested unsupported category (`reason: FULLBACKUP_CATEGORY_UNSUPPORTED`),
+/// and `FULLBACKUP_DATA_ROOT_NOT_FOUND` when the archive has no recognisable
 /// user-data root. Per-entity problems never abort the run: they land in the
 /// counters and the warning sample.
-pub fn imports_sillytavern_execute(
+pub fn imports_fullbackup_execute(
     db: &mut Database,
     request: &[u8],
 ) -> Result<Vec<u8>, KernelError> {
-    let req = generated::decode_request_imports_sillytavern_execute(request)?;
+    let req = generated::decode_request_imports_fullbackup_execute(request)?;
     let selected = select_categories(req.categories.as_deref())?;
 
     // 1. The staged archive: the same asset the analysis read, opened read-only.
@@ -259,17 +259,17 @@ pub fn imports_sillytavern_execute(
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()
-        .map_err(|err| sqlite(err, "imports.sillytavern.execute: asset lookup"))?;
+        .map_err(|err| sqlite(err, "imports.fullbackup.execute: asset lookup"))?;
     let (relative_key, source_hash) =
         row.ok_or_else(|| crate::assets::asset_not_found(&req.asset_id))?;
 
     let path = neotavern_storage::assets::resolve_asset_path(db, &relative_key)
-        .map_err(|err| storage(format!("imports.sillytavern.execute: {err}")))?;
+        .map_err(|err| storage(format!("imports.fullbackup.execute: {err}")))?;
     let file = File::open(&path)
-        .map_err(|err| storage(format!("imports.sillytavern.execute: cannot open: {err}")))?;
+        .map_err(|err| storage(format!("imports.fullbackup.execute: cannot open: {err}")))?;
     let mut archive = ZipArchive::new(file).map_err(|err| {
         validation(
-            "SILLYTAVERN_ARCHIVE_INVALID",
+            "FULLBACKUP_ARCHIVE_INVALID",
             &format!("not a readable zip: {err}"),
         )
     })?;
@@ -314,39 +314,39 @@ pub fn imports_sillytavern_execute(
 
     // 4. Import in dependency order: characters and personas first (chats bind
     //    to both), then the independent buckets.
-    if exec.selected(ImportsSillytavernCategory::Characters) {
+    if exec.selected(ImportsFullbackupCategory::Characters) {
         import_characters(&mut archive, entries, &root, db, &mut exec)?;
     }
-    if exec.selected(ImportsSillytavernCategory::Personas) {
+    if exec.selected(ImportsFullbackupCategory::Personas) {
         import_personas(&mut archive, entries, &root, db, &mut exec)?;
     }
-    if exec.selected(ImportsSillytavernCategory::Chats) {
+    if exec.selected(ImportsFullbackupCategory::Chats) {
         import_chats(&mut archive, entries, &root, db, &mut exec)?;
     }
-    if exec.selected(ImportsSillytavernCategory::Lorebooks) {
+    if exec.selected(ImportsFullbackupCategory::Lorebooks) {
         import_lorebooks(&mut archive, entries, &root, db, &mut exec)?;
     }
-    if exec.selected(ImportsSillytavernCategory::Presets) {
+    if exec.selected(ImportsFullbackupCategory::Presets) {
         import_presets(&mut archive, entries, &root, db, &mut exec)?;
     }
-    if exec.selected(ImportsSillytavernCategory::Groups) {
+    if exec.selected(ImportsFullbackupCategory::Groups) {
         import_groups(&mut archive, entries, &root, db, &mut exec)?;
     }
-    if exec.selected(ImportsSillytavernCategory::Backgrounds) {
+    if exec.selected(ImportsFullbackupCategory::Backgrounds) {
         import_backgrounds(&mut archive, entries, &root, db, &mut exec)?;
     }
-    if exec.selected(ImportsSillytavernCategory::ExtensionSettings) {
+    if exec.selected(ImportsFullbackupCategory::ExtensionSettings) {
         import_extension_settings(&mut archive, entries, &root, db, &mut exec)?;
     }
-    if exec.selected(ImportsSillytavernCategory::ApiSettings) {
+    if exec.selected(ImportsFullbackupCategory::ApiSettings) {
         import_api_settings(&mut archive, entries, &root, db, &mut exec)?;
     }
-    if exec.selected(ImportsSillytavernCategory::Themes) {
+    if exec.selected(ImportsFullbackupCategory::Themes) {
         import_themes(&mut archive, entries, &root, db, &mut exec)?;
     }
 
     let totals = exec.totals();
-    let dto = ResultImportsSillytavernExecute {
+    let dto = ResultImportsFullbackupExecute {
         run_id: exec.run_id,
         source_hash,
         conflict_policy: exec.policy.clone(),
@@ -356,7 +356,7 @@ pub fn imports_sillytavern_execute(
         warning_count: exec.warning_count,
         warnings: exec.warnings,
     };
-    crate::product::validate(&dto, generated::validate_result_imports_sillytavern_execute)?;
+    crate::product::validate(&dto, generated::validate_result_imports_fullbackup_execute)?;
     crate::product::encode(&dto)
 }
 
@@ -364,16 +364,16 @@ pub fn imports_sillytavern_execute(
 /// `legacyExtensions` is refused when explicitly requested (ADR-0059) instead of
 /// being silently dropped.
 fn select_categories(
-    requested: Option<&[ImportsSillytavernCategory]>,
+    requested: Option<&[ImportsFullbackupCategory]>,
 ) -> Result<[bool; 11], KernelError> {
     let mut selected = [true; 11];
-    selected[category_index(ImportsSillytavernCategory::LegacyExtensions)] = false;
+    selected[category_index(ImportsFullbackupCategory::LegacyExtensions)] = false;
     if let Some(list) = requested {
         selected = [false; 11];
         for id in list {
-            if *id == ImportsSillytavernCategory::LegacyExtensions {
+            if *id == ImportsFullbackupCategory::LegacyExtensions {
                 return Err(validation(
-                    "SILLYTAVERN_CATEGORY_UNSUPPORTED",
+                    "FULLBACKUP_CATEGORY_UNSUPPORTED",
                     "legacyExtensions are not importable (ADR-0059)",
                 ));
             }
@@ -422,7 +422,7 @@ fn import_characters(
 
         exec.saw = true;
         let Some(bytes) = read_entry(archive, name, MAX_CHARACTER_BYTES as u64) else {
-            exec.bump(ImportsSillytavernCategory::Characters, Outcome::Invalid);
+            exec.bump(ImportsFullbackupCategory::Characters, Outcome::Invalid);
             exec.warn("CHARACTER_TOO_LARGE", Some(name));
             continue;
         };
@@ -431,7 +431,7 @@ fn import_characters(
         // 1. This exact source was imported by an earlier run.
         if let Some((target, seen)) = receipt(db, RECEIPT_CHARACTER, &source_id)? {
             if seen == checksum && target_exists(db, "characters", &target)? {
-                exec.bump(ImportsSillytavernCategory::Characters, Outcome::Reused);
+                exec.bump(ImportsFullbackupCategory::Characters, Outcome::Reused);
                 continue;
             }
         }
@@ -440,7 +440,7 @@ fn import_characters(
         let parsed = match parse_import_card(&bytes) {
             Ok(parsed) => parsed,
             Err(_) => {
-                exec.bump(ImportsSillytavernCategory::Characters, Outcome::Invalid);
+                exec.bump(ImportsFullbackupCategory::Characters, Outcome::Invalid);
                 exec.warn("CHARACTER_IMPORT_FAILED", Some(name));
                 continue;
             }
@@ -454,7 +454,7 @@ fn import_characters(
         let tags_json = serde_json::to_string(&parsed.tags).map_err(|err| {
             KernelError::new(
                 KernelErrorCode::Internal,
-                format!("imports.sillytavern.execute: serialize tags: {err}"),
+                format!("imports.fullbackup.execute: serialize tags: {err}"),
             )
         })?;
         let avatar_bytes = bytes
@@ -471,11 +471,11 @@ fn import_characters(
                 |row| row.get(0),
             )
             .optional()
-            .map_err(|err| sqlite(err, "imports.sillytavern.execute: card dedupe"))?;
+            .map_err(|err| sqlite(err, "imports.fullbackup.execute: card dedupe"))?;
         if let Some(target) = by_hash {
             if target_exists(db, "characters", &target)? {
                 record_receipt(db, exec, RECEIPT_CHARACTER, &source_id, &target, &checksum)?;
-                exec.bump(ImportsSillytavernCategory::Characters, Outcome::Reused);
+                exec.bump(ImportsFullbackupCategory::Characters, Outcome::Reused);
                 continue;
             }
         }
@@ -483,13 +483,13 @@ fn import_characters(
         // 4. Name conflict with a row this archive did not create.
         let conflict = find_by_name(db, "characters", &card_name)?;
         if let Some(existing) = conflict {
-            exec.conflict(ImportsSillytavernCategory::Characters);
+            exec.conflict(ImportsFullbackupCategory::Characters);
             match exec.policy {
-                ImportsSillytavernConflictPolicy::Skip => {
-                    exec.bump(ImportsSillytavernCategory::Characters, Outcome::Skipped);
+                ImportsFullbackupConflictPolicy::Skip => {
+                    exec.bump(ImportsFullbackupCategory::Characters, Outcome::Skipped);
                     exec.warn("CHARACTER_CONFLICT", Some(name));
                 }
-                ImportsSillytavernConflictPolicy::Copy => {
+                ImportsFullbackupConflictPolicy::Copy => {
                     let avatar = publish_avatar(db, &stem, avatar_bytes)?;
                     let copy_id = copy_source_id(&source_id, exec);
                     insert_character(
@@ -503,12 +503,12 @@ fn import_characters(
                         &checksum,
                         &copy_id,
                     )?;
-                    exec.bump(ImportsSillytavernCategory::Characters, Outcome::Imported);
+                    exec.bump(ImportsFullbackupCategory::Characters, Outcome::Imported);
                     exec.warn("CHARACTER_CONFLICT", Some(name));
                 }
-                ImportsSillytavernConflictPolicy::Merge
-                | ImportsSillytavernConflictPolicy::Replace => {
-                    let replace = matches!(exec.policy, ImportsSillytavernConflictPolicy::Replace);
+                ImportsFullbackupConflictPolicy::Merge
+                | ImportsFullbackupConflictPolicy::Replace => {
+                    let replace = matches!(exec.policy, ImportsFullbackupConflictPolicy::Replace);
                     if replace {
                         snapshot_character(db, &existing, &exec.now)?;
                     }
@@ -526,7 +526,7 @@ fn import_characters(
                         &source_id,
                         replace,
                     )?;
-                    exec.bump(ImportsSillytavernCategory::Characters, Outcome::Imported);
+                    exec.bump(ImportsFullbackupCategory::Characters, Outcome::Imported);
                     exec.warn("CHARACTER_CONFLICT", Some(name));
                 }
             }
@@ -543,7 +543,7 @@ fn import_characters(
                 &checksum,
                 &source_id,
             )?;
-            exec.bump(ImportsSillytavernCategory::Characters, Outcome::Imported);
+            exec.bump(ImportsFullbackupCategory::Characters, Outcome::Imported);
         }
     }
     Ok(())
@@ -591,7 +591,7 @@ fn insert_character(
                 &now
             ],
         )
-        .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: character insert"))?;
+        .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: character insert"))?;
         put_receipt(tx, &run_id, &family, &source_id, &target, &checksum, &now)
     })?;
     Ok(())
@@ -628,10 +628,10 @@ fn update_character(
             },
         )
         .optional()
-        .map_err(|err| sqlite(err, "sillytavern import: character lookup"))?;
+        .map_err(|err| sqlite(err, "fullbackup import: character lookup"))?;
     let Some((old_name, old_description, old_avatar, old_tags, old_ext)) = current else {
         return Err(storage(format!(
-            "imports.sillytavern.execute: character {id} vanished mid-run"
+            "imports.fullbackup.execute: character {id} vanished mid-run"
         )));
     };
     let merged_name = if replace {
@@ -682,7 +682,7 @@ fn update_character(
                 &now
             ],
         )
-        .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: character update"))?;
+        .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: character update"))?;
         put_receipt(
             tx,
             &run_id,
@@ -729,7 +729,7 @@ fn snapshot_character(db: &mut Database, id: &str, now: &str) -> Result<(), Kern
             },
         )
         .optional()
-        .map_err(|err| sqlite(err, "sillytavern import: character snapshot lookup"))?;
+        .map_err(|err| sqlite(err, "fullbackup import: character snapshot lookup"))?;
     let Some((name, description, avatar, profile_id, tags, ext, import_hash, updated_at)) = row
     else {
         return Ok(());
@@ -741,7 +741,7 @@ fn snapshot_character(db: &mut Database, id: &str, now: &str) -> Result<(), Kern
             rusqlite::params![id],
             |row| row.get(0),
         )
-        .map_err(|err| sqlite(err, "sillytavern import: character version lookup"))?;
+        .map_err(|err| sqlite(err, "fullbackup import: character version lookup"))?;
     let snapshot = json!({
         "name": name,
         "description": description,
@@ -751,12 +751,12 @@ fn snapshot_character(db: &mut Database, id: &str, now: &str) -> Result<(), Kern
         "extJson": ext,
         "importHash": import_hash,
         "updatedAt": updated_at,
-        "capturedBy": "imports.sillytavern.execute",
+        "capturedBy": "imports.fullbackup.execute",
     });
     let text = serde_json::to_string(&snapshot).map_err(|err| {
         KernelError::new(
             KernelErrorCode::Internal,
-            format!("imports.sillytavern.execute: snapshot encode: {err}"),
+            format!("imports.fullbackup.execute: snapshot encode: {err}"),
         )
     })?;
     let snapshot_id = crate::product::new_id();
@@ -768,7 +768,7 @@ fn snapshot_character(db: &mut Database, id: &str, now: &str) -> Result<(), Kern
              VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![&snapshot_id, &target, version, &text, &now],
         )
-        .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: snapshot insert"))?;
+        .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: snapshot insert"))?;
         Ok(())
     })?;
     Ok(())
@@ -824,7 +824,7 @@ fn import_personas(
     for (avatar_id, value) in personas {
         exec.saw = true;
         let Some((name, description)) = persona_fields(value) else {
-            exec.bump(ImportsSillytavernCategory::Personas, Outcome::Invalid);
+            exec.bump(ImportsFullbackupCategory::Personas, Outcome::Invalid);
             exec.warn(
                 "PERSONA_INVALID",
                 Some(&format!(
@@ -838,7 +838,7 @@ fn import_personas(
 
         if let Some((target, seen)) = receipt(db, RECEIPT_PERSONA, &source_id)? {
             if seen == checksum && target_exists(db, "personas", &target)? {
-                exec.bump(ImportsSillytavernCategory::Personas, Outcome::Reused);
+                exec.bump(ImportsFullbackupCategory::Personas, Outcome::Reused);
                 continue;
             }
         }
@@ -852,9 +852,9 @@ fn import_personas(
         let is_default = !default_persona.is_empty() && avatar_id.to_lowercase() == default_persona;
         let conflict = find_by_name(db, "personas", &display_name)?;
 
-        if conflict.is_some() && matches!(exec.policy, ImportsSillytavernConflictPolicy::Skip) {
-            exec.conflict(ImportsSillytavernCategory::Personas);
-            exec.bump(ImportsSillytavernCategory::Personas, Outcome::Skipped);
+        if conflict.is_some() && matches!(exec.policy, ImportsFullbackupConflictPolicy::Skip) {
+            exec.conflict(ImportsFullbackupCategory::Personas);
+            exec.bump(ImportsFullbackupCategory::Personas, Outcome::Skipped);
             exec.warn("PERSONA_CONFLICT", Some(avatar_id));
             continue;
         }
@@ -862,12 +862,12 @@ fn import_personas(
 
         match conflict {
             Some(existing) => {
-                exec.conflict(ImportsSillytavernCategory::Personas);
+                exec.conflict(ImportsFullbackupCategory::Personas);
                 match exec.policy {
-                    ImportsSillytavernConflictPolicy::Skip => {
+                    ImportsFullbackupConflictPolicy::Skip => {
                         unreachable!("handled before the avatar publish")
                     }
-                    ImportsSillytavernConflictPolicy::Copy => {
+                    ImportsFullbackupConflictPolicy::Copy => {
                         let copy_id = copy_source_id(&source_id, exec);
                         insert_persona(
                             db,
@@ -879,13 +879,13 @@ fn import_personas(
                             &copy_id,
                             &checksum,
                         )?;
-                        exec.bump(ImportsSillytavernCategory::Personas, Outcome::Imported);
+                        exec.bump(ImportsFullbackupCategory::Personas, Outcome::Imported);
                         exec.warn("PERSONA_CONFLICT", Some(avatar_id));
                     }
-                    ImportsSillytavernConflictPolicy::Merge
-                    | ImportsSillytavernConflictPolicy::Replace => {
+                    ImportsFullbackupConflictPolicy::Merge
+                    | ImportsFullbackupConflictPolicy::Replace => {
                         let replace =
-                            matches!(exec.policy, ImportsSillytavernConflictPolicy::Replace);
+                            matches!(exec.policy, ImportsFullbackupConflictPolicy::Replace);
                         update_persona(
                             db,
                             exec,
@@ -897,7 +897,7 @@ fn import_personas(
                             &source_id,
                             &checksum,
                         )?;
-                        exec.bump(ImportsSillytavernCategory::Personas, Outcome::Imported);
+                        exec.bump(ImportsFullbackupCategory::Personas, Outcome::Imported);
                         exec.warn("PERSONA_CONFLICT", Some(avatar_id));
                     }
                 }
@@ -913,7 +913,7 @@ fn import_personas(
                     &source_id,
                     &checksum,
                 )?;
-                exec.bump(ImportsSillytavernCategory::Personas, Outcome::Imported);
+                exec.bump(ImportsFullbackupCategory::Personas, Outcome::Imported);
             }
         }
     }
@@ -996,7 +996,7 @@ fn insert_persona(
                 &now
             ],
         )
-        .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: persona insert"))?;
+        .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: persona insert"))?;
         put_receipt(
             tx,
             &run_id,
@@ -1030,10 +1030,10 @@ fn update_persona(
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()
-        .map_err(|err| sqlite(err, "sillytavern import: persona lookup"))?;
+        .map_err(|err| sqlite(err, "fullbackup import: persona lookup"))?;
     let Some((old_name, old_description, old_avatar)) = current else {
         return Err(storage(format!(
-            "imports.sillytavern.execute: persona {id} vanished mid-run"
+            "imports.fullbackup.execute: persona {id} vanished mid-run"
         )));
     };
     let incoming_description = description.clone().unwrap_or_default();
@@ -1069,7 +1069,7 @@ fn update_persona(
                 &now
             ],
         )
-        .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: persona update"))?;
+        .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: persona update"))?;
         put_receipt(
             tx,
             &run_id,
@@ -1126,7 +1126,7 @@ fn import_chat(
     exec.saw = true;
 
     let Some(checksum) = hash_entry(archive, name) else {
-        exec.bump(ImportsSillytavernCategory::Chats, Outcome::Invalid);
+        exec.bump(ImportsFullbackupCategory::Chats, Outcome::Invalid);
         exec.warn("CHAT_IMPORT_FAILED", Some(name));
         return Ok(());
     };
@@ -1136,7 +1136,7 @@ fn import_chat(
     if let Some((target, seen)) = receipt(db, RECEIPT_CHAT, &source_id)? {
         if target_exists(db, "chats", &target)? {
             if seen == checksum {
-                exec.bump(ImportsSillytavernCategory::Chats, Outcome::Reused);
+                exec.bump(ImportsFullbackupCategory::Chats, Outcome::Reused);
                 return Ok(());
             }
             previous_chat = Some(target);
@@ -1144,13 +1144,13 @@ fn import_chat(
     }
 
     // 2. A transcript belongs to a character the kernel knows: `chats.character_id`
-    //    is NOT NULL and SillyTavern stores one directory per character.
+    //    is NOT NULL and legacy full-data stores one directory per character.
     let character_stem = relative
         .split_once('/')
         .map(|(stem, _)| stem.to_string())
         .unwrap_or_default();
     let Some(character_id) = resolve_chat_character(db, &character_stem)? else {
-        exec.bump(ImportsSillytavernCategory::Chats, Outcome::Skipped);
+        exec.bump(ImportsFullbackupCategory::Chats, Outcome::Skipped);
         exec.warn("CHAT_CHARACTER_NOT_FOUND", Some(name));
         return Ok(());
     };
@@ -1171,16 +1171,16 @@ fn import_chat(
     let plan = match previous_chat {
         None => ChatPlan::Fresh,
         Some(existing) => {
-            exec.conflict(ImportsSillytavernCategory::Chats);
+            exec.conflict(ImportsFullbackupCategory::Chats);
             match exec.policy {
-                ImportsSillytavernConflictPolicy::Skip => {
-                    exec.bump(ImportsSillytavernCategory::Chats, Outcome::Skipped);
+                ImportsFullbackupConflictPolicy::Skip => {
+                    exec.bump(ImportsFullbackupCategory::Chats, Outcome::Skipped);
                     exec.warn("CHAT_CONFLICT", Some(name));
                     return Ok(());
                 }
-                ImportsSillytavernConflictPolicy::Replace => ChatPlan::Replace(existing),
-                ImportsSillytavernConflictPolicy::Copy => ChatPlan::Copy,
-                ImportsSillytavernConflictPolicy::Merge => ChatPlan::Merge(existing),
+                ImportsFullbackupConflictPolicy::Replace => ChatPlan::Replace(existing),
+                ImportsFullbackupConflictPolicy::Copy => ChatPlan::Copy,
+                ImportsFullbackupConflictPolicy::Merge => ChatPlan::Merge(existing),
             }
         }
     };
@@ -1206,7 +1206,7 @@ fn import_chat(
         }
     };
 
-    // 4. Chat header: SillyTavern's first line may be `chat_metadata`, which is
+    // 4. Chat header: legacy full-data's first line may be `chat_metadata`, which is
     //    not a message (the legacy importer skipped it the same way).
     let header = read_first_record(archive, name);
     let metadata = header
@@ -1236,7 +1236,7 @@ fn import_chat(
             rusqlite::params![&character_id],
             |row| row.get(0),
         )
-        .map_err(|err| sqlite(err, "sillytavern import: chat order"))?;
+        .map_err(|err| sqlite(err, "fullbackup import: chat order"))?;
 
     let now = exec.now.clone();
     let run_id = exec.run_id.clone();
@@ -1254,7 +1254,7 @@ fn import_chat(
                 "DELETE FROM chats WHERE id = ?1",
                 rusqlite::params![&chat_id_owned],
             )
-            .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: chat replace"))?;
+            .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: chat replace"))?;
         }
         if insert_row {
             tx.execute(
@@ -1271,7 +1271,7 @@ fn import_chat(
                     sort_order
                 ],
             )
-            .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: chat insert"))?;
+            .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: chat insert"))?;
         }
         let (inserted, invalid) =
             append_messages(tx, archive, &source_name, &chat_id_owned, start_sequence)?;
@@ -1287,11 +1287,11 @@ fn import_chat(
         Ok((inserted, invalid))
     })?;
 
-    exec.dependent(ImportsSillytavernCategory::Chats, inserted);
+    exec.dependent(ImportsFullbackupCategory::Chats, inserted);
     if invalid_lines > 0 {
         exec.warn("CHAT_MESSAGE_INVALID", Some(name));
     }
-    exec.bump(ImportsSillytavernCategory::Chats, Outcome::Imported);
+    exec.bump(ImportsFullbackupCategory::Chats, Outcome::Imported);
     Ok(())
 }
 
@@ -1308,7 +1308,7 @@ fn append_messages(
     let entry = archive.by_name(name).map_err(|_| {
         StorageError::with(
             StorageErrorCode::Io,
-            "sillytavern import: chat entry disappeared",
+            "fullbackup import: chat entry disappeared",
             vec![],
         )
     })?;
@@ -1364,7 +1364,7 @@ fn append_messages(
                     ],
                 )
                 .map_err(|err| {
-                    StorageError::from_sqlite(err, "sillytavern import: message insert")
+                    StorageError::from_sqlite(err, "fullbackup import: message insert")
                 })?;
                 sequence += 1;
                 inserted += 1;
@@ -1384,7 +1384,7 @@ struct ChatMessage {
     created_at: Option<String>,
 }
 
-/// Maps one SillyTavern transcript record onto a message (same rules as the
+/// Maps one legacy full-data transcript record onto a message (same rules as the
 /// legacy importer: `mes` or `extra.display_text`, `is_user`/`is_system`, tool
 /// extras).
 fn chat_message(record: &Value) -> Option<ChatMessage> {
@@ -1442,7 +1442,7 @@ fn count_messages(db: &Database, chat_id: &str) -> Result<i64, KernelError> {
             rusqlite::params![chat_id],
             |row| row.get(0),
         )
-        .map_err(|err| sqlite(err, "sillytavern import: message count"))
+        .map_err(|err| sqlite(err, "fullbackup import: message count"))
 }
 
 /// Reads the first transcript record (used for `chat_metadata`).
@@ -1492,14 +1492,14 @@ fn import_lorebooks(
             .to_string();
         let source_id = format!("lorebooks/{stem}");
         let Some(bytes) = read_entry(archive, name, MAX_WORLD_BYTES) else {
-            exec.bump(ImportsSillytavernCategory::Lorebooks, Outcome::Invalid);
+            exec.bump(ImportsFullbackupCategory::Lorebooks, Outcome::Invalid);
             exec.warn("LOREBOOK_IMPORT_FAILED", Some(name));
             continue;
         };
         let checksum = sha256_hex(&bytes);
         if let Some((target, seen)) = receipt(db, RECEIPT_LOREBOOK, &source_id)? {
             if seen == checksum && target_exists(db, "lorebooks", &target)? {
-                exec.bump(ImportsSillytavernCategory::Lorebooks, Outcome::Reused);
+                exec.bump(ImportsFullbackupCategory::Lorebooks, Outcome::Reused);
                 continue;
             }
         }
@@ -1507,7 +1507,7 @@ fn import_lorebooks(
             .ok()
             .filter(Value::is_object)
         else {
-            exec.bump(ImportsSillytavernCategory::Lorebooks, Outcome::Invalid);
+            exec.bump(ImportsFullbackupCategory::Lorebooks, Outcome::Invalid);
             exec.warn("LOREBOOK_IMPORT_FAILED", Some(name));
             continue;
         };
@@ -1541,7 +1541,7 @@ fn import_lorebooks(
         let entries_json = serde_json::to_string(&entry_values).map_err(|err| {
             KernelError::new(
                 KernelErrorCode::Internal,
-                format!("imports.sillytavern.execute: serialize lorebook: {err}"),
+                format!("imports.fullbackup.execute: serialize lorebook: {err}"),
             )
         })?;
         let entry_count = entry_values.len() as i64;
@@ -1549,13 +1549,13 @@ fn import_lorebooks(
         let conflict = find_by_name(db, "lorebooks", &lorebook_name)?;
         match conflict {
             Some(existing) => {
-                exec.conflict(ImportsSillytavernCategory::Lorebooks);
+                exec.conflict(ImportsFullbackupCategory::Lorebooks);
                 match exec.policy {
-                    ImportsSillytavernConflictPolicy::Skip => {
-                        exec.bump(ImportsSillytavernCategory::Lorebooks, Outcome::Skipped);
+                    ImportsFullbackupConflictPolicy::Skip => {
+                        exec.bump(ImportsFullbackupCategory::Lorebooks, Outcome::Skipped);
                         exec.warn("LOREBOOK_CONFLICT", Some(name));
                     }
-                    ImportsSillytavernConflictPolicy::Copy => {
+                    ImportsFullbackupConflictPolicy::Copy => {
                         let copy_id = copy_source_id(&source_id, exec);
                         insert_lorebook(
                             db,
@@ -1566,14 +1566,14 @@ fn import_lorebooks(
                             &copy_id,
                             &checksum,
                         )?;
-                        exec.bump(ImportsSillytavernCategory::Lorebooks, Outcome::Imported);
-                        exec.dependent(ImportsSillytavernCategory::Lorebooks, entry_count);
+                        exec.bump(ImportsFullbackupCategory::Lorebooks, Outcome::Imported);
+                        exec.dependent(ImportsFullbackupCategory::Lorebooks, entry_count);
                         exec.warn("LOREBOOK_CONFLICT", Some(name));
                     }
-                    ImportsSillytavernConflictPolicy::Merge
-                    | ImportsSillytavernConflictPolicy::Replace => {
+                    ImportsFullbackupConflictPolicy::Merge
+                    | ImportsFullbackupConflictPolicy::Replace => {
                         let replace =
-                            matches!(exec.policy, ImportsSillytavernConflictPolicy::Replace);
+                            matches!(exec.policy, ImportsFullbackupConflictPolicy::Replace);
                         let current: Option<String> = db
                             .conn()
                             .query_row(
@@ -1583,7 +1583,7 @@ fn import_lorebooks(
                             )
                             .optional()
                             .map_err(|err| {
-                                sqlite(err, "sillytavern import: lorebook entries lookup")
+                                sqlite(err, "fullbackup import: lorebook entries lookup")
                             })?;
                         let keep_existing_entries = !replace
                             && current
@@ -1618,10 +1618,7 @@ fn import_lorebooks(
                                 ],
                             )
                             .map_err(|err| {
-                                StorageError::from_sqlite(
-                                    err,
-                                    "sillytavern import: lorebook update",
-                                )
+                                StorageError::from_sqlite(err, "fullbackup import: lorebook update")
                             })?;
                             put_receipt(
                                 tx,
@@ -1633,9 +1630,9 @@ fn import_lorebooks(
                                 &now,
                             )
                         })?;
-                        exec.bump(ImportsSillytavernCategory::Lorebooks, Outcome::Imported);
+                        exec.bump(ImportsFullbackupCategory::Lorebooks, Outcome::Imported);
                         if !keep_existing_entries {
-                            exec.dependent(ImportsSillytavernCategory::Lorebooks, entry_count);
+                            exec.dependent(ImportsFullbackupCategory::Lorebooks, entry_count);
                         }
                         exec.warn("LOREBOOK_CONFLICT", Some(name));
                     }
@@ -1651,8 +1648,8 @@ fn import_lorebooks(
                     &source_id,
                     &checksum,
                 )?;
-                exec.bump(ImportsSillytavernCategory::Lorebooks, Outcome::Imported);
-                exec.dependent(ImportsSillytavernCategory::Lorebooks, entry_count);
+                exec.bump(ImportsFullbackupCategory::Lorebooks, Outcome::Imported);
+                exec.dependent(ImportsFullbackupCategory::Lorebooks, entry_count);
             }
         }
     }
@@ -1683,7 +1680,7 @@ fn insert_lorebook(
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![&target, &name, &description, &entries_json, &now, &now],
         )
-        .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: lorebook insert"))?;
+        .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: lorebook insert"))?;
         put_receipt(
             tx,
             &run_id,
@@ -1729,14 +1726,14 @@ fn import_presets(
                 .to_string();
             let source_id = format!("presets/{kind}/{stem}");
             let Some(bytes) = read_entry(archive, name, MAX_PRESET_BYTES) else {
-                exec.bump(ImportsSillytavernCategory::Presets, Outcome::Invalid);
+                exec.bump(ImportsFullbackupCategory::Presets, Outcome::Invalid);
                 exec.warn("PRESET_IMPORT_FAILED", Some(name));
                 continue;
             };
             let checksum = sha256_hex(&bytes);
             if let Some((target, seen)) = receipt(db, RECEIPT_PRESET, &source_id)? {
                 if seen == checksum && target_exists(db, "presets", &target)? {
-                    exec.bump(ImportsSillytavernCategory::Presets, Outcome::Reused);
+                    exec.bump(ImportsFullbackupCategory::Presets, Outcome::Reused);
                     continue;
                 }
             }
@@ -1744,7 +1741,7 @@ fn import_presets(
                 .ok()
                 .filter(Value::is_object)
             else {
-                exec.bump(ImportsSillytavernCategory::Presets, Outcome::Invalid);
+                exec.bump(ImportsFullbackupCategory::Presets, Outcome::Invalid);
                 exec.warn("PRESET_IMPORT_FAILED", Some(name));
                 continue;
             };
@@ -1759,19 +1756,19 @@ fn import_presets(
             let settings_json = serde_json::to_string(&value).map_err(|err| {
                 KernelError::new(
                     KernelErrorCode::Internal,
-                    format!("imports.sillytavern.execute: serialize preset: {err}"),
+                    format!("imports.fullbackup.execute: serialize preset: {err}"),
                 )
             })?;
             let conflict = find_preset_conflict(db, kind, &preset_name)?;
             match conflict {
                 Some(existing) => {
-                    exec.conflict(ImportsSillytavernCategory::Presets);
+                    exec.conflict(ImportsFullbackupCategory::Presets);
                     match exec.policy {
-                        ImportsSillytavernConflictPolicy::Skip => {
-                            exec.bump(ImportsSillytavernCategory::Presets, Outcome::Skipped);
+                        ImportsFullbackupConflictPolicy::Skip => {
+                            exec.bump(ImportsFullbackupCategory::Presets, Outcome::Skipped);
                             exec.warn("PRESET_CONFLICT", Some(name));
                         }
-                        ImportsSillytavernConflictPolicy::Copy => {
+                        ImportsFullbackupConflictPolicy::Copy => {
                             let copy_id = copy_source_id(&source_id, exec);
                             insert_preset(
                                 db,
@@ -1782,13 +1779,13 @@ fn import_presets(
                                 &copy_id,
                                 &checksum,
                             )?;
-                            exec.bump(ImportsSillytavernCategory::Presets, Outcome::Imported);
+                            exec.bump(ImportsFullbackupCategory::Presets, Outcome::Imported);
                             exec.warn("PRESET_CONFLICT", Some(name));
                         }
-                        ImportsSillytavernConflictPolicy::Merge
-                        | ImportsSillytavernConflictPolicy::Replace => {
+                        ImportsFullbackupConflictPolicy::Merge
+                        | ImportsFullbackupConflictPolicy::Replace => {
                             let replace =
-                                matches!(exec.policy, ImportsSillytavernConflictPolicy::Replace);
+                                matches!(exec.policy, ImportsFullbackupConflictPolicy::Replace);
                             let current: Option<String> = db
                                 .conn()
                                 .query_row(
@@ -1797,7 +1794,7 @@ fn import_presets(
                                     |row| row.get(0),
                                 )
                                 .optional()
-                                .map_err(|err| sqlite(err, "sillytavern import: preset lookup"))?;
+                                .map_err(|err| sqlite(err, "fullbackup import: preset lookup"))?;
                             let settings_owned = if replace {
                                 settings_json.clone()
                             } else {
@@ -1818,7 +1815,7 @@ fn import_presets(
                                 .map_err(|err| {
                                     StorageError::from_sqlite(
                                         err,
-                                        "sillytavern import: preset update",
+                                        "fullbackup import: preset update",
                                     )
                                 })?;
                                 put_receipt(
@@ -1831,7 +1828,7 @@ fn import_presets(
                                     &now,
                                 )
                             })?;
-                            exec.bump(ImportsSillytavernCategory::Presets, Outcome::Imported);
+                            exec.bump(ImportsFullbackupCategory::Presets, Outcome::Imported);
                             exec.warn("PRESET_CONFLICT", Some(name));
                         }
                     }
@@ -1846,7 +1843,7 @@ fn import_presets(
                         &source_id,
                         &checksum,
                     )?;
-                    exec.bump(ImportsSillytavernCategory::Presets, Outcome::Imported);
+                    exec.bump(ImportsFullbackupCategory::Presets, Outcome::Imported);
                 }
             }
         }
@@ -1878,7 +1875,7 @@ fn insert_preset(
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![&target, &kind, &name, &settings_json, &now, &now],
         )
-        .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: preset insert"))?;
+        .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: preset insert"))?;
         put_receipt(
             tx,
             &run_id,
@@ -1904,7 +1901,7 @@ fn find_preset_conflict(
             |row| row.get(0),
         )
         .optional()
-        .map_err(|err| sqlite(err, "sillytavern import: preset conflict lookup"))
+        .map_err(|err| sqlite(err, "fullbackup import: preset conflict lookup"))
 }
 
 // --- groups / extension settings / api settings (settings documents) --------
@@ -1928,7 +1925,7 @@ fn import_groups(
     for name in &names {
         exec.saw = true;
         let Some(value) = read_json_value(archive, name, MAX_PRESET_BYTES) else {
-            exec.bump(ImportsSillytavernCategory::Groups, Outcome::Invalid);
+            exec.bump(ImportsFullbackupCategory::Groups, Outcome::Invalid);
             exec.warn("GROUP_IMPORT_FAILED", Some(name));
             continue;
         };
@@ -1939,7 +1936,7 @@ fn import_groups(
             .trim()
             .to_string();
         if display_name.is_empty() {
-            exec.bump(ImportsSillytavernCategory::Groups, Outcome::Invalid);
+            exec.bump(ImportsFullbackupCategory::Groups, Outcome::Invalid);
             exec.warn("GROUP_INVALID", Some(name));
             continue;
         }
@@ -1961,11 +1958,11 @@ fn import_groups(
     import_settings_document(
         db,
         exec,
-        ImportsSillytavernCategory::Groups,
+        ImportsFullbackupCategory::Groups,
         SETTINGS_GROUPS,
         &records,
     )?;
-    if exec.categories[category_index(ImportsSillytavernCategory::Groups)].imported > 0 {
+    if exec.categories[category_index(ImportsFullbackupCategory::Groups)].imported > 0 {
         exec.warn(
             "GROUPS_PRESERVED_NOT_MODELED",
             Some(&format!("{root}groups")),
@@ -2002,7 +1999,7 @@ fn import_extension_settings(
         exec.saw = true;
         if !value.is_object() {
             exec.bump(
-                ImportsSillytavernCategory::ExtensionSettings,
+                ImportsFullbackupCategory::ExtensionSettings,
                 Outcome::Invalid,
             );
             exec.warn("EXTENSION_SETTINGS_IMPORT_FAILED", Some(namespace));
@@ -2016,11 +2013,11 @@ fn import_extension_settings(
     import_settings_document(
         db,
         exec,
-        ImportsSillytavernCategory::ExtensionSettings,
+        ImportsFullbackupCategory::ExtensionSettings,
         SETTINGS_EXTENSION_SETTINGS,
         &records,
     )?;
-    if exec.categories[category_index(ImportsSillytavernCategory::ExtensionSettings)].imported > 0 {
+    if exec.categories[category_index(ImportsFullbackupCategory::ExtensionSettings)].imported > 0 {
         exec.warn(
             "EXTENSION_SETTINGS_PRESERVED_NOT_MODELED",
             Some(&format!("{root}settings.json")),
@@ -2048,7 +2045,7 @@ fn import_api_settings(
     for name in &names {
         exec.saw = true;
         let Some(value) = read_json_value(archive, name, MAX_PRESET_BYTES) else {
-            exec.bump(ImportsSillytavernCategory::ApiSettings, Outcome::Invalid);
+            exec.bump(ImportsFullbackupCategory::ApiSettings, Outcome::Invalid);
             exec.warn("API_SETTINGS_IMPORT_FAILED", Some(name));
             continue;
         };
@@ -2082,7 +2079,7 @@ fn import_api_settings(
         records.push((
             id,
             json!({
-                "name": format!("SillyTavern: {stem}"),
+                "name": format!("legacy full-data: {stem}"),
                 "provider": "openai-compatible",
                 "model": model_value,
                 "baseUrl": base_url_value,
@@ -2097,11 +2094,11 @@ fn import_api_settings(
     import_settings_document(
         db,
         exec,
-        ImportsSillytavernCategory::ApiSettings,
+        ImportsFullbackupCategory::ApiSettings,
         SETTINGS_API_SETTINGS,
         &records,
     )?;
-    if exec.categories[category_index(ImportsSillytavernCategory::ApiSettings)].imported > 0 {
+    if exec.categories[category_index(ImportsFullbackupCategory::ApiSettings)].imported > 0 {
         exec.warn(
             "API_SETTINGS_PRESERVED_NOT_MODELED",
             Some(&format!("{root}openai settings")),
@@ -2121,7 +2118,7 @@ fn import_api_settings(
 fn import_settings_document(
     db: &mut Database,
     exec: &mut Execution,
-    category: ImportsSillytavernCategory,
+    category: ImportsFullbackupCategory,
     key: &str,
     records: &[(String, Value)],
 ) -> Result<(), KernelError> {
@@ -2133,7 +2130,7 @@ fn import_settings_document(
             |row| row.get(0),
         )
         .optional()
-        .map_err(|err| sqlite(err, "sillytavern import: settings document lookup"))?;
+        .map_err(|err| sqlite(err, "fullbackup import: settings document lookup"))?;
     let mut document: BTreeMap<String, Value> = raw
         .as_deref()
         .and_then(|text| serde_json::from_str::<Value>(text).ok())
@@ -2157,16 +2154,16 @@ fn import_settings_document(
             Some(current) => {
                 exec.conflict(category.clone());
                 match exec.policy {
-                    ImportsSillytavernConflictPolicy::Skip => {
+                    ImportsFullbackupConflictPolicy::Skip => {
                         exec.bump(category.clone(), Outcome::Skipped);
                         exec.warn("SETTINGS_DOCUMENT_CONFLICT", Some(id));
                     }
-                    ImportsSillytavernConflictPolicy::Replace => {
+                    ImportsFullbackupConflictPolicy::Replace => {
                         document.insert(id.clone(), value.clone());
                         exec.bump(category.clone(), Outcome::Imported);
                         changed = true;
                     }
-                    ImportsSillytavernConflictPolicy::Merge => {
+                    ImportsFullbackupConflictPolicy::Merge => {
                         let merged_text =
                             fill_json_object(&current.to_string(), &value.to_string());
                         let merged_value: Value =
@@ -2179,7 +2176,7 @@ fn import_settings_document(
                             changed = true;
                         }
                     }
-                    ImportsSillytavernConflictPolicy::Copy => {
+                    ImportsFullbackupConflictPolicy::Copy => {
                         let copy_id = copy_document_key(&document, id);
                         document.insert(copy_id, value.clone());
                         exec.bump(category.clone(), Outcome::Imported);
@@ -2197,7 +2194,7 @@ fn import_settings_document(
         serde_json::to_string(&Value::Object(document.into_iter().collect())).map_err(|err| {
             KernelError::new(
                 KernelErrorCode::Internal,
-                format!("imports.sillytavern.execute: serialize settings document: {err}"),
+                format!("imports.fullbackup.execute: serialize settings document: {err}"),
             )
         })?;
     let now = exec.now.clone();
@@ -2208,7 +2205,7 @@ fn import_settings_document(
              updated_at = excluded.updated_at",
             rusqlite::params![key, &text, &now],
         )
-        .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: settings document"))?;
+        .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: settings document"))?;
         Ok(())
     })?;
     Ok(())
@@ -2251,12 +2248,12 @@ fn import_backgrounds(
         }
         exec.saw = true;
         if entry.size > MAX_BACKGROUND_BYTES {
-            exec.bump(ImportsSillytavernCategory::Backgrounds, Outcome::Invalid);
+            exec.bump(ImportsFullbackupCategory::Backgrounds, Outcome::Invalid);
             exec.warn("BACKGROUND_TOO_LARGE", Some(&entry.name));
             continue;
         }
         let Some(bytes) = read_entry(archive, &entry.name, MAX_BACKGROUND_BYTES as u64) else {
-            exec.bump(ImportsSillytavernCategory::Backgrounds, Outcome::Invalid);
+            exec.bump(ImportsFullbackupCategory::Backgrounds, Outcome::Invalid);
             exec.warn("BACKGROUND_IMPORT_FAILED", Some(&entry.name));
             continue;
         };
@@ -2279,10 +2276,10 @@ fn import_backgrounds(
                 } else {
                     Outcome::Imported
                 };
-                exec.bump(ImportsSillytavernCategory::Backgrounds, outcome);
+                exec.bump(ImportsFullbackupCategory::Backgrounds, outcome);
             }
             Err(_) => {
-                exec.bump(ImportsSillytavernCategory::Backgrounds, Outcome::Invalid);
+                exec.bump(ImportsFullbackupCategory::Backgrounds, Outcome::Invalid);
                 exec.warn("BACKGROUND_IMPORT_FAILED", Some(&entry.name));
             }
         }
@@ -2313,7 +2310,7 @@ fn import_themes(
         // a real SEC-05 trust decision instead of an import inventing one.
         let kind = if is_css { "theme-css" } else { "theme-json" };
         let Some(bytes) = read_entry(archive, &entry.name, MAX_PRESET_BYTES) else {
-            exec.bump(ImportsSillytavernCategory::Themes, Outcome::Invalid);
+            exec.bump(ImportsFullbackupCategory::Themes, Outcome::Invalid);
             exec.warn("THEME_IMPORT_FAILED", Some(&entry.name));
             continue;
         };
@@ -2336,10 +2333,10 @@ fn import_themes(
                 } else {
                     Outcome::Imported
                 };
-                exec.bump(ImportsSillytavernCategory::Themes, outcome);
+                exec.bump(ImportsFullbackupCategory::Themes, outcome);
             }
             Err(_) => {
-                exec.bump(ImportsSillytavernCategory::Themes, Outcome::Invalid);
+                exec.bump(ImportsFullbackupCategory::Themes, Outcome::Invalid);
                 exec.warn("THEME_IMPORT_FAILED", Some(&entry.name));
             }
         }
@@ -2364,7 +2361,7 @@ fn receipt(
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()
-        .map_err(|err| sqlite(err, "sillytavern import: receipt lookup"))
+        .map_err(|err| sqlite(err, "fullbackup import: receipt lookup"))
 }
 
 /// A receipt whose target was deleted by the user must not count as "already
@@ -2379,14 +2376,14 @@ fn target_exists(db: &Database, table: &str, id: &str) -> Result<bool, KernelErr
         "presets" => "SELECT COUNT(*) FROM presets WHERE id = ?1",
         other => {
             return Err(storage(format!(
-                "imports.sillytavern.execute: unknown receipt table {other}"
+                "imports.fullbackup.execute: unknown receipt table {other}"
             )))
         }
     };
     let count: i64 = db
         .conn()
         .query_row(sql, rusqlite::params![id], |row| row.get(0))
-        .map_err(|err| sqlite(err, "sillytavern import: receipt target lookup"))?;
+        .map_err(|err| sqlite(err, "fullbackup import: receipt target lookup"))?;
     Ok(count > 0)
 }
 
@@ -2438,7 +2435,7 @@ fn put_receipt(
             now
         ],
     )
-    .map_err(|err| StorageError::from_sqlite(err, "sillytavern import: receipt write"))?;
+    .map_err(|err| StorageError::from_sqlite(err, "fullbackup import: receipt write"))?;
     Ok(())
 }
 
@@ -2622,7 +2619,7 @@ fn character_ext(card: &Value, path: &str, checksum: &str) -> String {
     let value = json!({
         "_card": card,
         "_st2": {
-            "migrationSource": "sillytavern",
+            "migrationSource": "fullbackup",
             "sourcePath": path,
             "sourceHash": checksum,
         },
@@ -2704,17 +2701,17 @@ fn find_by_name(db: &Database, table: &str, name: &str) -> Result<Option<String>
         }
         other => {
             return Err(storage(format!(
-                "imports.sillytavern.execute: unknown conflict table {other}"
+                "imports.fullbackup.execute: unknown conflict table {other}"
             )))
         }
     };
     db.conn()
         .query_row(sql, rusqlite::params![name], |row| row.get(0))
         .optional()
-        .map_err(|err| sqlite(err, "sillytavern import: conflict lookup"))
+        .map_err(|err| sqlite(err, "fullbackup import: conflict lookup"))
 }
 
-/// Persona descriptor → `(name, description)`. SillyTavern stores an object per
+/// Persona descriptor → `(name, description)`. legacy full-data stores an object per
 /// avatar id; a bare string is an older/alternate shape the analyzer accepts too.
 fn persona_fields(value: &Value) -> Option<(String, Option<String>)> {
     match value {
@@ -2757,7 +2754,7 @@ fn timestamp_value(value: &Value) -> Option<String> {
     value.as_i64().and_then(epoch_millis)
 }
 
-/// SillyTavern mixes seconds and milliseconds depending on version; anything
+/// legacy full-data mixes seconds and milliseconds depending on version; anything
 /// below 1e11 is seconds.
 fn epoch_millis(raw: i64) -> Option<String> {
     let millis = if raw.abs() < 100_000_000_000 {

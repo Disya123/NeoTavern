@@ -7,9 +7,9 @@ Instructions for AI agents and developers working on NeoTavern.
 When making decisions, follow this order:
 
 1. Preservation of user data.
-2. Compatibility with existing SillyTavern user data (cards, chats, backups)
+2. Compatibility with existing legacy user data (cards, chats, backups)
    during the legacy transition (ADR-0058): the data import/migration path
-   lives as long as the migration contour does. SillyTavern-era PLUGINS are
+   lives as long as the migration contour does. legacy-era PLUGINS are
    not supported — the compatibility layer was removed by owner decision
    (2026-10-31, ADR-0059 slice); the target plugin platform is the native
    Plugin SDK (declarative slots + IR).
@@ -515,16 +515,16 @@ New permissions after an update require the user's consent again.
 
 ## 18. Legacy compatibility
 
-SillyTavern-era PLUGIN compatibility was removed by owner decision
+legacy-era PLUGIN compatibility was removed by owner decision
 (2026-10-31, ADR-0059 slice): there is no Express compatibility host, no
-`legacy.js` loader, no `window.SillyTavern` / `window.eventSource` /
+`legacy.js` loader, no `window.legacy` / `window.eventSource` /
 `window.event_types` / `window.extension_settings` / jQuery globals or DOM
 islands, no `legacy` manifest block and no `legacy.trusted` permission, and
 no migration guide is planned. A manifest carrying the removed block is
 rejected at install. New plugins target the native Plugin SDK (declarative
 slots + the sandboxed iframe surface + the IR schema).
 
-What remains legacy is DATA, not plugins: SillyTavern user data (character
+What remains legacy is DATA, not plugins: legacy user data (character
 cards, chats, backups) keeps importing through Settings → Data for the
 remaining lifetime of the migration contour (ADR-0058/ADR-0038).
 

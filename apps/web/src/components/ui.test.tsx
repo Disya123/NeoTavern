@@ -733,12 +733,12 @@ describe('CharacterManagementPanel', () => {
     await renderWithProviders(<DataMigrationPanel />);
 
     const input = screen.getByLabelText('Choose ZIP');
-    const archive = new File(['PK\u0003\u0004'], 'sillytavern-data.zip', {
+    const archive = new File(['PK\u0003\u0004'], 'legacy-data.zip', {
       type: 'application/zip',
     });
     await userEvent.upload(input, archive);
 
-    expect(screen.getByText('sillytavern-data.zip')).toBeInTheDocument();
+    expect(screen.getByText('legacy-data.zip')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Analyze archive' })).toBeEnabled();
   });
 
@@ -772,7 +772,7 @@ describe('CharacterManagementPanel', () => {
     );
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.endsWith('/imports/sillytavern/analyze')) {
+      if (url.endsWith('/imports/fullbackup/analyze')) {
         return new Response(
           JSON.stringify({
             analysisId: '018f0000-0000-7000-8000-000000000301',

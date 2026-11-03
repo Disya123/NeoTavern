@@ -1,7 +1,7 @@
 /**
  * Durable per-artifact import identities.
  *
- * A full SillyTavern archive can contain thousands of independently imported
+ * A full full-data archive can contain thousands of independently imported
  * objects. Tracking each source artifact makes retries idempotent even after a
  * process interruption halfway through an archive. The table is additive and
  * does not rewrite existing user data.

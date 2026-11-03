@@ -169,7 +169,7 @@ function triggerDownload(url: string): void {
 
 /**
  * Export one character card (PNG/JSON, Этап 4.5). Kernel plane: wire
- * `characters.export.card` returns the SillyTavern container base64-encoded;
+ * `characters.export.card` returns the legacy card container base64-encoded;
  * it is decoded into a Blob and downloaded locally (imported characters
  * round-trip their original card object verbatim from `ext_json._card`).
  * Legacy plane: the legacy download URL is served by the legacy contour
@@ -550,7 +550,7 @@ export type BridgeChatMessage = {
 };
 
 /**
- * Create a user message from a legacy bridge caller (SillyTavern
+ * Create a user message from a legacy bridge caller (legacy
  * `sendChatMessage`). Kernel plane: wire `chats.messages.create` returns the
  * lean `MessageDto` (id/chatId/role/content/createdAt/sequence) — legacy-only
  * fields (branchId, meta, variantCount, …) are absent, never fabricated.
@@ -2517,7 +2517,7 @@ export function translatePlugin(dto: PluginDto): InstalledPlugin {
     updatedAt: toEpochMs(dto.updatedAt),
     // Presence of frontend/backend/styles surfaces is not modelled by the
     // wire row; false is the honest "not declared", and the UI then treats
-    // the plugin as native (the SillyTavern-era legacy island fields were
+    // the plugin as native (the legacy-era legacy island fields were
     // removed with the plugin-compat contour, ADR-0059 Amendment 1).
     hasFrontend: false,
     hasBackend: false,

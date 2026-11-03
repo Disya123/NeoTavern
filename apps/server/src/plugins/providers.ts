@@ -49,7 +49,7 @@ interface ConfigIssue {
 }
 
 /**
- * Validate the SillyTavern-style "Additional Parameters" and prompt
+ * Validate the legacy-style "Additional Parameters" and prompt
  * post-processing settings that live on a provider config's `settings`. These
  * are stored as structured JSON (not YAML); shapes are enforced here so a
  * malformed value fails at write time, not at generation time. Custom

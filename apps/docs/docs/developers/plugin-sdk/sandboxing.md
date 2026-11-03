@@ -56,7 +56,7 @@ application.
 
 The legacy entry points (`legacy.frontend` / `legacy.backend`) and the
 `legacy.trusted` permission were removed by owner decision (2026-10-31);
-there is no compatibility mode for SillyTavern extensions. Only the
+there is no compatibility mode for legacy extensions. Only the
 sandboxed SDK path exists: frontend plugin UI runs in the sandboxed iframe,
 and backend plugins run in the restricted process described above.
 

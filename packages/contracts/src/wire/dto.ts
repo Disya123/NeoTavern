@@ -59,7 +59,7 @@ export type CharacterDto = Static<typeof CharacterDtoSchema>;
 
 /**
  * Character-card import request (`wire.request.imports.character.card`) —
- * imports a SillyTavern-compatible character card (V2 JSON, or PNG with the
+ * imports a legacy-compatible character card (V2 JSON, or PNG with the
  * `chara` tEXt chunk) that was staged first through `assets.put` (kind
  * `card`). The kernel parses the card, deduplicates by content sha256, and
  * creates the character (Этап 4.5).
@@ -88,29 +88,29 @@ export const CharacterCardImportResultDtoSchema = Type.Object(
 export type CharacterCardImportResultDto = Static<typeof CharacterCardImportResultDtoSchema>;
 
 /**
- * SillyTavern user-data archive analysis request
- * (`wire.request.imports.sillytavern.analyze`).
+ * full-data archive analysis request
+ * (`wire.request.imports.fullbackup.analyze`).
  *
  * The archive is staged first through the chunked `assets.put` ingestion
- * contract (ADR-0061): a real SillyTavern backup can reach the legacy 4 GiB
+ * contract (ADR-0061): a real full-data backup can reach the legacy 4 GiB
  * limit, so it never rides a JSON request — it is uploaded in chunks and
  * addressed here by asset id. This is the transport the cutover registry row
  * 10 was blocked on (Этап 4.5 cluster 10).
  */
-export const SillyTavernAnalyzeRequestDtoSchema = Type.Object(
+export const FullBackupAnalyzeRequestDtoSchema = Type.Object(
   {
     assetId: Type.String({ format: 'uuid' }),
   },
-  { $id: 'wire.request.imports.sillytavern.analyze', additionalProperties: false },
+  { $id: 'wire.request.imports.fullbackup.analyze', additionalProperties: false },
 );
-export type SillyTavernAnalyzeRequestDto = Static<typeof SillyTavernAnalyzeRequestDtoSchema>;
+export type FullBackupAnalyzeRequestDto = Static<typeof FullBackupAnalyzeRequestDtoSchema>;
 
 /**
- * SillyTavern import categories (`wire.imports.sillytavern.category`): the
+ * full-data import categories (`wire.imports.fullbackup.category`): the
  * same eleven buckets the legacy analyzer reports, so the migration panel can
  * present one row per bucket before anything is written.
  */
-export const WireSillyTavernCategory = Type.Union(
+export const WireFullBackupCategory = Type.Union(
   [
     Type.Literal('characters'),
     Type.Literal('chats'),
@@ -124,44 +124,44 @@ export const WireSillyTavernCategory = Type.Union(
     Type.Literal('legacyExtensions'),
     Type.Literal('themes'),
   ],
-  { $id: 'wire.imports.sillytavern.category', 'x-wire-unknown-behavior': 'reject' },
+  { $id: 'wire.imports.fullbackup.category', 'x-wire-unknown-behavior': 'reject' },
 );
-export type WireSillyTavernCategory = Static<typeof WireSillyTavernCategory>;
+export type WireFullBackupCategory = Static<typeof WireFullBackupCategory>;
 
-/** Per-category analysis (`wire.imports.sillytavern.category-analysis`).
+/** Per-category analysis (`wire.imports.fullbackup.category-analysis`).
  * `dependentRecords` counts nested rows the category would import (messages
  * in chats, entries in a lorebook); `invalid` counts entries that were
  * discovered but cannot be imported as-is (reported in `warnings`). */
-export const SillyTavernCategoryAnalysisDtoSchema = Type.Object(
+export const FullBackupCategoryAnalysisDtoSchema = Type.Object(
   {
-    id: WireSillyTavernCategory,
+    id: WireFullBackupCategory,
     discovered: Type.Integer({ minimum: 0 }),
     dependentRecords: Type.Integer({ minimum: 0 }),
     invalid: Type.Integer({ minimum: 0 }),
     sizeBytes: Type.Integer({ minimum: 0 }),
   },
-  { $id: 'wire.imports.sillytavern.category-analysis', additionalProperties: false },
+  { $id: 'wire.imports.fullbackup.category-analysis', additionalProperties: false },
 );
-export type SillyTavernCategoryAnalysisDto = Static<typeof SillyTavernCategoryAnalysisDtoSchema>;
+export type FullBackupCategoryAnalysisDto = Static<typeof FullBackupCategoryAnalysisDtoSchema>;
 
 /**
- * Analysis warning (`wire.imports.sillytavern.warning`): a stable machine code
+ * Analysis warning (`wire.imports.fullbackup.warning`): a stable machine code
  * plus the archive-relative path it applies to. Localization stays a frontend
  * concern (AGENTS.md §16); the bounded `warnings` sample is backed by the
  * full `warningCount`.
  */
-export const SillyTavernWarningDtoSchema = Type.Object(
+export const FullBackupWarningDtoSchema = Type.Object(
   {
     code: Type.String({ pattern: '^[A-Z][A-Z0-9_]*$', maxLength: 64 }),
     path: Type.Optional(Type.String({ maxLength: 1024 })),
   },
-  { $id: 'wire.imports.sillytavern.warning', additionalProperties: false },
+  { $id: 'wire.imports.fullbackup.warning', additionalProperties: false },
 );
-export type SillyTavernWarningDto = Static<typeof SillyTavernWarningDtoSchema>;
+export type FullBackupWarningDto = Static<typeof FullBackupWarningDtoSchema>;
 
 /**
- * SillyTavern archive analysis result
- * (`wire.result.imports.sillytavern.analyze`): a read-only inspection of the
+ * full-data archive analysis result
+ * (`wire.result.imports.fullbackup.analyze`): a read-only inspection of the
  * staged archive. It writes nothing, so it can be re-run freely; the actual
  * import (execute) is a separate, explicitly destructive operation.
  *
@@ -172,25 +172,25 @@ export type SillyTavernWarningDto = Static<typeof SillyTavernWarningDtoSchema>;
  * chosen at execute time, and reporting them before the user picked one would
  * be a guess).
  */
-export const SillyTavernAnalyzeResultDtoSchema = Type.Object(
+export const FullBackupAnalyzeResultDtoSchema = Type.Object(
   {
     sourceHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
     totalCompressedBytes: Type.Integer({ minimum: 0 }),
     totalExpandedBytes: Type.Integer({ minimum: 0 }),
-    categories: Type.Array(SillyTavernCategoryAnalysisDtoSchema, {
+    categories: Type.Array(FullBackupCategoryAnalysisDtoSchema, {
       minItems: 11,
       maxItems: 11,
     }),
     warningCount: Type.Integer({ minimum: 0 }),
-    warnings: Type.Array(SillyTavernWarningDtoSchema, { maxItems: 64 }),
+    warnings: Type.Array(FullBackupWarningDtoSchema, { maxItems: 64 }),
   },
-  { $id: 'wire.result.imports.sillytavern.analyze', additionalProperties: false },
+  { $id: 'wire.result.imports.fullbackup.analyze', additionalProperties: false },
 );
-export type SillyTavernAnalyzeResultDto = Static<typeof SillyTavernAnalyzeResultDtoSchema>;
+export type FullBackupAnalyzeResultDto = Static<typeof FullBackupAnalyzeResultDtoSchema>;
 
 /**
- * Conflict policy of `imports.sillytavern.execute`
- * (`wire.imports.sillytavern.conflict-policy`): the legacy
+ * Conflict policy of `imports.fullbackup.execute`
+ * (`wire.imports.fullbackup.conflict-policy`): the legacy
  * `DataImportConflictPolicy` verbatim, so the migration panel offers the same
  * four choices it always did.
  *
@@ -214,15 +214,15 @@ export type SillyTavernAnalyzeResultDto = Static<typeof SillyTavernAnalyzeResult
  * re-run of the same archive idempotent, and it is the default the legacy
  * `preserve` policy expressed.
  */
-export const WireSillyTavernConflictPolicy = Type.Union(
+export const WireFullBackupConflictPolicy = Type.Union(
   [Type.Literal('skip'), Type.Literal('copy'), Type.Literal('merge'), Type.Literal('replace')],
-  { $id: 'wire.imports.sillytavern.conflict-policy', 'x-wire-unknown-behavior': 'reject' },
+  { $id: 'wire.imports.fullbackup.conflict-policy', 'x-wire-unknown-behavior': 'reject' },
 );
-export type WireSillyTavernConflictPolicy = Static<typeof WireSillyTavernConflictPolicy>;
+export type WireFullBackupConflictPolicy = Static<typeof WireFullBackupConflictPolicy>;
 
 /**
- * SillyTavern archive execute request
- * (`wire.request.imports.sillytavern.execute`) — the destructive half of
+ * the legacy app archive execute request
+ * (`wire.request.imports.fullbackup.execute`) — the destructive half of
  * cutover-registry row 10. It reads the SAME staged asset the analysis read
  * (ADR-0061: the archive never rides a JSON request) and writes the categories
  * the analyzer reported.
@@ -230,13 +230,13 @@ export type WireSillyTavernConflictPolicy = Static<typeof WireSillyTavernConflic
  * `conflictPolicy` is REQUIRED: execute overwrites product data, so there is no
  * silent default the caller did not choose. `categories` is the subset the user
  * confirmed in the migration panel; absent means every supported category.
- * `legacyExtensions` is deliberately NOT importable (ADR-0059: SillyTavern-era
+ * `legacyExtensions` is deliberately NOT importable (ADR-0059: the legacy app-era
  * extensions are not a supported plugin surface) — requesting it is refused
  * with a `VALIDATION` product error rather than silently ignored, and omitting
  * it never loses the warning the analysis already raised.
  *
  * What lands where (the kernel owns no first-class model for everything
- * SillyTavern stored):
+ * the legacy app stored):
  *
  * - `characters` → `characters` rows (the full card preserved under
  *   `ext_json._card`, provenance under `ext_json._st2`, the PNG card published
@@ -250,8 +250,8 @@ export type WireSillyTavernConflictPolicy = Static<typeof WireSillyTavernConflic
  * - `backgrounds` → `background` assets (the canonical wallpaper kind);
  * - `themes` → `theme-css` / `theme-json` assets, ready for `themes.install`;
  * - `groups`, `extensionSettings`, `apiSettings` → preserved VERBATIM as
- *   non-secret settings documents (`sillytavern.groups`,
- *   `sillytavern.extension_settings`, `sillytavern.api_settings`) because the
+ *   non-secret settings documents (`fullbackup.groups`,
+ *   `fullbackup.extension_settings`, `fullbackup.api_settings`) because the
  *   kernel has no group model, no extension-settings store and no unsolicited
  *   provider-config registry; the response warns about it
  *   (`*_PRESERVED_NOT_MODELED`) instead of pretending they are live
@@ -264,20 +264,20 @@ export type WireSillyTavernConflictPolicy = Static<typeof WireSillyTavernConflic
  * written (messages, lore entries). The bounded `warnings` sample is backed by
  * the full `warningCount`.
  */
-export const SillyTavernExecuteRequestDtoSchema = Type.Object(
+export const FullBackupExecuteRequestDtoSchema = Type.Object(
   {
     assetId: Type.String({ format: 'uuid' }),
     categories: Type.Optional(
-      Type.Array(WireSillyTavernCategory, { minItems: 1, maxItems: 11, uniqueItems: true }),
+      Type.Array(WireFullBackupCategory, { minItems: 1, maxItems: 11, uniqueItems: true }),
     ),
-    conflictPolicy: WireSillyTavernConflictPolicy,
+    conflictPolicy: WireFullBackupConflictPolicy,
   },
-  { $id: 'wire.request.imports.sillytavern.execute', additionalProperties: false },
+  { $id: 'wire.request.imports.fullbackup.execute', additionalProperties: false },
 );
-export type SillyTavernExecuteRequestDto = Static<typeof SillyTavernExecuteRequestDtoSchema>;
+export type FullBackupExecuteRequestDto = Static<typeof FullBackupExecuteRequestDtoSchema>;
 
 /**
- * Per-category execute outcome (`wire.imports.sillytavern.category-execute`):
+ * Per-category execute outcome (`wire.imports.fullbackup.category-execute`):
  * the same eleven buckets the analysis reports, now with what actually
  * happened.
  *
@@ -297,9 +297,9 @@ export type SillyTavernExecuteRequestDto = Static<typeof SillyTavernExecuteReque
  * `imported + reused + skipped + invalid == discovered` from the analysis, so a
  * caller can reconcile the two operations without guessing.
  */
-export const SillyTavernCategoryExecuteDtoSchema = Type.Object(
+export const FullBackupCategoryExecuteDtoSchema = Type.Object(
   {
-    id: WireSillyTavernCategory,
+    id: WireFullBackupCategory,
     imported: Type.Integer({ minimum: 0 }),
     reused: Type.Integer({ minimum: 0 }),
     skipped: Type.Integer({ minimum: 0 }),
@@ -307,13 +307,13 @@ export const SillyTavernCategoryExecuteDtoSchema = Type.Object(
     invalid: Type.Integer({ minimum: 0 }),
     dependentImported: Type.Integer({ minimum: 0 }),
   },
-  { $id: 'wire.imports.sillytavern.category-execute', additionalProperties: false },
+  { $id: 'wire.imports.fullbackup.category-execute', additionalProperties: false },
 );
-export type SillyTavernCategoryExecuteDto = Static<typeof SillyTavernCategoryExecuteDtoSchema>;
+export type FullBackupCategoryExecuteDto = Static<typeof FullBackupCategoryExecuteDtoSchema>;
 
-/** Execute totals (`wire.imports.sillytavern.totals`): the sum of the
+/** Execute totals (`wire.imports.fullbackup.totals`): the sum of the
  * per-category counters, so a client never has to add them up itself. */
-export const SillyTavernExecuteTotalsDtoSchema = Type.Object(
+export const FullBackupExecuteTotalsDtoSchema = Type.Object(
   {
     imported: Type.Integer({ minimum: 0 }),
     reused: Type.Integer({ minimum: 0 }),
@@ -321,38 +321,38 @@ export const SillyTavernExecuteTotalsDtoSchema = Type.Object(
     conflicted: Type.Integer({ minimum: 0 }),
     invalid: Type.Integer({ minimum: 0 }),
   },
-  { $id: 'wire.imports.sillytavern.totals', additionalProperties: false },
+  { $id: 'wire.imports.fullbackup.totals', additionalProperties: false },
 );
-export type SillyTavernExecuteTotalsDto = Static<typeof SillyTavernExecuteTotalsDtoSchema>;
+export type FullBackupExecuteTotalsDto = Static<typeof FullBackupExecuteTotalsDtoSchema>;
 
 /**
- * SillyTavern archive execute result (`wire.result.imports.sillytavern.execute`).
+ * the legacy app archive execute result (`wire.result.imports.fullbackup.execute`).
  *
  * `runId` groups the `import_receipts` rows this run wrote (schema v31), so a
  * resumed or repeated import is reconcilable; `archiveAlreadyImported` is true
  * when the run wrote nothing because every selected entity was already imported
  * from the same source checksum (the legacy `reusedArchive` signal).
  */
-export const SillyTavernExecuteResultDtoSchema = Type.Object(
+export const FullBackupExecuteResultDtoSchema = Type.Object(
   {
     runId: Type.String({ format: 'uuid' }),
     sourceHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
-    conflictPolicy: WireSillyTavernConflictPolicy,
+    conflictPolicy: WireFullBackupConflictPolicy,
     archiveAlreadyImported: Type.Boolean(),
-    categories: Type.Array(SillyTavernCategoryExecuteDtoSchema, {
+    categories: Type.Array(FullBackupCategoryExecuteDtoSchema, {
       minItems: 11,
       maxItems: 11,
     }),
-    totals: SillyTavernExecuteTotalsDtoSchema,
+    totals: FullBackupExecuteTotalsDtoSchema,
     warningCount: Type.Integer({ minimum: 0 }),
-    warnings: Type.Array(SillyTavernWarningDtoSchema, { maxItems: 64 }),
+    warnings: Type.Array(FullBackupWarningDtoSchema, { maxItems: 64 }),
   },
-  { $id: 'wire.result.imports.sillytavern.execute', additionalProperties: false },
+  { $id: 'wire.result.imports.fullbackup.execute', additionalProperties: false },
 );
-export type SillyTavernExecuteResultDto = Static<typeof SillyTavernExecuteResultDtoSchema>;
+export type FullBackupExecuteResultDto = Static<typeof FullBackupExecuteResultDtoSchema>;
 
 /**
- * Character-card export format (`wire.card.export.format`): a SillyTavern
+ * Character-card export format (`wire.card.export.format`): a the legacy app
  * card container in plain JSON or a PNG whose `chara` tEXt chunk carries
  * base64-encoded JSON — the same container shapes `imports.character.card`
  * accepts, so an exported card re-imports verbatim (Этап 4.5 round trip).
@@ -375,7 +375,7 @@ export type CharacterCardExportRequestDto = Static<typeof CharacterCardExportReq
 
 /**
  * Character-card export result (`wire.result.characters.export.card`): the
- * SillyTavern card container base64-encoded so the UI can download it without
+ * the legacy app card container base64-encoded so the UI can download it without
  * a second transport hop. The JSON payload is the original card object when
  * it was preserved under `ext_json._card` (import round trip); a character
  * created without a card container is rebuilt from the canonical columns and
@@ -398,7 +398,7 @@ export type CharacterCardExportResultDto = Static<typeof CharacterCardExportResu
 /**
  * Character-card get request (`wire.request.characters.card.get`) — the
  * canonical field-level read of one character's card document (UI-02,
- * ADR-0057 Phase 2). The card is the SillyTavern-compatible object the
+ * ADR-0057 Phase 2). The card is the the legacy app-compatible object the
  * import preserved under `ext_json._card`; a character created without a
  * card container returns an EMPTY object (honest absence — the editor
  * must never synthesize greeting/notes strings the user never wrote).
@@ -4246,16 +4246,16 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.character-versions': CharacterVersionsResultDtoSchema,
   'wire.request.characters.versions.restore': CharacterVersionRestoreRequestDtoSchema,
   'wire.request.imports.character.card': CharacterCardImportRequestDtoSchema,
-  'wire.request.imports.sillytavern.analyze': SillyTavernAnalyzeRequestDtoSchema,
-  'wire.result.imports.sillytavern.analyze': SillyTavernAnalyzeResultDtoSchema,
-  'wire.request.imports.sillytavern.execute': SillyTavernExecuteRequestDtoSchema,
-  'wire.result.imports.sillytavern.execute': SillyTavernExecuteResultDtoSchema,
-  'wire.imports.sillytavern.category': WireSillyTavernCategory,
-  'wire.imports.sillytavern.category-analysis': SillyTavernCategoryAnalysisDtoSchema,
-  'wire.imports.sillytavern.category-execute': SillyTavernCategoryExecuteDtoSchema,
-  'wire.imports.sillytavern.conflict-policy': WireSillyTavernConflictPolicy,
-  'wire.imports.sillytavern.totals': SillyTavernExecuteTotalsDtoSchema,
-  'wire.imports.sillytavern.warning': SillyTavernWarningDtoSchema,
+  'wire.request.imports.fullbackup.analyze': FullBackupAnalyzeRequestDtoSchema,
+  'wire.result.imports.fullbackup.analyze': FullBackupAnalyzeResultDtoSchema,
+  'wire.request.imports.fullbackup.execute': FullBackupExecuteRequestDtoSchema,
+  'wire.result.imports.fullbackup.execute': FullBackupExecuteResultDtoSchema,
+  'wire.imports.fullbackup.category': WireFullBackupCategory,
+  'wire.imports.fullbackup.category-analysis': FullBackupCategoryAnalysisDtoSchema,
+  'wire.imports.fullbackup.category-execute': FullBackupCategoryExecuteDtoSchema,
+  'wire.imports.fullbackup.conflict-policy': WireFullBackupConflictPolicy,
+  'wire.imports.fullbackup.totals': FullBackupExecuteTotalsDtoSchema,
+  'wire.imports.fullbackup.warning': FullBackupWarningDtoSchema,
   'wire.card.export.format': WireCardExportFormat,
   'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,
   'wire.result.characters.export.card': CharacterCardExportResultDtoSchema,

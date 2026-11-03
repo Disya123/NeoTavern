@@ -1,18 +1,18 @@
-//! Этап 4.5 cluster 10: SillyTavern user-data archive analysis
-//! (`imports.sillytavern.analyze`).
+//! Этап 4.5 cluster 10: full-data archive analysis
+//! (`imports.fullbackup.analyze`).
 //!
 //! The archive reaches the kernel through the chunked `assets.put` ingestion
 //! contract (ADR-0061) and is addressed by `assetId`, so a backup up to the
 //! legacy 4 GiB cap never rides a JSON request. This operation is **read-only**:
 //! it walks the ZIP central directory, classifies every entry by the
-//! SillyTavern user-data layout, counts what an import would touch and reports
+//! full-data archive layout, counts what an import would touch and reports
 //! honest warnings. Nothing is written, so the operation is idempotent.
 //!
 //! Deliberate scope (documented, not silently missing):
 //!
 //! - **Conflicts are an execute-time concern.** The legacy analyzer matched
 //!   names against the database before the user picked a conflict policy; the
-//!   kernel reports facts and lets `imports.sillytavern.execute` resolve
+//!   kernel reports facts and lets `imports.fullbackup.execute` resolve
 //!   collisions under the chosen policy.
 //! - **No `analysisId`/`expiresAt` staging tuple.** The staged asset already
 //!   owns the archive's lifetime, so the analysis needs no server-side state.
@@ -26,8 +26,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 
 use contracts_generated::generated::{
-    self, ImportsSillytavernCategory, ImportsSillytavernCategoryAnalysis,
-    ImportsSillytavernWarning, ResultImportsSillytavernAnalyze,
+    self, ImportsFullbackupCategory, ImportsFullbackupCategoryAnalysis, ImportsFullbackupWarning,
+    ResultImportsFullbackupAnalyze,
 };
 use neotavern_storage::open::Database;
 use rusqlite::OptionalExtension;
@@ -52,7 +52,7 @@ pub(crate) const MAX_PRESET_BYTES: u64 = 32 * 1024 * 1024;
 pub(crate) const MAX_CHAT_LINE_CHARS: usize = 16 * 1024 * 1024;
 pub(crate) const MAX_BACKGROUND_BYTES: i64 = 64 * 1024 * 1024;
 
-/// Directories that mark a SillyTavern user-data root (lowercase).
+/// Directories that mark a full-data archive root (lowercase).
 const ROOT_MARKERS: [&str; 16] = [
     "characters",
     "chats",
@@ -88,33 +88,33 @@ pub(crate) const PRESET_DIRECTORIES: [&str; 8] = [
 pub(crate) const IMAGE_EXTENSIONS: [&str; 5] = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
 
 /// Canonical category order of the result array.
-pub(crate) const CATEGORY_ORDER: [ImportsSillytavernCategory; 11] = [
-    ImportsSillytavernCategory::Characters,
-    ImportsSillytavernCategory::Chats,
-    ImportsSillytavernCategory::Personas,
-    ImportsSillytavernCategory::Lorebooks,
-    ImportsSillytavernCategory::Presets,
-    ImportsSillytavernCategory::Groups,
-    ImportsSillytavernCategory::Backgrounds,
-    ImportsSillytavernCategory::ExtensionSettings,
-    ImportsSillytavernCategory::ApiSettings,
-    ImportsSillytavernCategory::LegacyExtensions,
-    ImportsSillytavernCategory::Themes,
+pub(crate) const CATEGORY_ORDER: [ImportsFullbackupCategory; 11] = [
+    ImportsFullbackupCategory::Characters,
+    ImportsFullbackupCategory::Chats,
+    ImportsFullbackupCategory::Personas,
+    ImportsFullbackupCategory::Lorebooks,
+    ImportsFullbackupCategory::Presets,
+    ImportsFullbackupCategory::Groups,
+    ImportsFullbackupCategory::Backgrounds,
+    ImportsFullbackupCategory::ExtensionSettings,
+    ImportsFullbackupCategory::ApiSettings,
+    ImportsFullbackupCategory::LegacyExtensions,
+    ImportsFullbackupCategory::Themes,
 ];
 
-pub(crate) fn category_index(id: ImportsSillytavernCategory) -> usize {
+pub(crate) fn category_index(id: ImportsFullbackupCategory) -> usize {
     match id {
-        ImportsSillytavernCategory::Characters => 0,
-        ImportsSillytavernCategory::Chats => 1,
-        ImportsSillytavernCategory::Personas => 2,
-        ImportsSillytavernCategory::Lorebooks => 3,
-        ImportsSillytavernCategory::Presets => 4,
-        ImportsSillytavernCategory::Groups => 5,
-        ImportsSillytavernCategory::Backgrounds => 6,
-        ImportsSillytavernCategory::ExtensionSettings => 7,
-        ImportsSillytavernCategory::ApiSettings => 8,
-        ImportsSillytavernCategory::LegacyExtensions => 9,
-        ImportsSillytavernCategory::Themes => 10,
+        ImportsFullbackupCategory::Characters => 0,
+        ImportsFullbackupCategory::Chats => 1,
+        ImportsFullbackupCategory::Personas => 2,
+        ImportsFullbackupCategory::Lorebooks => 3,
+        ImportsFullbackupCategory::Presets => 4,
+        ImportsFullbackupCategory::Groups => 5,
+        ImportsFullbackupCategory::Backgrounds => 6,
+        ImportsFullbackupCategory::ExtensionSettings => 7,
+        ImportsFullbackupCategory::ApiSettings => 8,
+        ImportsFullbackupCategory::LegacyExtensions => 9,
+        ImportsFullbackupCategory::Themes => 10,
     }
 }
 
@@ -164,7 +164,7 @@ pub(crate) fn index_archive(archive: &mut ZipArchive<File>) -> Result<ArchiveInd
         let lower = name.to_lowercase();
         dirs.insert(lower.trim_end_matches('/').to_string());
         // Every ancestor directory counts, not only explicit directory
-        // entries: a flat ZIP from the SillyTavern exporter has no dir rows.
+        // entries: a flat ZIP from the legacy exporter has no dir rows.
         let mut cursor = if is_dir {
             lower.trim_end_matches('/').to_string()
         } else {
@@ -194,8 +194,8 @@ pub(crate) fn index_archive(archive: &mut ZipArchive<File>) -> Result<ArchiveInd
 
 /// Accumulated analysis state.
 struct Analysis {
-    categories: [ImportsSillytavernCategoryAnalysis; 11],
-    warnings: Vec<ImportsSillytavernWarning>,
+    categories: [ImportsFullbackupCategoryAnalysis; 11],
+    warnings: Vec<ImportsFullbackupWarning>,
     warning_count: i64,
     read_budget: u64,
     budget_exhausted: bool,
@@ -204,7 +204,7 @@ struct Analysis {
 impl Analysis {
     fn new() -> Self {
         Self {
-            categories: CATEGORY_ORDER.map(|id| ImportsSillytavernCategoryAnalysis {
+            categories: CATEGORY_ORDER.map(|id| ImportsFullbackupCategoryAnalysis {
                 id,
                 discovered: 0,
                 dependent_records: 0,
@@ -220,8 +220,8 @@ impl Analysis {
 
     fn bump(
         &mut self,
-        id: ImportsSillytavernCategory,
-        f: impl FnOnce(&mut ImportsSillytavernCategoryAnalysis),
+        id: ImportsFullbackupCategory,
+        f: impl FnOnce(&mut ImportsFullbackupCategoryAnalysis),
     ) {
         f(&mut self.categories[category_index(id)]);
     }
@@ -229,7 +229,7 @@ impl Analysis {
     fn warn(&mut self, code: &str, path: Option<&str>) {
         self.warning_count += 1;
         if self.warnings.len() < MAX_WARNING_SAMPLE {
-            self.warnings.push(ImportsSillytavernWarning {
+            self.warnings.push(ImportsFullbackupWarning {
                 code: code.to_string(),
                 path: path.map(str::to_string),
             });
@@ -251,18 +251,18 @@ impl Analysis {
 
 pub(crate) fn archive_invalid(reason: &str) -> KernelError {
     KernelError::product(
-        "SILLYTAVERN_ARCHIVE_INVALID".to_string(),
+        "FULLBACKUP_ARCHIVE_INVALID".to_string(),
         vec![("reason".to_string(), reason.to_string())],
     )
 }
 
 pub(crate) fn data_root_missing() -> KernelError {
-    KernelError::product("SILLYTAVERN_DATA_ROOT_NOT_FOUND".to_string(), Vec::new())
+    KernelError::product("FULLBACKUP_DATA_ROOT_NOT_FOUND".to_string(), Vec::new())
 }
 
 fn archive_too_large(limit: i64) -> KernelError {
     KernelError::product(
-        "SILLYTAVERN_ARCHIVE_TOO_LARGE".to_string(),
+        "FULLBACKUP_ARCHIVE_TOO_LARGE".to_string(),
         vec![("limitBytes".to_string(), limit.to_string())],
     )
 }
@@ -275,18 +275,18 @@ pub(crate) fn storage(message: String) -> KernelError {
     KernelError::new(KernelErrorCode::StorageFailure, message)
 }
 
-fn encode_result(dto: &ResultImportsSillytavernAnalyze) -> Result<Vec<u8>, KernelError> {
-    crate::product::validate(dto, generated::validate_result_imports_sillytavern_analyze)?;
+fn encode_result(dto: &ResultImportsFullbackupAnalyze) -> Result<Vec<u8>, KernelError> {
+    crate::product::validate(dto, generated::validate_result_imports_fullbackup_analyze)?;
     crate::product::encode(dto)
 }
 
-/// `imports.sillytavern.analyze` — inspect a staged SillyTavern user-data
+/// `imports.fullbackup.analyze` — inspect a staged legacy full-data user-data
 /// archive without writing anything.
-pub fn imports_sillytavern_analyze(
+pub fn imports_fullbackup_analyze(
     db: &mut Database,
     request: &[u8],
 ) -> Result<Vec<u8>, KernelError> {
-    let req = generated::decode_request_imports_sillytavern_analyze(request)?;
+    let req = generated::decode_request_imports_fullbackup_analyze(request)?;
 
     // 1. The staged archive asset must exist; its published checksum IS the
     //    sha256 of the archive bytes, so the analysis never re-hashes a
@@ -299,14 +299,14 @@ pub fn imports_sillytavern_analyze(
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()
-        .map_err(|err| sqlite(err, "imports.sillytavern.analyze: asset lookup"))?;
+        .map_err(|err| sqlite(err, "imports.fullbackup.analyze: asset lookup"))?;
     let (relative_key, source_hash, _size_bytes) =
         row.ok_or_else(|| crate::assets::asset_not_found(&req.asset_id))?;
 
     let path = neotavern_storage::assets::resolve_asset_path(db, &relative_key)
-        .map_err(|err| storage(format!("imports.sillytavern.analyze: {err}")))?;
+        .map_err(|err| storage(format!("imports.fullbackup.analyze: {err}")))?;
     let file = File::open(&path)
-        .map_err(|err| storage(format!("imports.sillytavern.analyze: cannot open: {err}")))?;
+        .map_err(|err| storage(format!("imports.fullbackup.analyze: cannot open: {err}")))?;
     let mut archive = ZipArchive::new(file)
         .map_err(|err| archive_invalid(&format!("not a readable zip: {err}")))?;
 
@@ -389,12 +389,12 @@ pub fn imports_sillytavern_analyze(
             .find(|entry| entry.name == *name)
             .map(|entry| entry.size)
             .unwrap_or(0);
-        analysis.bump(ImportsSillytavernCategory::Characters, |category| {
+        analysis.bump(ImportsFullbackupCategory::Characters, |category| {
             category.discovered += 1;
             category.size_bytes += size;
         });
         if size > MAX_CHARACTER_BYTES {
-            analysis.bump(ImportsSillytavernCategory::Characters, |category| {
+            analysis.bump(ImportsFullbackupCategory::Characters, |category| {
                 category.invalid += 1;
             });
             analysis.warn("CHARACTER_TOO_LARGE", Some(name));
@@ -408,7 +408,7 @@ pub fn imports_sillytavern_analyze(
                 MAX_CHARACTER_BYTES as u64,
             );
             if parsed.is_none() {
-                analysis.bump(ImportsSillytavernCategory::Characters, |category| {
+                analysis.bump(ImportsFullbackupCategory::Characters, |category| {
                     category.invalid += 1;
                 });
                 analysis.warn("CHARACTER_IMPORT_FAILED", Some(name));
@@ -433,12 +433,12 @@ pub fn imports_sillytavern_analyze(
             .find(|entry| entry.name == *name)
             .map(|entry| entry.size)
             .unwrap_or(0);
-        analysis.bump(ImportsSillytavernCategory::Chats, |category| {
+        analysis.bump(ImportsFullbackupCategory::Chats, |category| {
             category.discovered += 1;
             category.size_bytes += size;
         });
         let (records, invalid) = scan_chat(&mut archive, name, &mut analysis);
-        analysis.bump(ImportsSillytavernCategory::Chats, |category| {
+        analysis.bump(ImportsFullbackupCategory::Chats, |category| {
             category.dependent_records += records;
             category.invalid += invalid;
         });
@@ -460,7 +460,7 @@ pub fn imports_sillytavern_analyze(
             .find(|entry| entry.name == *name)
             .map(|entry| entry.size)
             .unwrap_or(0);
-        analysis.bump(ImportsSillytavernCategory::Lorebooks, |category| {
+        analysis.bump(ImportsFullbackupCategory::Lorebooks, |category| {
             category.discovered += 1;
             category.size_bytes += size;
         });
@@ -478,7 +478,7 @@ pub fn imports_sillytavern_analyze(
                         }
                     }
                 }
-                analysis.bump(ImportsSillytavernCategory::Lorebooks, |category| {
+                analysis.bump(ImportsFullbackupCategory::Lorebooks, |category| {
                     category.dependent_records += valid;
                     category.invalid += invalid;
                 });
@@ -487,7 +487,7 @@ pub fn imports_sillytavern_analyze(
                 }
             }
             None => {
-                analysis.bump(ImportsSillytavernCategory::Lorebooks, |category| {
+                analysis.bump(ImportsFullbackupCategory::Lorebooks, |category| {
                     category.invalid += 1;
                 });
                 analysis.warn("LOREBOOK_IMPORT_FAILED", Some(name));
@@ -512,18 +512,18 @@ pub fn imports_sillytavern_analyze(
                 .find(|entry| entry.name == *name)
                 .map(|entry| entry.size)
                 .unwrap_or(0);
-            analysis.bump(ImportsSillytavernCategory::Presets, |category| {
+            analysis.bump(ImportsFullbackupCategory::Presets, |category| {
                 category.discovered += 1;
                 category.size_bytes += size;
             });
             if directory == "openai settings" {
-                analysis.bump(ImportsSillytavernCategory::ApiSettings, |category| {
+                analysis.bump(ImportsFullbackupCategory::ApiSettings, |category| {
                     category.discovered += 1;
                     category.size_bytes += size;
                 });
             }
             if read_json(&mut archive, name, &mut analysis, MAX_PRESET_BYTES).is_none() {
-                analysis.bump(ImportsSillytavernCategory::Presets, |category| {
+                analysis.bump(ImportsFullbackupCategory::Presets, |category| {
                     category.invalid += 1;
                 });
                 analysis.warn("PRESET_IMPORT_FAILED", Some(name));
@@ -547,13 +547,13 @@ pub fn imports_sillytavern_analyze(
             .find(|entry| entry.name == *name)
             .map(|entry| entry.size)
             .unwrap_or(0);
-        analysis.bump(ImportsSillytavernCategory::Groups, |category| {
+        analysis.bump(ImportsFullbackupCategory::Groups, |category| {
             category.discovered += 1;
             category.size_bytes += size;
         });
         let parsed = read_json(&mut archive, name, &mut analysis, MAX_PRESET_BYTES);
         let Some(value) = parsed else {
-            analysis.bump(ImportsSillytavernCategory::Groups, |category| {
+            analysis.bump(ImportsFullbackupCategory::Groups, |category| {
                 category.invalid += 1;
             });
             analysis.warn("GROUP_IMPORT_FAILED", Some(name));
@@ -564,7 +564,7 @@ pub fn imports_sillytavern_analyze(
             .and_then(|value| value.as_str())
             .is_some_and(|name| !name.trim().is_empty());
         if !named {
-            analysis.bump(ImportsSillytavernCategory::Groups, |category| {
+            analysis.bump(ImportsFullbackupCategory::Groups, |category| {
                 category.invalid += 1;
             });
         }
@@ -575,11 +575,11 @@ pub fn imports_sillytavern_analyze(
                 .find(|entry| !entry.is_dir && entry.lower == transcript.to_lowercase())
             {
                 let entry_name = entry.name.clone();
-                analysis.bump(ImportsSillytavernCategory::Groups, |category| {
+                analysis.bump(ImportsFullbackupCategory::Groups, |category| {
                     category.size_bytes += entry.size;
                 });
                 let (records, invalid) = scan_chat(&mut archive, &entry_name, &mut analysis);
-                analysis.bump(ImportsSillytavernCategory::Groups, |category| {
+                analysis.bump(ImportsFullbackupCategory::Groups, |category| {
                     category.dependent_records += records;
                     category.invalid += invalid;
                 });
@@ -598,7 +598,7 @@ pub fn imports_sillytavern_analyze(
             let mut invalid = 0i64;
             for (avatar_id, name) in personas {
                 discovered += 1;
-                // SillyTavern stores an object per avatar id (`{name, description}`)
+                // legacy full-data stores an object per avatar id (`{name, description}`)
                 // and older backups a bare string; anything else is invalid.
                 let valid = match name {
                     serde_json::Value::String(text) => !text.trim().is_empty(),
@@ -624,7 +624,7 @@ pub fn imports_sillytavern_analyze(
                     .find(|entry| !entry.is_dir && entry.lower.starts_with(&avatar_path))
                 {
                     let size = entry.size;
-                    analysis.bump(ImportsSillytavernCategory::Personas, |category| {
+                    analysis.bump(ImportsFullbackupCategory::Personas, |category| {
                         category.size_bytes += size;
                     });
                 }
@@ -634,7 +634,7 @@ pub fn imports_sillytavern_analyze(
                 .and_then(|name| entries.iter().find(|entry| entry.name == *name))
                 .map(|entry| entry.size)
                 .unwrap_or(0);
-            analysis.bump(ImportsSillytavernCategory::Personas, |category| {
+            analysis.bump(ImportsFullbackupCategory::Personas, |category| {
                 category.discovered += discovered;
                 category.invalid += invalid;
                 category.size_bytes += settings_size;
@@ -651,7 +651,7 @@ pub fn imports_sillytavern_analyze(
                 .and_then(|name| entries.iter().find(|entry| entry.name == *name))
                 .map(|entry| entry.size)
                 .unwrap_or(0);
-            analysis.bump(ImportsSillytavernCategory::ExtensionSettings, |category| {
+            analysis.bump(ImportsFullbackupCategory::ExtensionSettings, |category| {
                 category.discovered += namespaces;
                 category.size_bytes += settings_size;
             });
@@ -669,7 +669,7 @@ pub fn imports_sillytavern_analyze(
             continue;
         }
         let size = entry.size;
-        analysis.bump(ImportsSillytavernCategory::Backgrounds, |category| {
+        analysis.bump(ImportsFullbackupCategory::Backgrounds, |category| {
             category.discovered += 1;
             category.size_bytes += size;
             if size > MAX_BACKGROUND_BYTES {
@@ -704,7 +704,7 @@ pub fn imports_sillytavern_analyze(
         if !has_index {
             continue;
         }
-        analysis.bump(ImportsSillytavernCategory::LegacyExtensions, |category| {
+        analysis.bump(ImportsFullbackupCategory::LegacyExtensions, |category| {
             category.discovered += 1;
             category.size_bytes += size;
         });
@@ -719,13 +719,13 @@ pub fn imports_sillytavern_analyze(
             continue;
         }
         let size = entry.size;
-        analysis.bump(ImportsSillytavernCategory::Themes, |category| {
+        analysis.bump(ImportsFullbackupCategory::Themes, |category| {
             category.discovered += 1;
             category.size_bytes += size;
         });
     }
 
-    let dto = ResultImportsSillytavernAnalyze {
+    let dto = ResultImportsFullbackupAnalyze {
         source_hash,
         total_compressed_bytes: total_compressed,
         total_expanded_bytes: total_expanded,
@@ -756,7 +756,7 @@ pub(crate) fn is_unsafe_path(path: &str) -> bool {
     path.split('/').any(|segment| segment == "..")
 }
 
-/// Scores every directory that looks like a SillyTavern user-data root.
+/// Scores every directory that looks like a full-data archive root.
 pub(crate) fn detect_root(entries: &[Entry], dirs: &BTreeSet<String>) -> Option<String> {
     let mut candidates: Vec<String> = dirs
         .iter()

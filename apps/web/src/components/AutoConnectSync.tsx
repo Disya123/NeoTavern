@@ -1,6 +1,6 @@
 /**
  * Restores and re-validates the last confirmed connection on launch — the
- * classic SillyTavern "Auto-connect to Last Server" behaviour. When
+ * classic legacy "Auto-connect to Last Server" behaviour. When
  * `settings.autoConnect` is on and `settings.lastServer` references an enabled
  * provider, this re-asserts it as the active provider and warms the model
  * discovery cache to confirm the endpoint is reachable. Failures are non-fatal:

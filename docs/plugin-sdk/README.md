@@ -34,7 +34,7 @@ React/Zustand/Fastify/SQLite (AGENTS.md §17).
 
 The `.stplugin` package is a ZIP with a manifest. `validateManifest()` checks
 the id (reverse-DNS), the semver version, `apiVersion <= 2`, and permission
-validity. The legacy entry-point block (SillyTavern compatibility) was
+validity. The legacy entry-point block (legacy compatibility) was
 removed by owner decision (2026-10-31) — manifests carrying `legacy` are
 rejected at install.
 
@@ -362,10 +362,10 @@ are automatically removed on disable/crash/shutdown.
 Native modes: Sandboxed UI (iframe + RPC) and Backend worker (separate
 process). `node:vm` is not used as a sandbox.
 
-SillyTavern-era plugin compatibility (the `legacy` manifest block, the
+legacy-era plugin compatibility (the `legacy` manifest block, the
 `legacy.trusted` permission, the Express compatibility host, and the
-`window.SillyTavern`/jQuery globals) was removed by owner decision
-(2026-10-31): plugins written against the SillyTavern environment do not
+`window.legacy`/jQuery globals) was removed by owner decision
+(2026-10-31): plugins written against the legacy environment do not
 run, and new plugins use the Plugin SDK. The former per-legacy-API authority
 map (`packages/legacy-compat/COMPATIBILITY.md`, ARC-11
 `legacyAuthority.spec.ts`) is retired with that surface; ADR-0039 remains as

@@ -76,7 +76,7 @@ export function replaceMacros(text: string, ctx: MacroContext): string {
   });
 }
 
-/** Build a macro context with SillyTavern-compatible fallbacks. */
+/** Build a macro context with legacy-compatible fallbacks. */
 export function buildMacroContext(input: {
   userName?: string | null;
   charName?: string | null;

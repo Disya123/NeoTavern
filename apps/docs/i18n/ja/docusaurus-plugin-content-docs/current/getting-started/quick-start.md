@@ -43,4 +43,4 @@ NeoTavern を開きます。ホーム画面が直接開き、初回起動時に�
 
 - バックエンドが起動しない、ポートが使用中の場合は[トラブルシューティング](troubleshooting)。
 - 生成パラメータと接続プロファイルの調整は[設定](../user-guide/settings)。
-- 既存の SillyTavern バックアップのインポートや独自バックアップの作成は[データとバックアップ](../user-guide/data-and-backups)。
+- 既存の legacy バックアップのインポートや独自バックアップの作成は[データとバックアップ](../user-guide/data-and-backups)。

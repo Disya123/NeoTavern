@@ -50,9 +50,9 @@ import {
   type PagedMessagesDto,
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
-  type SillyTavernAnalyzeResultDto,
-  type SillyTavernExecuteRequestDto,
-  type SillyTavernExecuteResultDto,
+  type FullBackupAnalyzeResultDto,
+  type FullBackupExecuteRequestDto,
+  type FullBackupExecuteResultDto,
   type ChatsExportResultDto,
   type PromptPlanDto,
   type ChatContextAuditResultDto,
@@ -471,8 +471,8 @@ const CHARACTER_CARD_IMPORT: CharacterCardImportResultDto = {
   warnings: [],
 };
 
-/** `imports.sillytavern.analyze` response (cutover row 10): the read half. */
-const SILLYTAVERN_ANALYZE: SillyTavernAnalyzeResultDto = {
+/** `imports.fullbackup.analyze` response (cutover row 10): the read half. */
+const FULLBACKUP_ANALYZE: FullBackupAnalyzeResultDto = {
   sourceHash: 'abababababababababababababababababababababababababababababababab',
   totalCompressedBytes: 4096,
   totalExpandedBytes: 65536,
@@ -493,8 +493,8 @@ const SILLYTAVERN_ANALYZE: SillyTavernAnalyzeResultDto = {
   warnings: [],
 };
 
-/** `imports.sillytavern.execute` response: the destructive half. */
-const SILLYTAVERN_EXECUTE: SillyTavernExecuteResultDto = {
+/** `imports.fullbackup.execute` response: the destructive half. */
+const FULLBACKUP_EXECUTE: FullBackupExecuteResultDto = {
   runId: ASSET_ID,
   sourceHash: 'abababababababababababababababababababababababababababababababab',
   conflictPolicy: 'skip',
@@ -1016,10 +1016,10 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: EMPTY_RESULT };
       case 'imports.character.card':
         return { ok: true, value: CHARACTER_CARD_IMPORT };
-      case 'imports.sillytavern.analyze':
-        return { ok: true, value: SILLYTAVERN_ANALYZE };
-      case 'imports.sillytavern.execute':
-        return { ok: true, value: SILLYTAVERN_EXECUTE };
+      case 'imports.fullbackup.analyze':
+        return { ok: true, value: FULLBACKUP_ANALYZE };
+      case 'imports.fullbackup.execute':
+        return { ok: true, value: FULLBACKUP_EXECUTE };
       case 'characters.export.card':
         return { ok: true, value: CHARACTER_CARD_EXPORT };
       case 'chats.export':
@@ -1238,10 +1238,10 @@ function rpcResult(operationId: string | undefined): unknown {
       return EMPTY_RESULT;
     case 'imports.character.card':
       return CHARACTER_CARD_IMPORT;
-    case 'imports.sillytavern.analyze':
-      return SILLYTAVERN_ANALYZE;
-    case 'imports.sillytavern.execute':
-      return SILLYTAVERN_EXECUTE;
+    case 'imports.fullbackup.analyze':
+      return FULLBACKUP_ANALYZE;
+    case 'imports.fullbackup.execute':
+      return FULLBACKUP_EXECUTE;
     case 'characters.export.card':
       return CHARACTER_CARD_EXPORT;
     case 'chats.export':
@@ -3106,51 +3106,51 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(kernel.calls).toBe(0);
   });
 
-  it('imports.sillytavern.execute is routed identically by local and remote backends', async () => {
+  it('imports.fullbackup.execute is routed identically by local and remote backends', async () => {
     const kernel = new FakeKernelTransport();
     const local = new LocalBackend({ transport: kernel });
     const remote = makeRemoteBackend();
 
-    const request: SillyTavernExecuteRequestDto = {
+    const request: FullBackupExecuteRequestDto = {
       assetId: ASSET_ID,
       conflictPolicy: 'skip',
     };
     const [localResult, remoteResult] = await Promise.all([
-      local.imports.sillyTavernExecute(request),
-      remote.imports.sillyTavernExecute(request),
+      local.imports.fullBackupExecute(request),
+      remote.imports.fullBackupExecute(request),
     ]);
     expect(localResult).toEqual(remoteResult);
-    expect(localResult).toEqual(SILLYTAVERN_EXECUTE);
+    expect(localResult).toEqual(FULLBACKUP_EXECUTE);
     expect(kernel.requests).toEqual([
-      { operationId: 'imports.sillytavern.execute', payload: request },
+      { operationId: 'imports.fullbackup.execute', payload: request },
     ]);
   });
 
-  it('imports.sillytavern.execute with an unknown policy throws ValidationError before any transport call', async () => {
+  it('imports.fullbackup.execute with an unknown policy throws ValidationError before any transport call', async () => {
     const kernel = new FakeKernelTransport();
     const backend = new LocalBackend({ transport: kernel });
 
     await expect(
-      backend.imports.sillyTavernExecute({
+      backend.imports.fullBackupExecute({
         assetId: ASSET_ID,
-        conflictPolicy: 'overwrite' as SillyTavernExecuteRequestDto['conflictPolicy'],
+        conflictPolicy: 'overwrite' as FullBackupExecuteRequestDto['conflictPolicy'],
       }),
     ).rejects.toThrow(ValidationError);
     expect(kernel.calls).toBe(0);
   });
 
-  it('imports.sillytavern.analyze is routed identically by local and remote backends', async () => {
+  it('imports.fullbackup.analyze is routed identically by local and remote backends', async () => {
     const kernel = new FakeKernelTransport();
     const local = new LocalBackend({ transport: kernel });
     const remote = makeRemoteBackend();
 
     const [localResult, remoteResult] = await Promise.all([
-      local.imports.sillyTavernAnalyze(ASSET_ID),
-      remote.imports.sillyTavernAnalyze(ASSET_ID),
+      local.imports.fullBackupAnalyze(ASSET_ID),
+      remote.imports.fullBackupAnalyze(ASSET_ID),
     ]);
     expect(localResult).toEqual(remoteResult);
     expect(kernel.requests).toEqual([
-      { operationId: 'imports.sillytavern.analyze', payload: { assetId: ASSET_ID } },
+      { operationId: 'imports.fullbackup.analyze', payload: { assetId: ASSET_ID } },
     ]);
   });
 

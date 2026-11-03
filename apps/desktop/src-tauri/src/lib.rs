@@ -2081,7 +2081,7 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     }
     dispatch_ok(&host, "secrets.status", serde_json::json!({}))?;
     eprintln!("[smoke] golden: secrets status/lock ok");
-    // 14. Character card import (G6 evidence, round 33): a SillyTavern-
+    // 14. Character card import (G6 evidence, round 33): a legacy-
     //     compatible V2 card rides a PNG chara tEXt chunk (fixed fixture
     //     bytes, valid CRCs), published through assets.put kind card.
     const CARD_PNG_B64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAA9nRFWHRjaGFyYQBleUp6Y0dWaklqb2lZMmhoY21GZlkyRnlaRjkyTWlJc0luTndaV05mZG1WeWMybHZiaUk2SWpJdU1DSXNJbTVoYldVaU9pSkRZWEprSUVsdGNHOXlkQ0lzSW1SbGMyTnlhWEIwYVc5dUlqb2lTVzF3YjNKMFpXUWdabkp2YlNCaElGQk9SeUJqWVhKa0lHSjVJSFJvWlNCd1lXTnJZV2RsWkNCemJXOXJaU0lzSW1acGNuTjBYMjFsY3lJNklraGxiR3h2SUdaeWIyMGdkR2hsSUdOaGNtUXVJaXdpZEdGbmN5STZXeUpqWVhKa0lsMTmuwW+pAAAAAElFTkSuQmCC";

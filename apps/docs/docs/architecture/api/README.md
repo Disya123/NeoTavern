@@ -81,7 +81,7 @@ public; the rest of the core and plugin APIs are protected.
 - `GET /api/v2/characters/:id/export?format=json|png` → downloadable character
   card. `json` (and a request without `format`) returns a Character Card V2 JSON;
   `png` normalizes the local avatar original to PNG and embeds the V2 card
-  in a SillyTavern-compatible `chara` tEXt chunk. If there is no local avatar,
+  in a legacy full-data-compatible `chara` tEXt chunk. If there is no local avatar,
   a transparent portrait canvas is used; the server does not fetch network URLs.
 - `PATCH /api/v2/characters/:id` (body `CharacterUpdate`).
 - `DELETE /api/v2/characters/:id` → soft delete (trash).
@@ -193,8 +193,8 @@ without keys), `enabled`, `position` (order within the book), `metadata`
 (arbitrary extensions are preserved losslessly). Search across books and entries
 is available via FTS5 in `GET /api/v2/search` (`lorebooks_fts`, `lore_entries_fts`).
 
-Lorebook import from SillyTavern (`worlds/*.json`) is done via
-`POST /api/v2/imports/sillytavern` (categories `lorebooks`, `loreEntries`).
+Lorebook import from legacy full-data (`worlds/*.json`) is done via
+`POST /api/v2/imports/fullbackup` (categories `lorebooks`, `loreEntries`).
 
 ### File assets
 
@@ -350,7 +350,7 @@ below (or `null` to reset to the theme). The frontend applies the selected backg
 the chat via the CSS variable `--st-chat-wallpaper-image` (see `docs/theme-sdk/`).
 
 - `GET /api/v2/backgrounds` → `{ items: BackgroundItem[] }`. The catalog scans
-  `data/files/backgrounds/`, so files imported from SillyTavern 1
+  `data/files/backgrounds/`, so files imported from legacy full-data 1
   appear automatically. The `thumbnailUrl` field is guaranteed to point to a
   regenerable thumbnail (`ensureBackgroundThumbnail` creates it lazily on
   the first request). Sorting: new files first.
@@ -509,7 +509,7 @@ honest boundaries (approximate kernel tokenizer, no frontend interceptors).
   the connection and returns the available models without generation.
 
 The catalog includes OpenAI-compatible sources, the native Anthropic Messages API
-and text backends of classic SillyTavern: `text-completion`
+and text backends of classic legacy full-data: `text-completion`
 (`/v1/completions`, sources `ooba`/`koboldcpp`/`vllm`/`ollama`), `novelai`,
 `ai-horde` (async queue, key optional) and `koboldai`
 (`/api/v1/generate`). `adapterKind` defines the transport and the serialization
@@ -525,9 +525,9 @@ provider response.
 
 #### Additional parameters and prompt post-processing
 
-The `settings` field of the provider configuration accepts SillyTavern-compatible
+The `settings` field of the provider configuration accepts legacy full-data-compatible
 "Additional Parameters" and a post-processing mode. Unlike classic
-SillyTavern, the values are stored as **structured JSON** rather than YAML
+legacy full-data, the values are stored as **structured JSON** rather than YAML
 (see [ADR-0008](../adr/README.md#adr-0008-json-instead-of-yaml-for-additional-parameters)).
 All keys are optional and validated on write (`POST`/`PATCH /api/v2/providers`);
 an invalid value returns `PROVIDER_CONFIG_INVALID` with an array of `issues`
@@ -554,7 +554,7 @@ state returns the plaintext key, only a masked preview (`masked`). Schemas —
 
 - `GET /api/v2/secrets/exposure` → `{ allowSecretsExposure }`: the server flag
   that allows showing plaintext values (env `NEOTA_ALLOW_SECRETS_EXPOSURE`,
-  default `false`). The analogue of `allowKeysExposure` in SillyTavern.
+  default `false`). The analogue of `allowKeysExposure` in legacy full-data.
 - `GET /api/v2/providers/:id/secrets` → `{ items: ProviderSecret[] }`
   (active first; each item: `id`, `providerId`, `label`, `active`,
   `masked`, `createdAt` — without the value). 404 `PROVIDER_NOT_FOUND` if
@@ -656,7 +656,7 @@ and the reasons the legacy SSE endpoint is not reproduced on the kernel plane.
 
   `autoConnect` (optional boolean) and `lastServer` (optional
   `{ providerConfigId, source?, model? }` object or `null`) implement the
-  SillyTavern "Auto-connect to Last Server" behavior. The "Connect" button in
+  legacy full-data "Auto-connect to Last Server" behavior. The "Connect" button in
   the provider editor writes `lastServer` together with
   `activeProviderConfigId`; on load, when `autoConnect: true`, the client
   restores and re-validates that connection (model discovery).
@@ -727,11 +727,11 @@ report contents and creates the JSON file locally only on an explicit user
 action. Both state-changing maintenance operations are protected in remote
 mode by the common session/Origin/CSRF policy.
 
-### SillyTavern data transfer
+### legacy full-data data transfer
 
 #### Analysis
 
-`POST /api/v2/imports/sillytavern/analyze`
+`POST /api/v2/imports/fullbackup/analyze`
 
 - content type: `multipart/form-data`;
 - field: `file`, ZIP up to 4 GiB;
@@ -743,13 +743,13 @@ mode by the common session/Origin/CSRF policy.
 - cancellation: closing the request aborts saving, unpacking and analysis via
   `AbortSignal`;
 - side effects: the library, `import_jobs` and backups are not modified;
-- `200` response: `SillyTavernImportAnalysis`.
+- `200` response: `legacy full-dataImportAnalysis`.
 
 ```json
 {
   "analysisId": "0198…",
   "sourceHash": "64 hex characters",
-  "sourceName": "sillytavern-data.zip",
+  "sourceName": "legacy-data.zip",
   "expiresAt": 1785038400000,
   "archiveAlreadyImported": false,
   "totalCompressedBytes": 1048576,
@@ -786,7 +786,7 @@ mode by the common session/Origin/CSRF policy.
 
 #### Confirmation
 
-`POST /api/v2/imports/sillytavern/:analysisId/execute`
+`POST /api/v2/imports/fullbackup/:analysisId/execute`
 
 Request:
 
@@ -805,13 +805,13 @@ snapshot. The old chat stays available until the new transcript is fully
 written; after that it is atomically replaced by the new chat entity. `merge`
 does not splice two chat transcripts: the existing chat is kept.
 
-Response `200`: `SillyTavernImportResult`.
+Response `200`: `legacy full-dataImportResult`.
 
 ```json
 {
   "jobId": "0198…",
   "sourceHash": "64 hex characters",
-  "sourceName": "sillytavern-data.zip",
+  "sourceName": "legacy-data.zip",
   "safetyBackupId": "pre-import-0198…",
   "reusedArchive": false,
   "selectedCategories": ["characters", "chats", "personas"],
@@ -833,19 +833,19 @@ Response `200`: `SillyTavernImportResult`.
 Corrupted individual objects are skipped with a warning; an invalid/dangerous
 ZIP is rejected as a whole.
 
-`DELETE /api/v2/imports/sillytavern/:analysisId` deletes the unused staging
+`DELETE /api/v2/imports/fullbackup/:analysisId` deletes the unused staging
 and answers `204`. A completed, cancelled or expired `analysisId` returns
 `NOT_FOUND`.
 
 #### Compatible one-step endpoint
 
-`POST /api/v2/imports/sillytavern` is kept for existing clients. It accepts
+`POST /api/v2/imports/fullbackup` is kept for existing clients. It accepts
 the same multipart ZIP, imports all categories with the previous idempotent
-behavior and answers `SillyTavernImportResult`. Re-sending the exact same
+behavior and answers `legacy full-dataImportResult`. Re-sending the exact same
 archive returns the last saved report with `reusedArchive: true`. The new UI
 does not use this endpoint.
 
-Errors: `BAD_REQUEST` (missing file, SillyTavern structure not found or a
+Errors: `BAD_REQUEST` (missing file, legacy full-data structure not found or a
 dangerous ZIP), `FILE_TYPE_NOT_ALLOWED`, `FILE_TOO_LARGE`, `CONFLICT`
 (`IMPORT_ALREADY_RUNNING`, `IMPORT_ANALYSIS_ALREADY_RUNNING`,
 `IMPORT_ANALYSIS_LIMIT_REACHED`), `NOT_FOUND` (`IMPORT_ANALYSIS_NOT_FOUND`),
@@ -998,7 +998,7 @@ Frontend host endpoints `/api/v2/plugins/:id/sandbox`,
 frontend executes in an iframe with `sandbox="allow-scripts"`, a separate CSP
 and no same-origin capability. `/api/v2/plugins/:id/legacy.js` is **not
 available**: the legacy entry-point route was removed together with
-SillyTavern-era plugin compatibility by owner decision (2026-10-31), and
+legacy full-data-era plugin compatibility by owner decision (2026-10-31), and
 only the sandboxed SDK path exists. Backend routes are
 available only as `/api/plugins/{pluginId}/...`.
 

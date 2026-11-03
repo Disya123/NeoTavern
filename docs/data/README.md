@@ -381,7 +381,7 @@ deleted files; calling again is safe and returns zeros.
 ### Chat backgrounds
 
 The `files/backgrounds/` catalog is the source of truth: the list is built by
-scanning the directory, so originals imported from SillyTavern 1 are visible
+scanning the directory, so originals imported from legacy full-data 1 are visible
 without any transfer. Uploaded files are stored content-addressed
 (`{sha256}{ext}`, deduplicated by content) and never modified; originals are
 not cached and never deleted by cache cleanup.
@@ -439,7 +439,7 @@ identical cards with different bytes count as separate imports.
 
 The distribution contains the original V3 card of Hazel and four author
 entries of the Vesper lorebook — original starter content in a cyberpunk
-setting, not borrowed from SillyTavern.
+setting, not borrowed from legacy full-data.
 
 On the **legacy Fastify** contour, startup performs a resumable local
 import (`apps/server/src/lib/starterContent.ts`): it creates the
@@ -463,15 +463,15 @@ deleting or editing it is considered user intent. The import runs once,
 for both new and existing databases after an update. Kernel unit tests
 leave the env unset so they keep an empty library.
 
-## SillyTavern data import
+## legacy full-data data import
 
 The "Settings → Data and backups" screen uses a two-phase transfer of a full
-SillyTavern ZIP backup:
+legacy full-data ZIP backup:
 
-1. `POST /api/v2/imports/sillytavern/analyze` streams, hashes and safely
+1. `POST /api/v2/imports/fullbackup/analyze` streams, hashes and safely
    unpacks the archive into temporary disk staging, then only reads data.
 2. The user selects categories and a conflict policy.
-3. `POST /api/v2/imports/sillytavern/:analysisId/execute` creates a protective
+3. `POST /api/v2/imports/fullbackup/:analysisId/execute` creates a protective
    SQLite backup and only then writes the selected data.
 
 Read-only analysis does not create `import_jobs`, library entities, or a
@@ -523,7 +523,7 @@ chat, an `importing` marker is created first: after an interruption, a rerun
 removes only the unfinished transcript and starts it over. `import_jobs`
 stores every confirmed execution; multiple runs of the same SHA-256 are
 allowed for different categories and policies. The compatible one-step
-endpoint `POST /api/v2/imports/sillytavern` is kept: it reuses the last
+endpoint `POST /api/v2/imports/fullbackup` is kept: it reuses the last
 successful report of the exact archive and skips the preflight.
 
 See also: [migrations](../migrations/README.md).

@@ -1,5 +1,5 @@
 /**
- * Parsing/serialization for the SillyTavern-style "Additional Parameters"
+ * Parsing/serialization for the legacy-style "Additional Parameters"
  * (include body / exclude body / include headers). The editor edits these as
  * JSON text; provider settings store them as structured values.
  *

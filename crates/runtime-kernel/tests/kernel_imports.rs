@@ -1,6 +1,6 @@
 //! Этап 4.5: character-card import (`imports.character.card`).
 //!
-//! A SillyTavern-compatible card (V2 JSON, or a PNG carrying the `chara`
+//! A legacy-compatible card (V2 JSON, or a PNG carrying the `chara`
 //! tEXt chunk with base64-encoded JSON) is staged through `assets.put`
 //! (kind `card`); the import parses it, deduplicates by the sha256 of the
 //! original bytes and creates the character. Card fields beyond the canonical

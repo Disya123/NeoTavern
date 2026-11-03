@@ -1,12 +1,12 @@
 /**
  * Provider secrets — multiple labelled API keys per provider connection.
  *
- * Mirrors the SillyTavern secrets manager behaviour: a provider may hold
+ * Mirrors the legacy secrets manager behaviour: a provider may hold
  * several stored keys, exactly one of which is *active* and used for
  * generation. Secret **values are write-only**: they never appear in list or
  * state schemas. Only the dedicated `/reveal` endpoint returns a plaintext
  * value, and only when secrets exposure is explicitly enabled server-side
- * (`NEOTA_ALLOW_SECRETS_EXPOSURE`, default off) — the equivalent of SillyTavern's
+ * (`NEOTA_ALLOW_SECRETS_EXPOSURE`, default off) — the equivalent of legacy's
  * `allowKeysExposure` gate (AGENTS.md §4, §11).
  */
 import { Type, type Static } from '@sinclair/typebox';
@@ -78,7 +78,7 @@ export type SecretsExposure = Static<typeof SecretsExposureSchema>;
 
 /**
  * Mask a secret value for safe display: keep only the last few characters and
- * replace the remainder with bullets (matches SillyTavern `getMaskedValue`).
+ * replace the remainder with bullets (matches legacy `getMaskedValue`).
  */
 export function maskSecretValue(value: string, visibleSuffix = 4): string {
   if (value.length === 0) return '';

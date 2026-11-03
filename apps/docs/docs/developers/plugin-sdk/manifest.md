@@ -106,10 +106,10 @@ update requires re-consent — see [Permissions](permissions.md).
 
 ## Legacy Entry Points
 
-The legacy entry-point block (SillyTavern compatibility) was removed by owner
+The legacy entry-point block (legacy compatibility) was removed by owner
 decision (2026-10-31) — manifests carrying `legacy` are rejected at install.
-SillyTavern-era plugin compatibility was removed; plugins written against the
-SillyTavern environment do not run, and new plugins use the Plugin SDK.
+legacy-era plugin compatibility was removed; plugins written against the
+legacy environment do not run, and new plugins use the Plugin SDK.
 
 ## OAuth Clients
 

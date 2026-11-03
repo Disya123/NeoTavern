@@ -1,5 +1,5 @@
 /**
- * Unit tests for the SillyTavern-style prompt post-processing stage
+ * Unit tests for the legacy-style prompt post-processing stage
  * (merge/semi/strict/single and their `_tools` variants).
  */
 import { describe, it, expect } from 'vitest';

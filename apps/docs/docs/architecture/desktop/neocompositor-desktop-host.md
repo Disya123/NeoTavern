@@ -951,13 +951,13 @@ actions 36 + gap 8; rows 64 + 4). Тест
 `backups_list_create_restore_over_product_wire`.
 
 Над бэкапами — React `DataMigrationPanel` и `ActivationStatusPanel`.
-SillyTavern ZIP-import на kernel-плоскости нет (`UnsupportedError
-('imports.sillytavern.analyze')`); native не выдумывает wire-операцию:
+full-data ZIP-import на kernel-плоскости нет (`UnsupportedError
+('imports.fullbackup.analyze')`); native не выдумывает wire-операцию:
 кнопка «Analyze archive» → `CAPABILITY_UNAVAILABLE`. Активация data-root
 (`data.activation.status`) read-only: layout v1/v2, active root / id,
 журнал, баннер pending. Demo — committed restore без pending; default —
 пустой журнал. Тест
-`data_activation_status_and_sillytavern_import_honesty_over_product_wire`.
+`data_activation_status_and_fullbackup_import_honesty_over_product_wire`.
 
 ## Character Advanced: lorebooks
 
@@ -1233,11 +1233,11 @@ wire-вызова («No changes.»), успех обновляет карточ�
 скрытый `<input type=file>`; нативный хост честно спрашивает путь к файлу,
 `TextFocus::CardPath`). Подтверждение делает двухшаговый провод: `assets.put`
 (kind `card`, base64) → `imports.character.card`; ядро парсит
-SillyTavern-карточку и дедуплицирует по sha256 контента — повторный импорт
+legacy-карточку и дедуплицирует по sha256 контента — повторный импорт
 того же файла возвращает существующего персонажа (`created == false`,
 статус «Already imported (…)»), первый — «Imported …» с автоселектом.
 Экспорт — кнопка DownloadSimple в action bar редактора:
-`characters.export.card` (JSON) паркует SillyTavern-контейнер в
+`characters.export.card` (JSON) паркует legacy-контейнер в
 `last_export`, bin пишет файл в `exports/` (тот же синк, что у чатов).
 FakeWire парсит V2/flat JSON; PNG-чанк `chara` — kernel-only (честный
 `VALIDATION` вместо фейкового парса), png-экспорт тоже не синтезируется.

@@ -47,8 +47,8 @@ NeoTavern is extended in three ways:
 - [Providers](developers/providers/) — provider adapters that implement the unified
   adapter contract.
 
-SillyTavern-era plugin compatibility was removed by owner decision
-(2026-10-31); plugins written against the SillyTavern environment do not run,
+legacy-era plugin compatibility was removed by owner decision
+(2026-10-31); plugins written against the legacy environment do not run,
 and new plugins use the Plugin SDK.
 
 The [API Reference](api/) is generated from the SDK sources by TypeDoc

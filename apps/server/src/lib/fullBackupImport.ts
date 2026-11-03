@@ -1,5 +1,5 @@
 /**
- * Streaming migration from a SillyTavern user-data directory extracted from a
+ * Streaming migration from a legacy user-data directory extracted from a
  * ZIP archive.
  *
  * Supported today: Character Cards, solo JSONL chats (including swipes),
@@ -18,8 +18,8 @@ import type {
   DataImportEntityCount,
   DataImportWarning,
   MessageRole,
-  SillyTavernImportCategoryAnalysis,
-  SillyTavernImportCategoryId,
+  FullBackupCategoryAnalysis,
+  FullBackupCategoryId,
 } from '@neotavern/contracts';
 import type {
   CacheMetadataRepository,
@@ -76,14 +76,14 @@ const PRESET_DIRECTORIES: ReadonlyArray<{ directory: string; kind: string }> = [
   { directory: 'TextGen Settings', kind: 'textgen' },
 ];
 
-export interface SillyTavernImportRun {
+export interface legacyImportRun {
   counts: DataImportCounts;
   warningCount: number;
   warnings: DataImportWarning[];
 }
 
-export interface SillyTavernImportInspection {
-  categories: SillyTavernImportCategoryAnalysis[];
+export interface legacyImportInspection {
+  categories: FullBackupCategoryAnalysis[];
   conflictCount: number;
   conflicts: DataImportConflict[];
   warningCount: number;
@@ -97,7 +97,7 @@ interface ImportContext {
   signal: AbortSignal;
   counts: DataImportCounts;
   warnings: WarningCollector;
-  selectedCategories: ReadonlySet<SillyTavernImportCategoryId>;
+  selectedCategories: ReadonlySet<FullBackupCategoryId>;
   conflictPolicy: ImportResolutionPolicy;
   executionId: string;
   plugins?: PluginRepository;
@@ -127,13 +127,13 @@ class WarningCollector {
   }
 }
 
-/** Import all supported data below the best matching SillyTavern user root. */
-export async function importSillyTavernData(options: {
+/** Import all supported data below the best matching legacy user root. */
+export async function importlegacyData(options: {
   repository: DataImportRepository;
   paths: DataPaths;
   extractedRoot: string;
   signal: AbortSignal;
-  categories?: readonly SillyTavernImportCategoryId[];
+  categories?: readonly FullBackupCategoryId[];
   conflictPolicy?: DataImportConflictPolicy;
   executionId?: string;
   /** Registries used by the apiSettings/legacyExtensions categories. */
@@ -141,13 +141,13 @@ export async function importSillyTavernData(options: {
   providerConfigs?: ProviderConfigRepository;
   /** Cache bookkeeping sink for generated thumbnails (ТЗ §11.3). */
   cacheMetadata?: CacheMetadataRepository;
-}): Promise<SillyTavernImportRun> {
+}): Promise<legacyImportRun> {
   const warnings = new WarningCollector();
   const root = await detectUserRoot(options.extractedRoot);
   if (!root) {
     throw new AppError({
       code: ErrorCodes.BAD_REQUEST,
-      params: { reason: 'SILLYTAVERN_DATA_ROOT_NOT_FOUND' },
+      params: { reason: 'FULLBACKUP_DATA_ROOT_NOT_FOUND' },
     });
   }
 
@@ -188,23 +188,23 @@ export async function importSillyTavernData(options: {
 }
 
 /**
- * Inspect supported SillyTavern data without mutating the library.
+ * Inspect supported legacy data without mutating the library.
  *
  * The inspection deliberately parses every supported record using the same
  * limits as the importer so the confirmation screen can report damaged data
  * and existing-library conflicts before a safety backup or import job exists.
  */
-export async function analyzeSillyTavernData(options: {
+export async function analyzelegacyData(options: {
   repository: DataImportRepository;
   extractedRoot: string;
   signal: AbortSignal;
-}): Promise<SillyTavernImportInspection> {
+}): Promise<legacyImportInspection> {
   const warnings = new WarningCollector();
   const root = await detectUserRoot(options.extractedRoot);
   if (!root) {
     throw new AppError({
       code: ErrorCodes.BAD_REQUEST,
-      params: { reason: 'SILLYTAVERN_DATA_ROOT_NOT_FOUND' },
+      params: { reason: 'FULLBACKUP_DATA_ROOT_NOT_FOUND' },
     });
   }
 
@@ -253,28 +253,25 @@ const CATEGORY_IDS = [
   'apiSettings',
   'legacyExtensions',
   'themes',
-] as const satisfies readonly SillyTavernImportCategoryId[];
+] as const satisfies readonly FullBackupCategoryId[];
 
 interface AnalysisContext {
   repository: DataImportRepository;
   root: string;
   signal: AbortSignal;
-  categories: Record<SillyTavernImportCategoryId, SillyTavernImportCategoryAnalysis>;
+  categories: Record<FullBackupCategoryId, FullBackupCategoryAnalysis>;
   warnings: WarningCollector;
   conflictCount: number;
   conflicts: DataImportConflict[];
 }
 
-function createCategoryAnalysis(): Record<
-  SillyTavernImportCategoryId,
-  SillyTavernImportCategoryAnalysis
-> {
+function createCategoryAnalysis(): Record<FullBackupCategoryId, FullBackupCategoryAnalysis> {
   return Object.fromEntries(
     CATEGORY_IDS.map((id) => [
       id,
       { id, discovered: 0, dependentRecords: 0, invalid: 0, conflicts: 0, sizeBytes: 0 },
     ]),
-  ) as Record<SillyTavernImportCategoryId, SillyTavernImportCategoryAnalysis>;
+  ) as Record<FullBackupCategoryId, FullBackupCategoryAnalysis>;
 }
 
 async function reportUnsupportedAnalysisData(context: AnalysisContext): Promise<void> {
@@ -288,7 +285,7 @@ async function reportUnsupportedAnalysisData(context: AnalysisContext): Promise<
     });
   }
 
-  // SillyTavern server plugins live in the install directory (plugins/ next to
+  // legacy server plugins live in the install directory (plugins/ next to
   // server.js), not in the user-data archive — nothing to import from the ZIP.
   const serverPlugins = await findChild(context.root, 'plugins', 'directory');
   if (serverPlugins) {
@@ -578,7 +575,7 @@ async function analyzePresets(context: AnalysisContext): Promise<void> {
 
 function addConflict(
   context: AnalysisContext,
-  categoryId: SillyTavernImportCategoryId,
+  categoryId: FullBackupCategoryId,
   sourceKey: string,
   path: string,
   conflict: ReturnType<DataImportRepository['findConflict']>,
@@ -719,7 +716,7 @@ async function importPersonas(context: ImportContext): Promise<void> {
           sourceKey: effectiveSourceKey(context, personaKey(avatarId)),
           sourceHash,
           metadata: {
-            source: 'sillytavern',
+            source: 'fullbackup',
             avatarId,
             descriptor,
           },
@@ -772,7 +769,7 @@ async function importCharacters(context: ImportContext): Promise<void> {
           sourceKind: 'character',
           sourceKey: effectiveSourceKey(context, characterKey(stem)),
           sourceHash,
-          metadata: { source: 'sillytavern', path: shownPath, format: parsed.sourceFormat },
+          metadata: { source: 'fullbackup', path: shownPath, format: parsed.sourceFormat },
         },
         {
           ...parsed.character,
@@ -780,7 +777,7 @@ async function importCharacters(context: ImportContext): Promise<void> {
             ...(parsed.character.ext ?? {}),
             _st2: {
               ...existingSt2,
-              migrationSource: 'sillytavern',
+              migrationSource: 'fullbackup',
               sourcePath: shownPath,
               sourceHash,
             },
@@ -863,7 +860,7 @@ async function importChat(
         createdAt: fallbackTime,
         updatedAt: Math.max(fallbackTime, Math.round(info.mtimeMs)),
         metadata: {
-          source: 'sillytavern',
+          source: 'fullbackup',
           path: shownPath,
           chatMetadata: metadata,
         },
@@ -980,7 +977,7 @@ async function importLorebooks(context: ImportContext): Promise<void> {
           description: typeof root['description'] === 'string' ? root['description'] : '',
           entries,
           metadata: {
-            source: 'sillytavern',
+            source: 'fullbackup',
             path: shownPath,
             sourceRoot: omit(root, ['entries', 'name', 'description']),
           },
@@ -1022,7 +1019,7 @@ async function importPresets(context: ImportContext): Promise<void> {
               ).toLowerCase()}`,
             ),
             sourceHash,
-            metadata: { source: 'sillytavern', path: shownPath },
+            metadata: { source: 'fullbackup', path: shownPath },
           },
           presetDirectory.kind,
           requestedName,
@@ -1101,7 +1098,7 @@ async function importGroups(context: ImportContext): Promise<void> {
       const time = Math.max(0, Math.round(info.mtimeMs));
       const session = context.repository.beginChatImport(
         {
-          sourceKind: 'sillytavern-group',
+          sourceKind: 'fullbackup-group',
           sourceKey: effectiveSourceKey(context, `groups/${groupId}`.toLowerCase()),
           sourceHash: sha256(bytes),
           characterId: null,
@@ -1109,7 +1106,7 @@ async function importGroups(context: ImportContext): Promise<void> {
           title: name.slice(0, 500),
           createdAt: time,
           updatedAt: time,
-          metadata: { source: 'sillytavern', path: shownPath, group: record },
+          metadata: { source: 'fullbackup', path: shownPath, group: record },
         },
         context.conflictPolicy,
       );
@@ -1313,7 +1310,7 @@ async function importApiSettings(context: ImportContext): Promise<void> {
       const shownPath = displayPath(context, filePath);
       try {
         const data = parseJsonRecord(await readBounded(filePath, MAX_PRESET_BYTES));
-        const name = `SillyTavern: ${basename(filePath, extname(filePath))}`.slice(0, 200);
+        const name = `legacy: ${basename(filePath, extname(filePath))}`.slice(0, 200);
         if (existingNames.has(name.toLowerCase())) {
           context.counts.apiSettings.reused += 1;
           continue;
@@ -1352,7 +1349,7 @@ async function importApiSettings(context: ImportContext): Promise<void> {
   }
 }
 
-// --- Legacy UI extensions (ТЗ §16): SillyTavern-era extensions are NOT
+// --- Legacy UI extensions (ТЗ §16): legacy-era extensions are NOT
 // supported (ADR-0059 Amendment 1, 2026-10-31) — they are analyzed for the
 // report and skipped with an honest warning, never installed. ---
 
@@ -1384,9 +1381,9 @@ async function importLegacyExtensions(context: ImportContext): Promise<void> {
         new AppError({
           code: ErrorCodes.PLUGIN_INVALID,
           params: {
-            reason: 'SillyTavern extensions are not supported; plugins must target the Plugin SDK',
+            reason: 'legacy extensions are not supported; plugins must target the Plugin SDK',
           },
-          message: 'SillyTavern extensions are not supported',
+          message: 'legacy extensions are not supported',
         }),
       ),
     );
@@ -1468,7 +1465,7 @@ function parseChatMessage(
     createdAt,
     variants,
     meta: {
-      sillyTavern: omit(record, ['mes', 'swipes']),
+      fullBackup: omit(record, ['mes', 'swipes']),
     },
   };
 }

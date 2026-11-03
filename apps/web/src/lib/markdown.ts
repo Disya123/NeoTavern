@@ -54,7 +54,7 @@ export function renderMarkdownDocument(value: string, options?: { articleClass?:
 }
 
 /**
- * Inline formatting order mirrors SillyTavern 1:
+ * Inline formatting order mirrors legacy 1:
  * protect code → wrap dialogue quotes → strong → emphasis → media/links.
  */
 export function renderMarkdownInline(value: string): string {

@@ -812,10 +812,10 @@ host.
 
 ## 6. Legacy
 
-SillyTavern-era plugin compatibility (`legacy.trusted`, the legacy entry
+legacy-era plugin compatibility (`legacy.trusted`, the legacy entry
 points, the Express compatibility host) was removed by owner decision
 (2026-10-31); manifests carrying the removed `legacy` block are rejected at
-install, and plugins written against the SillyTavern environment do not run.
+install, and plugins written against the legacy environment do not run.
 Ordinary rev4 plugins neither require nor receive privileges in the
 application origin.
 

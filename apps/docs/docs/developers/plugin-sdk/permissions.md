@@ -36,7 +36,7 @@ The built-in set is a stable, versioned contract:
 | `notifications`      | Show notifications                                            |
 | `server.routes`      | Mount backend routes                                          |
 
-The former `legacy.trusted` permission (running SillyTavern legacy code in a
+The former `legacy.trusted` permission (running legacy legacy code in a
 trusted context) was removed by owner decision (2026-10-31) together with the
 legacy entry points it gated.
 

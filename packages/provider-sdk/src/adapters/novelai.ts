@@ -1,5 +1,5 @@
 /**
- * NovelAI text-generation adapter (classic SillyTavern "NovelAI" backend).
+ * NovelAI text-generation adapter (classic legacy "NovelAI" backend).
  *
  * Implemented against NovelAI's documented HTTP API using only the global
  * `fetch` (AGENTS.md §7): `POST {baseUrl}/ai/generate` with a Bearer API key,

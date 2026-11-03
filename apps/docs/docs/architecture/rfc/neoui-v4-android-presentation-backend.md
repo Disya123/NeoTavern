@@ -2711,7 +2711,7 @@ Inline WebSurface не является обязательной capability.
 
 WebSurface имеет origin policy, storage isolation, bridge allowlist и crash recovery.
 
-Для legacy SillyTavern-class UI/extension route WebSurface является
+Для legacy legacy-class UI/extension route WebSurface является
 compatibility product, а не невидимым implementation detail. Product decision
 MUST определить:
 

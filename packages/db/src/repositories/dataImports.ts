@@ -417,7 +417,7 @@ export class DataImportRepository {
   }
 
   /**
-   * Store legacy extension settings imported from SillyTavern. Shares the
+   * Store legacy extension settings imported from legacy. Shares the
    * storage shape and key with the server-side legacy compat host
    * (`apps/server/src/legacy/host.ts` LEGACY_SETTINGS_KEY), so imported values
    * are immediately served by GET /api/v2/legacy/extension-settings.

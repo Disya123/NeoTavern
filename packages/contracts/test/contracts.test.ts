@@ -408,7 +408,7 @@ describe('contracts', () => {
   });
 
   describe('provider kinds, sources and catalog', () => {
-    it('lists the classic SillyTavern backends as built-in kinds', () => {
+    it('lists the classic legacy backends as built-in kinds', () => {
       expect(BuiltinProviderKinds).toEqual(
         expect.arrayContaining(['text-completion', 'novelai', 'ai-horde', 'koboldai']),
       );

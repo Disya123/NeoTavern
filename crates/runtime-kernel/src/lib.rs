@@ -42,8 +42,8 @@ pub mod gallery;
 pub mod generation;
 pub mod headless;
 pub mod imports;
-pub mod imports_st;
-pub mod imports_st_execute;
+pub mod imports_full_backup;
+pub mod imports_full_backup_execute;
 pub mod local;
 pub mod plugin_blobs;
 pub mod plugin_secrets;
@@ -704,11 +704,11 @@ fn handle_unary(
         "assets.thumb" => with_db_opt(db, |db| assets::assets_thumb(db, req)),
         "assets.delete" => with_db_opt(db, |db| assets::assets_delete(db, req)),
         "imports.character.card" => with_db_opt(db, |db| imports::imports_character_card(db, req)),
-        "imports.sillytavern.analyze" => {
-            with_db_opt(db, |db| imports_st::imports_sillytavern_analyze(db, req))
-        }
-        "imports.sillytavern.execute" => with_db_opt(db, |db| {
-            imports_st_execute::imports_sillytavern_execute(db, req)
+        "imports.fullbackup.analyze" => with_db_opt(db, |db| {
+            imports_full_backup::imports_fullbackup_analyze(db, req)
+        }),
+        "imports.fullbackup.execute" => with_db_opt(db, |db| {
+            imports_full_backup_execute::imports_fullbackup_execute(db, req)
         }),
         "characters.export.card" => with_db_opt(db, |db| exports::characters_export_card(db, req)),
         // Этап 4 slice 6: canonical Extensions-context registry (SEC-05).

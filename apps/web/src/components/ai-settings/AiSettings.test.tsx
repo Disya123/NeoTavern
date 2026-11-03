@@ -407,7 +407,7 @@ describe('ProviderProfileEditor', () => {
     expect(within(chatSource).queryByText('Custom text completion')).toBeNull();
 
     // Switching the API repopulates the source list with text sources only and
-    // resets the selected source to the first text source (SillyTavern main_api).
+    // resets the selected source to the first text source (legacy main_api).
     await userEvent.selectOptions(apiSelect, 'text');
     expect(screen.getByLabelText('API')).toHaveValue('text');
     const textSource = screen.getByLabelText('Provider source');

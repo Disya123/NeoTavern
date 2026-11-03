@@ -168,7 +168,7 @@ export class TextCompletionAdapter implements ProviderAdapter {
     if (this.supports('seed') && request.seed !== undefined) body['seed'] = request.seed;
     if (request.stop && request.stop.length > 0) body['stop'] = request.stop;
     if (request.stream) body['stream_options'] = { include_usage: true };
-    // Classic SillyTavern additional parameters: merge custom body keys, then
+    // Classic legacy additional parameters: merge custom body keys, then
     // drop excluded keys. Forbidden headers are handled in headers().
     const finalBody = applyCustomBody(body, this.config.settings);
 

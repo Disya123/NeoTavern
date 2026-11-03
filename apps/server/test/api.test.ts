@@ -1041,7 +1041,7 @@ describe('plugins', () => {
     await app.inject({ method: 'DELETE', url: `/api/v2/plugins/${pluginId}` });
   });
 
-  it('rejects the removed SillyTavern legacy entry-point block', async () => {
+  it('rejects the removed legacy legacy entry-point block', async () => {
     // ST plugin compatibility was removed by owner decision (ADR-0059 slice):
     // manifests carrying `legacy` entries fail validation at install.
     const pluginId = 'test.legacy-trusted';
@@ -1242,7 +1242,7 @@ describe('characters', () => {
   });
 });
 
-describe('SillyTavern data migration', () => {
+describe('legacy data migration', () => {
   it('streams a complete archive, preserves metadata, and is idempotent', async () => {
     try {
       const card = {
@@ -1335,11 +1335,11 @@ describe('SillyTavern data migration', () => {
         }),
         'backup/data/default-user/groups/unsupported.json': '{}',
       });
-      const upload = multipartFile(zip, 'sillytavern-data.zip', 'application/zip');
+      const upload = multipartFile(zip, 'legacy-data.zip', 'application/zip');
 
       const first = await app.inject({
         method: 'POST',
-        url: '/api/v2/imports/sillytavern',
+        url: '/api/v2/imports/fullbackup',
         ...upload,
       });
       expect(first.statusCode, first.payload).toBe(200);
@@ -1419,7 +1419,7 @@ describe('SillyTavern data migration', () => {
 
       const second = await app.inject({
         method: 'POST',
-        url: '/api/v2/imports/sillytavern',
+        url: '/api/v2/imports/fullbackup',
         ...upload,
       });
       expect(second.statusCode, second.payload).toBe(200);
@@ -1485,7 +1485,7 @@ describe('SillyTavern data migration', () => {
 
     const analysisResponse = await app.inject({
       method: 'POST',
-      url: '/api/v2/imports/sillytavern/analyze',
+      url: '/api/v2/imports/fullbackup/analyze',
       ...multipartFile(zip, 'preflight.zip', 'application/zip'),
     });
     expect(analysisResponse.statusCode, analysisResponse.payload).toBe(200);
@@ -1517,7 +1517,7 @@ describe('SillyTavern data migration', () => {
 
     const execute = await app.inject({
       method: 'POST',
-      url: `/api/v2/imports/sillytavern/${analysis.analysisId}/execute`,
+      url: `/api/v2/imports/fullbackup/${analysis.analysisId}/execute`,
       payload: { categories: ['characters'], conflictPolicy: 'skip' },
     });
     expect(execute.statusCode, execute.payload).toBe(200);
@@ -1544,7 +1544,7 @@ describe('SillyTavern data migration', () => {
 
     const consumed = await app.inject({
       method: 'DELETE',
-      url: `/api/v2/imports/sillytavern/${analysis.analysisId}`,
+      url: `/api/v2/imports/fullbackup/${analysis.analysisId}`,
     });
     expect(consumed.statusCode).toBe(404);
   });
@@ -1562,18 +1562,18 @@ describe('SillyTavern data migration', () => {
     });
     const analyzed = await app.inject({
       method: 'POST',
-      url: '/api/v2/imports/sillytavern/analyze',
+      url: '/api/v2/imports/fullbackup/analyze',
       ...multipartFile(zip, 'discard.zip', 'application/zip'),
     });
     expect(analyzed.statusCode, analyzed.payload).toBe(200);
     const discarded = await app.inject({
       method: 'DELETE',
-      url: `/api/v2/imports/sillytavern/${analyzed.json().analysisId}`,
+      url: `/api/v2/imports/fullbackup/${analyzed.json().analysisId}`,
     });
     expect(discarded.statusCode).toBe(204);
     const execute = await app.inject({
       method: 'POST',
-      url: `/api/v2/imports/sillytavern/${analyzed.json().analysisId}/execute`,
+      url: `/api/v2/imports/fullbackup/${analyzed.json().analysisId}/execute`,
       payload: { categories: ['characters'], conflictPolicy: 'skip' },
     });
     expect(execute.statusCode).toBe(404);
@@ -1583,19 +1583,19 @@ describe('SillyTavern data migration', () => {
     const upload = multipartFile(Buffer.from('not a zip'), 'data.zip', 'application/zip');
     const response = await app.inject({
       method: 'POST',
-      url: '/api/v2/imports/sillytavern',
+      url: '/api/v2/imports/fullbackup',
       ...upload,
     });
     expect(response.statusCode).toBe(415);
     expect(response.json().code).toBe('FILE_TYPE_NOT_ALLOWED');
   });
 
-  it('rejects a ZIP that does not contain a SillyTavern user-data root', async () => {
+  it('rejects a ZIP that does not contain a legacy user-data root', async () => {
     const zip = await zipArchive({ 'notes/readme.txt': 'not user data' });
     const upload = multipartFile(zip, 'unrelated.zip', 'application/zip');
     const response = await app.inject({
       method: 'POST',
-      url: '/api/v2/imports/sillytavern',
+      url: '/api/v2/imports/fullbackup',
       ...upload,
     });
     expect(response.statusCode).toBe(400);
@@ -2824,7 +2824,7 @@ describe('providers', () => {
       adapterKind: 'openai-compatible',
       defaultBaseUrl: 'https://api.openai.com/v1',
     });
-    // Classic SillyTavern text-completion backends serialize the prompt as text.
+    // Classic legacy text-completion backends serialize the prompt as text.
     expect(body.items.find((item: { id: string }) => item.id === 'ooba')).toMatchObject({
       adapterKind: 'text-completion',
       defaultBaseUrl: 'http://127.0.0.1:5000/v1',
@@ -2975,7 +2975,7 @@ describe('providers', () => {
     });
   });
 
-  it('validates SillyTavern-style additional parameters and post-processing', async () => {
+  it('validates legacy-style additional parameters and post-processing', async () => {
     const valid = await app.inject({
       method: 'POST',
       url: '/api/v2/providers',

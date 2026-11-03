@@ -310,12 +310,12 @@
     {
       "source": "api/README.md",
       "target": "api/README.md",
-      "sha256": "eea12ee80805f8b7e2bf43fcef7d71ed9b5e5961f311dc88a34c7a0d5774f000"
+      "sha256": "d153032d80786998055bacca33eb7982cea489bd471bff1d76e9001385d48403"
     },
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "0adf102f77c9022091872473d72fad9b80069aaf544b1696623f52d192bae84a"
+      "sha256": "305c9eb3cb6066a8377b32fc300923fb1cdd8f3912bd98dfa86ed1193d75b062"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -325,7 +325,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "96cb3da3cd0a0b62c862737958c77543ec94d4a8d38868d2d7f5d0c35249eade"
+      "sha256": "3b3a454507f3d4facde0d3a31e303e714e1b436ffb23058d7951cece126a8381"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -355,12 +355,12 @@
     {
       "source": "architecture/native-presentation-platform.md",
       "target": "architecture/native-presentation-platform.md",
-      "sha256": "5faf5355d019b3bef681fb19b7af2e75971ab460fc8f0a110ee4c095106a0fdc"
+      "sha256": "1b93413427bac88cbf75b377919610449cdfa61171518a4319bb8ec05af14640"
     },
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "ccfa758b5552891aed5c77f646975e7f8deadc0d732f32acc0b40af55aed3974"
+      "sha256": "393694bd6a805d1b69849832a5e65d853dea7d929d377fc733c4f15f39d8d98c"
     },
     {
       "source": "architecture/portable-data.md",
@@ -375,7 +375,7 @@
     {
       "source": "architecture/prompt-pipeline.md",
       "target": "architecture/prompt-pipeline.md",
-      "sha256": "58562fd4243d78de6dbc4f2426be6dba48ac93dfb18d1b6137d3c96bef0959c8"
+      "sha256": "064cf61c76168c811c2ab5db88d924b904424937879bc21966417338c6aeb1f6"
     },
     {
       "source": "architecture/providers.md",
@@ -385,7 +385,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "4d8fad8c74598e2d1e249f7d4f88bca911d705beca777a2ffc00e12335396e38"
+      "sha256": "0b23e7c048c02dec7d64c84134d84f67734f5a3cf1790f5be01361922932f597"
     },
     {
       "source": "architecture/resource-containment.md",
@@ -405,7 +405,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "97ebfa81e4ec3b49bb1dbf560acc7387e9b938f33e421e1bf585c63c2d00c93e"
+      "sha256": "fb422c1686d65d32f8a84c233ec85b96a2f8203cac0510226bc33861e6efa7c6"
     },
     {
       "source": "audits/rust-app/INVENTORY.md",
@@ -440,12 +440,12 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "2232e739aaad622eae9b4831fa50bc6329407d70c603d5805db0890c00c7dfc8"
+      "sha256": "aa5494310ecc87a6175d3e58e6e9998a968f42fac274ba675a975e39d0e72b0c"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "42cff1468c11eaa0fbb91afd3bace619cd68711731da01b59fb9e4d9d145b6f9"
+      "sha256": "bfae09116766cfbb9ee7f70b1aee3a99d2cc3af4abfb81e2ef39595be051fe82"
     },
     {
       "source": "desktop/README.md",
@@ -465,7 +465,7 @@
     {
       "source": "desktop/neocompositor-desktop-host.md",
       "target": "desktop/neocompositor-desktop-host.md",
-      "sha256": "0a2538e66009fcfe4e64c109f1a15850301773f1567fa95e173416c5caf37377"
+      "sha256": "a99402730a2a246824b528df9936590890dceca90e391f4889ad3bead11729ba"
     },
     {
       "source": "desktop/rust-ui-style-port.md",
@@ -480,12 +480,12 @@
     {
       "source": "migrations/etap6-legacy-removal.md",
       "target": "migrations/etap6-legacy-removal.md",
-      "sha256": "46bae726c8c17b1d70db2324f03079ac18b13229194aebb7ad759e0c07e33ea7"
+      "sha256": "1225b2b85b5cd3eec4ea2775c7a472a3fe26ceebc1b6d860222551ceae790ade"
     },
     {
       "source": "plugin-sdk/README.md",
       "target": "plugin-sdk/README.md",
-      "sha256": "f5fe21542c2a7ec719baadcfbb45e127d8593f4c95d1977165c065546b9b0fda"
+      "sha256": "73ea5cc236049fd0fbfe1e42c475c93a8a7c924356f0c43f374b367492ffa045"
     },
     {
       "source": "plugin-sdk/examples/rev4-overlay-game.md",
@@ -495,7 +495,7 @@
     {
       "source": "plugin-sdk/rev4-api.md",
       "target": "plugin-sdk/rev4-api.md",
-      "sha256": "d22c852107aa0fa3963f7abe07665abcb6367dabaa260a238c7a737cb6e7bf31"
+      "sha256": "4e1dca20e0da89cda3750d2acbf6ce55da3cc4ff2b934a3596278bb6d85459ff"
     },
     {
       "source": "plugin-sdk/visual-surface-ir.md",
@@ -505,7 +505,7 @@
     {
       "source": "prompt-pipeline/README.md",
       "target": "prompt-pipeline/README.md",
-      "sha256": "52ac1ef2e1856dc05fc6d19ba793227b04c72599ed232c02db7eeb9c4bcc570f"
+      "sha256": "9187516aca22df5c35a60bc2a2256e5c13204d97c6279e31830e2e4df2b99e29"
     },
     {
       "source": "rfc/README.md",
@@ -585,7 +585,7 @@
     {
       "source": "rfc/neoui-v4-android-presentation-backend.md",
       "target": "rfc/neoui-v4-android-presentation-backend.md",
-      "sha256": "412f88b95aec39fcc1653fa6a0333878a648c49daba0b2674f0973413d697af4"
+      "sha256": "2da816ef8f6bde75a261198699ecbd0253bf176d99c2324a347d0f1c5026b1aa"
     },
     {
       "source": "rfc/perf-18-20-physical-runbook.md",
@@ -595,7 +595,7 @@
     {
       "source": "rfc/presentation-compatibility-matrix.md",
       "target": "rfc/presentation-compatibility-matrix.md",
-      "sha256": "39d6cc7d8f0849ea80ef97c1fb07e931c2cc03a0bfa602c1e7fcf9766a4b63f2"
+      "sha256": "76c6d50724310993e3ed31affb0d5fd808e17fa54c5916dd5fb3b4553916d32d"
     },
     {
       "source": "rfc/remaining-b-physical-runbook.md",
@@ -610,7 +610,7 @@
     {
       "source": "ux/README.md",
       "target": "ux/README.md",
-      "sha256": "22a17e979ab4df0faa8a32321794892ee2c473b8fd8c23f36121fbc6d78d51f1"
+      "sha256": "454b699d6be4f23ba621cc1faf5860a6af332a23ea551582dd4636f293165522"
     },
     {
       "source": "_category_.json",

@@ -906,16 +906,16 @@ export const en = {
     'contextStrategy_vector-recall': 'Recall relevant memory',
     contextStrategy_manual: 'Manual exclusions',
     data: 'Data & backups',
-    migrateSillyTavern: 'Move data from SillyTavern',
-    migrateSillyTavernHint:
-      'Import characters, solo chats, personas, Worlds and JSON presets from a SillyTavern full-data ZIP.',
+    migrateFullBackup: 'Import a full-data backup',
+    migrateFullBackupHint:
+      'Import characters, solo chats, personas, Worlds and JSON presets from a full-data ZIP exported by the previous app.',
     chooseArchive: 'Choose ZIP',
     migrationSafety:
       'Existing data is not overwritten. Secrets, plugins, themes and unsupported group chats are skipped and listed in the report.',
     migrationSafetyTwoPhase:
-      'Analysis is read-only. Nothing enters your library until you review the archive and confirm; a safety backup is created immediately before import.',
+      'Analysis is read-only. Nothing enters your library until you review the archive and confirm. Imported rows are receipt-tracked, so re-running the same archive is safe, and replaced characters keep a version snapshot.',
     migrationArchiveHint:
-      'In SillyTavern, create a full data backup and select the resulting ZIP here. Archives up to 4 GB are supported.',
+      'Export a full-data backup in the previous app and select the resulting ZIP here. Archives up to 4 GB are supported.',
     archiveSize: '{{size}} MB',
     migrationArchiveTooLarge: 'Choose a ZIP smaller than 4 GB.',
     startMigration: 'Start migration',
@@ -989,7 +989,7 @@ export const en = {
       'Only supported, non-secret settings were imported.',
     migrationWarning_UNSUPPORTED_DATA_SKIPPED:
       'This data type is not supported by the current release and was skipped.',
-    migrationWarning_SETTINGS_INVALID: 'The SillyTavern settings file is invalid.',
+    migrationWarning_SETTINGS_INVALID: 'The legacy settings file is invalid.',
     migrationWarning_PERSONA_INVALID: 'A persona definition is invalid.',
     migrationWarning_PERSONA_AVATAR_INVALID: 'A persona avatar is invalid.',
     migrationWarning_PERSONA_AVATAR_MISSING: 'A persona avatar file is missing.',
@@ -1446,7 +1446,7 @@ export const en = {
       'Frontend code runs in an opaque-origin iframe. Backend code runs in a separate Node process with restricted files, environment, native addons, workers, and child processes.',
     legacyTrustedTitle: 'Trusted legacy compatibility',
     legacyTrustedHint:
-      'This SillyTavern extension runs in the main app context and is not sandboxed. Review its source and approve legacy.trusted only when you trust the package.',
+      'This legacy extension runs in the main app context and is not sandboxed. Review its source and approve legacy.trusted only when you trust the package.',
     safeMode: 'Plugin recovery',
     safeModeHint: 'Open the manager while bypassing frontend plugins and stopping backend workers.',
     openSafeMode: 'Open safe mode',

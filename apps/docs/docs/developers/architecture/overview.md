@@ -83,7 +83,7 @@ Everything runs on your machine:
 - The app works offline. Provider calls are the only network traffic, and
   the built-in `echo` adapter lets you test the whole pipeline without any
   provider.
-- Backups, exports, and the SillyTavern import all happen locally through
+- Backups, exports, and the full-data import all happen locally through
   the same SQLite and file APIs.
 
 See [Data & Storage](../data/) for the storage layer and

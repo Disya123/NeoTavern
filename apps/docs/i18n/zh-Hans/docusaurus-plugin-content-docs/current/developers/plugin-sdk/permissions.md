@@ -35,7 +35,7 @@ sidebar_position: 3
 | `notifications`      | 显示通知                   |
 | `server.routes`      | 挂载后端路由               |
 
-原 `legacy.trusted` 权限（在受信任上下文中运行 SillyTavern 旧版代码）已连同
+原 `legacy.trusted` 权限（在受信任上下文中运行 legacy 旧版代码）已连同
 它所控制的旧版入口点一起，根据所有者的决定（2026-10-31）被移除。
 
 ## 作用域权限

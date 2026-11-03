@@ -78,7 +78,7 @@ describe('database migrations', () => {
       `INSERT INTO import_jobs (
          id, source_hash, source_name, source_kind, status, summary,
          error_code, started_at, completed_at
-       ) VALUES (?, ?, 'archive.zip', 'sillytavern-data-zip', 'completed', '{}', NULL, ?, ?)`,
+       ) VALUES (?, ?, 'archive.zip', 'legacy-data-zip', 'completed', '{}', NULL, ?, ?)`,
     );
     insertJob.run('018f0000-0000-7000-8000-000000000101', 'e'.repeat(64), 2, 3);
     insertJob.run('018f0000-0000-7000-8000-000000000102', 'e'.repeat(64), 4, 5);

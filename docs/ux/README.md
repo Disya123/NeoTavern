@@ -56,7 +56,7 @@ The first stable version is not required to:
 
 - automatically translate user content;
 - hide technical capabilities from experienced users;
-- reproduce the current SillyTavern interface pixel-for-pixel;
+- reproduce the current legacy interface pixel-for-pixel;
 - guarantee that extensions depending on private DOM or CSS details keep
   working;
 - provide a fully standalone mobile build with local Node.js;
@@ -70,7 +70,7 @@ Wants to start chatting quickly; is unfamiliar with the terms prompt pipeline,
 tokenizer, instruct format, and context shifting. Needs safe defaults,
 step-by-step provider setup, and understandable errors.
 
-### 4.2. Current SillyTavern user
+### 4.2. Current legacy user
 
 Migrates a large library of characters, chats, presets, lorebooks, plugins, and
 themes. Needs a pre-import check, a compatibility report, preservation of
@@ -280,7 +280,7 @@ A clean install shows a non-blocking checklist in the chat canvas:
 
 1. The user picks the language and text scale right in the checklist.
 2. The interface explains local storage and offers an optional import of the
-   current SillyTavern or a backup restore in the Settings → Data menu.
+   current legacy or a backup restore in the Settings → Data menu.
 3. The user connects a local/remote provider or Echo for an offline check.
    While no provider is active, sending messages is unavailable and a link to
    settings is shown nearby.
@@ -318,7 +318,7 @@ creating an additional conversation remains a separate `New chat` action.
 - Thumbnails are used for previews rather than originals.
 - A card shows the name, image, key tags, and last use.
 - Selecting an item does not depend on its position in the array.
-- The sidebar replicates the Character Management workflow from SillyTavern:
+- The sidebar replicates the Character Management workflow from legacy:
   `Cards → Edit → Advanced → Gallery`. Selecting a card simultaneously pins the
   character on Home and opens its editor.
 - The `Edit` tab offers replacing the avatar from a file, favorite, separate
@@ -630,7 +630,7 @@ inherits the parent's character, persona, background, and summary.
 - First a top-level **API** is chosen (Chat Completions or Text Completions),
   then the **Source** list ("API type") is filtered to the sources of the
   selected API; changing the API resets the source to the first available one —
-  the behavior of `main_api` in classic SillyTavern.
+  the behavior of `main_api` in classic legacy.
 - No connection name needs to be entered: the selected source itself becomes
   the profile name, so the key is saved right after selecting the source and
   pasting the value. In the panel, the name field is hidden when a source is
@@ -694,7 +694,7 @@ Choose source
 
 ### 13.3. Implemented scenario
 
-Under "Settings → Data and backups", a full SillyTavern ZIP backup can be
+Under "Settings → Data and backups", a full full-data ZIP backup can be
 imported without a terminal. A read-only analysis runs first: the screen shows
 objects, nested records, corruption, size, and conflicts separately for
 characters, chats, personas, lorebooks, and presets. Until confirmation, the
@@ -959,7 +959,7 @@ contrast, long pseudo-locale, and mobile RTL.
 ### 28.4. Data
 
 - Backups are created and restored from the UI.
-- A full SillyTavern ZIP backup is imported from the UI; E2E verifies the path
+- A full full-data ZIP backup is imported from the UI; E2E verifies the path
   from file selection through read-only analysis and confirmation to the
   character appearing in the library.
 - A protective copy is created before a dangerous restore.
@@ -1099,7 +1099,7 @@ switching when the resize handle moves a few pixels. Control panel tabs
 (Settings, Personas, Characters, AI Settings, plugin panels) use a single
 segment variant with equal columns; on a narrow panel the row stacks into two
 columns. The Settings menu is a tabbed panel (role="tablist") with General,
-Themes, and Data tabs: theme installation, active theme selection, SillyTavern
+Themes, and Data tabs: theme installation, active theme selection, legacy
 migration, and backups live here, not on a separate page. In General, the
 start Home choice uses the same full-width
 segmented control as Contrast and other binary settings; the options explicitly
@@ -1123,7 +1123,7 @@ checks are not presented as a substitute for real assistive technology.
    character, and sends the first message without leaving the chat workspace.
 2. A returning user opens the catalog and history, then closes the surface and
    continues the same chat draft.
-3. A SillyTavern user analyzes and imports a full ZIP, verifies the
+3. A legacy user analyzes and imports a full ZIP, verifies the
    result, and re-imports without duplicates.
 4. A theme author downloads `theme-starter.zip`, changes semantic tokens and
    the shell, installs the package, and restores the base theme through safe

@@ -107,7 +107,7 @@ silently converted.
 
 In chat mode (`serializeAsText=false`), the `GenerationMessage[]` array may be
 reassembled before provider serialization — a port of the `mergeMessages`
-algorithm from classic SillyTavern
+algorithm from classic legacy
 (`apps/server/src/pipeline/promptPostProcessing.ts`). In text mode the stage
 is skipped: roles are already collapsed by the instruct render into a single
 string. The mode is taken from the provider setting `promptPostProcessing` and
@@ -135,7 +135,7 @@ pre-reassembly; the transformed array appears only in
 
 ## Additional parameters (request extras)
 
-SillyTavern's classic "Additional Parameters" are stored in the provider
+legacy's classic "Additional Parameters" are stored in the provider
 settings as structured JSON (see [API](../api/README.md) and
 [ADR-0008](../adr/README.md#adr-0008-json-instead-of-yaml-for-additional-parameters))
 and applied by adapters at the request serialization stage

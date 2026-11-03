@@ -40,13 +40,13 @@ export const ProviderSourceIds = [
   'mistralai',
   'chutes',
   'electron-hub',
-  // Text-completion backends (classic SillyTavern "Text Completion" API).
+  // Text-completion backends (classic legacy "Text Completion" API).
   'text-completion',
   'ooba',
   'koboldcpp',
   'vllm',
   'ollama',
-  // Standalone classic SillyTavern backends.
+  // Standalone classic legacy backends.
   'novelai',
   'ai-horde',
   'koboldai',
@@ -243,7 +243,7 @@ export type GenerationDefaults = Static<typeof GenerationDefaultsSchema>;
 
 /**
  * Additional request parameters stored on a provider config's `settings`
- * (classic SillyTavern "Additional Parameters"). Unlike ST1 these are stored as
+ * (classic legacy "Additional Parameters"). Unlike ST1 these are stored as
  * **structured JSON** rather than YAML: `customIncludeBody` is merged into the
  * request body, `customExcludeBody` lists body keys to drop, and
  * `customIncludeHeaders` adds request headers. The transform is applied by the
@@ -319,7 +319,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Validate the SillyTavern-style "Additional Parameters" found on a provider
+ * Validate the legacy-style "Additional Parameters" found on a provider
  * config's `settings`. Single source of truth shared by the server (write-time
  * rejection) and the web editor (fast local feedback) — see ADR-0008. Shapes
  * are enforced so a malformed value fails at write time, not at generation

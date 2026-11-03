@@ -57,12 +57,12 @@ deduplication is preserved.
 ## Chat Backgrounds
 
 `files/backgrounds/` is the source of truth: the list is built by scanning
-the directory, so backgrounds imported from SillyTavern appear without any
+the directory, so backgrounds imported from legacy appear without any
 transfer step. Uploaded files are stored content-addressed and never
 modified.
 
 Background thumbnails live in `cache/thumbnails/`, keyed by the SHA-256 of
-the file name rather than the content, which lets SillyTavern-imported
+the file name rather than the content, which lets legacy-imported
 files with arbitrary names get thumbnails too and keeps upload, list, and
 delete on one key. A file that cannot be decoded or exceeds 64 MiB is
 listed without a thumbnail; the original remains available. Deleting a

@@ -39,7 +39,7 @@ browser storage, or diagnostic exports.
 - **Character cards** export as PNG or JSON, and chats export as archives
   you can keep or move to another machine. See
   [Characters](characters).
-- **SillyTavern migration** lives in Settings → Data: pick a full data
+- **legacy migration** lives in Settings → Data: pick a full data
   backup ZIP, and the app first runs a read-only analysis that reports the
   objects, nested records, damage, size, and conflicts per category —
   characters, chats, personas, lorebooks, and presets. Nothing is written

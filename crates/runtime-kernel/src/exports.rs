@@ -1,6 +1,6 @@
 //! Этап 4.5: character-card export (`characters.export.card`).
 //!
-//! Symmetric to `imports.character.card`: builds the SillyTavern card
+//! Symmetric to `imports.character.card`: builds the legacy card container
 //! container for one character and returns it base64-encoded so the UI can
 //! download it without a second transport hop. When the character was created
 //! by an import, the original card object is preserved verbatim under
@@ -26,7 +26,7 @@ use crate::{KernelError, KernelErrorCode};
 const CARD_KEYWORD: &str = "chara";
 const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
 
-/// `characters.export.card` — export one character as a SillyTavern card
+/// `characters.export.card` — export one character as a legacy card container
 /// container (`json` or `png`). Missing character → `CHARACTER_NOT_FOUND`.
 pub fn characters_export_card(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_characters_export_card(request)?;

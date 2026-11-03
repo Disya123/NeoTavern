@@ -358,7 +358,7 @@ fn retrieve_memory_blocks(db: &Database, chat_id: &str, context_text: &str) -> V
 }
 
 /// Loads the chat's character (name/description) and the character-card
-/// persona (`ext_json.personality`, SillyTavern card field) as system blocks.
+/// persona (`ext_json.personality`, legacy card field) as system blocks.
 fn character_system_blocks(db: &Database, chat_id: &str) -> Result<Vec<PromptBlock>, KernelError> {
     let row = db
         .conn()
@@ -392,7 +392,7 @@ fn character_system_blocks(db: &Database, chat_id: &str) -> Result<Vec<PromptBlo
             text: description,
         });
     }
-    // Persona: the raw SillyTavern card field (if the host preserved it in
+    // Persona: the raw legacy card field (if the host preserved it in
     // ext_json). Missing → no persona block.
     let persona = match serde_json::from_str::<serde_json::Value>(&ext_json) {
         Ok(value) => value

@@ -1,5 +1,5 @@
 /**
- * KoboldAI Classic adapter (classic SillyTavern "KoboldAI" backend).
+ * KoboldAI Classic adapter (classic legacy "KoboldAI" backend).
  *
  * Talks to a KoboldAI/Kobold server's native API using only the global `fetch`
  * (AGENTS.md §7): `POST {baseUrl}/api/v1/generate` with a prompt and sampler

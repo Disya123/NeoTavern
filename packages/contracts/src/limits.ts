@@ -5,7 +5,7 @@
  * The *schema* maximum is the absolute ceiling the backend will accept
  * (`CONTEXT_TOKEN_UNLOCKED_MAX`). The *locked* default maximum
  * (`CONTEXT_TOKEN_DEFAULT_MAX`) is a UI concept: the context-size slider is
- * capped there until the user explicitly unlocks it, mirroring SillyTavern's
+ * capped there until the user explicitly unlocks it, mirroring the legacy app's
  * "Unlocked Context Size" toggle. Keeping both here prevents the schema and
  * the UI from drifting apart.
  */
@@ -13,7 +13,7 @@
 /** Minimum context window, in tokens. */
 export const CONTEXT_TOKEN_MIN = 256;
 
-/** Default context window for new installations (SillyTavern legacy value). */
+/** Default context window for new installations (the legacy app legacy value). */
 export const CONTEXT_TOKEN_DEFAULT = 16_032;
 
 /** Default slider ceiling for the context size, in tokens (200k). */

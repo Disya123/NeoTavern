@@ -62,4 +62,4 @@ scroll back through the history while it streams. See
 - [Settings](../user-guide/settings) to tune generation parameters and
   connection profiles.
 - [Data & Backups](../user-guide/data-and-backups) to import an existing
-  SillyTavern backup or create your own.
+  full-data backup or create your own.

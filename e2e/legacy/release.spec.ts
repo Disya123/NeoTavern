@@ -1022,7 +1022,7 @@ test('creates a redacted diagnostic report and runs local recovery actions', asy
   await expectNoA11yViolations(page);
 });
 
-test('migrates a SillyTavern archive from Settings without a terminal', async ({ page }) => {
+test('migrates a full-data archive from Settings without a terminal', async ({ page }) => {
   const characterName = `Migrated Guide ${Date.now()}`;
   const card = {
     spec: 'chara_card_v2',
@@ -1052,7 +1052,7 @@ test('migrates a SillyTavern archive from Settings without a terminal', async ({
   const settings = await openSettingsPanel(page);
   await settings.getByRole('tab', { name: 'Data & backups' }).click();
   await settings.getByLabel('Choose ZIP').setInputFiles({
-    name: 'sillytavern-data.zip',
+    name: 'fullbackup-data.zip',
     mimeType: 'application/zip',
     buffer: archive,
   });

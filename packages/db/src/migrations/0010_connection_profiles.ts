@@ -1,6 +1,6 @@
 /**
  * Connection profiles — named bundles of connection settings layered over
- * provider configs (the classic SillyTavern "Connection Profiles" manager).
+ * provider configs (the classic legacy "Connection Profiles" manager).
  *
  * `name` and `mode` are columns for listing/filtering; every other field lives
  * in the versioned `payload` JSON so unknown fields survive round-trips

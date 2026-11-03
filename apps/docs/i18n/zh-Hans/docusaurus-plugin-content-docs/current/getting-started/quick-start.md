@@ -53,5 +53,5 @@ Echo 会回复一段预设的应答，不需要密钥，也不需要网络访问
 
 - 如果后端无法启动或端口已被占用，请参阅[故障排除](troubleshooting)。
 - 调整生成参数和连接配置文件，请参阅[设置](../user-guide/settings)。
-- 导入现有的 SillyTavern 备份或创建自己的备份，请参阅
+- 导入现有的 legacy 备份或创建自己的备份，请参阅
   [数据与备份](../user-guide/data-and-backups)。

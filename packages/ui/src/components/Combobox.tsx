@@ -45,7 +45,7 @@ function optionMatches(option: ComboboxOption, query: string): boolean {
 
 /**
  * Accessible, searchable single-select combobox (WAI-ARIA `combobox` + `listbox`),
- * used wherever SillyTavern shows a "pick from a loaded list, or type your own"
+ * used wherever legacy shows a "pick from a loaded list, or type your own"
  * control — primarily the model picker fed by `/v1/models`.
  *
  * Built on Radix Popover for the floating panel, outside-click dismissal and

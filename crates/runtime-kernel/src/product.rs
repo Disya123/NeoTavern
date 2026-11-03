@@ -733,7 +733,7 @@ pub fn characters_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kern
 }
 
 /// `characters.card.get` (UI-02, ADR-0057 Phase 2) — the canonical
-/// field-level read of one character's card document: the SillyTavern
+/// field-level read of one character's card document: the legacy
 /// object the import preserved under `ext_json._card`. A character
 /// created without a card container returns an EMPTY object — honest
 /// absence; the editor must never synthesize greeting/notes strings.

@@ -59,7 +59,7 @@ permissions, incompatible, or error. From there you can:
   by the host.
 - **Uninstall** it, which also clears its registrations.
 
-SillyTavern-era extensions are not supported: plugin compatibility was
+legacy-era extensions are not supported: plugin compatibility was
 removed by owner decision (2026-10-31), and packages carrying the removed
 legacy manifest block are rejected at install.
 

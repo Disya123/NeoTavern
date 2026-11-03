@@ -32,7 +32,7 @@ export interface ApiKeysModalProps {
 }
 
 /**
- * Multi-key secrets manager (SillyTavern-style). Secret values are write-only:
+ * Multi-key secrets manager (legacy-style). Secret values are write-only:
  * the list shows masked previews, and copying/viewing a plaintext value requires
  * server-side secrets exposure to be enabled (AGENTS.md §4, §11).
  */

@@ -1,5 +1,5 @@
 /**
- * Classic SillyTavern "Additional Parameters", stored on a provider config's
+ * Classic legacy "Additional Parameters", stored on a provider config's
  * `settings` as structured JSON (see ADR-0008 — JSON instead of YAML):
  *
  * - `customIncludeBody`    — object merged into the outgoing request body.

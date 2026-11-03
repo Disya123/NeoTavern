@@ -86,7 +86,7 @@ export const PROVIDER_CATALOG: readonly ProviderCatalogEntry[] = [
   compatible('mistralai', 'https://api.mistral.ai/v1'),
   compatible('chutes', 'https://llm.chutes.ai/v1'),
   compatible('electron-hub', 'https://api.electronhub.ai/v1'),
-  // Text-completion backends (classic SillyTavern "Text Completion" API). They
+  // Text-completion backends (classic legacy "Text Completion" API). They
   // consume a serialized prompt via an OpenAI-compatible /v1/completions
   // endpoint (or Kobold /api/v1/generate for the generic source).
   textCompletion('text-completion', null),
@@ -94,7 +94,7 @@ export const PROVIDER_CATALOG: readonly ProviderCatalogEntry[] = [
   textCompletion('koboldcpp', 'http://127.0.0.1:5001/v1'),
   textCompletion('vllm', 'http://127.0.0.1:8000/v1'),
   textCompletion('ollama', 'http://127.0.0.1:11434/v1'),
-  // Standalone classic SillyTavern backends.
+  // Standalone classic legacy backends.
   {
     id: 'novelai',
     adapterKind: 'novelai',

@@ -42,7 +42,7 @@ import { registerBackupRoutes } from './plugins/backups.js';
 import { registerDiagnosticRoutes } from './plugins/diagnostics.js';
 import { registerThemeRoutes } from './plugins/themes.js';
 import { registerPluginRoutes } from './plugins/plugins.js';
-import { MAX_SILLYTAVERN_ARCHIVE_BYTES, registerDataImportRoutes } from './plugins/dataImports.js';
+import { MAX_FULLBACKUP_ARCHIVE_BYTES, registerDataImportRoutes } from './plugins/dataImports.js';
 
 export async function buildApp(input: AppContextInput): Promise<TypedApp> {
   const secrets =
@@ -82,7 +82,7 @@ export async function buildApp(input: AppContextInput): Promise<TypedApp> {
   await app.register(multipart, {
     limits: {
       files: 1,
-      fileSize: MAX_SILLYTAVERN_ARCHIVE_BYTES,
+      fileSize: MAX_FULLBACKUP_ARCHIVE_BYTES,
       fields: 0,
     },
   });

@@ -6,7 +6,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { createQueryClient, jsonResponse } from '../../test/helpers.js';
 import { getCsrfToken, setCsrfToken } from './client.js';
 import {
-  useAnalyzeSillyTavern,
+  useAnalyzeFullBackup,
   useAuthSession,
   useBackgroundImageUrl,
   useBackgrounds,
@@ -21,8 +21,8 @@ import {
   useDeleteCharacter,
   useDeleteCharacterImage,
   useDiagnostics,
-  useDiscardSillyTavernAnalysis,
-  useExecuteSillyTavernImport,
+  useDiscardFullBackupAnalysis,
+  useExecuteFullBackupImport,
   useImportCharacter,
   useInstructFormats,
   useLogin,
@@ -55,6 +55,10 @@ const assetsMock = vi.hoisted(() => ({
   uploadAppend: vi.fn(),
   uploadFinish: vi.fn(),
 }));
+const importsMock = vi.hoisted(() => ({
+  fullBackupAnalyze: vi.fn(),
+  fullBackupExecute: vi.fn(),
+}));
 vi.mock('./backend.js', async (importOriginal) => {
   const actual = (await importOriginal()) as { backend: Record<string, unknown> };
   const realBackend = actual.backend;
@@ -67,9 +71,17 @@ vi.mock('./backend.js', async (importOriginal) => {
       return Reflect.get(target, prop, receiver);
     },
   });
+  const realImports = (realBackend as { imports: Record<string, unknown> }).imports;
+  const importsProxy = new Proxy(realImports, {
+    get(target, prop, receiver) {
+      if (prop in importsMock) return importsMock[prop as keyof typeof importsMock];
+      return Reflect.get(target, prop, receiver);
+    },
+  });
   const backendProxy = new Proxy(realBackend, {
     get(target, prop, receiver) {
       if (prop === 'assets') return assetsProxy;
+      if (prop === 'imports') return importsProxy;
       return Reflect.get(target, prop, receiver);
     },
   });
@@ -869,46 +881,119 @@ describe('remaining legacy hooks (kernel-plane honesty, slice 22)', () => {
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useAnalyzeSillyTavern rejects with UnsupportedError on the kernel plane', async () => {
+  it('useAnalyzeFullBackup stages the archive and analyses it by asset id', async () => {
     mocks.isKernelMode.mockReturnValue(true);
-    const { result } = renderHook(() => useAnalyzeSillyTavern(), {
+    promptPlanMock.readFileBase64.mockResolvedValue('YWJj');
+    assetsMock.uploadBegin.mockResolvedValue({
+      uploadId: 'u1',
+      chunkSizeBytes: 512 * 1024,
+      expiresAt: '',
+    });
+    assetsMock.uploadAppend.mockResolvedValue({});
+    assetsMock.uploadFinish.mockResolvedValue({
+      asset: { id: 'asset-1', sizeBytes: 3 },
+      deduplicated: false,
+    });
+    importsMock.fullBackupAnalyze.mockResolvedValue({
+      sourceHash: 'a'.repeat(64),
+      totalCompressedBytes: 3,
+      totalExpandedBytes: 9,
+      categories: [
+        { id: 'characters', discovered: 1, dependentRecords: 0, invalid: 0, sizeBytes: 3 },
+        { id: 'chats', discovered: 2, dependentRecords: 40, invalid: 1, sizeBytes: 6 },
+      ],
+      warningCount: 0,
+      warnings: [],
+    });
+    const { result } = renderHook(() => useAnalyzeFullBackup(), {
       wrapper: wrapperFor(queryClient),
     });
     act(() =>
       result.current.mutate({
-        file: new File(['x'], 'st.zip'),
+        file: new File(['abc'], 'backup.zip'),
         signal: new AbortController().signal,
       }),
     );
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(importsMock.fullBackupAnalyze).toHaveBeenCalledWith('asset-1', expect.anything());
+    expect(result.current.data).toMatchObject({
+      analysisId: 'asset-1',
+      sourceName: 'backup.zip',
+      conflictCount: 0,
+      conflicts: [],
+      categories: [
+        { id: 'characters', discovered: 1, conflicts: 0 },
+        { id: 'chats', discovered: 2, dependentRecords: 40, invalid: 1 },
+      ],
+    });
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useExecuteSillyTavernImport rejects with UnsupportedError on the kernel plane', async () => {
+  it('useExecuteFullBackupImport calls the wire op with the chosen policy (legacyExtensions dropped)', async () => {
     mocks.isKernelMode.mockReturnValue(true);
-    const { result } = renderHook(() => useExecuteSillyTavernImport(), {
+    importsMock.fullBackupExecute.mockResolvedValue({
+      runId: 'run-1',
+      sourceHash: 'b'.repeat(64),
+      conflictPolicy: 'skip',
+      archiveAlreadyImported: false,
+      categories: [
+        {
+          id: 'characters',
+          discovered: 1,
+          imported: 1,
+          reused: 0,
+          skipped: 0,
+          conflicted: 0,
+          invalid: 0,
+          dependentImported: 0,
+        },
+      ],
+      totals: {
+        discovered: 1,
+        imported: 1,
+        reused: 0,
+        skipped: 0,
+        conflicted: 0,
+        invalid: 0,
+        dependentImported: 0,
+      },
+      warningCount: 0,
+      warnings: [],
+    });
+    const { result } = renderHook(() => useExecuteFullBackupImport(), {
       wrapper: wrapperFor(queryClient),
     });
     act(() =>
       result.current.mutate({
         analysisId: 'a1',
-        input: { categories: ['characters'], conflictPolicy: 'skip' },
+        input: { categories: ['characters', 'legacyExtensions'], conflictPolicy: 'skip' },
         signal: new AbortController().signal,
       }),
     );
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(importsMock.fullBackupExecute).toHaveBeenCalledWith(
+      { assetId: 'a1', categories: ['characters'], conflictPolicy: 'skip' },
+      expect.anything(),
+    );
+    expect(result.current.data).toMatchObject({
+      jobId: 'run-1',
+      safetyBackupId: '',
+      counts: { characters: { imported: 1, reused: 0, skipped: 0 } },
+    });
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useDiscardSillyTavernAnalysis rejects with UnsupportedError on the kernel plane', async () => {
+  it('useDiscardFullBackupAnalysis drops the staged asset on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
-    const { result } = renderHook(() => useDiscardSillyTavernAnalysis(), {
+    assetsMock.del.mockResolvedValue({});
+    const { result } = renderHook(() => useDiscardFullBackupAnalysis(), {
       wrapper: wrapperFor(queryClient),
     });
     act(() => result.current.mutate('a1'));
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(assetsMock.del).toHaveBeenCalledWith('a1');
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
   });

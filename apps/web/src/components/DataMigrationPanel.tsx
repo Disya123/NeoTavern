@@ -15,15 +15,15 @@ import type {
   DataImportCounts,
   DataImportEntityCount,
   DataImportWarning,
-  SillyTavernImportAnalysis,
-  SillyTavernImportCategoryId,
-  SillyTavernImportResult,
+  FullBackupAnalysis,
+  FullBackupCategoryId,
+  FullBackupImportResult,
 } from '@neotavern/contracts';
 import { ActionBar, ActionBarGroup, Button } from '@neotavern/ui';
 import {
-  useAnalyzeSillyTavern,
-  useDiscardSillyTavernAnalysis,
-  useExecuteSillyTavernImport,
+  useAnalyzeFullBackup,
+  useDiscardFullBackupAnalysis,
+  useExecuteFullBackupImport,
 } from '../api/hooks.js';
 import {
   isLegacyImportAvailable,
@@ -66,7 +66,7 @@ const CATEGORY_IDS = [
   'apiSettings',
   'legacyExtensions',
   'themes',
-] as const satisfies readonly SillyTavernImportCategoryId[];
+] as const satisfies readonly FullBackupCategoryId[];
 const CONFLICT_POLICIES = [
   'skip',
   'copy',
@@ -80,16 +80,16 @@ export function DataMigrationPanel() {
   const inputId = useId();
   const policyGroup = useId();
   const errorText = useErrorText();
-  const analysisMutation = useAnalyzeSillyTavern();
-  const execution = useExecuteSillyTavernImport();
-  const discard = useDiscardSillyTavernAnalysis();
+  const analysisMutation = useAnalyzeFullBackup();
+  const execution = useExecuteFullBackupImport();
+  const discard = useDiscardFullBackupAnalysis();
   const activeRequest = useRef<AbortController | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [analysis, setAnalysis] = useState<SillyTavernImportAnalysis | null>(null);
+  const [analysis, setAnalysis] = useState<FullBackupAnalysis | null>(null);
   const [selectedCategories, setSelectedCategories] =
-    useState<readonly SillyTavernImportCategoryId[]>(CATEGORY_IDS);
+    useState<readonly FullBackupCategoryId[]>(CATEGORY_IDS);
   const [conflictPolicy, setConflictPolicy] = useState<DataImportConflictPolicy>('skip');
-  const [result, setResult] = useState<SillyTavernImportResult | null>(null);
+  const [result, setResult] = useState<FullBackupImportResult | null>(null);
   const [cancelled, setCancelled] = useState(false);
   const number = new Intl.NumberFormat(i18n.language);
   const fileSize = new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 });
@@ -156,14 +156,14 @@ export function DataMigrationPanel() {
   };
 
   return (
-    <section className={styles.panel} data-component="sillytavern-migration">
+    <section className={styles.panel} data-component="fullbackup-migration">
       <div className={styles.intro}>
         <span className={styles.icon}>
           <Archive weight="duotone" aria-hidden="true" />
         </span>
         <div className={styles.copy}>
-          <h3>{t('settings:migrateSillyTavern')}</h3>
-          <p>{t('settings:migrateSillyTavernHint')}</p>
+          <h3>{t('settings:migrateFullBackup')}</h3>
+          <p>{t('settings:migrateFullBackupHint')}</p>
         </div>
         <Button asChild variant="ghost">
           <label htmlFor={inputId} aria-disabled={busy}>
@@ -537,7 +537,7 @@ function MigrationResult({
   result,
   number,
 }: {
-  result: SillyTavernImportResult;
+  result: FullBackupImportResult;
   number: Intl.NumberFormat;
 }) {
   const { t } = useTranslation();

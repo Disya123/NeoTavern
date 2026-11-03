@@ -39,8 +39,8 @@ NeoTavern 可以通过三种方式扩展：
 - [主题 SDK](developers/theme-sdk/) —— 由设计令牌、组件皮肤和外壳布局构建的主题。
 - [提供商](developers/providers/) —— 实现统一适配器契约的提供商适配器。
 
-SillyTavern 时代的插件兼容已根据所有者的决定（2026-10-31）移除；针对
-SillyTavern 环境编写的插件无法运行，新插件请使用插件 SDK。
+legacy 时代的插件兼容已根据所有者的决定（2026-10-31）移除；针对
+legacy 环境编写的插件无法运行，新插件请使用插件 SDK。
 
 [API 参考](api/) 在每次站点构建时由 TypeDoc 从 SDK 源码生成，
 因此其成员页面始终与已发布的包一致。
