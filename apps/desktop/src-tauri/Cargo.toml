@@ -43,6 +43,9 @@ neotavern-host-tools = { path = "../../../crates/adapters/host-tools" }
 # (staged-root legacy import + rollback) inside the packaged process.
 neotavern-storage = { path = "../../../crates/storage" }
 rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
+# Round 30: the Settings → Data legacy app.db file picker (open dialog only;
+# no filesystem scope — the picked path goes to legacy_import_plan/execute).
+tauri-plugin-dialog = "2"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-updater = "2"

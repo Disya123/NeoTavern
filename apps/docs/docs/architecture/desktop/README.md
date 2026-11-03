@@ -71,7 +71,13 @@ Runtime Kernel → SQLite` (ТЗ §11.1/§15.1).
 ### Legacy data import (Settings → Data, kernel mode)
 
 Kernel-mode builds expose three host commands for the Settings → Data flow
-(release gates G7/G8, user-facing half; ADR-0062 staged-root lifecycle):
+(release gates G7/G8, user-facing half; ADR-0062 staged-root lifecycle). The
+React contour wires them in `DataMigrationPanel` (round 30): the file is
+picked through `tauri-plugin-dialog` (open dialog only, no filesystem scope),
+the plan block shows per-family counts, executing stages + activates with an
+explicit restart notice, and one rollback stays available until the restart.
+Bindings: `apps/web/src/api/legacyAppDb.ts` (unit-tested); the commands
+themselves:
 
 - `legacy_import_plan(sourcePath)` — dry run: reads the user-picked legacy
   `app.db` and reports per-family row counts + readiness. Writes nothing.

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Core desktop window capability. The sidecar is controlled only by Rust.",
+  "description": "Core desktop window capability. The sidecar is controlled only by Rust; the dialog plugin serves the Settings → Data legacy app.db file picker (open dialog only, no filesystem scope).",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-open"]
 }

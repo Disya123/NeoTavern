@@ -445,7 +445,7 @@
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "c35218165033006d5a00597ddbaf984037209255cc0ecd5b91db952b8adaac07"
+      "sha256": "7722febe24f4a353aaaadc86d8e655dd88dd60f2364a500298051996488d625a"
     },
     {
       "source": "desktop/chat-ui-recipe.md",

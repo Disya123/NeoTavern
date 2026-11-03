@@ -1,6 +1,7 @@
 import {
   Archive,
   CheckCircle,
+  Database,
   FileMagnifyingGlass,
   FileZip,
   ShieldCheck,
@@ -24,6 +25,17 @@ import {
   useDiscardSillyTavernAnalysis,
   useExecuteSillyTavernImport,
 } from '../api/hooks.js';
+import {
+  isLegacyImportAvailable,
+  legacyImportExecute,
+  legacyImportPlan,
+  legacyImportRollback,
+  parseLegacyOpError,
+  pickLegacyAppDb,
+  type LegacyImportExecuteReport,
+  type LegacyImportPlanReport,
+  type LegacyOpFailure,
+} from '../api/legacyAppDb.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import styles from './DataMigrationPanel.module.css';
 
@@ -355,6 +367,168 @@ export function DataMigrationPanel() {
       ) : null}
 
       {result ? <MigrationResult result={result} number={number} /> : null}
+
+      <LegacyAppDbImport />
+    </section>
+  );
+}
+
+/**
+ * Kernel-mode legacy app.db migration (G7/G8 user-facing half): pick the
+ * old database, see the per-family plan, stage + activate (restart
+ * applies), one rollback kept. Hidden outside the desktop kernel runtime.
+ */
+function LegacyAppDbImport() {
+  const { t } = useTranslation();
+  const [sourcePath, setSourcePath] = useState<string | null>(null);
+  const [plan, setPlan] = useState<LegacyImportPlanReport | null>(null);
+  const [executed, setExecuted] = useState<LegacyImportExecuteReport | null>(null);
+  const [rolledBack, setRolledBack] = useState(false);
+  const [failure, setFailure] = useState<LegacyOpFailure | null>(null);
+  const [busy, setBusy] = useState<'plan' | 'execute' | 'rollback' | null>(null);
+  if (!isLegacyImportAvailable()) return null;
+
+  const reset = (): void => {
+    setPlan(null);
+    setExecuted(null);
+    setRolledBack(false);
+    setFailure(null);
+  };
+
+  const run = async (step: 'plan' | 'execute' | 'rollback'): Promise<void> => {
+    setFailure(null);
+    setBusy(step);
+    try {
+      if (step === 'plan' && sourcePath) {
+        setExecuted(null);
+        setRolledBack(false);
+        setPlan(await legacyImportPlan(sourcePath));
+      } else if (step === 'execute' && sourcePath) {
+        setExecuted(await legacyImportExecute(sourcePath));
+      } else if (step === 'rollback') {
+        await legacyImportRollback();
+        setExecuted(null);
+        setRolledBack(true);
+      }
+    } catch (error) {
+      setFailure(parseLegacyOpError(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const failureKey =
+    failure?.code === 'LEGACY_SOURCE_UNREADABLE'
+      ? 'settings:legacyErrSource'
+      : failure?.code === 'LEGACY_NO_ROLLBACK_TARGET'
+        ? 'settings:legacyErrNoTarget'
+        : failure?.code === 'LEGACY_NO_DATA_ROOT'
+          ? 'settings:legacyErrNoRoot'
+          : failure?.code === 'LEGACY_UNAVAILABLE'
+            ? 'settings:legacyErrUnavailable'
+            : null;
+
+  return (
+    <section className={styles.legacyBlock} data-component="legacy-appdb-migration">
+      <div className={styles.intro}>
+        <span className={styles.icon}>
+          <Database weight="duotone" aria-hidden="true" />
+        </span>
+        <div className={styles.copy}>
+          <h3>{t('settings:legacyAppDb')}</h3>
+          <p>{t('settings:legacyAppDbHint')}</p>
+        </div>
+        <Button
+          variant="ghost"
+          disabled={busy !== null}
+          onClick={() => {
+            void (async () => {
+              const picked = await pickLegacyAppDb();
+              if (picked === null) return;
+              setSourcePath(picked);
+              reset();
+            })();
+          }}
+        >
+          <FileMagnifyingGlass aria-hidden="true" />
+          {t('settings:legacyChooseFile')}
+        </Button>
+      </div>
+
+      {sourcePath ? (
+        <p className={styles.cancelled} role="status">
+          {t('settings:legacyPickedFile', { path: sourcePath })}
+        </p>
+      ) : null}
+
+      {plan ? (
+        <div className={styles.selection}>
+          <p>
+            <strong>
+              {plan.ready ? t('settings:legacyPlanReady') : t('settings:legacyPlanNotReady')}
+            </strong>
+          </p>
+          <dl className={styles.counts}>
+            {plan.families.map((family) => (
+              <div key={family.family}>
+                <dt>{family.family}</dt>
+                <dd>{new Intl.NumberFormat().format(family.count)}</dd>
+              </div>
+            ))}
+          </dl>
+          {plan.problems.length > 0 ? (
+            <ul>
+              {plan.problems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {executed ? (
+        <div className={styles.result} aria-live="polite">
+          <header>
+            <CheckCircle weight="fill" aria-hidden="true" />
+            <div>
+              <h4>{t('settings:legacyRestartRequired', { rootId: executed.stagedRootId })}</h4>
+            </div>
+          </header>
+        </div>
+      ) : null}
+
+      {rolledBack ? (
+        <p className={styles.cancelled} role="status">
+          {t('settings:legacyRolledBack')}
+        </p>
+      ) : null}
+
+      {failure ? (
+        <p className={styles.error} role="alert">
+          {failureKey !== null
+            ? t(failureKey, failure.code === 'LEGACY_STORAGE' ? { message: failure.message } : {})
+            : t('settings:legacyErrGeneric', { message: failure.message })}
+        </p>
+      ) : null}
+
+      {sourcePath ? (
+        <ActionBar align="end" collapse="stack" data-part="legacy-appdb-actions">
+          <ActionBarGroup placement="primary">
+            {executed ? (
+              <Button variant="ghost" disabled={busy !== null} onClick={() => void run('rollback')}>
+                {t('settings:legacyRollback')}
+              </Button>
+            ) : null}
+            <Button
+              variant="primary"
+              disabled={busy !== null || executed !== null || !plan?.ready}
+              onClick={() => void run('execute')}
+            >
+              {busy === 'execute' ? t('settings:migrationRunning') : t('settings:legacyImport')}
+            </Button>
+          </ActionBarGroup>
+        </ActionBar>
+      ) : null}
     </section>
   );
 }

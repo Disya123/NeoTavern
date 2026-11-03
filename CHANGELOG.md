@@ -4,6 +4,14 @@
 
 ### Added
 
+- **The Settings → Data UI reaches the legacy import commands (round 30/40).**
+  `DataMigrationPanel` gains a kernel-mode block: the legacy `app.db` is
+  picked through the native dialog plugin, the staged import plan shows
+  per-family row counts, executing stages + activates the migrated root with
+  an explicit restart notice, and a single rollback stays available until
+  restart. Bindings live in `apps/web/src/api/legacyAppDb.ts` with stable
+  `LEGACY_*` failure codes localized in en/ru resources (9 new unit tests).
+
 - **Legacy data import reaches the Desktop host surface (round 29/40).**
   Kernel-mode builds expose legacy_import_plan / legacy_import_execute /
   legacy_import_rollback Tauri commands over the ADR-0062 staged-root
