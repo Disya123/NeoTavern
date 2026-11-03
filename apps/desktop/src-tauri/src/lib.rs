@@ -2408,7 +2408,99 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         serde_json::json!({ "id": "smoke-plugin" }),
     )?;
     eprintln!("[smoke] golden: declarative plugin lifecycle (state/secrets/blocks) ok");
+    // 15b. Plugin package-trust fence walk (security.plugin-package-trust,
+    //      round 42): SEC-05 says an install may never lower the recorded
+    //      trust rank. The kernel enforces that fence, and the packaged smoke
+    //      proves both halves — a rejected downgrade leaves the registry
+    //      untouched, an equal-rank version bump still lands, and the probe
+    //      plugin is removed again so the walk leaves no residue.
+    dispatch_ok(
+        &host,
+        "plugins.install",
+        serde_json::json!({
+            "id": "trust-fence-plugin",
+            "name": "Trust Fence Plugin",
+            "version": "1.0.0",
+            "trustState": "verified-publisher",
+            "publisherKeyId": "fp-trust-fence",
+            "permissions": ["plugin.storage"],
+            "manifest": { "id": "trust-fence-plugin", "main": "dist/index.js" },
+        }),
+    )?;
+    let downgrade = dispatch_error(
+        &host,
+        "plugins.install",
+        serde_json::json!({
+            "id": "trust-fence-plugin",
+            "name": "Trust Fence Plugin",
+            "version": "2.0.0",
+            "trustState": "locally-trusted",
+            "publisherKeyId": "fp-trust-fence",
+            "permissions": ["plugin.storage"],
+            "manifest": { "id": "trust-fence-plugin", "main": "dist/index.js" },
+        }),
+    )?;
+    if !downgrade.contains("PLUGIN_TRUST_DOWNGRADE") || !downgrade.contains("trust-fence-plugin") {
+        return Err(format!(
+            "plugin trust downgrade was not rejected: {downgrade}"
+        ));
+    }
+    let fenced = plugin_item(
+        &dispatch_ok(&host, "plugins.list", serde_json::json!({}))?,
+        "trust-fence-plugin",
+    )?;
+    if fenced["version"] != serde_json::json!("1.0.0")
+        || fenced["trustState"] != serde_json::json!("verified-publisher")
+    {
+        return Err(format!(
+            "rejected trust downgrade still mutated the registry: {fenced}"
+        ));
+    }
+    dispatch_ok(
+        &host,
+        "plugins.install",
+        serde_json::json!({
+            "id": "trust-fence-plugin",
+            "name": "Trust Fence Plugin",
+            "version": "2.0.0",
+            "trustState": "verified-publisher",
+            "publisherKeyId": "fp-trust-fence",
+            "permissions": ["plugin.storage"],
+            "manifest": { "id": "trust-fence-plugin", "main": "dist/index.js" },
+        }),
+    )?;
+    let upgraded = plugin_item(
+        &dispatch_ok(&host, "plugins.list", serde_json::json!({}))?,
+        "trust-fence-plugin",
+    )?;
+    if upgraded["version"] != serde_json::json!("2.0.0")
+        || upgraded["trustState"] != serde_json::json!("verified-publisher")
+    {
+        return Err(format!("trust-equal version bump did not land: {upgraded}"));
+    }
+    dispatch_ok(
+        &host,
+        "plugins.uninstall",
+        serde_json::json!({ "id": "trust-fence-plugin" }),
+    )?;
+    eprintln!(
+        "[smoke] golden: plugin package-trust fence ok (downgrade rejected, equal rank bumps)"
+    );
     Ok(())
+}
+
+/// Finds one plugin in a `plugins.list` envelope or fails the walk.
+#[cfg(desktop)]
+fn plugin_item(list: &serde_json::Value, plugin_id: &str) -> Result<serde_json::Value, String> {
+    list["items"]
+        .as_array()
+        .and_then(|items| {
+            items
+                .iter()
+                .find(|item| item["id"] == serde_json::json!(plugin_id))
+                .cloned()
+        })
+        .ok_or_else(|| format!("plugin {plugin_id} missing from the registry: {list}"))
 }
 
 /// Builds a minimal legacy Drizzle-era `app.db` for the packaged migration

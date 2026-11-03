@@ -4,6 +4,19 @@
 
 ### Added
 
+- **Plugin package trust reaches Packaged on desktop (round 42/99).**
+  `security.plugin-package-trust` now has behavioural packaged evidence for
+  the SEC-05 fence: a probe plugin installed as `verified-publisher` is
+  re-installed at a higher version with a LOWER trust state
+  (`locally-trusted`) and the kernel refuses it with
+  `PLUGIN_TRUST_DOWNGRADE` **without** mutating the registry (the row still
+  reads 1.0.0 / verified-publisher); an equal-rank version bump to 2.0.0 then
+  lands durably, and the probe plugin is uninstalled so the walk leaves no
+  residue. The 14-case Rust verifier suite stays the package-level evidence
+  (signed, unsigned, bad signature, unknown key, traversal, absolute path,
+  duplicate path, symlink mode, unlisted file, missing file, digest mismatch,
+  zip bomb, trust rank order). Desktop score: **33/43**.
+
 - **Provider access reaches Packaged on desktop (round 41/99).**
   `providers.access` (`providers.models` + `providers.test`) now has
   packaged evidence: the golden smoke enumerates the built-in fake adapter's
