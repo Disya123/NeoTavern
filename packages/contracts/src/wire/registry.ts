@@ -1367,6 +1367,33 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
 
+  // ADR-0063: image generation is the last media op — prompt in, a
+  // `generated-image` asset id out, single image per call.
+  op(
+    'providers.images',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.providers-images',
+    'wire.result.providers-images',
+    undefined,
+    [
+      'INTERNAL',
+      'VALIDATION',
+      'NOT_FOUND',
+      'UNAUTHORIZED',
+      'RATE_LIMITED',
+      'PROVIDER_ERROR',
+      'CAPABILITY_UNAVAILABLE',
+      'CANCELLED',
+      'CONTRACT_VIOLATION',
+      'OUTCOME_UNKNOWN',
+    ],
+    8192,
+    8192,
+    undefined,
+  ),
   // ADR-0063: speech synthesis travels the other way — text in, a
   // `generated-audio` asset id out. The legacy cap is 4 MiB of audio per call,
   // so 8 MiB is a hard ceiling here, not a budget the provider may exceed.
@@ -3659,6 +3686,28 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     secretId: UUID_PROVIDER_SECRET,
   }),
   fx('secrets-exposure-request', 'secrets.exposure', 'request', true, {}),
+  fx('providers-images-request', 'providers.images', 'request', true, {
+    providerId: UUID_AVATAR,
+    prompt: 'a lighthouse at dusk',
+    size: '1024x1024',
+  }),
+  fx('providers-images-response', 'providers.images', 'response', true, {
+    assetId: UUID_PRESET,
+    contentType: 'image/png',
+    sizeBytes: 70,
+    model: 'fake-1',
+    width: 1,
+    height: 1,
+  }),
+  fx('neg-providers-images-empty-prompt', 'providers.images', 'request', false, {
+    providerId: UUID_AVATAR,
+    prompt: '',
+  }),
+  fx('neg-providers-images-bad-size', 'providers.images', 'request', false, {
+    providerId: UUID_AVATAR,
+    prompt: 'a lighthouse at dusk',
+    size: '100x100',
+  }),
   fx('providers-speech-request', 'providers.speech', 'request', true, {
     providerId: UUID_AVATAR,
     text: 'Hello there.',

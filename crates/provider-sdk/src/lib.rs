@@ -322,6 +322,34 @@ impl ProviderCapabilities {
     }
 }
 
+/// One image generation request (media operations, ADR-0063).
+pub struct ImageRequest<'a> {
+    /// Provider identifier used on the wire.
+    pub provider_id: &'a str,
+    /// Model the config addresses.
+    pub model: &'a str,
+    /// The prompt, verbatim.
+    pub prompt: &'a str,
+    /// Requested size token (`1024x1024`, …), when the caller has one.
+    pub size: Option<&'a str>,
+    /// Bounds the whole call.
+    pub deadline: Option<policy::Deadline>,
+    /// Resolved API key, when the config has one.
+    pub api_key: Option<&'a str>,
+}
+
+/// One produced image and the facts the provider reports about it.
+pub struct GeneratedImage {
+    /// The encoded image bytes.
+    pub bytes: Vec<u8>,
+    /// Content type the bytes are actually in.
+    pub content_type: String,
+    /// Width the provider reports, when it reports one.
+    pub width: Option<u32>,
+    /// Height the provider reports, when it reports one.
+    pub height: Option<u32>,
+}
+
 /// One speech synthesis request (media operations, ADR-0063).
 ///
 /// Text in, bytes out: the kernel stages the produced audio as a
@@ -425,6 +453,19 @@ pub trait ProviderAdapter: Send + Sync {
         Err(ProviderError::with(
             ProviderErrorCode::CapabilityUnavailable,
             "this provider does not support live model discovery",
+            vec![("provider".to_string(), self.id().to_string())],
+        ))
+    }
+
+    /// Generates one image (media operations, ADR-0063).
+    ///
+    /// Optional capability with the same honest default as the other media
+    /// methods: a provider that cannot generate images refuses instead of
+    /// answering an empty body.
+    fn generate_image(&self, _request: &ImageRequest<'_>) -> Result<GeneratedImage, ProviderError> {
+        Err(ProviderError::with(
+            ProviderErrorCode::CapabilityUnavailable,
+            "this provider does not support image generation",
             vec![("provider".to_string(), self.id().to_string())],
         ))
     }

@@ -302,6 +302,7 @@ export class LegacyBackend implements NeoBackend {
     test: () => this.unsupported('providers.test'),
     transcribe: () => this.unsupported('providers.transcribe'),
     speech: () => this.unsupported('providers.speech'),
+    images: () => this.unsupported('providers.images'),
   };
 
   /**

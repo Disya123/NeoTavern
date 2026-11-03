@@ -22,11 +22,13 @@
 
 use std::time::Duration;
 
-use contracts_generated::generated::{self, ResultProviderTranscribe, ResultProvidersSpeech};
+use contracts_generated::generated::{
+    self, ResultProviderTranscribe, ResultProvidersImages, ResultProvidersSpeech,
+};
 use neotavern_storage::open::Database;
 use provider_sdk::policy::Deadline;
 use provider_sdk::secret::SecretResolver;
-use provider_sdk::{SpeechRequest, TranscriptionRequest};
+use provider_sdk::{ImageRequest, SpeechRequest, TranscriptionRequest};
 use rusqlite::OptionalExtension;
 
 use crate::provider_access::{config_model, provider_error, resolve_adapter};
@@ -42,6 +44,8 @@ pub(crate) const MAX_AUDIO_BYTES: i64 = 64 * 1024 * 1024;
 /// Hard cap on produced speech (ADR-0063): identical to the op's response
 /// budget, so a provider cannot make the kernel stage an unbounded file.
 pub(crate) const MAX_SPEECH_BYTES: usize = 8 * 1024 * 1024;
+/// Hard cap on a produced image (ADR-0063): matches the legacy upload cap.
+pub(crate) const MAX_IMAGE_BYTES: usize = 16 * 1024 * 1024;
 
 fn config_not_found(provider_id: &str) -> KernelError {
     KernelError::product(
@@ -281,4 +285,98 @@ pub(crate) fn speech(
     };
     crate::product::validate(&dto, generated::validate_result_providers_speech)?;
     crate::product::encode(&dto)
+}
+
+fn extension_for_image(content_type: &str) -> &'static str {
+    match content_type {
+        "image/png" => "png",
+        "image/jpeg" => "jpg",
+        "image/webp" => "webp",
+        "image/gif" => "gif",
+        _ => "bin",
+    }
+}
+
+/// `providers.images` — generate one image and stage it.
+///
+/// Same shape as speech: prompt in, `generated-image` asset id out, honest
+/// `CAPABILITY_UNAVAILABLE` when the provider cannot generate, and a size cap
+/// (16 MiB) so the kernel never stages an unbounded body. No `n`: a batch would
+/// need partial-failure semantics the wire does not have.
+pub(crate) fn images(
+    db: &mut Database,
+    registry: &ProviderRegistry,
+    resolver: Option<&dyn SecretResolver>,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_providers_images(request)?;
+    let (provider, config) = providers_config::load_config_by_id(db.conn(), &req.provider_id)?
+        .ok_or_else(|| config_not_found(&req.provider_id))?;
+    let model = req
+        .model
+        .clone()
+        .or_else(|| config_model(&config))
+        .ok_or_else(|| model_required(&req.provider_id))?;
+    let adapter = resolve_adapter(registry, &provider, &config)?;
+    let api_key =
+        providers_config::resolve_config_api_key(db.conn(), resolver, &req.provider_id, &provider)?;
+
+    let image = adapter
+        .generate_image(&ImageRequest {
+            provider_id: &provider,
+            model: &model,
+            prompt: &req.prompt,
+            size: req.size.as_ref().map(image_size_str),
+            deadline: Some(Deadline::after(TRANSCRIBE_TIMEOUT)),
+            api_key: api_key.as_deref(),
+        })
+        .map_err(|err| provider_error(&err))?;
+    if image.bytes.is_empty() {
+        return Err(KernelError::product(
+            "IMAGE_EMPTY_BODY".to_string(),
+            vec![("providerId".to_string(), req.provider_id.clone())],
+        ));
+    }
+    if image.bytes.len() > MAX_IMAGE_BYTES {
+        return Err(KernelError::product(
+            "IMAGE_TOO_LARGE".to_string(),
+            vec![
+                ("providerId".to_string(), req.provider_id.clone()),
+                ("sizeBytes".to_string(), image.bytes.len().to_string()),
+                ("limitBytes".to_string(), MAX_IMAGE_BYTES.to_string()),
+            ],
+        ));
+    }
+
+    let filename = format!("image.{}", extension_for_image(&image.content_type));
+    let (asset_id, _) = crate::assets::publish_bytes(
+        db,
+        "generated-image",
+        &filename,
+        &image.bytes,
+        Some(&image.content_type),
+    )?;
+
+    let dto = ResultProvidersImages {
+        asset_id,
+        content_type: image.content_type,
+        size_bytes: image.bytes.len() as i64,
+        model,
+        width: image.width.map(i64::from),
+        height: image.height.map(i64::from),
+    };
+    crate::product::validate(&dto, generated::validate_result_providers_images)?;
+    crate::product::encode(&dto)
+}
+
+/// Wire size token → the token a provider expects.
+fn image_size_str(value: &generated::ProvidersImagesSize) -> &'static str {
+    use generated::ProvidersImagesSize as Size;
+    match value {
+        Size::N256x256 => "256x256",
+        Size::N512x512 => "512x512",
+        Size::N1024x1024 => "1024x1024",
+        Size::N1536x1024 => "1536x1024",
+        Size::N1024x1536 => "1024x1536",
+    }
 }

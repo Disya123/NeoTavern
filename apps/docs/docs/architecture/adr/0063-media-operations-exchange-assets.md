@@ -4,9 +4,8 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/0063-media-ope
 
 # ADR-0063 — Media operations exchange assets, never bytes
 
-**Status:** accepted; implemented for `providers.transcribe` and
-`providers.speech` (rounds 52–53) — `providers.images` remains open on the same
-exchange
+**Status:** accepted; implemented for `providers.transcribe`,
+`providers.speech` and `providers.images` (rounds 52–54)
 **Date:** 2026-11-04
 **Supersedes:** nothing. **Related:** ADR-0061 (chunked ingestion), ADR-0038
 (kernel owns product state, no second backend surface), ADR-0059 (React-primary,
@@ -151,3 +150,13 @@ filename = speech.<ext>)` — the extension follows the content type, not the
   8 MiB is `AUDIO_TOO_LARGE` — the same ceiling as the op's response budget;
 - a provider without the capability answers `CAPABILITY_UNAVAILABLE` through the
   adapter default, exactly like transcription.
+
+## Images: the same outbound half (round 54)
+
+`providers.images` closes the row. It reuses the speech mechanism verbatim — one
+asset per call, `generated-image` kind, 16 MiB cap, honest refusal when the
+adapter lacks the method — and deliberately drops the legacy `n` parameter: a
+batch would need partial-failure semantics the wire does not have, and a caller
+that wants three images can call three times. The provider-reported
+`width`/`height` are passed through as optional facts; the kernel never decodes
+the image to guess them.

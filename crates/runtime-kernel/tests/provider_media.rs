@@ -13,7 +13,8 @@
 //!   audio, so the result DTO shape is pinned without a network.
 
 use contracts_generated::generated::{
-    ProviderConfigDto, ResultProviderModels, ResultProviderTranscribe, ResultProvidersSpeech,
+    ProviderConfigDto, ResultProviderModels, ResultProviderTranscribe, ResultProvidersImages,
+    ResultProvidersSpeech,
 };
 use runtime_kernel::{CancellationFlag, Kernel, KernelConfig, KernelError};
 use serde_json::{json, Value};
@@ -312,4 +313,57 @@ fn speech_refuses_honestly_without_the_capability_or_the_config() {
     )
     .expect_err("unknown config must fail");
     assert_eq!(product_code(&unknown), "PROVIDER_CONFIG_NOT_FOUND");
+}
+
+// ---------------------------------------------------------------------------
+// Image generation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn images_stage_a_generated_image_asset() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(dir.path());
+    let config = set_config(&kernel, "fake", "local-fake", json!({ "model": "fake-1" }));
+
+    let result = dispatch_decoded::<ResultProvidersImages>(
+        &kernel,
+        "providers.images",
+        json!({ "providerId": config.id, "prompt": "a lighthouse", "size": "512x512" }),
+    )
+    .expect("generation must succeed");
+
+    assert_eq!(result.content_type, "image/png");
+    assert_eq!((result.width, result.height), (Some(1), Some(1)));
+    assert_eq!(result.size_bytes, 70);
+
+    let asset = dispatch_json(&kernel, "assets.get", json!({ "assetId": result.asset_id }))
+        .expect("the produced asset must be addressable");
+    assert_eq!(asset["asset"]["kind"], "generated-image");
+    assert_eq!(asset["asset"]["sizeBytes"], 70);
+
+    let content = dispatch_json(
+        &kernel,
+        "assets.content",
+        json!({ "assetId": result.asset_id }),
+    )
+    .expect("content must be readable");
+    let encoded = content["contentBase64"].as_str().expect("base64 body");
+    assert!(
+        encoded.starts_with("iVBOR"),
+        "expected a PNG signature, got {encoded:.12}"
+    );
+}
+
+#[test]
+fn images_refuse_honestly_without_the_capability() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(dir.path());
+    let replay = set_config(&kernel, "recorded", "replay", json!({ "model": "fake-1" }));
+    let err = dispatch_json(
+        &kernel,
+        "providers.images",
+        json!({ "providerId": replay.id, "prompt": "a lighthouse" }),
+    )
+    .expect_err("a non-media provider must refuse");
+    assert_eq!(product_code(&err), "CAPABILITY_UNAVAILABLE");
 }

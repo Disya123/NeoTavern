@@ -127,6 +127,7 @@
   "providers.config.get",
   "providers.config.list",
   "providers.config.set",
+  "providers.images",
   "providers.list",
   "providers.models",
   "providers.secrets.create",

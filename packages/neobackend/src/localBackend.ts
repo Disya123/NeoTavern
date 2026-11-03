@@ -82,6 +82,7 @@ import {
   type ProviderTestResultDto,
   type ProviderTranscribeResultDto,
   type ProvidersSpeechResultDto,
+  type ProvidersImagesResultDto,
   type ProviderSecretDto,
   type ListProviderSecretsResultDto,
   type CreateProviderSecretResultDto,
@@ -490,6 +491,7 @@ export class LocalBackend implements NeoBackend {
       transcribe: (req, opts) =>
         this.invoke<ProviderTranscribeResultDto>('providers.transcribe', req, opts),
       speech: (req, opts) => this.invoke<ProvidersSpeechResultDto>('providers.speech', req, opts),
+      images: (req, opts) => this.invoke<ProvidersImagesResultDto>('providers.images', req, opts),
     };
     this.plugins = {
       list: (opts) => this.invoke<ListPluginsResultDto>('plugins.list', {}, opts),

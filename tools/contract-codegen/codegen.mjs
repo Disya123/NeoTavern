@@ -97,11 +97,15 @@ function canonicalString(value) {
 // ---------------------------------------------------------------------------
 
 function pascalSegment(segment) {
-  return segment
+  const joined = segment
     .split(/[^A-Za-z0-9]+/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join('');
+  // Rust identifiers cannot start with a digit; wire values like `256x256`
+  // are legitimate (image sizes), so the generated variant gets an `N` prefix
+  // while `#[serde(rename)]` keeps the wire spelling.
+  return /^[0-9]/u.test(joined) ? `N${joined}` : joined;
 }
 
 function snakeOfId(id) {

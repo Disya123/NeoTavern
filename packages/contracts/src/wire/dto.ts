@@ -365,6 +365,54 @@ export const WireSpeechFormat = Type.Union(
 );
 export type WireSpeechFormat = Static<typeof WireSpeechFormat>;
 
+/** Requested image size (`wire.providers-images.size`). */
+export const WireImageSize = Type.Union(
+  [
+    Type.Literal('256x256'),
+    Type.Literal('512x512'),
+    Type.Literal('1024x1024'),
+    Type.Literal('1536x1024'),
+    Type.Literal('1024x1536'),
+  ],
+  { $id: 'wire.providers-images.size', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WireImageSize = Static<typeof WireImageSize>;
+
+/**
+ * Image generation request (`wire.request.providers-images`, ADR-0063): a
+ * prompt in, an asset id out. Single image per call by design — the legacy
+ * `n` parameter is not carried, because the kernel stages one asset per call and
+ * a batch would need partial-failure semantics the wire does not have.
+ */
+export const ProvidersImagesRequestDtoSchema = Type.Object(
+  {
+    providerId: Type.String({ format: 'uuid' }),
+    prompt: Type.String({ minLength: 1, maxLength: 4000 }),
+    size: Type.Optional(WireImageSize),
+    model: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  },
+  { $id: 'wire.request.providers-images', additionalProperties: false },
+);
+export type ProvidersImagesRequestDto = Static<typeof ProvidersImagesRequestDtoSchema>;
+
+/**
+ * Image generation result (`wire.result.providers-images`): the produced image
+ * is STAGED as a `generated-image` asset; `width`/`height` are what the provider
+ * reported (the kernel does not decode images to guess).
+ */
+export const ProvidersImagesResultDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+    contentType: Type.String({ minLength: 1, maxLength: 128 }),
+    sizeBytes: Type.Integer({ minimum: 0 }),
+    model: Type.String({ minLength: 1, maxLength: 200 }),
+    width: Type.Optional(Type.Integer({ minimum: 1 })),
+    height: Type.Optional(Type.Integer({ minimum: 1 })),
+  },
+  { $id: 'wire.result.providers-images', additionalProperties: false },
+);
+export type ProvidersImagesResultDto = Static<typeof ProvidersImagesResultDtoSchema>;
+
 /**
  * Speech synthesis request (`wire.request.providers-speech`, ADR-0063): text in,
  * nothing binary in the request. `voice` and `format` are provider-facing knobs
@@ -4347,6 +4395,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.imports.fullbackup.warning': FullBackupWarningDtoSchema,
   'wire.card.export.format': WireCardExportFormat,
   'wire.providers-speech.format': WireSpeechFormat,
+  'wire.providers-images.size': WireImageSize,
+  'wire.request.providers-images': ProvidersImagesRequestDtoSchema,
+  'wire.result.providers-images': ProvidersImagesResultDtoSchema,
   'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,
   'wire.result.characters.export.card': CharacterCardExportResultDtoSchema,
   'wire.request.characters.card.get': CharacterCardGetRequestDtoSchema,

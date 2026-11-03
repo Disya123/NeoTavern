@@ -116,6 +116,7 @@ import type {
   ChatsExportResultDto,
   ProviderTranscribeResultDto,
   ProvidersSpeechResultDto,
+  ProvidersImagesResultDto,
 } from '@neotavern/contracts';
 import type {
   BackendCallOptions,
@@ -407,6 +408,8 @@ export class RemoteBackend implements NeoBackend {
       }),
     speech: (req, opts) =>
       this.sdk.call<ProvidersSpeechResultDto>('providers.speech', req, { signal: opts?.signal }),
+    images: (req, opts) =>
+      this.sdk.call<ProvidersImagesResultDto>('providers.images', req, { signal: opts?.signal }),
   };
 
   readonly plugins: PluginsApi = {

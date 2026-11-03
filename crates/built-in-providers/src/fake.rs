@@ -23,9 +23,9 @@ use std::sync::Arc;
 use provider_sdk::policy::Deadline;
 use provider_sdk::policy::Usage;
 use provider_sdk::{
-    Availability, CancelToken, EmitStatus, ProviderAdapter, ProviderCapabilities, ProviderError,
-    ProviderErrorCode, ProviderEvent, ProviderModel, ProviderRequest, SpeechAudio, SpeechRequest,
-    Transcription, TranscriptionRequest,
+    Availability, CancelToken, EmitStatus, GeneratedImage, ImageRequest, ProviderAdapter,
+    ProviderCapabilities, ProviderError, ProviderErrorCode, ProviderEvent, ProviderModel,
+    ProviderRequest, SpeechAudio, SpeechRequest, Transcription, TranscriptionRequest,
 };
 use sha2::{Digest, Sha256};
 
@@ -358,6 +358,26 @@ impl ProviderAdapter for FakeProvider {
         Ok(Usage {
             steps: emitted_steps,
             output_chars,
+        })
+    }
+
+    /// Deterministic image generation: a valid 1x1 PNG, identical for every
+    /// prompt. The fake exists to exercise the staging path, and a real raster
+    /// encoder has no place in the test double.
+    fn generate_image(&self, _request: &ImageRequest<'_>) -> Result<GeneratedImage, ProviderError> {
+        /// 1x1 truecolour-with-alpha PNG (70 bytes), the canonical test image.
+        const PNG_1X1: &[u8] = &[
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0xda, 0x63, 0xfc, 0xcf, 0xc0, 0x50, 0x0f, 0x00, 0x04, 0x85, 0x01, 0x80, 0x84, 0xa9,
+            0x8c, 0x21, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+        ];
+        Ok(GeneratedImage {
+            bytes: PNG_1X1.to_vec(),
+            content_type: "image/png".to_string(),
+            width: Some(1),
+            height: Some(1),
         })
     }
 

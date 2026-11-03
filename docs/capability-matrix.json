@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-11-03T23:32:40.235Z",
+  "generatedAt": "2026-11-03T23:38:42.551Z",
   "rows": [
     {
       "hosts": {
@@ -411,8 +411,8 @@
       "id": "providers.media",
       "milestone": "M7",
       "notes": "",
-      "title": "Media operations over staged assets (transcription, speech)",
-      "wireOps": ["providers.speech", "providers.transcribe"]
+      "title": "Media operations over staged assets (transcription, speech, images)",
+      "wireOps": ["providers.images", "providers.speech", "providers.transcribe"]
     },
     {
       "hosts": {

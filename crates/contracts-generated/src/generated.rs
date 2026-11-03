@@ -90,6 +90,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "secrets.exposure" => Some(1024),
         "providers.models" => Some(2048),
         "providers.test" => Some(8192),
+        "providers.images" => Some(8192),
         "providers.speech" => Some(8192),
         "providers.transcribe" => Some(2048),
         "backups.create" => Some(1024),
@@ -251,6 +252,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "secrets.exposure" => Some(1024),
         "providers.models" => Some(262144),
         "providers.test" => Some(262144),
+        "providers.images" => Some(8192),
         "providers.speech" => Some(8192),
         "providers.transcribe" => Some(262144),
         "backups.create" => Some(262144),
@@ -9241,6 +9243,253 @@ pub fn validate_providers_speech_format(value: &Value) -> Result<(), Vec<Issue>>
 
 pub fn decode_providers_speech_format(bytes: &[u8]) -> Result<ProvidersSpeechFormat, WireError> {
     crate::decode::<ProvidersSpeechFormat>(validate_providers_speech_format, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ProvidersImagesSize {
+    #[serde(rename = "256x256")] N256x256,
+    #[serde(rename = "512x512")] N512x512,
+    #[serde(rename = "1024x1024")] N1024x1024,
+    #[serde(rename = "1536x1024")] N1536x1024,
+    #[serde(rename = "1024x1536")] N1024x1536,
+}
+
+pub(crate) fn check_providers_images_size(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "256x256" | "512x512" | "1024x1024" | "1536x1024" | "1024x1536") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_providers_images_size(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_providers_images_size(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_providers_images_size(bytes: &[u8]) -> Result<ProvidersImagesSize, WireError> {
+    crate::decode::<ProvidersImagesSize>(validate_providers_images_size, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestProvidersImages {
+    #[serde(rename = "providerId")]
+    pub provider_id: String,
+    pub prompt: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<ProvidersImagesSize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+}
+
+pub(crate) fn check_request_providers_images(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("providerId").is_none() {
+            issues.push(Issue::new(join_path(path, "providerId"), "RequiredProperty"));
+        }
+        if value.get("prompt").is_none() {
+            issues.push(Issue::new(join_path(path, "prompt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("providerId") {
+            let child_path = join_path(path, "providerId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("prompt") {
+            let child_path = join_path(path, "prompt");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 4000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("size") {
+            let child_path = join_path(path, "size");
+            check_providers_images_size(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("model") {
+            let child_path = join_path(path, "model");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "providerId" | "prompt" | "size" | "model") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_providers_images(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_providers_images(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_providers_images(bytes: &[u8]) -> Result<RequestProvidersImages, WireError> {
+    crate::decode::<RequestProvidersImages>(validate_request_providers_images, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultProvidersImages {
+    #[serde(rename = "assetId")]
+    pub asset_id: String,
+    #[serde(rename = "contentType")]
+    pub content_type: String,
+    #[serde(rename = "sizeBytes")]
+    pub size_bytes: i64,
+    pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<i64>,
+}
+
+pub(crate) fn check_result_providers_images(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("assetId").is_none() {
+            issues.push(Issue::new(join_path(path, "assetId"), "RequiredProperty"));
+        }
+        if value.get("contentType").is_none() {
+            issues.push(Issue::new(join_path(path, "contentType"), "RequiredProperty"));
+        }
+        if value.get("sizeBytes").is_none() {
+            issues.push(Issue::new(join_path(path, "sizeBytes"), "RequiredProperty"));
+        }
+        if value.get("model").is_none() {
+            issues.push(Issue::new(join_path(path, "model"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("assetId") {
+            let child_path = join_path(path, "assetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("contentType") {
+            let child_path = join_path(path, "contentType");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("sizeBytes") {
+            let child_path = join_path(path, "sizeBytes");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("model") {
+            let child_path = join_path(path, "model");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("width") {
+            let child_path = join_path(path, "width");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("height") {
+            let child_path = join_path(path, "height");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "assetId" | "contentType" | "sizeBytes" | "model" | "width" | "height") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_providers_images(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_providers_images(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_providers_images(bytes: &[u8]) -> Result<ResultProvidersImages, WireError> {
+    crate::decode::<ResultProvidersImages>(validate_result_providers_images, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -200,6 +200,8 @@ import type {
   ProviderTranscribeRequestDto,
   ProvidersSpeechRequestDto,
   ProvidersSpeechResultDto,
+  ProvidersImagesRequestDto,
+  ProvidersImagesResultDto,
   ProviderTranscribeResultDto,
 } from '@neotavern/contracts';
 
@@ -973,6 +975,14 @@ export interface ProvidersApi {
     req: ProvidersSpeechRequestDto,
     opts?: BackendCallOptions,
   ): Promise<ProvidersSpeechResultDto>;
+  /**
+   * Generates one image (wire `providers.images`, ADR-0063): prompt in, the
+   * produced image staged as a `generated-image` asset id out.
+   */
+  images(
+    req: ProvidersImagesRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ProvidersImagesResultDto>;
 }
 
 /**

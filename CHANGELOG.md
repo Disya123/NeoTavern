@@ -24,6 +24,23 @@
 
 ### Added
 
+- **`providers.images` — the media family is complete (round 54/99,
+  ADR-0063).** Prompt in, `generated-image` asset id out: `{ assetId,
+  contentType, sizeBytes, model, width?, height? }`, one image per call (the
+  legacy `n` parameter is not carried — a batch needs partial-failure semantics
+  the wire does not have). The kernel resolves the addressed config, refuses an
+  empty body (`IMAGE_EMPTY_BODY`) and anything over 16 MiB (`IMAGE_TOO_LARGE`),
+  then publishes through `assets.publish_bytes` so identical images dedupe. The
+  generator now prefixes enum variants that start with a digit (`256x256` →
+  `N256x256`) while `#[serde(rename)]` keeps the wire spelling — the image-size
+  union is the first schema that needed it. Facade: `backend.providers.images`;
+  legacy plane answers `UnsupportedError`. Registry: 154 ops; `providers.media`
+  now lists all three ops (Implemented, not Packaged). Verified: `provider_media`
+  10/10, contracts + neobackend 233/233, clippy `-D warnings`, round gate and
+  docs:check green.
+
+### Added
+
 - **`providers.speech` — synthesis stages a `generated-audio` asset (round
   53/99, ADR-0063).** Text in, asset id out: `providerId` + `text` (+ optional
   voice/format/model) answered with `{ assetId, contentType, sizeBytes, model,
