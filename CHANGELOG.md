@@ -1063,6 +1063,22 @@
 
 ### Fixed
 
+- **First green accessibility gate run (round 37/40).** The kernel-plane axe
+  suite `e2e/a11y-shell.spec.ts` scans the chat workspace and all five nav
+  panels (Characters/Personas/Lorebooks/Backgrounds/Settings) at WCAG 2.2 AA
+  and passes (5/5 Playwright shards). The scans caught real defects, fixed
+  here: the `text-muted` design tokens failed AA on surface-tertiary and the
+  70% glass blend (light `#706861` → `#675f58`, dark `#998f87` → `#a39a91`;
+  the numeric contract lives in `packages/ui/test/tokens-contrast.test.ts` —
+  muted/secondary ≥ 4.5:1 on every surface, both themes), and the character
+  toolbar collapsed its buttons to 12px width in the rail panel — now floored
+  at the WCAG 2.2 24px target-size minimum. The axe scans run on the
+  high-contrast user profile: axe-core cannot resolve the color-mix/backdrop
+  stacks of the default glass panels and fabricates blended contrast pairs,
+  so the normal-profile contrast is guarded by the numeric token test instead.
+  The diagnostic output of the axe helper now prints per-node fg/bg/ratio and
+  target-size measurements.
+
 - **Playwright E2E suite goes green for the first time (round 35/40).** The
   kernel-mode suite (`apps/web` dist + `neotavern-headless` over Product
   Wire) passes 4/4 shards: remote HostConnect, generation preset and

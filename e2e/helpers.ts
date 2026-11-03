@@ -75,7 +75,19 @@ export async function expectNoA11yViolations(page: Page, scope?: string): Promis
   expect(
     results.violations,
     results.violations
-      .map((violation) => `${violation.id}: ${violation.nodes.length} node(s)`)
+      .map((violation) => {
+        const targets = violation.nodes
+          .slice(0, 6)
+          .map((node) => {
+            const detail =
+              node.any[0]?.data !== undefined
+                ? JSON.stringify({ ...node.any[0].data, ...node.all[0]?.data })
+                : 'no-data';
+            return `    ${node.target.join(' ')} :: ${node.html.slice(0, 100)} :: ${detail}`;
+          })
+          .join('\n');
+        return `${violation.id} (${violation.help}): ${violation.nodes.length} node(s)\n${targets}`;
+      })
       .join('\n'),
   ).toEqual([]);
 }

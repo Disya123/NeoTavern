@@ -110,7 +110,9 @@
   }
 
   .primaryActions :global(.st-button) {
-    min-width: 0;
+    /* WCAG 2.2 AA target-size floor: the rail toolbar collapses, but a
+       target must never shrink below 24px wide (axe caught 12px buttons). */
+    min-width: 24px;
   }
 
   .cardToolbar .sortControl {
