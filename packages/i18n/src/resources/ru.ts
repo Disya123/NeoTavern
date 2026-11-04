@@ -1432,6 +1432,7 @@ export const ru: Resources = {
     processStateRunning: 'Работает',
     processStateBackoff: 'Перезапуск',
     processStateFailed: 'Отказ',
+    openShell: 'Открыть интерфейс',
     shellExit: 'Выйти из интерфейса плагина',
     shellTitle: 'Интерфейс плагина',
     eyebrow: 'Локальные расширения',

@@ -24,6 +24,18 @@
 
 ### Added
 
+- **A plugin can take over the window, and only with a grant (round 110/99, ADR-0066 D4 closed).**
+  The last unwired piece was the trigger: `shellMode.replace` had no caller, so the
+  surface container could never activate. `shellLaunch` decides through
+  `resolveUiSurface` — the plugin must declare `runtime.ui: 'shell'` **and** hold
+  `ui.shell.replace` as recorded by the kernel — and the Plugins page shows an "open
+  interface" button only when both hold. `launchShell` returns false instead of throwing,
+  so a wrong transition can never leave the user in a frame they cannot leave; the
+  host-drawn exit control remains the way back. Verified: shellLaunch 4/4 (grant, missing
+  grant, wrong surface, missing manifest), tsc and ESLint clean.
+
+### Added
+
 - **Consent now comes before the bytes (round 109/99, ADR-0066 P5b closed).**
   Installing a package was a single call that read the manifest and wrote files at once,
   so a dialog could not stand in front of it. The host gained

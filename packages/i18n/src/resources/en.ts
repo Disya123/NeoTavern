@@ -1404,6 +1404,7 @@ export const en = {
     processStateRunning: 'Running',
     processStateBackoff: 'Restarting',
     processStateFailed: 'Failed',
+    openShell: 'Open interface',
     shellExit: 'Exit plugin UI',
     shellTitle: 'Plugin interface',
     eyebrow: 'Local extensions',

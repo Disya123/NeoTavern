@@ -28,6 +28,7 @@ import { PluginAuthDialog, extractAuthClients } from '../components/PluginAuthDi
 import { usePluginRegistrations } from '../plugins/runtime.js';
 import { PluginConsentDialog } from '../plugins/PluginConsentDialog.js';
 import { hasBundleHost } from '../plugins/bundleClient.js';
+import { canReplaceShell, launchShell } from '../plugins/shellLaunch.js';
 import {
   choosePluginPackage,
   commitPluginPackage,
@@ -489,6 +490,25 @@ export function PluginsPage() {
                             >
                               {t('plugins:openPage')}
                             </SystemSurfaceLink>
+                          </Button>
+                        ) : null}
+                        {canReplaceShell({
+                          id: plugin.id,
+                          manifest: plugin.manifest,
+                          grantedPermissions: plugin.grantedPermissions,
+                        }) ? (
+                          <Button
+                            size="sm"
+                            disabled={busy}
+                            onClick={() =>
+                              launchShell({
+                                id: plugin.id,
+                                manifest: plugin.manifest,
+                                grantedPermissions: plugin.grantedPermissions,
+                              })
+                            }
+                          >
+                            {t('plugins:openShell')}
                           </Button>
                         ) : null}
                         {extractAuthClients(plugin.manifest).length > 0 ? (
