@@ -17,6 +17,7 @@
  */
 import { kernel } from '@neotavern/plugin-sdk';
 import { UnsupportedError } from '@neotavern/neobackend';
+import { backend } from '../../api/backend.js';
 import { hostSurfaceFetch } from '../../api/hostSurfaces.js';
 import type { KernelHostContext } from './types.js';
 
@@ -70,32 +71,56 @@ function mapRestError(status: number, body: unknown): KernelError {
 }
 
 /**
- * One job-queue host call. The queue is the trusted host's in-process
- * scheduler (see `plugins.jobs.host-queue` in hostSurfaces.ts), so on the
- * kernel plane the sandbox gets a stable CAPABILITY_UNAVAILABLE instead of a
- * request to a route the plane does not serve.
+ * Plugin job queue on the kernel plane (ADR-0064). The queue is kernel state
+ * (`plugins.jobs.*`), not a host HTTP surface: enqueue/cancel/list go through the
+ * facade, and the two host-only verbs the wire deliberately does not expose —
+ * ack and retry — refuse honestly instead of pretending.
  */
-async function jobsRest(
-  ctx: KernelHostContext,
-  path: string,
-  init?: { method: string; body?: string },
-): Promise<Record<string, unknown>> {
-  let response: Response;
+function failUnsupported(surface: string): never {
+  throw new KernelError(KernelErrorCode.PROTOCOL_UNSUPPORTED, { details: { surface } });
+}
+
+const MAX_JOB_PAYLOAD_BYTES = 65_536;
+
+function encodePayload(payload: unknown): string | undefined {
+  if (payload === undefined) return undefined;
+  let encoded: string;
   try {
-    // The registry route owns the `/jobs` segment, so the per-call suffix is
-    // the sub-path the handler built (`/jobs/list` -> `/list`).
-    response = await hostSurfaceFetch(
-      'plugins.jobs.host-queue',
-      ctx.pluginId,
-      path.replace(/^\/jobs/u, ''),
-      init,
-    );
-  } catch (error) {
-    throw mapHostSurfaceError(error);
+    encoded = JSON.stringify(payload);
+  } catch {
+    throw failParams('payload-not-serializable');
   }
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw mapRestError(response.status, body);
-  return isPlainRecord(body) ? body : {};
+  if (encoded.length > MAX_JOB_PAYLOAD_BYTES) throw failParams('payload-too-large');
+  return encoded;
+}
+
+/** Map a facade rejection onto the sandbox error vocabulary. */
+function mapFacadeError(error: unknown): unknown {
+  if (error instanceof KernelError) return error;
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code: unknown }).code)
+      : '';
+  if (code.includes('NOT_FOUND')) return new KernelError(KernelErrorCode.NOT_FOUND);
+  if (code.includes('CAPABILITY') || code === 'PROTOCOL_UNSUPPORTED') {
+    return new KernelError(KernelErrorCode.PROTOCOL_UNSUPPORTED, { details: { code } });
+  }
+  if (code.includes('VALIDATION') || code.includes('CONFLICT') || code === 'JOB_TERMINAL') {
+    return new KernelError(KernelErrorCode.VALIDATION_FAILED, { details: { code } });
+  }
+  if (code.includes('QUEUE_LIMIT')) {
+    return new KernelError(KernelErrorCode.VALIDATION_FAILED, { details: { code } });
+  }
+  return new KernelError(KernelErrorCode.INTERNAL, { details: { code } });
+}
+
+/** Best-effort decode of an opaque job payload for the sandbox view. */
+function safeParsePayload(payloadJson: string): unknown {
+  try {
+    return JSON.parse(payloadJson) as unknown;
+  } catch {
+    return payloadJson;
+  }
 }
 
 /** A fail-closed host surface becomes the sandbox's CAPABILITY_UNAVAILABLE. */
@@ -325,49 +350,42 @@ export function attachJobs(ctx: KernelHostContext): void {
       (params['intervalMs'] === undefined ? 0 : 1) +
       (params['cron'] === undefined ? 0 : 1);
     if (modeCount > 1) throw failParams('schedule-exclusive');
-    const record = await jobsRest(ctx, '/jobs', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: params['name'],
-        ...(typeof params['runAt'] === 'number' ? { runAt: params['runAt'] } : {}),
-        ...(typeof params['intervalMs'] === 'number' ? { intervalMs: params['intervalMs'] } : {}),
-        ...(typeof params['cron'] === 'string' ? { cron: params['cron'] } : {}),
-        ...(params['payload'] === undefined ? {} : { payload: params['payload'] }),
-        ...(typeof params['retries'] === 'number' ? { retries: params['retries'] } : {}),
-        ...(typeof params['retryDelayMs'] === 'number'
-          ? { retryDelayMs: params['retryDelayMs'] }
-          : {}),
-      }),
-    });
-    return { jobId: record['jobId'] };
+    // Recurring schedules have no wire representation: the kernel queue holds one
+    // due time per job, and a plugin that needs a cadence enqueues the next job
+    // from its handler.
+    if (params['intervalMs'] !== undefined || params['cron'] !== undefined) {
+      failUnsupported('jobs.recurring');
+    }
+    const runAt =
+      typeof params['runAt'] === 'number' ? new Date(params['runAt']).toISOString() : undefined;
+    const retries = typeof params['retries'] === 'number' ? params['retries'] : 0;
+    const maxAttempts = Math.min(10, Math.max(1, retries + 1));
+    try {
+      const { job } = await backend.plugins.jobsEnqueue({
+        pluginId: ctx.pluginId,
+        kind: params['name'].slice(0, 32),
+        ...(encodePayload(params['payload']) === undefined
+          ? {}
+          : { payloadJson: encodePayload(params['payload']) as string }),
+        ...(runAt === undefined ? {} : { runAt }),
+        maxAttempts,
+      });
+      return { jobId: job.id };
+    } catch (error) {
+      throw mapFacadeError(error);
+    }
   });
 
-  session.handle('jobs.ack', async (request) => {
+  session.handle('jobs.ack', async () => {
     requireCapability(ctx, 'jobs.background');
-    const params = request.params;
-    if (!isPlainRecord(params) || typeof params['jobId'] !== 'string') {
-      throw failParams('jobId-required');
-    }
-    if (typeof params['ok'] !== 'boolean') throw failParams('ok-required');
-    const outcome = await jobsRest(ctx, `/jobs/${encodeURIComponent(params['jobId'])}/ack`, {
-      method: 'POST',
-      body: JSON.stringify({
-        ok: params['ok'],
-        ...(typeof params['error'] === 'string' ? { error: params['error'] } : {}),
-      }),
-    });
-    return { acknowledged: outcome['acknowledged'] === true };
+    // Completion is the executor's report, never a client's claim: exposing it
+    // would let a sandbox mark work done without running it.
+    failUnsupported('jobs.ack');
   });
 
-  session.handle('jobs.retry', async (request) => {
+  session.handle('jobs.retry', async () => {
     requireCapability(ctx, 'jobs.background');
-    const params = request.params;
-    if (!isPlainRecord(params) || typeof params['jobId'] !== 'string') {
-      throw failParams('jobId-required');
-    }
-    return jobsRest(ctx, `/jobs/${encodeURIComponent(params['jobId'])}/retry`, {
-      method: 'POST',
-    });
+    failUnsupported('jobs.retry');
   });
 
   session.handle('jobs.cancel', async (request) => {
@@ -376,13 +394,32 @@ export function attachJobs(ctx: KernelHostContext): void {
     if (!isPlainRecord(params) || typeof params['jobId'] !== 'string') {
       throw failParams('jobId-required');
     }
-    await jobsRest(ctx, `/jobs/${encodeURIComponent(params['jobId'])}/cancel`, { method: 'POST' });
-    return {};
+    try {
+      await backend.plugins.jobsCancel({ pluginId: ctx.pluginId, jobId: params['jobId'] });
+      return {};
+    } catch (error) {
+      throw mapFacadeError(error);
+    }
   });
 
   session.handle('jobs.list', async () => {
     requireCapability(ctx, 'jobs.background');
-    return jobsRest(ctx, '/jobs');
+    try {
+      const page = await backend.plugins.jobsList({ pluginId: ctx.pluginId });
+      return {
+        jobs: page.items.map((job) => ({
+          jobId: job.id,
+          name: job.kind,
+          state: job.state,
+          runAt: job.runAt,
+          attempts: job.attempts,
+          maxAttempts: job.maxAttempts,
+          payload: safeParsePayload(job.payloadJson),
+        })),
+      };
+    } catch (error) {
+      throw mapFacadeError(error);
+    }
   });
 
   // Due-job relay: SSE app event -> live sandbox `jobs.run` RPC.

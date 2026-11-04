@@ -77,7 +77,6 @@ describe('host surface registry', () => {
         'plugins.auth.revoke',
         'plugins.auth.sandbox-session',
         'plugins.auth.fetch-proxy',
-        'plugins.jobs.host-queue',
       ]),
     );
   });
@@ -111,10 +110,6 @@ describe('host surfaces fail closed on the kernel plane', () => {
           method: 'POST',
           body: '{}',
         }),
-    ],
-    [
-      'plugins.jobs.host-queue',
-      () => hostSurfaceFetch('plugins.jobs.host-queue', 'author.p', '/list', { method: 'POST' }),
     ],
   ];
 
@@ -164,13 +159,6 @@ describe('host surfaces keep the legacy routes on the legacy plane', () => {
 });
 
 describe('sandbox host adapter keeps the declared routes on the legacy plane', () => {
-  it('jobs calls resolve under /api/v2/plugins/:id/jobs', async () => {
-    await hostSurfaceFetch('plugins.jobs.host-queue', 'author.p', '/list', { method: 'POST' });
-    const [url, init] = fetchMock.mock.calls[0] as [string, { method?: string }];
-    expect(url).toBe('/api/v2/plugins/author.p/jobs/list');
-    expect(init.method).toBe('POST');
-  });
-
   it('sandbox auth metadata resolves under /api/v2/plugins/:id/auth', async () => {
     await hostSurfaceFetch('plugins.auth.sandbox-session', 'author.p', '/connections');
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/v2/plugins/author.p/auth/connections');
@@ -190,7 +178,7 @@ describe('sandbox host adapter keeps the declared routes on the legacy plane', (
     expect(init.body).toBe('{"url":"https://example.test"}');
 
     fetchMock.mockClear();
-    await hostSurfaceFetch('plugins.jobs.host-queue', 'author.p', '/list', { method: 'POST' });
+    await hostSurfaceFetch('plugins.auth.fetch-proxy', 'author.p', '', { method: 'POST' });
     const [, plain] = fetchMock.mock.calls[0] as [string, { headers?: unknown }];
     expect(plain.headers).toBeUndefined();
   });

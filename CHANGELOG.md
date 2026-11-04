@@ -22,6 +22,21 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Changed
+
+- **Plugin jobs run on the kernel queue, not a host HTTP surface (round 68/99).**
+  `apps/web/src/plugins/kernel/jobs.ts` lost the last `plugins.jobs.host-queue`
+  lookups: `jobs.schedule` enqueues through `plugins.jobsEnqueue` (kind = name,
+  opaque payload bounded to 64 KiB, `runAt` as RFC3339, attempts from `retries`),
+  `jobs.cancel`/`jobs.list` read the durable queue, and the two host-only verbs the
+  wire deliberately does not expose — `jobs.ack` and `jobs.retry` — now fail with
+  `PROTOCOL_UNSUPPORTED` instead of pretending a route exists. Recurring schedules
+  (`intervalMs`/`cron`) have no wire representation and refuse honestly; a plugin
+  that needs a cadence enqueues its next job from the handler. The
+  `plugins.jobs.host-queue` boundary row is deleted from `hostSurfaces.ts`, so the
+  host adapter now covers only install/auth surfaces. Verified: jobs 11/11,
+  hostSurfaces 19/19, web 841/841, tsc/ESLint clean.
+
 ### Removed
 
 - **`LegacyBackend` and `legacyRaw()` are deleted from the tree (round 64/99).**

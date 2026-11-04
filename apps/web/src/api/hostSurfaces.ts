@@ -50,8 +50,7 @@ export interface HostSurface {
     | 'plugins.auth.connect'
     | 'plugins.auth.revoke'
     | 'plugins.auth.sandbox-session'
-    | 'plugins.auth.fetch-proxy'
-    | 'plugins.jobs.host-queue';
+    | 'plugins.auth.fetch-proxy';
   /** Legacy route template (the sidecar side of the boundary). */
   readonly route: string;
   readonly method: 'GET' | 'POST' | 'DELETE';
@@ -166,19 +165,6 @@ export const HOST_SURFACES: readonly HostSurface[] = [
       'The executor owns authenticated fetch (token injection in the trusted host); the sandbox RPC calls it ' +
       'directly instead of an HTTP proxy.',
   },
-  {
-    id: 'plugins.jobs.host-queue',
-    route: '/plugins/:id/jobs',
-    method: 'POST',
-    kernelMode: 'unsupported',
-    why:
-      'The job scheduler is the in-process legacy host queue (`pluginJobs`): timers, retries, DLQ and the ' +
-      'worker that turns a due job into a sandbox RPC all live in the trusted host, not in product state. The ' +
-      'kernel deliberately is not a job runner (ADR-0038 / ТЗ 14.1), so scheduling is a host capability.',
-    removal:
-      'The kernel-mode plugin executor owns scheduling and delivers `jobs.run` to the sandbox; the UI stops ' +
-      'calling the HTTP routes.',
-  },
 ] as const;
 
 /** Look up a surface by id (throws on an unknown id — that is a code bug). */
@@ -206,7 +192,7 @@ function assertLegacyPlane(id: HostSurface['id']): void {
  * dead route by accident — the caller maps it to `CAPABILITY_UNAVAILABLE`.
  */
 export async function hostSurfaceFetch(
-  id: 'plugins.auth.sandbox-session' | 'plugins.auth.fetch-proxy' | 'plugins.jobs.host-queue',
+  id: 'plugins.auth.sandbox-session' | 'plugins.auth.fetch-proxy',
   pluginId: string,
   suffix: string,
   init?: { method?: string; body?: string },

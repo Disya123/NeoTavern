@@ -61,6 +61,11 @@ function buildClosedNode(root: string, path: string, cache: Map<string, unknown>
     // defined on the function".
     getOwnPropertyDescriptor(target, prop) {
       if (prop === 'then' || prop === CLOSED_NODE || typeof prop === 'symbol') return undefined;
+      // Function-internal properties are non-configurable on the target; answering
+      // them from the trap violates a proxy invariant (and object spread hits them).
+      if (prop === 'prototype' || prop === 'caller' || prop === 'arguments') {
+        return Reflect.getOwnPropertyDescriptor(target, prop);
+      }
       const t = target as unknown as Record<string | symbol, unknown>;
       if (!(prop in t)) {
         const next = path.length === 0 ? String(prop) : `${path}.${prop}`;
