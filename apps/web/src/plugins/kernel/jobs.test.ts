@@ -239,7 +239,13 @@ describe('kernel jobs', () => {
     attachJobs(fake.ctx);
     const listener = fake.dueListeners[0]?.listener;
     if (!listener) throw new Error('no due listener registered');
-    listener({ pluginId: 'test.jobs', jobId: 'j1', name: 'tick', payload: { a: 1 } });
+    listener({
+      pluginId: 'test.jobs',
+      jobId: 'j1',
+      kind: 'tick',
+      payloadJson: '{"a":1}',
+      attempts: 1,
+    });
     await vi.waitFor(() =>
       expect(fake.session.call).toHaveBeenCalledWith('jobs.run', {
         jobId: 'j1',
@@ -249,7 +255,7 @@ describe('kernel jobs', () => {
     );
 
     // Other plugins' due events are not forwarded.
-    listener({ pluginId: 'other.plugin', jobId: 'j2', name: 'tick' });
+    listener({ pluginId: 'other.plugin', jobId: 'j2', kind: 'tick', attempts: 1 });
     await Promise.resolve();
     expect(fake.session.call).toHaveBeenCalledTimes(1);
   });

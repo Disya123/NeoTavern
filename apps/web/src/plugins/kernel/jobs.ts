@@ -94,6 +94,32 @@ function encodePayload(payload: unknown): string | undefined {
   return encoded;
 }
 
+/**
+ * Reports a sandbox job outcome to the desktop host (ADR-0065). Outside the Tauri
+ * shell there is no timer and therefore no claim to report: the kernel queue is
+ * drained by the desktop host only, so this is a no-op on the web plane.
+ */
+async function reportHostJob(
+  jobId: string,
+  attempts: number,
+  ok: boolean,
+  error?: string,
+): Promise<void> {
+  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('plugin_job_report', {
+      jobId,
+      attempts,
+      ok,
+      ...(error === undefined ? {} : { error }),
+    });
+  } catch {
+    // The lease expiry is the safety net: a failed report costs one retry, not
+    // a lost job.
+  }
+}
+
 /** Map a facade rejection onto the sandbox error vocabulary. */
 function mapFacadeError(error: unknown): unknown {
   if (error instanceof KernelError) return error;
@@ -422,19 +448,31 @@ export function attachJobs(ctx: KernelHostContext): void {
     }
   });
 
-  // Due-job relay: SSE app event -> live sandbox `jobs.run` RPC.
+  // Due-job relay (ADR-0065): the desktop timer claims a job in the kernel and
+  // emits `plugin.job.due`; the sandbox runs it and the host reports the outcome.
+  // A missing report is safe — the kernel lease expires and the scheduler retries.
   const unsubscribeDue = ctx.runtime.onAppEvent(JOB_DUE_EVENT, (payload) => {
     if (!isPlainRecord(payload) || payload['pluginId'] !== ctx.pluginId) return;
-    if (!ctx.hasCapability('jobs.background')) return;
+    const jobId = typeof payload['jobId'] === 'string' ? payload['jobId'] : '';
+    const attempts = typeof payload['attempts'] === 'number' ? payload['attempts'] : 0;
+    if (!jobId || attempts < 1) return;
+    if (!ctx.hasCapability('jobs.background')) {
+      void reportHostJob(jobId, attempts, false, 'CAPABILITY_DENIED');
+      return;
+    }
+    const kind = typeof payload['kind'] === 'string' ? payload['kind'] : '';
     void session
       .call('jobs.run', {
-        jobId: payload['jobId'],
-        name: payload['name'],
-        ...(payload['payload'] === undefined ? {} : { payload: payload['payload'] }),
+        jobId,
+        name: kind,
+        ...(typeof payload['payloadJson'] === 'string'
+          ? { payload: safeParsePayload(payload['payloadJson']) }
+          : {}),
       })
-      .catch(() => {
-        // Sandbox without a jobs.run handler (or mid-reload) simply misses
-        // the dispatch; the persisted record already advanced server-side.
+      .then(() => reportHostJob(jobId, attempts, true))
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'PLUGIN_JOB_FAILED';
+        void reportHostJob(jobId, attempts, false, message.slice(0, 500));
       });
   });
   session.scope.track({ dispose: unsubscribeDue });

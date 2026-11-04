@@ -209,6 +209,45 @@ impl KernelHost {
         Arc::clone(&self.kernel)
     }
 
+    /// Claims one due plugin job for the desktop timer (ADR-0065).
+    ///
+    /// The kernel owns the queue; the host only asks what is due and reports the
+    /// outcome. A claim taken here must be reported (`report_plugin_job`) or it
+    /// expires back into the queue.
+    pub fn claim_plugin_job(
+        &self,
+        lease_ms: i64,
+    ) -> Result<Option<runtime_kernel::plugin_jobs::ClaimedJob>, runtime_kernel::KernelError> {
+        let kernel = self.kernel.lock().map_err(|_| {
+            runtime_kernel::KernelError::with_params(
+                runtime_kernel::KernelErrorCode::Internal,
+                "kernel mutex poisoned",
+                Vec::new(),
+            )
+        })?;
+        kernel.claim_plugin_job(lease_ms)
+    }
+
+    /// Reports a claimed plugin job's outcome (ADR-0065). Completion is the
+    /// executor's report, never a client claim, which is why this is a host
+    /// method and not a wire operation.
+    pub fn report_plugin_job(
+        &self,
+        job_id: &str,
+        attempts: u32,
+        ok: bool,
+        error: Option<String>,
+    ) -> Result<(), runtime_kernel::KernelError> {
+        let kernel = self.kernel.lock().map_err(|_| {
+            runtime_kernel::KernelError::with_params(
+                runtime_kernel::KernelErrorCode::Internal,
+                "kernel mutex poisoned",
+                Vec::new(),
+            )
+        })?;
+        kernel.report_plugin_job(job_id, attempts, ok, error)
+    }
+
     /// Executes one unary wire operation: decode envelope → protocol check →
     /// kernel dispatch → validated response envelope.
     ///

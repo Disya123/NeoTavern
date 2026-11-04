@@ -24,6 +24,20 @@
 
 ### Added
 
+- **The desktop host dispatches plugin jobs (round 72/99, ADR-0065).**
+  `NEOTA_PLUGIN_JOBS=1` starts a one-second timer that claims one due job through
+  `KernelHost::claim_plugin_job` and emits `plugin.job.due`
+  (`{jobId, pluginId, kind, payloadJson, attempts}`) to the webview; the webview's
+  plugin runtime registers that event on the same delivery path as kernel app
+  events, `jobs.ts` runs it in the sandbox and reports the outcome through the
+  host-only `plugin_job_report` command. A sandbox error becomes a bounded
+  `lastError`; a missing report costs one lease and a retry. The timer is off by
+  default. Verified: jobs 11/11 (relay carries the new payload and the report),
+  tauri-local tests green, web 841/841, tsc and ESLint clean. Not yet proven in a
+  packaged webview: the smoke still covers enqueue/list/cancel only.
+
+### Added
+
 - **Kernel handle can claim and report plugin jobs (round 71/99, ADR-0065).**
   Two internal (never wire) commands, `ClaimPluginJob` and `ReportPluginJob`,
   plus `Kernel::claim_plugin_job` / `Kernel::report_plugin_job`. The desktop timer

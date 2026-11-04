@@ -10,7 +10,7 @@ use neotavern_tauri_local::{
 #[cfg(desktop)]
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 #[cfg(desktop)]
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 #[cfg(desktop)]
 use tauri_plugin_updater::UpdaterExt;
 #[cfg(desktop)]
@@ -159,6 +159,69 @@ fn resolve_data_dir(app: &tauri::App) -> Result<(PathBuf, bool), Box<dyn std::er
     Ok((data_dir, portable))
 }
 
+/// Lease handed to a plugin job claimed by the desktop timer (ADR-0065). Long
+/// enough for a sandbox round trip, short enough that a crashed webview returns
+/// the job to the queue on the next pass.
+#[cfg(desktop)]
+const PLUGIN_JOB_LEASE_MS: i64 = 30_000;
+
+/// Reports a sandbox job outcome back to the kernel (ADR-0065).
+///
+/// Host-only on purpose: exposing completion over the wire would let a client
+/// mark work done without running it, so the queue's claim/complete verbs stay
+/// inside the host boundary. A stale `attempts` is refused by the kernel.
+#[cfg(desktop)]
+#[tauri::command]
+fn plugin_job_report(
+    app: AppHandle,
+    job_id: String,
+    attempts: u32,
+    ok: bool,
+    error: Option<String>,
+) -> Result<(), String> {
+    let host = app.state::<KernelHost>();
+    host.report_plugin_job(&job_id, attempts, ok, error)
+        .map_err(|error| error.to_string())
+}
+
+/// Starts the plugin job timer when the host opts in (`NEOTA_PLUGIN_JOBS`).
+///
+/// The kernel owns time and state; this loop only asks what is due and hands the
+/// invocation to the webview, which runs the sandbox and calls
+/// [`plugin_job_report`]. A job whose report never arrives stays leased until the
+/// lease expires, exactly like a crashed synchronous handler.
+#[cfg(desktop)]
+fn spawn_plugin_job_timer(app: AppHandle) {
+    if !std::env::var("NEOTA_PLUGIN_JOBS")
+        .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(1_000));
+        let host = app.state::<KernelHost>();
+        match host.claim_plugin_job(PLUGIN_JOB_LEASE_MS) {
+            Ok(Some(job)) => {
+                let payload = serde_json::json!({
+                    "jobId": job.id,
+                    "pluginId": job.plugin_id,
+                    "kind": job.kind,
+                    "payloadJson": job.payload_json,
+                    "attempts": job.attempts,
+                });
+                if let Err(error) = app.emit("plugin.job.due", payload) {
+                    eprintln!("plugin job timer: emit failed: {error}");
+                }
+            }
+            Ok(None) => {}
+            // A storage failure must not kill the timer: the next tick retries,
+            // and the queue is the durable record either way.
+            Err(error) => eprintln!("plugin job timer: {error}"),
+        }
+    });
+}
+
 #[cfg(desktop)]
 fn setup_local_kernel_mode(
     app: &mut tauri::App,
@@ -203,6 +266,8 @@ fn setup_local_kernel_mode(
     })?;
 
     app.manage(host);
+    #[cfg(desktop)]
+    spawn_plugin_job_timer(app.handle().clone());
 
     // Phase 9 Remote Access host service (РўР— В§10): the service wraps the
     // remote-http adapter lifecycle; its config persists next to the app
@@ -2446,6 +2511,7 @@ pub fn run() {
                 // Truthful backend probe for the DiagnosticsPanel: since round
                 // 60a the answer is always "kernel".
                 desktop_backend_mode,
+                plugin_job_report,
                 commands::kernel_dispatch,
                 commands::kernel_stream_start,
                 commands::kernel_stream_abort,

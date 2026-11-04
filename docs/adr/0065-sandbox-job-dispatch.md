@@ -51,6 +51,15 @@ crash-safety the sync handler had, expressed as a timeout instead of a panic.
 
 ## Implementation note (round 70)
 
+Round 72 wired the three parties: `spawn_plugin_job_timer` claims through
+`KernelHost::claim_plugin_job` when `NEOTA_PLUGIN_JOBS` is truthy, emits
+`plugin.job.due` to the webview, and the host-only `plugin_job_report` command
+applies the sandbox's answer. The web side registers the Tauri event in the
+plugin runtime (same delivery path as kernel app events) and `jobs.ts` reports
+success or the bounded error message. The packaged dispatch loop is not yet
+proven inside a webview — the smoke covers enqueue/list/cancel only — so that
+stays the open item.
+
 Round 71 added the handle path the timer will use: internal `ClaimPluginJob` /
 `ReportPluginJob` commands and `Kernel::claim_plugin_job` / `report_plugin_job`,
 so a host never borrows the writer's database. Round 70 landed the seam itself:

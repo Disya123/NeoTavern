@@ -2055,7 +2055,35 @@ export class FrontendPluginRuntime {
    * plugin relay drains (cluster 18). Both feed the same `deliverAppEvent`, so
    * a sandbox cannot tell which plane it runs on.
    */
+
+  /**
+   * Host-local event bridge (ADR-0065): the desktop job timer emits
+   * `plugin.job.due` through Tauri rather than the wire, because claiming and
+   * completing a job are host operations. The event enters the same delivery
+   * path as kernel app events, so a sandbox cannot tell the difference — and the
+   * outcome goes back through the host-only `plugin_job_report` command.
+   */
+  private hostEventsReady = false;
+
+  private syncHostEvents(): void {
+    if (this.hostEventsReady) return;
+    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+    this.hostEventsReady = true;
+    void (async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        await listen<unknown>('plugin.job.due', (event) => {
+          this.deliverAppEvent('plugin.job.due', event.payload);
+        });
+      } catch {
+        // A host without the event bridge simply has no timer (web plane).
+        this.hostEventsReady = false;
+      }
+    })();
+  }
+
   private syncEventStream(): void {
+    this.syncHostEvents();
     if (isKernelMode()) {
       if (this.frames.size > 0 && !this.appEventPolling) {
         this.appEventPolling = startAppEventPolling({
