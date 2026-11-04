@@ -1137,3 +1137,58 @@
     box-shadow: var(--st-shadow-focus);
   }
 }
+
+/* Phones: no permanent rail. A single button opens the rail as a full-screen menu, and
+   the same toggle inside it closes it again — the destinations stay one tap away without
+   costing a column of width on every screen. */
+.mobileMenuButton {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .mobileMenuButton {
+    position: fixed;
+    z-index: calc(var(--st-layer-modal) + 1);
+    inset-block-start: 12px;
+    inset-inline-start: 12px;
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-secondary);
+    color: var(--st-color-text-primary);
+  }
+
+  .sidebar:has(.rail[data-state='expanded']) .mobileMenuButton {
+    display: none;
+  }
+
+  .rail {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    padding: max(var(--st-space-lg), var(--nt-inset-top)) var(--st-space-lg)
+      max(var(--st-space-lg), var(--nt-inset-bottom));
+    transform: translateX(-100%);
+    transition: transform var(--st-motion-duration-normal) var(--st-motion-easing-standard);
+    z-index: calc(var(--st-layer-modal) + 2);
+  }
+
+  .rail[data-state='expanded'] {
+    transform: none;
+  }
+
+  .railMain,
+  .railBottom {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rail[data-state='expanded'] .railItem {
+    width: 100%;
+  }
+}

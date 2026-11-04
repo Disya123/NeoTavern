@@ -125,9 +125,10 @@
   }
 
   @media (max-width: 600px) {
+    /* The rail is an overlay on phones, not a column: content uses the whole width. */
     .main,
     .mainShifted {
-      margin-inline-start: var(--shell-rail-current-width, var(--st-shell-rail-width));
+      margin-inline-start: 0;
     }
   }
 }
