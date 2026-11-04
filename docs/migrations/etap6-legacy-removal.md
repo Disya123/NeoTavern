@@ -80,6 +80,25 @@ kernel-owned database`, exit 0). The MSI branch still fails with `os error 32`
 (a file held by the previous build), which is why the portable zip is the
 official artifact — unchanged from earlier rounds.
 
+## Open product gap found while closing g9
+
+Installing a plugin **from a package file** is not possible on the kernel plane:
+
+- `apps/web/src/api/hostSurfaces.ts` routes `installPlugin(file)` to
+  `plugins.install.host-verify`, which is `unsupported` everywhere, and the route
+  it names (`/api/v2/plugins/install`) was deleted with the Fastify contour;
+- the wire `plugins.install` takes manifest _metadata_ (`id`, `name`, `version`,
+  `permissions`, `trustState`), not package bytes, so it cannot stand in;
+- `crates/adapters/package-verify` can verify a signed ZIP (path safety, limits,
+  publisher/local keys, Ed25519) but has **no call site anywhere in the tree**.
+
+So the honest state is: plugins that are already installed keep working, and the
+kernel can register a plugin by descriptor, but a user cannot double-click a
+`.zip` and install it. Closing this needs a contract decision (stage the package as
+an asset and verify in the kernel, or verify in the host and install by
+descriptor) plus signature keys, which the build does not have — the same gap that
+keeps `security.plugin-package-trust` at `Implemented` rather than `Packaged`.
+
 ## Migration notes for users of the removed contour
 
 1. **Nothing to migrate by hand for product data.** The kernel opens
