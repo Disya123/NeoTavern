@@ -1601,7 +1601,7 @@ describe('legacy data migration', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
       code: 'BAD_REQUEST',
-      params: { reason: 'SILLYTAVERN_DATA_ROOT_NOT_FOUND' },
+      params: { reason: 'FULLBACKUP_DATA_ROOT_NOT_FOUND' },
     });
   });
 });

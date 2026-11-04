@@ -113,7 +113,6 @@ import type {
   CharacterVersionsResultDto,
   CharacterCardImportResultDto,
   FullBackupAnalyzeResultDto,
-  FullBackupExecuteRequestDto,
   FullBackupExecuteResultDto,
   ChatsExportResultDto,
   ProviderTranscribeResultDto,

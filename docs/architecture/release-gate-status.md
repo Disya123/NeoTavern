@@ -68,3 +68,33 @@ Until then nothing in this list is "done", and the sidecar stays the default.
 Deleting `fastify`/`drizzle`/`api/v2` is the last step of the same gate: it
 can only happen when the legacy plane is provably unnecessary, which is exactly
 what G6–G8 measure.
+
+## Pre-deletion full run (round 58b)
+
+The gates were run end to end before stage 6, not spot-checked:
+
+| Gate                                                    | Result                                                                                                                         |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `cargo clippy --workspace --all-targets -- -D warnings` | clean                                                                                                                          |
+| `cargo fmt --check` (hand-written crates)               | clean — `contracts-generated` is generated output and is excluded by design; formatting it would be undone by the next codegen |
+| `tsc -b tsconfig.build.json` + web/ui/i18n typecheck    | clean                                                                                                                          |
+| `eslint . --max-warnings=0`                             | clean, after removing three genuinely unused imports/vars surfaced by the run                                                  |
+| root `vitest run`                                       | **1925/1925**                                                                                                                  |
+| `apps/web` vitest                                       | **872/872**                                                                                                                    |
+| contracts + neobackend                                  | **233/233**                                                                                                                    |
+| Playwright E2E (6 shards, includes the a11y axe scan)   | **6/6 shards**                                                                                                                 |
+| Playwright visual                                       | **3/3**                                                                                                                        |
+| packaged portable smoke                                 | exit 0 (SHA-256 `841ac496…4eca`)                                                                                               |
+
+Two long-standing reds were resolved rather than waived:
+
+- the legacy server asserted the pre-rename reason string
+  `SILLYTAVERN_DATA_ROOT_NOT_FOUND`; the test now matches the product code the
+  handler actually emits;
+- `apps/plugin-runtime` used `@endo/harden` without declaring it (it was only a
+  transitive `.pnpm` entry), so the SES corpus test failed with a missing module.
+  The dependency is now a declared devDependency and the corpus is **7/7**.
+
+Known environment caveat, unchanged: `tauri build` compiles the executable but
+fails the MSI bundling step with `os error 32` (a locked file) on this machine; the
+official artifact is the portable build, and that is what the smoke walks.

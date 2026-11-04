@@ -98,7 +98,6 @@ import {
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
   type FullBackupAnalyzeResultDto,
-  type FullBackupExecuteRequestDto,
   type FullBackupExecuteResultDto,
   type SearchResultDto,
   type ChatsExportResultDto,

@@ -10,7 +10,6 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Run: `pnpm test:visual` (or `playwright test -c playwright.visual.config.ts`).
  */
-const root = import.meta.dirname;
 const shardOffset = Number.parseInt(process.env['E2E_PORT_OFFSET'] ?? '0', 10) || 0;
 const webPort = 4174 + shardOffset * 2;
 const headlessPort = 18080 + shardOffset * 2;
