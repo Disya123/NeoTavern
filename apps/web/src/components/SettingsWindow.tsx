@@ -35,6 +35,12 @@ export function SettingsWindow({ onClose }: SettingsWindowProps) {
       }}
     >
       <div className={styles.window}>
+        {/* The dialog's close control lives in this band, so the band is reserved here
+            instead of moving the control: settings content starts below it and can never
+            collide with the X. */}
+        <header className={styles.windowHeader}>
+          <h2>{sections.find((entry) => entry.value === section)?.label}</h2>
+        </header>
         <nav className={styles.sectionNav} aria-label={t('settings:title')}>
           {sections.map((entry) => {
             const EntryIcon = entry.icon;
