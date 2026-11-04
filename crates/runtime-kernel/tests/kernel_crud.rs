@@ -708,11 +708,43 @@ fn chats_and_messages_crud_round_trip() {
     assert_eq!(m2.role, MessageRole::Tool);
     assert_eq!(m2.generation_run_id.as_deref(), Some(run_id));
 
+    // Idempotent append (rev4 outbox): the same key in the same chat answers the
+    // ORIGINAL message and does not consume a new sequence.
+    let keyed = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({
+            "chatId": chat_id,
+            "role": "user",
+            "content": "tick",
+            "idempotencyKey": "outbox-key-1",
+        }),
+    )
+    .expect("keyed message");
+    let retried = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({
+            "chatId": chat_id,
+            "role": "user",
+            "content": "tick (retry)",
+            "idempotencyKey": "outbox-key-1",
+        }),
+    )
+    .expect("retried message");
+    assert_eq!(retried.id, keyed.id, "a retry must not append a duplicate");
+    assert_eq!(retried.sequence, keyed.sequence);
+    assert_eq!(
+        keyed.sequence, 3,
+        "the keyed append takes the next sequence"
+    );
+    assert_eq!(retried.content, "tick", "the original content wins");
+
     // chat messageCount now reflects the three appended messages
     let chat_after =
         dispatch_decoded::<ChatDto>(&kernel, "chats.get", json!({ "chatId": chat_id }))
             .expect("chats.get after append");
-    assert_eq!(chat_after.message_count, 3);
+    assert_eq!(chat_after.message_count, 4);
 
     // missing chat → CHAT_NOT_FOUND
     let err = dispatch_json(
@@ -800,7 +832,8 @@ fn chats_and_messages_crud_round_trip() {
         json!({ "chatId": chat_id }),
     )
     .expect("messages.list after delete");
-    assert_eq!(remaining.items.len(), 2);
+    // Four appends (m0, m1, m2 and the idempotent keyed one) minus the deleted m2.
+    assert_eq!(remaining.items.len(), 3);
     assert!(remaining.items.iter().all(|m| m.id != m2.id));
 
     // delete again → MESSAGE_NOT_FOUND

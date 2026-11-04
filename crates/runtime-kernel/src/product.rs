@@ -1897,14 +1897,38 @@ pub fn messages_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     if !chat_exists(db.conn(), &chat_id)? {
         return Err(not_found("CHAT", &chat_id));
     }
+    // Outbox retry (rev4): the same key in the same chat answers the original
+    // message. The unique index `(chat_id, idempotency_key)` is the authority;
+    // the kernel is a single writer, so this pre-check cannot race with itself.
+    if let Some(key) = req.idempotency_key.as_deref() {
+        let existing: Option<String> = db
+            .conn()
+            .query_row(
+                "SELECT id FROM messages WHERE chat_id = ?1 AND idempotency_key = ?2",
+                params![&chat_id, key],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| sqlite(e, "messages_create: idempotency lookup"))?;
+        if let Some(existing) = existing {
+            let dto = query_message(db.conn(), &chat_id, &existing)?.ok_or_else(|| {
+                KernelError::new(
+                    KernelErrorCode::Internal,
+                    "messages_create: idempotent hit but select back found no row",
+                )
+            })?;
+            validate(&dto, generated::validate_message_dto)?;
+            return encode(&dto);
+        }
+    }
     let id = new_id();
     let now = now();
     let role = role_sql(&req.role);
     let sequence = db.transaction(|tx| {
         let sequence = next_message_sequence(tx, &chat_id)?;
         tx.execute(
-            "INSERT INTO messages (id, chat_id, role, content, sequence, generation_run_id, meta_json, created_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO messages (id, chat_id, role, content, sequence, generation_run_id, meta_json, idempotency_key, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 &id,
                 &chat_id,
@@ -1913,6 +1937,7 @@ pub fn messages_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
                 sequence,
                 &req.generation_run_id,
                 "{}",
+                &req.idempotency_key,
                 &now
             ],
         )

@@ -22,6 +22,22 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Added
+
+- **Idempotent message append on the wire (round 61/99, schema v34).**
+  `chats.messages.create` accepts an optional `idempotencyKey` (1–128 chars): a
+  second create with the same key in the same chat returns the ORIGINAL message,
+  content included, instead of appending a duplicate. The guarantee is stored, not
+  inferred — migration v34 adds `messages.idempotency_key` and a partial unique
+  index `(chat_id, idempotency_key) WHERE idempotency_key IS NOT NULL`, so legacy
+  rows (NULL) stay out of the index. This is the precondition for porting the
+  plugin outbox off `legacyRaw()`: the bridge forwards plugin keys today and the
+  retry semantics would otherwise be lost. Second gap recorded, not solved: the
+  wire role union has no `plugin` member, so the bridge must map that role
+  explicitly. Verified: `kernel_crud` 25/25 (keyed append returns the original id
+  and sequence, messageCount accounts for it), storage migrations green,
+  contracts + neobackend 233/233, codegen `--check`.
+
 ### Changed
 
 - **Migration guide reflects the deleted contour (round 60c-2/99).**

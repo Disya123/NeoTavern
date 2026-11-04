@@ -1387,6 +1387,27 @@ pub const MIGRATION_33_SQL: &str = migration_33_sql!();
 pub const MIGRATION_33_CHECKSUM: &str =
     "5d9a17769a76bcb92bb1bb568595bc1afae41478ab54155d9ac72fb30d34fd95";
 
+/// Literal body of the message idempotency (v34) migration: one nullable column
+/// plus a partial unique index, so a plugin retry carrying the same
+/// `idempotencyKey` addresses the original row instead of appending a duplicate,
+/// while every legacy row (NULL) stays out of the index entirely.
+macro_rules! migration_34_sql {
+    () => {
+        r#"ALTER TABLE messages ADD COLUMN idempotency_key TEXT;
+CREATE UNIQUE INDEX idx_messages_idempotency ON messages(chat_id, idempotency_key) WHERE idempotency_key IS NOT NULL;"#
+    };
+}
+
+/// Name of the message idempotency (v34) schema migration.
+pub const MIGRATION_34_NAME: &str = "034_message_idempotency";
+
+/// Exact SQL of the message idempotency schema migration (v34).
+pub const MIGRATION_34_SQL: &str = migration_34_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_34_SQL` string bytes.
+pub const MIGRATION_34_CHECKSUM: &str =
+    "ecf99b75328be8a1ff2da82857c9f81e198750416ffe1a4cbed7eef0e6cbda38";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1459,7 +1480,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_32_sql!(),
     "\n",
-    migration_33_sql!()
+    migration_33_sql!(),
+    "\n",
+    migration_34_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

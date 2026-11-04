@@ -1613,6 +1613,12 @@ export const CreateMessageRequestDtoSchema = Type.Object(
     role: WireMessageRole,
     content: Type.String({ minLength: 0, maxLength: 1000000 }),
     generationRunId: Type.Optional(Type.String({ format: 'uuid' })),
+    /**
+     * Retry key (rev4 outbox): a second create with the same key in the same chat
+     * answers the ORIGINAL message instead of appending a duplicate. Optional —
+     * absent means "always append", which is what UI sends.
+     */
+    idempotencyKey: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
   },
   { $id: 'wire.request.create-message', additionalProperties: false },
 );

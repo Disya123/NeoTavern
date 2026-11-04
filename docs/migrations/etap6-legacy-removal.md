@@ -60,7 +60,13 @@ requires a decision, not a rewrite:
 - alternative: accept the loss explicitly and delete the outbox expectation —
   a behaviour regression, so it needs an owner decision rather than a silent drop.
 
-That is why 60c-3 is scoped as a contract slice, not a mechanical handler port.
+**Resolved in round 61 (schema v34):** `chats.messages.create` now accepts an
+optional `idempotencyKey` (1–128 chars); the kernel answers the ORIGINAL message
+for a repeated key in the same chat, and a partial unique index
+`(chat_id, idempotency_key)` is the authority. A second gap surfaced with it: the
+wire `message.role` union is `system|user|assistant|tool`, so the legacy
+`plugin` role has no wire spelling — the bridge will have to map it explicitly
+(e.g. to `assistant` with plugin metadata) when 60c-3 lands.
 
 ## Migration notes for users of the removed contour
 
