@@ -1453,6 +1453,9 @@ export const ru: Resources = {
     install: 'Установить пакет плагина',
     installing: 'Проверяем пакет…',
     fileTooLarge: 'Выберите пакет плагина размером меньше 25 МБ.',
+    installPackageTitle: 'Установка из пакета',
+    installPackageHint:
+      'Выбери папку с manifest.json — каждый объявленный файл проверяется по контрольной сумме до установки.',
     installFromGitTitle: 'Установка из репозитория',
     installFromGitHint:
       'Вставьте ссылку на GitHub или GitLab — архив скачается по HTTPS, пройдёт проверку, а npm-зависимости установятся автоматически.',

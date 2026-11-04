@@ -92,6 +92,37 @@
     background: color-mix(in srgb, var(--st-color-warning) 8%, var(--st-color-surface-secondary));
   }
 
+  .packageInstall {
+    width: min(calc(100% - 2 * var(--st-space-2xl)), 1180px);
+    margin: var(--st-space-lg) auto 0;
+    padding: var(--st-space-md) var(--st-space-lg);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-secondary);
+  }
+
+  .packageInstallHeading {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-md);
+  }
+
+  .packageInstallHeading > svg {
+    flex: none;
+    color: var(--st-color-accent-soft-text);
+    font-size: var(--st-font-size-xl);
+  }
+
+  .packageInstallHeading p {
+    margin-top: var(--st-space-xs);
+    color: var(--st-color-text-secondary);
+  }
+
+  .packageInstallAction {
+    margin-inline-start: auto;
+    flex: none;
+  }
+
   .gitInstall {
     width: min(calc(100% - 2 * var(--st-space-2xl)), 1180px);
     margin: var(--st-space-lg) auto 0;

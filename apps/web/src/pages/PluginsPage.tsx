@@ -198,6 +198,31 @@ export function PluginsPage({ embedded = false }: PluginsPageProps = {}) {
     remove.isPending ||
     exitSafeMode.isPending;
 
+  const installControl = (
+    <>
+      {hasBundleHost() ? (
+        <Button variant="primary" disabled={busy} onClick={() => void choosePackageFolder()}>
+          <DownloadSimple aria-hidden="true" />
+          {t('plugins:install')}
+        </Button>
+      ) : (
+        <Button asChild variant="primary">
+          <label>
+            <DownloadSimple aria-hidden="true" />
+            {install.isPending ? t('plugins:installing') : t('plugins:install')}
+            <input
+              className={styles.fileInput}
+              type="file"
+              accept=".json,application/json"
+              disabled={busy}
+              onChange={(event) => void choosePackage(event)}
+            />
+          </label>
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <ErrorBoundary name="plugins">
       <div
@@ -205,35 +230,27 @@ export function PluginsPage({ embedded = false }: PluginsPageProps = {}) {
         data-component="plugin-manager"
         data-embedded={embedded ? 'true' : undefined}
       >
-        <header className={embedded ? styles.headerEmbedded : styles.header}>
-          {embedded ? null : (
+        {embedded ? (
+          <section className={styles.packageInstall} data-part="install-package">
+            <div className={styles.packageInstallHeading}>
+              <Package weight="duotone" aria-hidden="true" />
+              <div>
+                <strong>{t('plugins:installPackageTitle')}</strong>
+                <p>{t('plugins:installPackageHint')}</p>
+              </div>
+              <div className={styles.packageInstallAction}>{installControl}</div>
+            </div>
+          </section>
+        ) : (
+          <header className={styles.header}>
             <div>
               <span>{t('plugins:eyebrow')}</span>
               <h1>{t('plugins:title')}</h1>
               <p>{t('plugins:subtitle')}</p>
             </div>
-          )}
-          {hasBundleHost() ? (
-            <Button variant="primary" disabled={busy} onClick={() => void choosePackageFolder()}>
-              <DownloadSimple aria-hidden="true" />
-              {t('plugins:install')}
-            </Button>
-          ) : (
-            <Button asChild variant="primary">
-              <label>
-                <DownloadSimple aria-hidden="true" />
-                {install.isPending ? t('plugins:installing') : t('plugins:install')}
-                <input
-                  className={styles.fileInput}
-                  type="file"
-                  accept=".json,application/json"
-                  disabled={busy}
-                  onChange={(event) => void choosePackage(event)}
-                />
-              </label>
-            </Button>
-          )}
-        </header>
+            {installControl}
+          </header>
+        )}
 
         <section className={styles.security}>
           <LockKey weight="duotone" aria-hidden="true" />

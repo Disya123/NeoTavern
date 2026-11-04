@@ -1425,6 +1425,9 @@ export const en = {
     install: 'Install plugin package',
     installing: 'Checking package…',
     fileTooLarge: 'Choose a plugin package smaller than 25 MB.',
+    installPackageTitle: 'Install from package',
+    installPackageHint:
+      'Choose a folder with manifest.json — every declared file is verified against its checksum before anything is installed.',
     installFromGitTitle: 'Install from repository',
     installFromGitHint:
       'Paste a GitHub or GitLab link — the archive is downloaded over HTTPS, checked, and its npm dependencies are installed automatically.',
