@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "app.neotavern.v2",
   "build": {
-    "beforeBuildCommand": "pnpm --dir ../.. desktop:prepare",
-    "beforeDevCommand": "pnpm --dir ../.. desktop:prepare",
+    "beforeBuildCommand": "pnpm --dir ../.. run build",
+    "beforeDevCommand": "pnpm --dir ../.. run dev:web",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../../web/dist"
   },
