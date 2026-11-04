@@ -23,11 +23,13 @@ import {
   List,
   MagicWand,
   PaperPlaneRight,
+  SidebarSimple,
   StopCircle,
   X,
 } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { Button, IconButton } from '@neotavern/ui';
+import { useUiStore } from '../state/ui.js';
 import { SlotHost } from '../plugins/slots.js';
 import styles from './ChatWorkspace.module.css';
 
@@ -95,6 +97,7 @@ export function ChatComposer({
   onStop,
 }: ChatComposerProps) {
   const { t } = useTranslation();
+  const setNavigationRailExpanded = useUiStore((state) => state.setNavigationRailExpanded);
   const showStop = isGenerating && onStop !== undefined;
   type ContextPanelPhase = 'hidden' | 'entering' | 'shown' | 'leaving';
   const [contextPhase, setContextPhase] = useState<ContextPanelPhase>(
@@ -230,6 +233,16 @@ export function ChatComposer({
         />
         <div className={styles.composerActions}>
           <div className={styles.composerUtilities}>
+            {/* The menu lives here on phones: the field is where the thumb already is. */}
+            <button
+              type="button"
+              className={styles.composerMenu}
+              onClick={() => setNavigationRailExpanded(true)}
+              aria-label={t('navigation:menu')}
+              title={t('navigation:menu')}
+            >
+              <SidebarSimple size={19} aria-hidden="true" />
+            </button>
             <button
               type="button"
               onClick={onOpenSettings}

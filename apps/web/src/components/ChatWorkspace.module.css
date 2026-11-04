@@ -544,28 +544,25 @@
   }
 }
 
-/* The header is a two-column grid; on phones it gains a third column for the menu so the
-   identity and the search keep their places instead of being pushed around. */
-.headerMenuButton {
+/* Phone-only navigation entry, inline in the composer's utility row. */
+.composerMenu {
   display: none;
 }
 
 @media (max-width: 600px) {
-  .chatHeader {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    min-height: calc(var(--st-control-height-large) + var(--nt-inset-top));
-    padding-block-start: var(--nt-inset-top);
-  }
-
-  .headerMenuButton {
+  .composerMenu {
     display: inline-flex;
-    width: 36px;
-    height: 36px;
     align-items: center;
     justify-content: center;
-    border: 0;
-    border-radius: var(--st-radius-control);
-    background: transparent;
-    color: var(--st-color-text-secondary);
+  }
+}
+
+@media (max-width: 600px) {
+  /* Phone header: one control row plus the safe-area inset. It used to reserve
+     max(2xl, inset-top) as well, which left a band of nothing between the identity and
+     the page title. */
+  .chatHeader {
+    min-height: calc(var(--st-control-height-large) + var(--nt-inset-top));
+    padding-block-start: var(--nt-inset-top);
   }
 }
