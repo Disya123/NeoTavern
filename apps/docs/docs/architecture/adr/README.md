@@ -778,3 +778,17 @@ implemented slots, `navigation.secondary`/`panel.right` are not in v1;
 content geometry is a documented exception; breakpoints and the literal ban
 are checked by a style-contract test. Full decision, alternatives and
 consequences: [ADR-0011](0011-shell-layout-v1.md).
+
+## ADR-0066: Plugin application platform (hybrid execution, server-owned lifecycle)
+
+**Status:** accepted (design).
+**Decision:** plugins are applications, not integrations — the SDK stays generic
+and never grows scenario APIs. Hybrid execution (JS realm, WASM worker, one OS
+process per native plugin), execution affinity declared in the manifest, host-owned
+lifecycle, isolated UI with `ui.shell.replace`, capability consent for native/GPU/
+mic/camera, and four destructive acceptance tests (kill, hang, UI crash, denied
+capability).
+**Why:** the descriptor-only install cannot carry code, ONNX, agents or a replaced
+UI, and an iframe in the main React tree cannot isolate or host them.
+
+[ADR-0066](0066-plugin-application-platform.md).

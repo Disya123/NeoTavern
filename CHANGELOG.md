@@ -24,6 +24,19 @@
 
 ### Added
 
+- **Plugin platform design (round 81/99, ADR-0066).** The plugin system is scoped as
+  an application platform, not a bag of integrations: hybrid execution (sandboxed
+  JS realm, WASM in its own worker process, one OS process per native plugin),
+  execution affinity declared in the manifest and never inferred by the client,
+  server-owned lifecycle, isolated UI contexts including `ui.shell.replace`, a
+  supervisor with budgets and bounded restarts, native package layout with
+  checksums, and four destructive acceptance tests (kill a native plugin, hang an
+  agent, crash the plugin UI, attempt an ungranted capability). Nothing is claimed
+  as implemented: the ADR records the design and the phase order, and
+  `security.plugin-package-trust` stays `Implemented` until P2 + P5 land.
+
+### Added
+
 - **Desktop WebView E2E over CDP (round 80/99).** `pnpm desktop:e2e`
   (`scripts/desktop-webview-e2e.mjs`) launches the packaged shell in a temp copy,
   opens a WebView2 DevTools endpoint through

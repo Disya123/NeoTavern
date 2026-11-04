@@ -308,9 +308,14 @@
       "sha256": "1c884ebd27a290f9abb25519de66c72538bf01d64c747fe83454da14ba2f92c0"
     },
     {
+      "source": "adr/0066-plugin-application-platform.md",
+      "target": "adr/0066-plugin-application-platform.md",
+      "sha256": "eadc303e25ac379961c24f68d366f6e1ae231c24d9a7cfdefce84cf351822fc7"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "4d7b109e6b414b55257812e7d922e6a277bb9bcb538ecc029929acfad4ab037a"
+      "sha256": "d46438902dc99f5f80645d3ec5714ddd4906fc60587c02b629a81cc8f0ea3c25"
     },
     {
       "source": "android/README.md",
