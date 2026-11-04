@@ -85,7 +85,7 @@ export async function createBundleUrl(
   path: string,
 ): Promise<string> {
   const bytes = await readBundleFile(pluginId, version, path);
-  return URL.createObjectURL(new Blob([bytes], { type: 'text/javascript' }));
+  return URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: 'text/javascript' }));
 }
 
 /** What a manifest says the frame should import, if it says anything. */

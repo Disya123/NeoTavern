@@ -118,7 +118,7 @@ beforeEach(() => {
   fakeJobs.enqueue.mockResolvedValue({ job: { id: 'j1' } });
   fakeJobs.cancel.mockResolvedValue({ job: { id: 'j1' } });
   fakeJobs.list.mockResolvedValue({
-    items: [
+    jobs: [
       {
         id: 'j1',
         pluginId: 'test.jobs',
@@ -217,7 +217,8 @@ describe('kernel jobs', () => {
     const fake = fakeContext(new Set(['jobs.background']));
     attachJobs(fake.ctx);
     await invoke(fake.handlers, 'jobs.cancel', { jobId: 'j1' });
-    expect(fakeJobs.cancel).toHaveBeenCalledWith({ pluginId: 'test.jobs', jobId: 'j1' });
+    // The wire DTO carries the job id only; ownership is the kernel's job, not the client's.
+    expect(fakeJobs.cancel).toHaveBeenCalledWith({ jobId: 'j1' });
     const listed = (await invoke(fake.handlers, 'jobs.list', {})) as {
       jobs: Array<{ jobId: string; name: string; payload: unknown }>;
     };

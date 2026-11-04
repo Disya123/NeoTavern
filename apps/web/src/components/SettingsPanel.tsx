@@ -49,7 +49,7 @@ import { LorebookPanel } from './LorebookPanel.js';
 import { PersonasPanel } from './PersonasPanel.js';
 import { BackgroundsPanel } from './BackgroundsPanel.js';
 import { PluginsPage } from '../pages/PluginsPage.js';
-import { ApiBackedAiSettingsPanel } from './ApiBackedAiSettingsPanel.js';
+import { AiSettingsPanel } from './ai-settings/AiSettingsPanel.js';
 import { ActivationStatusPanel } from './ActivationStatusPanel.js';
 import { DiagnosticsPanel } from './DiagnosticsPanel.js';
 import { FloatingTabContent } from './FloatingTabContent.js';
@@ -71,7 +71,16 @@ export interface SettingsPanelProps {
 
 /** Settings menu: tabbed General / Themes / Data panel (role="tablist"). */
 type SettingsSectionId =
-  'general' | 'themes' | 'data' | 'profiles' | 'secrets' | 'tools' | 'remote';
+  | 'general'
+  | 'ai'
+  | 'plugins'
+  | 'library'
+  | 'themes'
+  | 'data'
+  | 'profiles'
+  | 'secrets'
+  | 'tools'
+  | 'remote';
 
 interface SectionEntry {
   value: SettingsSectionId;
@@ -126,7 +135,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       icon: Globe,
       content: (
         <FloatingTabContent>
-          <ApiBackedAiSettingsPanel onClose={() => undefined} />
+          <AiSettingsPanel onClose={() => undefined} />
         </FloatingTabContent>
       ),
     },

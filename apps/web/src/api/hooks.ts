@@ -106,7 +106,6 @@ import {
   disablePlugin,
   deletePlugin,
   installPlugin,
-  installPluginDirectory,
   installPluginFromGit,
   enterPluginSafeMode,
   exitPluginSafeMode,
@@ -128,6 +127,8 @@ import {
 import { UnsupportedError } from '@neotavern/neobackend';
 import { ProductError } from '@neotavern/client-sdk';
 import { backend, isKernelMode } from './backend.js';
+import { installPluginDirectory } from './hostSurfaces.js';
+import { hasBundleHost } from '../plugins/bundleClient.js';
 export * from './providerHooks.js';
 export type { ContinueCharacterChatInput, ContinueCharacterChatResult } from './wireBridge.js';
 

@@ -421,7 +421,7 @@ export function attachJobs(ctx: KernelHostContext): void {
       throw failParams('jobId-required');
     }
     try {
-      await backend.plugins.jobsCancel({ pluginId: ctx.pluginId, jobId: params['jobId'] });
+      await backend.plugins.jobsCancel({ jobId: params['jobId'] });
       return {};
     } catch (error) {
       throw mapFacadeError(error);
@@ -433,7 +433,7 @@ export function attachJobs(ctx: KernelHostContext): void {
     try {
       const page = await backend.plugins.jobsList({ pluginId: ctx.pluginId });
       return {
-        jobs: page.items.map((job) => ({
+        jobs: page.jobs.map((job) => ({
           jobId: job.id,
           name: job.kind,
           state: job.state,

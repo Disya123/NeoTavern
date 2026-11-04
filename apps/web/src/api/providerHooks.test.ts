@@ -43,7 +43,7 @@ vi.mock('./backend.js', async (importOriginal) => {
     >;
     const materialize = (t: Record<string | symbol, unknown>, p: string | symbol) => {
       if (!(p in t)) {
-        const next = path.length === 0 ? String(p) : `${path}.${p}`;
+        const next = path.length === 0 ? String(p) : `${path}.${String(p)}`;
         Object.defineProperty(t, p, {
           value: stubNode(next),
           configurable: true,

@@ -1,4 +1,5 @@
 /** Browser host for sandboxed frontend plugins and serializable UI registrations. */
+import { resolveEntryUrl } from './bundleClient.js';
 import { useMemo, useSyncExternalStore } from 'react';
 import type { i18n } from 'i18next';
 import type { InstalledPlugin } from '@neotavern/contracts';

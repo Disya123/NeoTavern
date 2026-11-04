@@ -58,10 +58,10 @@ describe('invalidateForAppEvent', () => {
     invalidateForAppEvent(queryClient, 'chat.message.created', { chatId: 'chat-7' });
     // The concrete keys are the transport's business; the contract is that the
     // message page, the chat detail and the chat list all get invalidated.
-    const keys = invalidateSpy.mock.calls.map((call) => JSON.stringify(call[0]));
-    expect(keys.some((key) => key.includes('chat-7'))).toBe(true);
-    expect(keys.some((key) => key.includes('messages'))).toBe(true);
-    expect(keys.some((key) => key.includes('"chats"'))).toBe(true);
+    const keys = invalidateSpy.mock.calls.map((call: unknown[]) => JSON.stringify(call[0]));
+    expect(keys.some((key: string) => key.includes('chat-7'))).toBe(true);
+    expect(keys.some((key: string) => key.includes('messages'))).toBe(true);
+    expect(keys.some((key: string) => key.includes('"chats"'))).toBe(true);
   });
 
   it('ignores an unknown event name', () => {

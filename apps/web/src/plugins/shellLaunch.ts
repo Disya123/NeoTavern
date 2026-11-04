@@ -6,7 +6,7 @@
  * cannot grant itself anything, so the second check is the one that matters — and it is
  * read from what the kernel recorded, not from what the plugin says about itself.
  */
-import { resolveUiSurface } from '@neotavern/plugin-sdk';
+import { resolveUiSurface, type PluginRuntimeDeclaration } from '@neotavern/plugin-sdk';
 import { shellMode } from './shellMode.js';
 
 export interface ShellCandidate {
@@ -19,7 +19,9 @@ export interface ShellCandidate {
 export function canReplaceShell(plugin: ShellCandidate): boolean {
   const runtime = plugin.manifest?.['runtime'];
   const surface = resolveUiSurface(
-    typeof runtime === 'object' && runtime !== null ? runtime : undefined,
+    typeof runtime === 'object' && runtime !== null
+      ? (runtime as PluginRuntimeDeclaration)
+      : undefined,
     plugin.grantedPermissions,
   );
   return surface.surface === 'shell';

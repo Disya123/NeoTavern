@@ -29,7 +29,8 @@ import {
 import { installPackage, readPackageManifest } from '../plugins/bundleClient.js';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { api, legacyUrl } from './client.js';
-import { isKernelMode } from './backend.js';
+import { backend, isKernelMode } from './backend.js';
+import { translatePlugin } from './wireBridge.js';
 
 /**
  * One host-owned capability the web contour needs but Product Wire does not
