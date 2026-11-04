@@ -6,6 +6,26 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { kernel } from '@neotavern/plugin-sdk';
+
+/**
+ * The chat handlers now speak to the backend facade (kernel plane), not REST; the
+ * draft handlers still stream into the server-side draft object, so the mock is
+ * partial: only `backend` is replaced, `legacyRaw` stays real.
+ */
+import type * as BackendModule from '../../api/backend.js';
+
+const { fakeChats } = vi.hoisted(() => ({
+  fakeChats: {
+    get: vi.fn(),
+    listMessages: vi.fn(),
+    createMessage: vi.fn(),
+  },
+}));
+
+vi.mock('../../api/backend.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof BackendModule>();
+  return { ...actual, backend: { ...actual.backend, chats: fakeChats } };
+});
 import type { RuntimeFrame } from '../runtime.js';
 import { attachChat } from './chat.js';
 import type { KernelHostContext } from './types.js';
@@ -85,6 +105,23 @@ let messageSequence: number;
 beforeEach(() => {
   calls = [];
   messageSequence = 0;
+  fakeChats.get.mockReset();
+  fakeChats.listMessages.mockReset();
+  fakeChats.createMessage.mockReset();
+  const notFound = (chatId: string) =>
+    new kernel.KernelError(kernel.KernelErrorCode.NOT_FOUND, { details: { chatId } });
+  fakeChats.get.mockImplementation(async (chatId: string) => {
+    if (chatId !== 'chat-1') throw notFound(chatId);
+    return { id: chatId, title: 'Test Chat' };
+  });
+  fakeChats.listMessages.mockImplementation(async (req: { chatId: string }) => {
+    if (req.chatId !== 'chat-1') throw notFound(req.chatId);
+    return { items: [{ id: 'msg-0', role: 'user', content: 'hi' }], hasMore: false };
+  });
+  fakeChats.createMessage.mockImplementation(async (req: { role: string; content: string }) => {
+    messageSequence += 1;
+    return { id: `msg-${messageSequence}`, role: 'assistant', content: req.content, meta: {} };
+  });
   fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
@@ -274,13 +311,15 @@ describe('chat.messages.append', () => {
     await expect(
       callHandler(session, 'chat.messages.append', { role: 'plugin', content: 'hello' }),
     ).resolves.toEqual({ messageId: 'msg-1' });
-    expect(calls).toEqual([
-      {
-        method: 'POST',
-        url: '/api/v2/chats/chat-1/messages',
-        body: { role: 'plugin', content: 'hello' },
-      },
-    ]);
+    // The wire role union has no `plugin`, so authorship rides in meta and the
+    // stored role is the closest legal one.
+    expect(fakeChats.createMessage).toHaveBeenCalledWith({
+      chatId: 'chat-1',
+      role: 'assistant',
+      content: 'hello',
+      meta: { authorKind: 'plugin' },
+    });
+    expect(calls).toEqual([]);
   });
 
   it('rejects non-plugin roles with VALIDATION_FAILED', async () => {
@@ -381,7 +420,7 @@ describe('draft streaming (server-side object)', () => {
     });
   });
 
-  it('append passes a plugin-provided idempotencyKey to the REST create', async () => {
+  it('append passes a plugin-provided idempotencyKey to the wire create', async () => {
     const { ctx, session } = makeContext({
       capabilities: ['chats.write.plugin'],
       chatId: 'chat-1',
@@ -392,10 +431,12 @@ describe('draft streaming (server-side object)', () => {
       content: 'retry me',
       idempotencyKey: 'outbox-1',
     });
-    expect(calls.at(-1)).toMatchObject({
-      method: 'POST',
-      url: '/api/v2/chats/chat-1/messages',
-      body: { role: 'plugin', content: 'retry me', idempotencyKey: 'outbox-1' },
+    expect(fakeChats.createMessage.mock.calls.at(-1)?.[0]).toEqual({
+      chatId: 'chat-1',
+      role: 'assistant',
+      content: 'retry me',
+      meta: { authorKind: 'plugin' },
+      idempotencyKey: 'outbox-1',
     });
   });
 });

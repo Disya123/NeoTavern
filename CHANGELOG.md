@@ -22,6 +22,18 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Changed
+
+- **The plugin chat bridge speaks Product Wire, not REST (round 63/99).**
+  `apps/web/src/plugins/kernel/chat.ts` lost its three `legacyRaw()` calls:
+  `chat.current` reads `chats.get`, `chat.messages.list` reads
+  `chats.listMessages`, and `chat.messages.append` writes through
+  `chats.createMessage` with `role: "assistant"` + `meta.authorKind = "plugin"`
+  and the plugin's `idempotencyKey` forwarded unchanged. A vanished chat is a
+  `KernelError(NOT_FOUND)` answered as `null`, matching the old 404 mapping. Draft
+  streaming already used the wire bridge and is untouched. Tests assert the facade
+  call shape instead of a recorded REST body (12/12); web suite green at 872/872.
+
 ### Added
 
 - **Message metadata passthrough on create (round 62/99).** `chats.messages.create`

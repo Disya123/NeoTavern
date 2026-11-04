@@ -15,8 +15,7 @@
  * half-written committed message; abort/session-teardown deletes the draft.
  */
 import { kernel } from '@neotavern/plugin-sdk';
-import type { CursorPage, Message } from '@neotavern/contracts';
-import { legacyRaw } from '../../api/backend.js';
+import { backend } from '../../api/backend.js';
 import { ApiError } from '../../api/client.js';
 import { commitMessageDraft, discardMessageDraft, saveMessageDraft } from '../../api/wireBridge.js';
 import type { KernelHostContext } from './types.js';
@@ -26,11 +25,6 @@ type KernelError = InstanceType<typeof KernelError>;
 
 /** 10Hz draft coalescing — host policy, not part of the plugin contract. */
 const FLUSH_INTERVAL_MS = 100;
-
-interface ChatMeta {
-  id: string;
-  title?: string;
-}
 
 interface DraftState {
   draftId: string;
@@ -91,11 +85,6 @@ function resolveChatId(
   return current;
 }
 
-function messagePath(chatId: string, messageId?: string): string {
-  const base = `/chats/${encodeURIComponent(chatId)}/messages`;
-  return messageId === undefined ? base : `${base}/${encodeURIComponent(messageId)}`;
-}
-
 export function attachChat(ctx: KernelHostContext): void {
   // ── chat.current ──────────────────────────────────────────────────────────
   ctx.session.handle('chat.current', async () => {
@@ -103,16 +92,10 @@ export function attachChat(ctx: KernelHostContext): void {
     const chatId = ctx.currentChatId();
     if (!chatId) return null;
     try {
-      const chat = await legacyRaw().request<ChatMeta>(
-        'GET',
-        `/chats/${encodeURIComponent(chatId)}`,
-      );
+      const chat = await backend.chats.get(chatId);
       return { chatId, title: chat.title };
     } catch (error) {
-      if (
-        error instanceof ApiError &&
-        (error.code === 'CHAT_NOT_FOUND' || error.code === 'NOT_FOUND')
-      ) {
+      if (error instanceof KernelError && error.code === KernelErrorCode.NOT_FOUND) {
         return null;
       }
       throw toKernelError(error);
@@ -132,22 +115,20 @@ export function attachChat(ctx: KernelHostContext): void {
       (ctx.hasCapability('chats.read.current') && !wantsOtherChat);
     if (!granted) throw deny('chat.messages.list');
     const chatId = resolveChatId(ctx, params, 'chat.messages.list');
-    const query = new URLSearchParams();
+    const req: Record<string, unknown> = { chatId };
     if (typeof params.cursor === 'string' && params.cursor.length > 0) {
-      query.set('cursor', params.cursor);
+      req.cursor = params.cursor;
     }
     if (typeof params.limit === 'number' && Number.isInteger(params.limit)) {
-      query.set('limit', String(params.limit));
+      req.limit = params.limit;
     }
-    const suffix = query.size > 0 ? `?${query.toString()}` : '';
     try {
-      const page = await legacyRaw().request<CursorPage<Message>>(
-        'GET',
-        `${messagePath(chatId)}${suffix}`,
+      const page = await backend.chats.listMessages(
+        req as Parameters<typeof backend.chats.listMessages>[0],
       );
       return {
         items: page.items,
-        ...(page.nextCursor === null ? {} : { nextCursor: page.nextCursor }),
+        ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }),
       };
     } catch (error) {
       throw toKernelError(error);
@@ -170,14 +151,23 @@ export function attachChat(ctx: KernelHostContext): void {
     }
     const content = stringParam(params.content, 'content', 'chat.messages.append');
     const chatId = resolveChatId(ctx, params, 'chat.messages.append');
+    // The wire role union has no `plugin` member and messages.role has a CHECK that
+    // SQLite cannot alter without a table rebuild, so authorship rides in meta.
+    const body: Record<string, unknown> = {
+      chatId,
+      role: 'assistant',
+      content,
+      meta: { authorKind: 'plugin' },
+    };
     // Outbox (rev4 stage 3): a plugin-provided key makes a retried append
     // return the original message instead of duplicating it.
-    const body: Record<string, unknown> = { role: 'plugin', content };
     if (typeof params.idempotencyKey === 'string' && params.idempotencyKey.length > 0) {
       body.idempotencyKey = params.idempotencyKey;
     }
     try {
-      const message = await legacyRaw().request<Message>('POST', messagePath(chatId), body);
+      const message = await backend.chats.createMessage(
+        body as Parameters<typeof backend.chats.createMessage>[0],
+      );
       return { messageId: message.id };
     } catch (error) {
       throw toKernelError(error);
