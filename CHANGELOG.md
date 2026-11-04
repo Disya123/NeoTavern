@@ -24,6 +24,16 @@
 
 ### Added
 
+- **One place decides which UI surface a plugin gets (round 95/99, ADR-0066 D4).**
+  `resolveUiSurface(runtime, granted)` answers for every host: silence is `none`, a
+  panel needs `ui.panel`, an overlay needs `ui.overlay`, and replacing the shell needs
+  `ui.shell.replace` — refused otherwise with the missing capability named, so the
+  diagnostics panel can say *why* a plugin is invisible instead of leaving an empty
+  frame. Verified: plugin-sdk 98/98 (3 new cases), tsc clean. Rendering the surfaces
+  in the app is the next slice.
+
+### Added
+
 - **Shell replacement needs consent, not just a wish (round 94/99, ADR-0066 D4).**
   `ui.shell.replace` joins the capability catalog, and a manifest that declares
   `runtime.ui: 'shell'` without requesting it is rejected: the UI declaration is a

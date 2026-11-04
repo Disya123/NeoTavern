@@ -7,6 +7,7 @@ import {
   Disposables,
   EventBus,
   validateManifest,
+  resolveUiSurface,
   definePlugin,
   activateServerPlugin,
   PluginRuntime,
@@ -590,5 +591,35 @@ describe('shell replacement consent (ADR-0066 D4)', () => {
       const result = validateManifest({ ...base, runtime: { host: 'sandbox', ui } });
       expect(result.ok, `${ui} must not demand the shell grant`).toBe(true);
     }
+  });
+});
+
+describe('ui surface resolution (ADR-0066 D4)', () => {
+  it('renders nothing when the plugin declared nothing', () => {
+    expect(resolveUiSurface(undefined, ['ui.shell.replace'])).toEqual({ surface: 'none' });
+    expect(resolveUiSurface({ host: 'sandbox' }, [])).toEqual({ surface: 'none' });
+  });
+
+  it('grants a panel and an overlay only with their capability', () => {
+    expect(resolveUiSurface({ host: 'sandbox', ui: 'panel' }, ['ui.panel'])).toEqual({
+      surface: 'panel',
+    });
+    expect(resolveUiSurface({ host: 'sandbox', ui: 'panel' }, [])).toEqual({
+      surface: 'none',
+      missing: 'ui.panel',
+    });
+    expect(resolveUiSurface({ host: 'sandbox', ui: 'overlay' }, ['ui.overlay'])).toEqual({
+      surface: 'overlay',
+    });
+  });
+
+  it('refuses to replace the shell without the grant and names what is missing', () => {
+    expect(resolveUiSurface({ host: 'native', ui: 'shell' }, ['ui.panel'])).toEqual({
+      surface: 'none',
+      missing: 'ui.shell.replace',
+    });
+    expect(resolveUiSurface({ host: 'native', ui: 'shell' }, ['ui.shell.replace'])).toEqual({
+      surface: 'shell',
+    });
   });
 });
