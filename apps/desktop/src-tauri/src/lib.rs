@@ -182,6 +182,14 @@ fn plugin_process_start(
     ))
 }
 
+/// Reads a package manifest without installing it, so consent can come first.
+#[cfg(desktop)]
+#[tauri::command]
+fn plugin_package_manifest(app: AppHandle, source_dir: String) -> Result<String, String> {
+    let host = app.state::<KernelHost>();
+    host.read_plugin_package_manifest(std::path::Path::new(&source_dir))
+}
+
 /// Installs a whole plugin package from a directory: manifest plus declared files.
 ///
 /// Returns a JSON envelope so the caller records the manifest text that was actually
@@ -2798,6 +2806,7 @@ pub fn run() {
                 plugin_bundle_read,
                 plugin_bundle_install,
                 plugin_package_install,
+                plugin_package_manifest,
                 plugin_process_status,
                 plugin_process_stop,
                 plugin_process_reset,

@@ -26,6 +26,14 @@ import { SystemSurfaceLink } from '../components/SystemSurfaceLink.js';
 import { ConfirmActionDialog } from '../components/ConfirmActionDialog.js';
 import { PluginAuthDialog, extractAuthClients } from '../components/PluginAuthDialog.js';
 import { usePluginRegistrations } from '../plugins/runtime.js';
+import { PluginConsentDialog } from '../plugins/PluginConsentDialog.js';
+import { hasBundleHost } from '../plugins/bundleClient.js';
+import {
+  choosePluginPackage,
+  commitPluginPackage,
+  type ChosenPluginPackage,
+} from '../api/hostSurfaces.js';
+import type { PluginManifest } from '@neotavern/plugin-sdk';
 import { useExtensionAvailability } from '../plugins/availability.js';
 import { isSafeMode } from '../theme/apply.js';
 import styles from './PluginsPage.module.css';
@@ -57,6 +65,19 @@ export function PluginsPage() {
   const [authTarget, setAuthTarget] = useState<{ id: string; name: string } | null>(null);
   const [gitUrl, setGitUrl] = useState('');
   const [gitRef, setGitRef] = useState('');
+  const [pendingPackage, setPendingPackage] = useState<ChosenPluginPackage | null>(null);
+
+  const reportInstalled = (result: Awaited<ReturnType<typeof commitPluginPackage>>): void => {
+    setApprovals((current) => ({
+      ...current,
+      [result.plugin.id]: result.plugin.grantedPermissions,
+    }));
+    setNotice(
+      t(result.replaced ? 'plugins:updatedNotice' : 'plugins:installedNotice', {
+        name: result.plugin.name,
+      }),
+    );
+  };
 
   const choosePackage = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = event.target.files?.[0];
@@ -69,16 +90,30 @@ export function PluginsPage() {
       return;
     }
     try {
-      const result = await install.mutateAsync(file);
-      setApprovals((current) => ({
-        ...current,
-        [result.plugin.id]: result.plugin.grantedPermissions,
-      }));
-      setNotice(
-        t(result.replaced ? 'plugins:updatedNotice' : 'plugins:installedNotice', {
-          name: result.plugin.name,
-        }),
-      );
+      reportInstalled(await install.mutateAsync(file));
+    } catch (error) {
+      setActionError(errorText(error));
+    }
+  };
+
+  // Desktop: the package is a folder the host reads and verifies, so the user is shown
+  // what it asks for before anything is written (ADR-0066 P5b).
+  const choosePackageFolder = async (): Promise<void> => {
+    setNotice(null);
+    setActionError(null);
+    try {
+      setPendingPackage(await choosePluginPackage());
+    } catch (error) {
+      setActionError(errorText(error));
+    }
+  };
+
+  const decidePackage = async (accepted: boolean): Promise<void> => {
+    const chosen = pendingPackage;
+    setPendingPackage(null);
+    if (!accepted || chosen === null) return;
+    try {
+      reportInstalled(await commitPluginPackage(chosen));
     } catch (error) {
       setActionError(errorText(error));
     }
@@ -166,19 +201,26 @@ export function PluginsPage() {
             <h1>{t('plugins:title')}</h1>
             <p>{t('plugins:subtitle')}</p>
           </div>
-          <Button asChild variant="primary">
-            <label>
+          {hasBundleHost() ? (
+            <Button variant="primary" disabled={busy} onClick={() => void choosePackageFolder()}>
               <DownloadSimple aria-hidden="true" />
-              {install.isPending ? t('plugins:installing') : t('plugins:install')}
-              <input
-                className={styles.fileInput}
-                type="file"
-                accept=".json,application/json"
-                disabled={busy}
-                onChange={(event) => void choosePackage(event)}
-              />
-            </label>
-          </Button>
+              {t('plugins:install')}
+            </Button>
+          ) : (
+            <Button asChild variant="primary">
+              <label>
+                <DownloadSimple aria-hidden="true" />
+                {install.isPending ? t('plugins:installing') : t('plugins:install')}
+                <input
+                  className={styles.fileInput}
+                  type="file"
+                  accept=".json,application/json"
+                  disabled={busy}
+                  onChange={(event) => void choosePackage(event)}
+                />
+              </label>
+            </Button>
+          )}
         </header>
 
         <section className={styles.security}>
@@ -482,6 +524,12 @@ export function PluginsPage() {
           )}
         </main>
       </div>
+      {pendingPackage ? (
+        <PluginConsentDialog
+          manifest={pendingPackage.manifest as unknown as PluginManifest}
+          onDecide={(accepted) => void decidePackage(accepted)}
+        />
+      ) : null}
       <ConfirmActionDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => {

@@ -26,7 +26,7 @@ import {
   type PluginInstallResult,
   type PluginSafeModeResult,
 } from '@neotavern/contracts';
-import { installPackage } from '../plugins/bundleClient.js';
+import { installPackage, readPackageManifest } from '../plugins/bundleClient.js';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { api, legacyUrl } from './client.js';
 import { isKernelMode } from './backend.js';
@@ -249,6 +249,64 @@ export async function installPlugin(file: File): Promise<PluginInstallResult> {
  * verified rather than one re-typed from the picked fields. Without a folder picker the
  * caller keeps the manifest-only path, which is honest but cannot load any code.
  */
+/** A package the user chose, read but not yet installed. */
+export interface ChosenPluginPackage {
+  sourceDir: string;
+  manifest: Record<string, unknown>;
+}
+
+/**
+ * Asks the user for a package folder and reads its manifest — no bytes installed yet.
+ *
+ * Split from the install on purpose: consent has to sit between these two calls, and a
+ * single function that both asks and installs would make the dialog unauthorable.
+ */
+export async function choosePluginPackage(): Promise<ChosenPluginPackage> {
+  const dialog = await import('@tauri-apps/plugin-dialog');
+  const picked = await dialog.open({ directory: true, multiple: false });
+  if (typeof picked !== 'string' || picked.length === 0) {
+    throw new Error('no package was selected');
+  }
+  return { sourceDir: picked, manifest: await readPackageManifest(picked) };
+}
+
+/** Installs a package the user already saw and approved. */
+export async function commitPluginPackage(
+  chosen: ChosenPluginPackage,
+): Promise<PluginInstallResult> {
+  const pkg = await installPackage(chosen.sourceDir);
+  return recordPackageDescriptor(pkg.manifest);
+}
+
+function recordPackageDescriptor(record: Record<string, unknown>): Promise<PluginInstallResult> {
+  return recordDescriptor(record);
+}
+
+async function recordDescriptor(record: Record<string, unknown>): Promise<PluginInstallResult> {
+  const id = typeof record['id'] === 'string' ? record['id'] : '';
+  if (!/^[a-z][a-z0-9-]{1,63}$/u.test(id)) {
+    throw new Error('plugin manifest needs an id matching ^[a-z][a-z0-9-]{1,63}$');
+  }
+  const name =
+    typeof record['name'] === 'string' && record['name'].length > 0 ? record['name'] : id;
+  const version =
+    typeof record['version'] === 'string' && record['version'].length > 0
+      ? record['version']
+      : '0.0.0';
+  const permissions = Array.isArray(record['permissions'])
+    ? record['permissions'].filter((value): value is string => typeof value === 'string')
+    : [];
+  const installed = await backend.plugins.install({
+    id,
+    name: name.slice(0, 128),
+    version: version.slice(0, 64),
+    trustState: 'locally-trusted',
+    permissions: permissions.slice(0, 64),
+    manifest: record,
+  });
+  return { plugin: translatePlugin(installed.plugin), replaced: false };
+}
+
 export async function installPluginDirectory(): Promise<PluginInstallResult> {
   const dialog = await import('@tauri-apps/plugin-dialog');
   const picked = await dialog.open({ directory: true, multiple: false });

@@ -216,3 +216,19 @@ export async function installPackage(sourceDir: string): Promise<InstalledPackag
   }
   throw new Error('the host reported no manifest');
 }
+
+/**
+ * Reads a package's manifest without installing anything.
+ *
+ * Consent has to happen before bytes land, so the dialog needs the manifest on its own.
+ * The host refuses a package with no digests here too: asking someone to approve a
+ * package that would fail on install is worse than not asking at all.
+ */
+export async function readPackageManifest(sourceDir: string): Promise<Record<string, unknown>> {
+  const raw = await invokeHost<string>('plugin_package_manifest', { sourceDir });
+  const parsed: unknown = JSON.parse(raw);
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('the package manifest is not an object');
+  }
+  return parsed as Record<string, unknown>;
+}

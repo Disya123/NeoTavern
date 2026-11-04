@@ -334,6 +334,26 @@ impl KernelHost {
             .map_err(|error| format!("{}: {error:?}", error.code()))
     }
 
+    /// Reads a package manifest without installing anything (ADR-0066 P5).
+    ///
+    /// Consent has to happen before bytes land, so the dialog needs the manifest on its
+    /// own. This reads and parses it, and refuses a package that has nothing to install,
+    /// so the user is never asked to approve a package that would fail afterwards.
+    pub fn read_plugin_package_manifest(&self, source_dir: &std::path::Path) -> Result<String, String> {
+        let text = std::fs::read_to_string(source_dir.join("manifest.json"))
+            .map_err(|error| format!("PLUGIN_MANIFEST_UNREADABLE: {error}"))?;
+        let value: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|error| format!("PLUGIN_MANIFEST_INVALID: {error}"))?;
+        let has_checksums = value
+            .get("checksums")
+            .and_then(serde_json::Value::as_object)
+            .is_some_and(|map| !map.is_empty());
+        if !has_checksums {
+            return Err("PLUGIN_MANIFEST_INVALID: checksums".to_string());
+        }
+        Ok(text)
+    }
+
     /// Installs a plugin package: its `manifest.json` plus the files it declares.
     ///
     /// One host call on purpose — the manifest the user picked and the bytes next to it

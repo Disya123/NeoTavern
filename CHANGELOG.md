@@ -24,6 +24,18 @@
 
 ### Added
 
+- **Consent now comes before the bytes (round 109/99, ADR-0066 P5b closed).**
+  Installing a package was a single call that read the manifest and wrote files at once,
+  so a dialog could not stand in front of it. The host gained
+  `plugin_package_manifest`, which reads and validates a package without installing
+  anything, and the page now chooses → shows what the package asks for → installs on
+  accept. Declining writes nothing. On the desktop the install button is a folder picker;
+  in a browser the manifest-only path remains, because no host can read a folder there.
+  Verified: PluginsPage 15/15, tsc and cargo check clean. The `ui.shell.replace`
+  activation is the last unwired piece.
+
+### Added
+
 - **The Plugins page installs packages, not just manifests (round 108/99).**
   On the desktop host the install button now opens a folder picker, installs the package
   through `plugin_package_install` and records the descriptor from the manifest that was
