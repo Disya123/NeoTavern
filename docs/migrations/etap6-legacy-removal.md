@@ -45,6 +45,23 @@ What remains of the legacy plane is **web-only dead code**, tracked as g6:
 | `/api/v2` string branches in hooks                        | ~322 `isKernelMode()` sites in 23 files                                                                                                    | remove per domain once the bridge is kernel-only                                                                                              |
 | `packages/neobackend/test/parity.test.ts` legacy sections | they assert the deleted behaviour                                                                                                          | delete with the code they cover                                                                                                               |
 
+### Contract gap found while planning 60c-3
+
+The plugin bridge's `chat.messages.append` forwards a plugin-provided
+`idempotencyKey` to the legacy REST route, and the outbox retry logic depends on
+it (a retried append returns the original message). The wire
+`chats.messages.create` request has no such field, and the only `idempotencyKey`
+in the contract belongs to generation steps. Converting the handler therefore
+requires a decision, not a rewrite:
+
+- **preferred:** add an optional `idempotencyKey` to `chats.messages.create` and
+  dedupe in the kernel (unique `(chat_id, idempotency_key)`), so plugin appends
+  keep their retry guarantee on the canonical plane;
+- alternative: accept the loss explicitly and delete the outbox expectation —
+  a behaviour regression, so it needs an owner decision rather than a silent drop.
+
+That is why 60c-3 is scoped as a contract slice, not a mechanical handler port.
+
 ## Migration notes for users of the removed contour
 
 1. **Nothing to migrate by hand for product data.** The kernel opens
