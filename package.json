@@ -62,7 +62,8 @@
     "kernel:dispatch:check": "node scripts/check-kernel-dispatch.mjs",
     "test:visual": "pnpm --filter @neotavern/web build && cargo build --manifest-path crates/Cargo.toml -p neotavern-headless && pnpm exec playwright test -c playwright.visual.config.ts",
     "dev:pnpm": "node tools/dev/pnpm.mjs",
-    "gate:round": "node tools/dev/round-gate.mjs"
+    "gate:round": "node tools/dev/round-gate.mjs",
+    "desktop:e2e": "node scripts/desktop-webview-e2e.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",

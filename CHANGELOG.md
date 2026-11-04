@@ -24,6 +24,17 @@
 
 ### Added
 
+- **Desktop WebView E2E over CDP (round 80/99).** `pnpm desktop:e2e`
+  (`scripts/desktop-webview-e2e.mjs`) launches the packaged shell in a temp copy,
+  opens a WebView2 DevTools endpoint through
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`, and drives the real UI with Playwright
+  over CDP (`playwright.desktop.config.ts`, `e2e/desktop`). The first two specs
+  assert that the shell boots with the kernel-backed starter library and that the
+  AI Settings region opens from the sidebar. Character creation, chat and the
+  backup journey are still headless-plane only, so G9 stays PARTIAL.
+
+### Added
+
 - **The packaged artifact proves the plugin dispatch loop (round 77/99, ADR-0065).**
   `run_plugin_dispatch_smoke` (`apps/desktop/src-tauri/src/lib.rs:250`) runs inside
   the portable binary when `NEOTA_PLUGIN_DISPATCH_SMOKE=1`: it installs a

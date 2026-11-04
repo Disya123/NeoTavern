@@ -106,3 +106,16 @@ Two long-standing reds were resolved rather than waived:
 Known environment caveat, unchanged: `tauri build` compiles the executable but
 fails the MSI bundling step with `os error 32` (a locked file) on this machine; the
 official artifact is the portable build, and that is what the smoke walks.
+
+### Desktop WebView E2E (round 80)
+
+`pnpm desktop:e2e` (`scripts/desktop-webview-e2e.mjs`) drives the **packaged** shell
+through the real WebView2: it copies the portable bundle to a temp directory, opens
+a DevTools endpoint with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`, connects Playwright
+over CDP and runs `playwright.desktop.config.ts` against `e2e/desktop`.
+
+Covered today (2 specs, ~0.7 s): the shell boots with the sidebar, the starter
+character arrives from the kernel (it is not in the web bundle), and the AI Settings
+region opens from the sidebar. **Not covered yet**: creating a character, sending a
+message, and the backup import/rollback journey — those still run only on the
+headless kernel plane. G9 stays PARTIAL until they do.

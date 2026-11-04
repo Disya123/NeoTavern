@@ -395,7 +395,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "b9c77c6ab02824953766322c32735fd1c4340ca264adff3a6ae435e473556224"
+      "sha256": "1adc6aa186009c528b794d79d9f45666239cf1b982537258b14083de0854b8bc"
     },
     {
       "source": "architecture/resource-containment.md",
