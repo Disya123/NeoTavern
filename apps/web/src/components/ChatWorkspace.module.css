@@ -544,15 +544,28 @@
   }
 }
 
-/* Phone-only navigation entry, inline in the composer's utility row. */
-.composerMenu {
+/* The header is a two-column grid; on phones it gains a third column for the menu so the
+   identity and the search keep their places instead of being pushed around. */
+.headerMenuButton {
   display: none;
 }
 
 @media (max-width: 600px) {
-  .composerMenu {
+  .chatHeader {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: calc(var(--st-control-height-large) + var(--nt-inset-top));
+    padding-block-start: var(--nt-inset-top);
+  }
+
+  .headerMenuButton {
     display: inline-flex;
+    width: 36px;
+    height: 36px;
     align-items: center;
     justify-content: center;
+    border: 0;
+    border-radius: var(--st-radius-control);
+    background: transparent;
+    color: var(--st-color-text-secondary);
   }
 }
