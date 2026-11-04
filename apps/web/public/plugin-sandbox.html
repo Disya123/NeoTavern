@@ -49,7 +49,14 @@
         if (!data || typeof data !== 'object' || typeof data.type !== 'string') return;
         if (data.type === 'neotavern.plugin.sandbox.bundle') {
           const url = typeof data.url === 'string' ? data.url : '';
-          if (!url.startsWith('/') || url.startsWith('//')) {
+          // A same-origin path or a blob: URL. Blob URLs are bytes the host read
+          // out of the verified bundle and handed to us through the parent; importing
+          // one cannot reach the filesystem, so they are as safe as a static path —
+          // and they are the only way a package that is not part of the app build can
+          // ship code.
+          const isSameOriginPath = url.startsWith('/') && !url.startsWith('//');
+          const isHostBlob = url.startsWith('blob:');
+          if (!isSameOriginPath && !isHostBlob) {
             post({ type: 'neotavern.plugin.sandbox.rejected', reason: 'unsafe-bundle-url' });
             return;
           }

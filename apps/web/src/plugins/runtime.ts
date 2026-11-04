@@ -1742,6 +1742,9 @@ export class FrontendPluginRuntime {
         frame.initialLoadDone = true;
         this.sendLanguage(frame, this.i18n?.language ?? document.documentElement.lang ?? 'en');
         this.startKernelSession(frame);
+        // The sandbox document is up; hand it the code it should run. A package with
+        // nothing to import simply gets no message (ADR-0066 P2c).
+        void this.deliverBundle(frame);
         return;
       }
       // Any later 'load' means the sandbox document was replaced — either the
@@ -1764,6 +1767,28 @@ export class FrontendPluginRuntime {
     }, this.crashPolicy.pingIntervalMs);
     host.append(clipSvg, iframe);
     this.ensureHiddenRoot().append(host);
+  }
+
+  /**
+   * Sends the frame the URL of its entry module, if the package has one and the host
+   * can serve the bytes. Failure is reported, never swallowed: a frame that got no
+   * bundle would otherwise sit there looking mounted and doing nothing.
+   */
+  private async deliverBundle(frame: RuntimeFrame): Promise<void> {
+    const manifest = (frame.plugin as { manifest?: unknown }).manifest;
+    try {
+      const url = await resolveEntryUrl(frame.plugin.id, frame.plugin.version, manifest);
+      if (url === null) return;
+      frame.iframe.contentWindow?.postMessage(
+        { type: 'neotavern.plugin.sandbox.bundle', url },
+        '*',
+      );
+    } catch (error) {
+      // A pack that cannot deliver its code is a failed mount, not a crash: the frame
+      // is alive and the user can retry, so this must not count against the restart
+      // budget that protects the product from a crash loop.
+      console.warn('[plugins] bundle delivery failed', frame.plugin.id, error);
+    }
   }
 
   /**

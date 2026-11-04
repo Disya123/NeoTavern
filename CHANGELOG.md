@@ -24,6 +24,17 @@
 
 ### Added
 
+- **The sandbox is handed its code (round 106/99, ADR-0066 P2c closed).** After the
+  sandbox document loads, `deliverBundle` resolves the package entry and posts
+  `neotavern.plugin.sandbox.bundle` with that URL — the message the sandbox document
+  already understood. The bundled sandbox refused every URL that was not a same-origin
+  path, so it now also accepts `blob:`: those are bytes the host read out of the verified
+  bundle, and importing one cannot reach the filesystem. A package with nothing to import
+  gets no message at all, and a delivery failure is a failed mount, not a crash, so it
+  never burns the restart budget. Verified: runtime 28/28, plugins 19/19, tsc clean.
+
+### Added
+
 - **The manifest already carries what the frame must import (round 105/99).**
   `entryPathFor(manifest)` resolves the entry from the three declaration styles the
   product actually has — flat `frontend`, `runtime.frontend`, `ui.panel.entry` — plus a
