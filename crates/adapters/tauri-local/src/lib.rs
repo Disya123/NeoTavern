@@ -106,6 +106,9 @@ pub struct KernelHost {
     /// host commands (ADR-0062, G7/G8) stage/activate/rollback against it.
     /// `None` = the stateless host refuses those commands.
     data_root: Option<std::path::PathBuf>,
+    /// One supervisor per plugin (ADR-0066 P3c): start/stop/status of native
+    /// plugin processes. The registry decides, `run_guarded` executes.
+    supervisors: Arc<Mutex<runtime_kernel::plugin_supervisor::SupervisorRegistry>>,
 }
 
 /// Host secret backend selection (ТЗ §SEC-01): which explicit backend the
@@ -182,6 +185,9 @@ impl KernelHost {
             streams: Arc::new(Mutex::new(HashMap::new())),
             tool_executor: Arc::new(Mutex::new(None)),
             data_root: data_root_slot,
+            supervisors: Arc::new(Mutex::new(
+                runtime_kernel::plugin_supervisor::SupervisorRegistry::new(),
+            )),
         })
     }
 
@@ -207,6 +213,108 @@ impl KernelHost {
     /// only for short dispatch calls.
     pub fn kernel_handle(&self) -> Arc<Mutex<Kernel>> {
         Arc::clone(&self.kernel)
+    }
+
+    /// Starts a native plugin process from its published bundle (ADR-0066 P3c).
+    ///
+    /// The caller names a plugin and a package-relative entry, never an absolute
+    /// path: the executable must already be inside the plugin's own staged bundle,
+    /// so a client cannot ask the host to run `/usr/bin/anything`. The policy
+    /// registry decides whether a start is allowed at all.
+    pub fn start_plugin_process(
+        &self,
+        plugin_id: &str,
+        version: &str,
+        entry: &str,
+        timeout_ms: u64,
+    ) -> Result<runtime_kernel::plugin_supervisor::ProcessOutcome, String> {
+        let data_root = self.data_root.as_deref().ok_or_else(|| {
+            "the host is stateless: no data root for plugin processes".to_string()
+        })?;
+        let policy = runtime_kernel::plugin_supervisor::SupervisorPolicy::default();
+        {
+            let mut registry = self
+                .supervisors
+                .lock()
+                .map_err(|_| "supervisor lock".to_string())?;
+            registry.register(plugin_id, policy.clone());
+            if !registry.start(plugin_id) {
+                return Err("PLUGIN_PROCESS_NOT_STARTABLE".to_string());
+            }
+        }
+        let executable =
+            runtime_kernel::plugin_bundles::bundle_dir(data_root, plugin_id, version).join(entry);
+        // The bundle store already refuses unsafe paths; this is the second fence:
+        // the resolved executable must still live inside the plugin's own directory.
+        if !executable.starts_with(runtime_kernel::plugin_bundles::bundle_dir(
+            data_root, plugin_id, version,
+        )) {
+            self.mark_plugin_process_failed(plugin_id, "PLUGIN_ENTRY_UNSAFE");
+            return Err("PLUGIN_ENTRY_UNSAFE".to_string());
+        }
+        let mut command = std::process::Command::new(&executable);
+        command.current_dir(executable.parent().unwrap_or(std::path::Path::new(".")));
+        let outcome = runtime_kernel::plugin_supervisor::run_guarded(
+            &mut command,
+            std::time::Duration::from_millis(timeout_ms.max(1_000)),
+        )
+        .map_err(|error| {
+            self.mark_plugin_process_failed(plugin_id, "PLUGIN_PROCESS_SPAWN_FAILED");
+            format!("PLUGIN_PROCESS_SPAWN_FAILED: {error}")
+        })?;
+        let mut registry = self
+            .supervisors
+            .lock()
+            .map_err(|_| "supervisor lock".to_string())?;
+        let _next_delay = registry.finish(plugin_id, outcome.kind, outcome.detail.clone());
+        Ok(outcome)
+    }
+
+    /// Supervisory state of one plugin: `(state, restarts, lastError)`.
+    pub fn plugin_process_status(&self, plugin_id: &str) -> Result<String, String> {
+        let registry = self
+            .supervisors
+            .lock()
+            .map_err(|_| "supervisor lock".to_string())?;
+        Ok(match registry.get(plugin_id) {
+            Some(entry) => format!(
+                "{:?}|{}|{}",
+                entry.state(),
+                entry.restarts(),
+                entry.last_error().unwrap_or_default()
+            ),
+            None => "Stopped|0|".to_string(),
+        })
+    }
+
+    /// Operator stop: history kept, backoff forgotten.
+    pub fn stop_plugin_process(&self, plugin_id: &str) -> Result<(), String> {
+        let mut registry = self
+            .supervisors
+            .lock()
+            .map_err(|_| "supervisor lock".to_string())?;
+        registry.stop(plugin_id);
+        Ok(())
+    }
+
+    /// Operator reset: the plugin may start again after a failure budget.
+    pub fn reset_plugin_process(&self, plugin_id: &str) -> Result<(), String> {
+        let mut registry = self
+            .supervisors
+            .lock()
+            .map_err(|_| "supervisor lock".to_string())?;
+        registry.reset(plugin_id);
+        Ok(())
+    }
+
+    fn mark_plugin_process_failed(&self, plugin_id: &str, reason: &str) {
+        if let Ok(mut registry) = self.supervisors.lock() {
+            let _ = registry.finish(
+                plugin_id,
+                runtime_kernel::plugin_supervisor::ExitKind::Crash,
+                Some(reason.to_string()),
+            );
+        }
     }
 
     /// Installs a plugin bundle from a verified source directory (ADR-0066 P2b).

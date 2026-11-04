@@ -24,6 +24,19 @@
 
 ### Added
 
+- **The host can start, stop and inspect a plugin process (round 89/99,
+  ADR-0066 P3c-2).** `KernelHost` now owns a supervisor registry and exposes
+  `start_plugin_process`, `plugin_process_status`, `stop_plugin_process` and
+  `reset_plugin_process`. A start names a plugin and a package-relative entry, never
+  an absolute path — the executable must already live in that plugin's staged bundle,
+  and the resolved path is re-checked against the bundle directory before spawn, so a
+  client cannot ask the host to run arbitrary binaries. A refusal from the policy is
+  `PLUGIN_PROCESS_NOT_STARTABLE`; a spawn failure and an unsafe entry are recorded as
+  crash reasons, not swallowed. Verified: `cargo check` and `clippy -D warnings`
+  clean for the adapter. Tauri commands and the web bridge are the next slice.
+
+### Added
+
 - **Per-plugin supervisor registry (round 88/99, ADR-0066 P3c-1).** The host now
   keeps one `Supervisor` per installed plugin: `register` (idempotent, keeps
   history), `can_start` (a `Failed` plugin stays down until an explicit reset, so a
