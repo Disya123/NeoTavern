@@ -1,12 +1,8 @@
 import {
-  BookOpenText,
   ChatsCircle,
   Cube,
-  Globe,
-  ImageSquare,
   SidebarSimple,
   SlidersHorizontal,
-  Smiley,
   UsersThree,
 } from '@phosphor-icons/react';
 import {
@@ -46,6 +42,11 @@ interface RailItem {
   icon: ComponentType<{ size?: number; weight?: 'regular' | 'fill' | 'duotone' }>;
 }
 
+/**
+ * Three destinations, on purpose. Everything that tunes the product — personas, lore,
+ * backgrounds, providers, plugins, data — lives in the settings window, so the rail stays
+ * a map of where you are rather than a list of every subsystem (see SettingsPanel).
+ */
 const RAIL_ITEMS: readonly RailItem[] = [
   { themeId: 'chats', id: 'home', labelKey: 'navigation:chats', icon: ChatsCircle },
   {
@@ -54,21 +55,6 @@ const RAIL_ITEMS: readonly RailItem[] = [
     labelKey: 'navigation:characters',
     icon: UsersThree,
   },
-  { themeId: 'personas', id: 'personas', labelKey: 'navigation:personas', icon: Smiley },
-  {
-    themeId: 'lorebooks',
-    id: 'lorebooks',
-    labelKey: 'navigation:lorebooks',
-    icon: BookOpenText,
-  },
-  {
-    themeId: 'backgrounds',
-    id: 'backgrounds',
-    labelKey: 'navigation:backgrounds',
-    icon: ImageSquare,
-  },
-  { themeId: 'ai-settings', id: 'providers', labelKey: 'settings:aiSettings', icon: Globe },
-  { themeId: 'plugins', id: 'plugins', labelKey: 'navigation:plugins', icon: Cube },
   {
     themeId: 'settings',
     id: 'settings',

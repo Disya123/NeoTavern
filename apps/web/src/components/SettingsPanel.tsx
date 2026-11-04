@@ -2,7 +2,10 @@ import {
   ArrowClockwise,
   Database,
   DownloadSimple,
+  Cube,
+  Globe,
   PencilSimple,
+  UsersThree,
   Plug,
   ShieldCheck,
   SlidersHorizontal,
@@ -42,6 +45,11 @@ import { useErrorText } from '../lib/useErrorText.js';
 import { isTauriRuntime } from '../api/tauriTransport.js';
 import { canChangeHost, openHostConnect, readHostSession } from '../api/hostSession.js';
 import { DataMigrationPanel } from './DataMigrationPanel.js';
+import { LorebookPanel } from './LorebookPanel.js';
+import { PersonasPanel } from './PersonasPanel.js';
+import { BackgroundsPanel } from './BackgroundsPanel.js';
+import { PluginsPage } from '../pages/PluginsPage.js';
+import { ApiBackedAiSettingsPanel } from './ApiBackedAiSettingsPanel.js';
 import { ActivationStatusPanel } from './ActivationStatusPanel.js';
 import { DiagnosticsPanel } from './DiagnosticsPanel.js';
 import { FloatingTabContent } from './FloatingTabContent.js';
@@ -109,6 +117,40 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       content: (
         <FloatingTabContent>
           <ThemesTab />
+        </FloatingTabContent>
+      ),
+    },
+    {
+      value: 'ai',
+      label: t('settings:aiSettings'),
+      icon: Globe,
+      content: (
+        <FloatingTabContent>
+          <ApiBackedAiSettingsPanel onClose={() => undefined} />
+        </FloatingTabContent>
+      ),
+    },
+    {
+      value: 'plugins',
+      label: t('navigation:plugins'),
+      icon: Cube,
+      content: (
+        <FloatingTabContent>
+          <PluginsPage />
+        </FloatingTabContent>
+      ),
+    },
+    {
+      value: 'library',
+      label: t('settings:library'),
+      icon: UsersThree,
+      content: (
+        <FloatingTabContent>
+          <div className={styles.stack}>
+            <PersonasPanel onClose={() => undefined} />
+            <LorebookPanel onClose={() => undefined} />
+            <BackgroundsPanel onClose={() => undefined} />
+          </div>
         </FloatingTabContent>
       ),
     },

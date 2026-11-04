@@ -905,6 +905,7 @@ export const en = {
     contextStrategy_summarize: 'Summarize older context',
     'contextStrategy_vector-recall': 'Recall relevant memory',
     contextStrategy_manual: 'Manual exclusions',
+    library: 'Library',
     data: 'Data & backups',
     migrateFullBackup: 'Import a full-data backup',
     migrateFullBackupHint:

@@ -24,6 +24,15 @@
 
 ### Changed
 
+- **The rail is a map of three places; the window holds everything else (UI).** The
+  navigation rail listed eight subsystems, so every new feature widened it and the rail
+  stopped saying where you are. It now carries Chats, Characters and Settings; personas,
+  lorebooks and backgrounds form a Library section in the settings window, and AI settings
+  and Plugins are sections of their own. Nothing became unreachable — the panels moved
+  rather than disappeared. Verified: components 198/198, tsc and ESLint clean.
+
+### Changed
+
 - **On a phone the menu is a screen, not a strip beside one (UI).** Opening the navigation
   panel used to leave the rail visible and size the panel to `100vw - rail`, so the content
   you opened was the part that got squeezed. The panel now takes the full screen
