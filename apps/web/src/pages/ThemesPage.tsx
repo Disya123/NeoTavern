@@ -122,8 +122,12 @@ export function ThemesPage({ embedded = false }: ThemesPageProps = {}) {
 
   return (
     <ErrorBoundary name="themes">
-      <div className={styles.page} data-component="theme-manager">
-        <header className={styles.header}>
+      <div
+        className={styles.page}
+        data-component="theme-manager"
+        data-embedded={embedded ? 'true' : undefined}
+      >
+        <header className={embedded ? styles.headerEmbedded : styles.header}>
           {embedded ? null : (
             <div>
               <span>{t('themes:eyebrow')}</span>

@@ -1,4 +1,18 @@
 @layer components {
+  .page[data-embedded='true'] {
+    height: auto;
+    overflow: visible;
+  }
+
+  .headerEmbedded {
+    /* Inside the settings window the page title is gone, so the header is a toolbar:
+       no page padding, no divider — just the actions, sitting right under the band. */
+    padding: 0 0 var(--st-space-md);
+    border-bottom: 0;
+    justify-content: flex-start;
+    gap: var(--st-space-sm);
+  }
+
   .page {
     height: 100%;
     overflow-y: auto;

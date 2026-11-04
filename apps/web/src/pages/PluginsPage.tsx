@@ -200,8 +200,12 @@ export function PluginsPage({ embedded = false }: PluginsPageProps = {}) {
 
   return (
     <ErrorBoundary name="plugins">
-      <div className={styles.page} data-component="plugin-manager">
-        <header className={styles.header}>
+      <div
+        className={styles.page}
+        data-component="plugin-manager"
+        data-embedded={embedded ? 'true' : undefined}
+      >
+        <header className={embedded ? styles.headerEmbedded : styles.header}>
           {embedded ? null : (
             <div>
               <span>{t('plugins:eyebrow')}</span>
