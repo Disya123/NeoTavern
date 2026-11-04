@@ -182,6 +182,33 @@ fn plugin_process_start(
     ))
 }
 
+/// Reads one bounded range of a staged plugin bundle (ADR-0066 P2c).
+///
+/// Returns `size|eof|<base64>` so the caller can loop without a second round trip for
+/// metadata. Host-only: the bytes belong to the data root, and a client that could ask
+/// for an arbitrary path would be able to read any file the host can.
+#[cfg(desktop)]
+#[tauri::command]
+fn plugin_bundle_read(
+    app: AppHandle,
+    plugin_id: String,
+    version: String,
+    path: String,
+    offset: u64,
+    length: u64,
+) -> Result<String, String> {
+    use base64::Engine as _;
+    let host = app.state::<KernelHost>();
+    let (bytes, size, eof) =
+        host.read_plugin_bundle(&plugin_id, &version, &path, offset, length)?;
+    Ok(format!(
+        "{}|{}|{}",
+        size,
+        if eof { 1 } else { 0 },
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
 /// Supervisory state of one plugin (`state|restarts|lastError`).
 #[cfg(desktop)]
 #[tauri::command]
@@ -2726,6 +2753,7 @@ pub fn run() {
                 desktop_backend_mode,
                 plugin_job_report,
                 plugin_process_start,
+                plugin_bundle_read,
                 plugin_process_status,
                 plugin_process_stop,
                 plugin_process_reset,

@@ -24,6 +24,19 @@
 
 ### Added
 
+- **Bundle bytes reach the frame without a new wire op (round 104/99, ADR-0066 P2c).**
+  A host command `plugin_bundle_read` returns `size|eof|<base64>` for one bounded range,
+  and `bundleClient.ts` assembles a file from those ranges, refusing a read that runs
+  past the declared size. It then hands the frame an object URL it can import. The path
+  stays package-relative and is re-validated by the host against the plugin's own bundle,
+  so traversal fails where the files are. Off-shell the module throws
+  `UnsupportedError('plugins.bundle')` instead of returning empty bytes. Verified:
+  bundleClient 5/5, tsc and ESLint clean, `cargo check` for the desktop crate clean.
+  A `plugins.bundle.*` wire family is still the contract-level version of this; the host
+  command path is what works today.
+
+### Added
+
 - **The consent step exists (round 103/99, ADR-0066 P5b).** `PluginConsentDialog`
   renders `describeConsent` sorted by risk, names the package and version, and returns a
   decision instead of installing anything itself — so a new install path cannot skip the
