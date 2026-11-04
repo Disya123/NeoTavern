@@ -4,6 +4,7 @@
  * `characters.list` and `characters.get`, mapped onto the canonical wire DTOs.
  * Every other operation throws `UnsupportedError`.
  */
+import { UnsupportedError } from './errors.js';
 import {
   WIRE_PROTOCOL,
   type CreateMemoryRequestDto,
@@ -58,16 +59,8 @@ import type {
 /**
  * Thrown for features the legacy `/api/v2` server does not expose yet.
  */
-export class UnsupportedError extends Error {
-  readonly code = 'UNSUPPORTED' as const;
-  readonly feature: string;
 
-  constructor(feature: string) {
-    super(`Feature not supported by the legacy backend: ${feature}`);
-    this.name = 'UnsupportedError';
-    this.feature = feature;
-  }
-}
+export { UnsupportedError };
 
 /** LegacyBackend constructor options. */
 export interface LegacyBackendOptions {

@@ -6,6 +6,7 @@
  * throw (`ContractMismatchError`, `ValidationError`, `ContractViolationError`,
  * `UnsupportedError`).
  */
+export * from './errors.js';
 export * from './neobackend.js';
 export * from './localBackend.js';
 export * from './remoteBackend.js';
