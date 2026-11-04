@@ -2242,17 +2242,6 @@ name = "neotavern-neocompositor"
 version = "0.1.0"
 
 [[package]]
-name = "neotavern-package-verify"
-version = "0.1.0"
-dependencies = [
- "ring",
- "serde",
- "serde_json",
- "sha2",
- "zip",
-]
-
-[[package]]
 name = "neotavern-storage"
 version = "0.1.0"
 dependencies = [

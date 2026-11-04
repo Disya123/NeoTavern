@@ -4,7 +4,7 @@
 # presentation contour was removed at the pivot).
 [workspace]
 resolver = "2"
-members = ["contracts-generated", "runtime-kernel", "storage", "secret-store", "adapters/android-jni", "adapters/remote-http", "adapters/cli", "adapters/desktop-remote", "adapters/headless", "adapters/envelope", "adapters/tauri-local", "adapters/host-tools", "adapters/package-verify", "provider-sdk", "built-in-providers", "plugin-executor", "provider-openai-compat", "adapters/mobile-ffi", "resource-runner", "neocompositor"]
+members = ["contracts-generated", "runtime-kernel", "storage", "secret-store", "adapters/android-jni", "adapters/remote-http", "adapters/cli", "adapters/desktop-remote", "adapters/headless", "adapters/envelope", "adapters/tauri-local", "adapters/host-tools", "provider-sdk", "built-in-providers", "plugin-executor", "provider-openai-compat", "adapters/mobile-ffi", "resource-runner", "neocompositor"]
 
 [profile.dev.package."*"]
 opt-level = 2

@@ -1,19 +1,17 @@
 /**
  * The one error a host without a capability throws (ТЗ §13.1).
  *
- * It used to live in `legacyBackend.ts`. That class is on its way out with the
- * `/api/v2` contour, but the error itself is not legacy: the kernel plane throws
- * it for host-only surfaces (`hostSurfaces.ts`) and a page with no host will
- * throw it too. Keeping it in its own module means deleting a backend can never
- * take the error class with it again.
+ * The kernel plane throws it for host-only surfaces (`hostSurfaces.ts`) and a page
+ * with no host throws it for every call. It lives in its own module so a backend
+ * rewrite can never take the error class with it.
  */
 export class UnsupportedError extends Error {
   readonly code = 'UNSUPPORTED' as const;
-  /** The wire surface (or `legacy.*` marker) that is unavailable. */
+  /** The wire surface (or host surface id) that is unavailable. */
   readonly feature: string;
 
   constructor(feature: string) {
-    super(`Feature not supported by the legacy backend: ${feature}`);
+    super(`Feature not supported by this host: ${feature}`);
     this.name = 'UnsupportedError';
     this.feature = feature;
   }

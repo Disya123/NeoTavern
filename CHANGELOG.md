@@ -22,6 +22,20 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Removed
+
+- **`crates/adapters/package-verify` is gone (round 76/99).** It could verify a
+  signed ZIP and had no call site anywhere, because plugins are installed as
+  manifest descriptors and the runtime loads code from the web bundle — a package
+  signature would verify bytes no plane reads. Deleting it removes a workspace
+  member and a documented-but-unreachable SEC-05 path instead of leaving the
+  matrix explaining why a crates.io-sized verifier never runs. The audit inventory
+  keeps the entry as historical with the removal note.
+- **`UnsupportedError` no longer blames the legacy backend.** Its message read
+  "Feature not supported by the legacy backend: …" months after that backend was
+  deleted; it now says "not supported by this host", which is what the kernel plane
+  and a hostless page actually mean.
+
 ### Changed
 
 - **Plugins install from a manifest, not a signed package (round 75/99).**
