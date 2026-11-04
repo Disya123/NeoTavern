@@ -24,6 +24,18 @@
 
 ### Added
 
+- **The web client can drive plugin processes (round 91/99, ADR-0066 P3c-4).**
+  `apps/web/src/plugins/processHost.ts` wraps the four host commands: start (plugin,
+  version, package-relative entry, timeout), status, stop, reset. The host answers in
+  one flat string (`kind|elapsedMs|detail`, `state|restarts|lastError`) so an IPC
+  version skew cannot rename a field, and both parsers are pure and tested. In a
+  browser-only session the module throws `UnsupportedError('plugins.process')` instead
+  of pretending a native plugin runs locally. Verified: processHost 5/5 (no-host
+  refusal with no invoke, crash/hang parsing, separators preserved in a reason,
+  forwarding, stop/reset), tsc and ESLint clean. The plugins health panel is next.
+
+### Added
+
 - **Desktop commands for plugin processes (round 90/99, ADR-0066 P3c-3).**
   Four Tauri commands (`plugin_process_start`, `plugin_process_status`,
   `plugin_process_stop`, `plugin_process_reset`) expose the supervisor to the shell.
