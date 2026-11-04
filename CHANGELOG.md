@@ -24,6 +24,15 @@
 
 ### Changed
 
+- **On a phone the menu is a screen, not a strip beside one (UI).** Opening the navigation
+  panel used to leave the rail visible and size the panel to `100vw - rail`, so the content
+  you opened was the part that got squeezed. The panel now takes the full screen
+  (`100vw × 100dvh`, no inline offset) and the rail fades out while it is open; closing the
+  panel brings the rail straight back. Verified: sidebar/workspace shell tests 4/4, tsc
+  clean.
+
+### Changed
+
 - **Settings are a window with a map, not a strip of tabs (UI).** `SettingsPanel` used
   segmented tabs, so the six destinations scrolled sideways and the current section had
   no place of its own. It now has a section rail on the left — General, Themes, Data,

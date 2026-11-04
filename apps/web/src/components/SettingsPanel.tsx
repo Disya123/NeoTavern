@@ -62,7 +62,8 @@ export interface SettingsPanelProps {
 }
 
 /** Settings menu: tabbed General / Themes / Data panel (role="tablist"). */
-type SettingsSectionId = 'general' | 'themes' | 'data' | 'profiles' | 'secrets' | 'tools' | 'remote';
+type SettingsSectionId =
+  'general' | 'themes' | 'data' | 'profiles' | 'secrets' | 'tools' | 'remote';
 
 interface SectionEntry {
   value: SettingsSectionId;
@@ -190,7 +191,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           {sections.find((entry) => entry.value === section)?.content}
         </div>
       </div>
-      />
     </FloatingTabPanel>
   );
 }

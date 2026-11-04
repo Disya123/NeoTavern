@@ -809,6 +809,23 @@
       z-index: var(--st-layer-modal);
     }
 
+    /* A phone has no room for a rail beside an open panel: the panel takes the whole
+       screen and the rail steps aside. Closing the panel brings the rail back, so
+       navigation is never more than one tap away. */
+    .sidebar:has(> .panelOpen[data-state='open']) .rail,
+    .sidebar:has(> .panelOpen[data-state='closing']) .rail {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .panelOpen[data-state='open'],
+    .panelOpen[data-state='closing'] {
+      inset-inline-start: 0;
+      width: 100vw;
+      height: 100dvh;
+      max-height: 100dvh;
+    }
+
     .rail {
       background: var(--st-color-surface-canvas);
       backdrop-filter: none;
@@ -839,7 +856,10 @@
     }
 
     .panelOpen {
-      width: calc(100vw - var(--shell-rail-current-width, var(--st-shell-rail-width)));
+      inset-inline-start: 0;
+      width: 100vw;
+      height: 100dvh;
+      max-height: 100dvh;
       padding-block-start: 0;
       padding-block-end: max(var(--st-space-2xl), var(--nt-inset-bottom));
     }
