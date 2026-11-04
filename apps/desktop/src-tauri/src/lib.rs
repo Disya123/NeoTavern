@@ -157,6 +157,55 @@ fn resolve_data_dir(app: &tauri::App) -> Result<(PathBuf, bool), Box<dyn std::er
     Ok((data_dir, portable))
 }
 
+/// Starts a native plugin process from its staged bundle (ADR-0066 P3c).
+///
+/// The webview names a plugin, a version and a package-relative entry — never an
+/// absolute path — and the host verifies the executable is inside that bundle before
+/// spawning it. The supervisor policy may refuse the start outright.
+#[cfg(desktop)]
+#[tauri::command]
+fn plugin_process_start(
+    app: AppHandle,
+    plugin_id: String,
+    version: String,
+    entry: String,
+    timeout_ms: Option<u64>,
+) -> Result<String, String> {
+    let host = app.state::<KernelHost>();
+    let outcome =
+        host.start_plugin_process(&plugin_id, &version, &entry, timeout_ms.unwrap_or(30_000))?;
+    Ok(format!(
+        "{:?}|{}|{}",
+        outcome.kind,
+        outcome.elapsed.as_millis(),
+        outcome.detail.unwrap_or_default()
+    ))
+}
+
+/// Supervisory state of one plugin (`state|restarts|lastError`).
+#[cfg(desktop)]
+#[tauri::command]
+fn plugin_process_status(app: AppHandle, plugin_id: String) -> Result<String, String> {
+    let host = app.state::<KernelHost>();
+    host.plugin_process_status(&plugin_id)
+}
+
+/// Operator stop: the plugin stops, its failure history is kept.
+#[cfg(desktop)]
+#[tauri::command]
+fn plugin_process_stop(app: AppHandle, plugin_id: String) -> Result<(), String> {
+    let host = app.state::<KernelHost>();
+    host.stop_plugin_process(&plugin_id)
+}
+
+/// Operator reset: a plugin that exhausted its restart budget may start again.
+#[cfg(desktop)]
+#[tauri::command]
+fn plugin_process_reset(app: AppHandle, plugin_id: String) -> Result<(), String> {
+    let host = app.state::<KernelHost>();
+    host.reset_plugin_process(&plugin_id)
+}
+
 /// Tauri event carrying one claimed plugin job to the webview (ADR-0065).
 ///
 /// Tauri event names reject `.` (`IllegalEventName`), so the host channel is
@@ -2676,6 +2725,10 @@ pub fn run() {
                 // 60a the answer is always "kernel".
                 desktop_backend_mode,
                 plugin_job_report,
+                plugin_process_start,
+                plugin_process_status,
+                plugin_process_stop,
+                plugin_process_reset,
                 commands::kernel_dispatch,
                 commands::kernel_stream_start,
                 commands::kernel_stream_abort,

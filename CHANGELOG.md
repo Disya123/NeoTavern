@@ -24,6 +24,14 @@
 
 ### Added
 
+- **Desktop commands for plugin processes (round 90/99, ADR-0066 P3c-3).**
+  Four Tauri commands (`plugin_process_start`, `plugin_process_status`,
+  `plugin_process_stop`, `plugin_process_reset`) expose the supervisor to the shell.
+  The start command takes a plugin, a version and a package-relative entry — never an
+  absolute path — and returns `kind|elapsedMs|detail`, so the UI can tell a clean stop
+  from a crash and show the reason. Verified: `cargo check` for the desktop crate
+  clean. The web bridge and the health panel are next.
+
 - **The host can start, stop and inspect a plugin process (round 89/99,
   ADR-0066 P3c-2).** `KernelHost` now owns a supervisor registry and exposes
   `start_plugin_process`, `plugin_process_status`, `stop_plugin_process` and
