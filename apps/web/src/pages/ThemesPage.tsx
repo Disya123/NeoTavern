@@ -22,7 +22,15 @@ interface ThemeDeleteTarget {
   name: string;
 }
 
-export function ThemesPage() {
+export interface ThemesPageProps {
+  /**
+   * Renders without the page header when hosted inside the settings window: the window
+   * already names the section, and two titles stacked read as a page inside a page.
+   */
+  embedded?: boolean;
+}
+
+export function ThemesPage({ embedded = false }: ThemesPageProps = {}) {
   const { t } = useTranslation();
   const themes = useThemes();
   const plugins = usePlugins();
@@ -116,11 +124,13 @@ export function ThemesPage() {
     <ErrorBoundary name="themes">
       <div className={styles.page} data-component="theme-manager">
         <header className={styles.header}>
-          <div>
-            <span>{t('themes:eyebrow')}</span>
-            <h1>{t('themes:title')}</h1>
-            <p>{t('themes:subtitle')}</p>
-          </div>
+          {embedded ? null : (
+            <div>
+              <span>{t('themes:eyebrow')}</span>
+              <h1>{t('themes:title')}</h1>
+              <p>{t('themes:subtitle')}</p>
+            </div>
+          )}
           <Button asChild variant="primary">
             <label>
               <DownloadSimple aria-hidden="true" />

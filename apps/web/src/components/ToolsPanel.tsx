@@ -22,7 +22,7 @@ function requiredNames(inputSchema: unknown): string[] {
   return required.filter((item): item is string => typeof item === 'string');
 }
 
-export function ToolsPanel() {
+export function ToolsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { t } = useTranslation();
   const errorText = useErrorText();
   const tools = useGenerationTools();
@@ -31,10 +31,12 @@ export function ToolsPanel() {
 
   return (
     <div className={styles.section}>
-      <header className={styles.sectionHeader}>
-        <h2>{t('tools:title')}</h2>
-        <p>{t('tools:titleHint')}</p>
-      </header>
+      {embedded ? null : (
+        <header className={styles.sectionHeader}>
+          <h2>{t('tools:title')}</h2>
+          <p>{t('tools:titleHint')}</p>
+        </header>
+      )}
 
       {tools.isError ? (
         <p className={styles.error} role="alert">

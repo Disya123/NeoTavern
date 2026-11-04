@@ -20,7 +20,7 @@ import { useLockSecrets, useSecretsStatus } from '../api/secretsHooks.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import styles from './SettingsPanel.module.css';
 
-export function SecretsPanel() {
+export function SecretsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { t } = useTranslation();
   const errorText = useErrorText();
   const status = useSecretsStatus();
@@ -54,10 +54,12 @@ export function SecretsPanel() {
   return (
     <div className={styles.body} data-part="secrets-settings">
       <section className={styles.section}>
-        <header className={styles.sectionHeader}>
-          <h2>{t('secrets:title')}</h2>
-          <p>{t('secrets:titleHint')}</p>
-        </header>
+        {embedded ? null : (
+          <header className={styles.sectionHeader}>
+            <h2>{t('secrets:title')}</h2>
+            <p>{t('secrets:titleHint')}</p>
+          </header>
+        )}
         <div className={styles.secretsMode} data-state={status.data.kind}>
           <span className={styles.backupIcon} aria-hidden="true">
             <SecretIcon kind={status.data.kind} />

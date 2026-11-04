@@ -28,7 +28,7 @@ import { useErrorText } from '../lib/useErrorText.js';
 import { ConfirmActionDialog } from './ConfirmActionDialog.js';
 import styles from './SettingsPanel.module.css';
 
-export function ProfilesPanel() {
+export function ProfilesPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { t } = useTranslation();
   const errorText = useErrorText();
   const profiles = useProfiles();
@@ -160,10 +160,12 @@ export function ProfilesPanel() {
       ) : null}
 
       <section className={styles.section}>
-        <header className={styles.sectionHeader}>
-          <h2>{t('profiles:title')}</h2>
-          <p>{t('profiles:titleHint')}</p>
-        </header>
+        {embedded ? null : (
+          <header className={styles.sectionHeader}>
+            <h2>{t('profiles:title')}</h2>
+            <p>{t('profiles:titleHint')}</p>
+          </header>
+        )}
         <form className={styles.field} onSubmit={(event) => void submitCreate(event)}>
           <span className={styles.fieldLabel}>{t('profiles:createName')}</span>
           <div className={styles.createRow}>

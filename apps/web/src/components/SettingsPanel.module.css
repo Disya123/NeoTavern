@@ -515,3 +515,25 @@
     white-space: nowrap;
   }
 }
+
+/* The AI settings panel is a floating panel by construction; inside the window its own
+   header would be a second title under the section label, so it is hidden and its tabs
+   sit directly under the section heading. */
+.windowBody [data-part='ai-settings-header'] {
+  display: none;
+}
+
+.windowBody [data-component='ai-settings-panel'] {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+/* A page that owns its own height cannot live inside a scrolling body: it would either
+   clip its list or refuse to scroll. Embedded pages give up their height claim. */
+.windowBody [data-component='plugin-manager'],
+.windowBody [data-component='theme-manager'] {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}

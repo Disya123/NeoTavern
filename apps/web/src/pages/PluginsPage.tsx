@@ -45,7 +45,12 @@ interface PluginDeleteTarget {
   name: string;
 }
 
-export function PluginsPage() {
+export interface PluginsPageProps {
+  /** Hides the page header when hosted in the settings window (see ThemesPage). */
+  embedded?: boolean;
+}
+
+export function PluginsPage({ embedded = false }: PluginsPageProps = {}) {
   const { t } = useTranslation();
   const plugins = usePlugins();
   const install = useInstallPlugin();
@@ -197,11 +202,13 @@ export function PluginsPage() {
     <ErrorBoundary name="plugins">
       <div className={styles.page} data-component="plugin-manager">
         <header className={styles.header}>
-          <div>
-            <span>{t('plugins:eyebrow')}</span>
-            <h1>{t('plugins:title')}</h1>
-            <p>{t('plugins:subtitle')}</p>
-          </div>
+          {embedded ? null : (
+            <div>
+              <span>{t('plugins:eyebrow')}</span>
+              <h1>{t('plugins:title')}</h1>
+              <p>{t('plugins:subtitle')}</p>
+            </div>
+          )}
           {hasBundleHost() ? (
             <Button variant="primary" disabled={busy} onClick={() => void choosePackageFolder()}>
               <DownloadSimple aria-hidden="true" />

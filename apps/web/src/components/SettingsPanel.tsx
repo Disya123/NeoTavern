@@ -138,7 +138,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
       icon: Cube,
       content: (
         <FloatingTabContent>
-          <PluginsPage />
+          <PluginsPage embedded />
         </FloatingTabContent>
       ),
     },
@@ -158,7 +158,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
       icon: Sliders,
       content: (
         <FloatingTabContent>
-          <ProfilesPanel />
+          <ProfilesPanel embedded />
         </FloatingTabContent>
       ),
     },
@@ -168,7 +168,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
       icon: ShieldCheck,
       content: (
         <FloatingTabContent>
-          <SecretsPanel />
+          <SecretsPanel embedded />
         </FloatingTabContent>
       ),
     },
@@ -178,7 +178,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
       icon: Plug,
       content: (
         <FloatingTabContent>
-          <ToolsPanel />
+          <ToolsPanel embedded />
         </FloatingTabContent>
       ),
     },
