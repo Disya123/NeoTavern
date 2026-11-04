@@ -24,6 +24,19 @@
 
 ### Added
 
+- **Supervisor policy for plugin processes (round 86/99, ADR-0066 D7/P3a).**
+  `crates/runtime-kernel/src/plugin_supervisor.rs` is the decision half of the
+  supervisor and nothing more: it never spawns or kills a process, so the rules are
+  testable without a GPU or a model. Clean exit is a stop, not a failure; crashes and
+  hangs back off exponentially (100 ms → cap) and are named to the user ("plugin
+  stopped responding for 5s"); after the restart budget the plugin is marked
+  `Failed` and stays installed but not running; heartbeats reset the crash streak,
+  an operator reset clears the failure state. Verified: 7/7 unit tests, no clock, no
+  I/O. The host half (one OS process per native plugin, budgets, kill on lease loss)
+  is the next slice, with the destructive acceptance tests from ADR-0066 D9.
+
+### Added
+
 - **The desktop host exposes bundle install/read (round 85/99, ADR-0066 P2b).**
   `KernelHost::install_plugin_bundle` and `read_plugin_bundle` wrap the bundle store
   against the host's data root; both refuse a stateless host instead of pretending.
