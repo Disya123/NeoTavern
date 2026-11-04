@@ -395,6 +395,22 @@ export function validateManifest(input: unknown): Result<PluginManifest> {
     }
   }
 
+  // A plugin that wants the whole window must ask for the capability that grants it:
+  // the UI declaration alone is a wish, the grant is the consent moment (ADR-0066 D4).
+  if (runtime?.ui === 'shell') {
+    const declared = Array.isArray(input['requiredCapabilities'])
+      ? input['requiredCapabilities']
+      : [];
+    const asksForShell = declared.some((entry) =>
+      typeof entry === 'string'
+        ? entry === 'ui.shell.replace'
+        : isRecord(entry) && entry['name'] === 'ui.shell.replace',
+    );
+    if (!asksForShell) {
+      issues.push("runtime.ui 'shell' requires the ui.shell.replace capability");
+    }
+  }
+
   let checksums: Record<string, string> | undefined;
   if (input['checksums'] !== undefined) {
     if (!isRecord(input['checksums'])) {

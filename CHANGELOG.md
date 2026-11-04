@@ -24,6 +24,15 @@
 
 ### Added
 
+- **Shell replacement needs consent, not just a wish (round 94/99, ADR-0066 D4).**
+  `ui.shell.replace` joins the capability catalog, and a manifest that declares
+  `runtime.ui: 'shell'` without requesting it is rejected: the UI declaration is a
+  wish, the grant is the consent moment. Panel, overlay and `none` surfaces are
+  unaffected. Verified: plugin-sdk 95/95 (4 new cases incl. the scoped-object form),
+  tsc clean.
+
+### Added
+
 - **Plugin process health panel (round 93/99, ADR-0066 P3c-6).**
   `PluginProcessHealthPanel` renders what the supervisor knows: state, restart count,
   the last failure reason, and stop/reset actions. A browser session says plainly that

@@ -68,6 +68,9 @@ export const CAPABILITY_NAMES = [
   'ui.global-shortcuts',
   'ui.messageBlock',
   'ui.notification',
+  // ADR-0066 D4: a plugin may replace the whole shell, and the host keeps a way
+  // back that the plugin cannot draw over.
+  'ui.shell.replace',
   // Compute
   'compute.worker',
   'compute.backend',

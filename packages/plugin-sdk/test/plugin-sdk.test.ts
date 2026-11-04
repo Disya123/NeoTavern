@@ -481,6 +481,7 @@ describe('runtime declaration (ADR-0066)', () => {
   it('accepts a native plugin that names its binaries and their digests', () => {
     const result = validateManifest({
       ...base,
+      requiredCapabilities: ['ui.shell.replace'],
       runtime: {
         host: 'native',
         ui: 'shell',
@@ -551,5 +552,43 @@ describe('runtime declaration (ADR-0066)', () => {
   it('rejects an unsafe checksum path', () => {
     const result = validateManifest({ ...base, checksums: { '../escape.js': 'a'.repeat(64) } });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('shell replacement consent (ADR-0066 D4)', () => {
+  const base = { id: 'author.shell', name: 'Shell', version: '1.0.0', apiVersion: 3 };
+
+  it('rejects a shell UI that did not ask for the capability', () => {
+    const result = validateManifest({ ...base, runtime: { host: 'sandbox', ui: 'shell' } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(String(result.error.message)).toMatch(/ui\.shell\.replace/u);
+    }
+  });
+
+  it('accepts a shell UI that declares the capability', () => {
+    const result = validateManifest({
+      ...base,
+      runtime: { host: 'sandbox', ui: 'shell' },
+      requiredCapabilities: ['ui.shell.replace'],
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.runtime?.ui).toBe('shell');
+  });
+
+  it('accepts the scoped-object form of the capability', () => {
+    const result = validateManifest({
+      ...base,
+      runtime: { host: 'sandbox', ui: 'shell' },
+      requiredCapabilities: [{ name: 'ui.shell.replace' }],
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('leaves panel and overlay UIs alone', () => {
+    for (const ui of ['none', 'panel', 'overlay'] as const) {
+      const result = validateManifest({ ...base, runtime: { host: 'sandbox', ui } });
+      expect(result.ok, `${ui} must not demand the shell grant`).toBe(true);
+    }
   });
 });
