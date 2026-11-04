@@ -18,63 +18,56 @@ This is the **migration / deprecation guide** for ТЗ §20 Этап 6 (ledger
   legacy full-data **user data** (character cards, chats, backups) keeps
   importing through Settings → Data.
 
-## What stays until the remaining specs are ported
+## Status after rounds 60a–60c-1 (2026-11-04)
 
-| Surface                         | Why it still exists                                                                                              |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `apps/server` Fastify `/api/v2` | `pnpm test:e2e:legacy` (`playwright.legacy.config.ts` / `e2e/legacy/`) — plugins, theme ZIP, echo, context-audit |
-| `packages/db` Drizzle schema    | Legacy adapter for `app.db`                                                                                      |
-| `legacyRaw()`                   | Unmigrated UI calls tracked in `docs/architecture/operations-inventory.md`                                       |
-| ADR-0048 / ADR-0047 w7 waivers  | Expire at this stage / the release gate                                                                          |
+Done and committed:
 
-## Cutover sequence (in progress on `pr-m7-etap6-slices`)
+- **The public desktop build runs the Kernel by default** (60a): the mode
+  resolver no longer consults the build channel, and the sidecar is reachable only
+  through `NEOTA_LEGACY_SERVER=1` for one transition window;
+- **the shell ships only the kernel** (60a): `DesktopMode`, the spawn/stop
+  lifecycle, `tauri-plugin-shell`, the `pkg` snapshot, the `sharp`/`better-sqlite3`
+  trees and the `externalBin` entry are deleted; the portable artifact contains no
+  `neotavern-server.exe`;
+- **`apps/server` and `packages/db` are deleted** (60b), with
+  `playwright.legacy.config.ts`, `e2e/legacy/**`, `test:e2e:legacy` and the vitest
+  SQLite probe. The starter assets the kernel embeds moved to
+  `crates/runtime-kernel/assets/starter`;
+- **`UnsupportedError` moved out of `legacyBackend.ts`** (60c-1) into
+  `packages/neobackend/src/errors.ts`, so the backend file can be deleted without
+  taking the error class with it.
 
-1. **Slice 1 (this branch):** Playwright default (`pnpm test:e2e`) boots
-   `neotavern-headless` + `apps/web/dist`. Kernel specs seed data over
-   Product Wire (`e2e/wire.ts`). Fastify suite is quarantined as
-   `pnpm test:e2e:legacy`. The browser honors a saved remote `hostSession`.
-2. Switch the desktop **public default** to Kernel (release gate in
-   AGENTS.md §21) so the sidecar is no longer the honest default.
-3. Delete Drizzle product tables and the legacy writer; keep a read-only
-   ST import path if cards/chats still arrive as ST1 dumps.
-4. Delete `legacyRaw()` call sites (fail the ui:api check if any remain)
-   and the `LegacyBackend` class.
-5. ~~Keep a versioned ST Compatibility API only if a remaining extension
-   surface still needs it; otherwise delete the Express compatibility host.~~
-   Done differently: the Express compatibility host was deleted outright on
-   2026-10-31 (ADR-0059 slice) — there is no legacy full-data Compatibility API
-   to keep.
-6. Recovery drills, SBOM/provenance, two real upgrade cycles — release-gate
-   items, not this branch.
+What remains of the legacy plane is **web-only dead code**, tracked as g6:
 
-## Delete inventory (Fastify still required by `e2e/legacy`)
+| Surface                                                   | Why it still exists                                                                                                                        | Plan                                                                                                                                          |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LegacyBackend` / `legacyRaw()`                           | the plugin kernel bridge (`apps/web/src/plugins/kernel/{chat,jobs,events,storage,auth}.ts`) is a REST implementation with no kernel branch | convert the bridge to the facade (`chats.get`, `chats.listMessages`, `chats.createMessage`, draft ops), then delete the class and `legacyRaw` |
+| `/api/v2` string branches in hooks                        | ~322 `isKernelMode()` sites in 23 files                                                                                                    | remove per domain once the bridge is kernel-only                                                                                              |
+| `packages/neobackend/test/parity.test.ts` legacy sections | they assert the deleted behaviour                                                                                                          | delete with the code they cover                                                                                                               |
 
-These surfaces are the remaining cutover targets. Slice 1 quarantined the
-Playwright Fastify boot into `e2e/legacy/` + `playwright.legacy.config.ts`;
-it did not delete `apps/server`.
+## Migration notes for users of the removed contour
 
-| Surface                                                                           | Role until cutover                                                        |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `apps/server`                                                                     | Fastify `/api/v2` product host (desktop sidecar + `pnpm test:e2e:legacy`) |
-| `packages/db`                                                                     | Drizzle schema for legacy `app.db`                                        |
-| `LegacyBackend` + `legacyRaw()` in `apps/web/src/api/backend.ts`                  | Facade transport for the sidecar                                          |
-| `apps/web/src/api/{client,events,generate,legacyExtensionSettings,wireBridge}.ts` | Remaining `/api/v2` sites (`docs/architecture/ui-legacy-surface.md`)      |
-| ADR-0048 message swipe/draft/revision routes                                      | Deleted with the Fastify product writer                                   |
-| ADR-0047 waiver 7                                                                 | Legacy Fastify product-data ownership — expires at this stage             |
+1. **Nothing to migrate by hand for product data.** The kernel opens
+   `database.sqlite` in the data root; a legacy `app.db` is imported through
+   Settings → Data (ADR-0062 staged-root lifecycle: plan → stage → validate →
+   activate → rollback). A failed import keeps the previous root active.
+2. **A stale `app.db` is not read implicitly.** There is no silent fallback: a data
+   root without `database.sqlite` is an error, and the packaged smoke treats it that
+   way.
+3. **The sidecar is gone.** `NEOTA_LEGACY_SERVER` no longer exists (round 60a
+   removed the switch together with the mode); the desktop shell always embeds the
+   kernel. `apps/server/data/` in a developer checkout is untouched user data and
+   can be deleted by the owner.
+4. **The portable artifact is the release.** `NeoTavern_0.1.0_x64-portable.zip`
+   (built by `scripts/package-portable-windows.mjs`, smoked by
+   `scripts/smoke-desktop-shell.mjs`) contains the executable, `resources/` and
+   `portable.flag`; user data is created in `data/` beside it.
 
-There is no versioned legacy full-data Compatibility API: it was removed outright
-on 2026-10-31 (ADR-0059 slice) together with the Express compatibility host,
-so this stage no longer has a plugin-compat contingency. The Этап 6 cleanup
-now covers only the Fastify/Drizzle sidecar and the `app.db` contour.
+## Cutover sequence (historical)
 
-## Rollback
-
-There is **no automatic down** for deleting Fastify. Rollback is a backup
-restore of the previous release artifact plus the previous data-root.
-Do not run a hidden destructive migration while reading data.
-
-## Related
-
-- [ADR-0038](../adr/0038-canonical-rust-kernel-core.md) — canonical Kernel core
-- [operations inventory](../architecture/operations-inventory.md) — remaining `/api/v2` rows
-- Ledger `M7-etap6-legacy-removal`
+1. Playwright default boots `neotavern-headless` + `apps/web/dist`; the Fastify
+   suite was quarantined as `test:e2e:legacy` and is now deleted.
+2. The desktop public default moved to the Kernel (60a).
+3. Drizzle product tables and the legacy writer were deleted (60b).
+4. `legacyRaw()` removal is the open item: the plugin bridge must become
+   kernel-only first (g6, see the table above).

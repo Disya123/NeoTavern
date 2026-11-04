@@ -22,6 +22,18 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Changed
+
+- **Migration guide reflects the deleted contour (round 60c-2/99).**
+  `docs/migrations/etap6-legacy-removal.md` no longer describes a future state: it
+  records what 60a–60c-1 actually removed (sidecar, `apps/server`, `packages/db`,
+  legacy E2E, the error class's old home) and what is left (web-only
+  `LegacyBackend`/`legacyRaw` and the plugin bridge that still speaks REST). It
+  also states the user-facing rules plainly: product data imports through
+  Settings → Data via the ADR-0062 staged-root lifecycle, a missing
+  `database.sqlite` is an error rather than an implicit `app.db` fallback, the
+  sidecar switch no longer exists, and the portable zip is the release artifact.
+
 ### Removed
 
 - **The legacy contour is gone from the tree (round 60b/99, ADR-0038).**
