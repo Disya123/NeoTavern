@@ -22,6 +22,16 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Changed
+
+- **Settings are a window with a map, not a strip of tabs (UI).** `SettingsPanel` used
+  segmented tabs, so the six destinations scrolled sideways and the current section had
+  no place of its own. It now has a section rail on the left — General, Themes, Data,
+  Profiles, Security, Tools, and Remote on the desktop shell — with the section content
+  filling the rest. On narrow screens the rail turns into a horizontal strip above the
+  content, so a phone shows the same window full-screen with the content at full width.
+  Verified: components 198/198, tsc clean.
+
 ### Added
 
 - **A plugin can take over the window, and only with a grant (round 110/99, ADR-0066 D4 closed).**

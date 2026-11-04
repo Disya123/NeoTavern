@@ -404,3 +404,91 @@
     }
   }
 }
+
+/* The settings window: a section rail on the left, the section's own content on the
+   right. The rail is the map — every setting in the product is reachable from here, so
+   it has to stay visible while the content scrolls. */
+.window {
+  display: grid;
+  grid-template-columns: 11.5rem minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sectionNav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.5rem 0.5rem 0.75rem;
+  border-inline-end: 1px solid var(--st-border);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sectionButton {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: var(--st-radius-sm);
+  background: transparent;
+  color: var(--st-text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.sectionButton:hover {
+  background: var(--st-surface-subtle);
+  color: var(--st-text);
+}
+
+.sectionButton[data-active] {
+  background: var(--st-surface-strong);
+  color: var(--st-text);
+  font-weight: 600;
+}
+
+.sectionButton:focus-visible {
+  outline: 2px solid var(--st-focus-ring);
+  outline-offset: 1px;
+}
+
+.windowBody {
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 40rem) {
+  .window {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sectionNav {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--st-border);
+    padding: 0 0 0.5rem;
+    gap: 0.25rem;
+    scrollbar-width: none;
+  }
+
+  .sectionNav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sectionButton {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}

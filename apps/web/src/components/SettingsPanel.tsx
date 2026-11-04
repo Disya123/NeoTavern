@@ -2,13 +2,17 @@ import {
   ArrowClockwise,
   Database,
   DownloadSimple,
+  PencilSimple,
+  Plug,
+  ShieldCheck,
   SlidersHorizontal,
+  Sliders,
   Trash,
 } from '@phosphor-icons/react';
 import { useState, type ChangeEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { ActionBar, ActionBarGroup, Button, Segmented, Tabs } from '@neotavern/ui';
+import { ActionBar, ActionBarGroup, Button, Segmented } from '@neotavern/ui';
 import { SUPPORTED_LANGUAGES } from '@neotavern/i18n';
 import type { AuthSession } from '@neotavern/contracts';
 import {
@@ -58,15 +62,26 @@ export interface SettingsPanelProps {
 }
 
 /** Settings menu: tabbed General / Themes / Data panel (role="tablist"). */
+type SettingsSectionId = 'general' | 'themes' | 'data' | 'profiles' | 'secrets' | 'tools' | 'remote';
+
+interface SectionEntry {
+  value: SettingsSectionId;
+  label: string;
+  icon: typeof Sliders;
+  content: ReactNode;
+}
+
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const { t } = useTranslation();
+  const [section, setSection] = useState<SettingsSectionId>('general');
   // Desktop-shell-only tab: the kernel remote server exists only in the
   // packaged app, so browsers never see (or invoke) it.
-  const remoteTab = isTauriRuntime()
+  const remoteTab: readonly SectionEntry[] = isTauriRuntime()
     ? [
         {
           value: 'remote',
           label: t('settings:remoteAccess'),
+          icon: ShieldCheck,
           content: (
             <FloatingTabContent>
               <RemoteAccessPanel />
@@ -75,6 +90,70 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         },
       ]
     : [];
+  const sections: readonly SectionEntry[] = [
+    {
+      value: 'general',
+      label: t('settings:general'),
+      icon: Sliders,
+      content: (
+        <FloatingTabContent>
+          <GeneralTab onClose={onClose} />
+        </FloatingTabContent>
+      ),
+    },
+    {
+      value: 'themes',
+      label: t('navigation:themes'),
+      icon: PencilSimple,
+      content: (
+        <FloatingTabContent>
+          <ThemesTab />
+        </FloatingTabContent>
+      ),
+    },
+    {
+      value: 'data',
+      label: t('settings:data'),
+      icon: Database,
+      content: (
+        <FloatingTabContent>
+          <DataTab />
+        </FloatingTabContent>
+      ),
+    },
+    {
+      value: 'profiles',
+      label: t('navigation:profiles'),
+      icon: Sliders,
+      content: (
+        <FloatingTabContent>
+          <ProfilesPanel />
+        </FloatingTabContent>
+      ),
+    },
+    {
+      value: 'secrets',
+      label: t('navigation:secrets'),
+      icon: ShieldCheck,
+      content: (
+        <FloatingTabContent>
+          <SecretsPanel />
+        </FloatingTabContent>
+      ),
+    },
+    {
+      value: 'tools',
+      label: t('settings:tools'),
+      icon: Plug,
+      content: (
+        <FloatingTabContent>
+          <ToolsPanel />
+        </FloatingTabContent>
+      ),
+    },
+    ...remoteTab,
+  ];
+
   return (
     <FloatingTabPanel
       component="settings-panel"
@@ -87,71 +166,30 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       title={t('settings:title')}
       onClose={onClose}
     >
-      <Tabs
-        variant="segment"
-        ariaLabel={t('settings:title')}
-        defaultValue="general"
-        className={styles.tabs}
-        contentClassName={styles.tabPanel}
-        scrollable
-        scrollMode="root"
-        tabs={[
-          {
-            value: 'general',
-            label: t('settings:general'),
-            content: (
-              <FloatingTabContent>
-                <GeneralTab onClose={onClose} />
-              </FloatingTabContent>
-            ),
-          },
-          {
-            value: 'themes',
-            label: t('navigation:themes'),
-            content: (
-              <FloatingTabContent>
-                <ThemesTab />
-              </FloatingTabContent>
-            ),
-          },
-          {
-            value: 'data',
-            label: t('settings:data'),
-            content: (
-              <FloatingTabContent>
-                <DataTab />
-              </FloatingTabContent>
-            ),
-          },
-          {
-            value: 'profiles',
-            label: t('navigation:profiles'),
-            content: (
-              <FloatingTabContent>
-                <ProfilesPanel />
-              </FloatingTabContent>
-            ),
-          },
-          {
-            value: 'secrets',
-            label: t('navigation:secrets'),
-            content: (
-              <FloatingTabContent>
-                <SecretsPanel />
-              </FloatingTabContent>
-            ),
-          },
-          {
-            value: 'tools',
-            label: t('settings:tools'),
-            content: (
-              <FloatingTabContent>
-                <ToolsPanel />
-              </FloatingTabContent>
-            ),
-          },
-          ...remoteTab,
-        ]}
+      <div className={styles.window}>
+        <nav className={styles.sectionNav} aria-label={t('settings:title')}>
+          {sections.map((entry) => {
+            const EntryIcon = entry.icon;
+            const active = entry.value === section;
+            return (
+              <button
+                key={entry.value}
+                type="button"
+                className={styles.sectionButton}
+                data-active={active || undefined}
+                aria-current={active ? 'page' : undefined}
+                onClick={() => setSection(entry.value)}
+              >
+                <EntryIcon size={18} aria-hidden="true" />
+                <span>{entry.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className={styles.windowBody}>
+          {sections.find((entry) => entry.value === section)?.content}
+        </div>
+      </div>
       />
     </FloatingTabPanel>
   );
