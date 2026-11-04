@@ -240,7 +240,15 @@ export const useUiStore = create<UiState>((set) => ({
   },
   sidebarOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
-  navigationRailExpanded: readStored('neotavern.navigationRailExpanded', 'true') === 'true',
+  // On a phone the rail is a full-screen menu, so "expanded" would mean the app opens
+  // into navigation instead of the conversation. Default it closed below 600px.
+  navigationRailExpanded:
+    readStored(
+      'neotavern.navigationRailExpanded',
+      typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches
+        ? 'false'
+        : 'true',
+    ) === 'true',
   setNavigationRailExpanded: (expanded) => {
     store('neotavern.navigationRailExpanded', String(expanded));
     set({ navigationRailExpanded: expanded });

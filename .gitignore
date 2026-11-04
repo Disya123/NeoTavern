@@ -95,3 +95,6 @@ __pycache__/
 
 # Local-only GPU raster evidence (ADR-0057 desktop bridge): never committed.
 artifacts/
+
+# Local UI screenshots from scripts/ui-shots.mjs
+.ui-shots/
