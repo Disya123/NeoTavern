@@ -24,6 +24,18 @@
 
 ### Added
 
+- **Plugin manifests can declare execution and UI (round 82/99, ADR-0066 P1).**
+  `validateManifest` now accepts an optional `runtime` block (`host: sandbox|wasm|native`,
+  `ui: none|panel|overlay|shell`, a `wasm` entry, per-platform `native` targets) and
+  a `checksums` map. Structural rules are enforced, not decorative: a `native` host
+  needs at least one platform, a `wasm` host needs its entry, and every executable
+  entry needs a lowercase sha256 digest — the host must be told which bytes it will
+  run. Manifests without the block keep working as sandboxed extensions, which is
+  what every 0.1.0 plugin was. Verified: plugin-sdk 31/31 (7 new cases), tsc clean.
+  Still open before anything can load: kernel bundle staging (P2).
+
+### Added
+
 - **Plugin platform design (round 81/99, ADR-0066).** The plugin system is scoped as
   an application platform, not a bag of integrations: hybrid execution (sandboxed
   JS realm, WASM in its own worker process, one OS process per native plugin),

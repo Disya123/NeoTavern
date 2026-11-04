@@ -62,7 +62,60 @@ export interface PluginManifest {
    */
   publisher?: { keyId: string };
   signature?: string;
+  /**
+   * Execution and UI declaration (ADR-0066). Optional for compatibility: a
+   * manifest without it is a sandboxed extension, which is what every 0.1.0
+   * plugin was.
+   */
+  runtime?: PluginRuntimeDeclaration;
+  /**
+   * Package contents digest (ADR-0066 D5): package-relative path → lowercase
+   * sha256. Required for native and wasm entries; signatures prove origin, these
+   * prove the bytes the host will execute.
+   */
+  checksums?: Record<string, string>;
 }
+
+/**
+ * Where each part of a plugin runs (ADR-0066 D1/D2).
+ *
+ * The manifest declares execution, the client never infers it: a plugin that needs
+ * ONNX or a GPU says `host: 'native'` and names its binaries, and a client that
+ * cannot run them reports a capability error instead of computing locally.
+ */
+export type PluginHostRuntime = 'sandbox' | 'wasm' | 'native';
+
+/** UI surface the plugin asks for (ADR-0066 D4). */
+export type PluginUiSurface = 'none' | 'panel' | 'overlay' | 'shell';
+
+export interface PluginRuntimeDeclaration {
+  /** Where the plugin's own logic executes on the host. */
+  host: PluginHostRuntime;
+  /** Surface the plugin renders into; `shell` replaces the stock UI. */
+  ui?: PluginUiSurface;
+  /** WASM entry, required when `host` is `wasm`. */
+  wasm?: string;
+  /** Native entries, one per platform alias; required when `host` is `native`. */
+  native?: PluginNativeTarget[];
+}
+
+export interface PluginNativeTarget {
+  /** `windows-x64`, `macos-arm64`, `macos-x64`, `linux-x64`, `linux-arm64`. */
+  platform: string;
+  /** Package-relative path of the executable. */
+  entry: string;
+}
+
+/** Platform aliases a package may declare. */
+export const PLUGIN_NATIVE_PLATFORMS = [
+  'windows-x64',
+  'macos-arm64',
+  'macos-x64',
+  'linux-x64',
+  'linux-arm64',
+] as const;
+
+const SHA256_RE = /^[0-9a-f]{64}$/u;
 
 /** A public OAuth 2.0 client descriptor (authorization-code + PKCE). */
 export interface PluginAuthClient {
@@ -277,6 +330,104 @@ export function validateManifest(input: unknown): Result<PluginManifest> {
     authClients = parseAuthClients(input['authClients'], issues) ?? undefined;
   }
 
+  let runtime: PluginRuntimeDeclaration | undefined;
+  if (input['runtime'] !== undefined) {
+    if (!isRecord(input['runtime'])) {
+      issues.push('runtime must be an object');
+    } else {
+      const host = input['runtime']['host'];
+      const ui = input['runtime']['ui'];
+      if (host !== 'sandbox' && host !== 'wasm' && host !== 'native') {
+        issues.push("runtime.host must be one of 'sandbox', 'wasm', 'native'");
+      }
+      if (ui !== undefined && !['none', 'panel', 'overlay', 'shell'].includes(ui as string)) {
+        issues.push("runtime.ui must be one of 'none', 'panel', 'overlay', 'shell'");
+      }
+      const wasm = input['runtime']['wasm'];
+      if (wasm !== undefined && (typeof wasm !== 'string' || !isSafePackagePath(wasm))) {
+        issues.push('runtime.wasm must be a safe relative package path');
+      }
+      if (host === 'wasm' && typeof wasm !== 'string') {
+        issues.push("runtime.wasm is required when runtime.host is 'wasm'");
+      }
+      let native: PluginNativeTarget[] | undefined;
+      if (input['runtime']['native'] !== undefined) {
+        if (!Array.isArray(input['runtime']['native'])) {
+          issues.push('runtime.native must be an array');
+        } else {
+          native = [];
+          for (const target of input['runtime']['native']) {
+            if (!isRecord(target)) {
+              issues.push('runtime.native entries must be objects');
+              continue;
+            }
+            const platform = target['platform'];
+            const entry = target['entry'];
+            if (
+              typeof platform !== 'string' ||
+              !(PLUGIN_NATIVE_PLATFORMS as readonly string[]).includes(platform)
+            ) {
+              issues.push(
+                `runtime.native platform must be one of ${PLUGIN_NATIVE_PLATFORMS.join(', ')}`,
+              );
+              continue;
+            }
+            if (typeof entry !== 'string' || !isSafePackagePath(entry)) {
+              issues.push('runtime.native entry must be a safe relative package path');
+              continue;
+            }
+            native.push({ platform, entry });
+          }
+        }
+      }
+      if (host === 'native' && (!native || native.length === 0)) {
+        issues.push("runtime.native must name at least one platform when runtime.host is 'native'");
+      }
+      if ((host === 'wasm' || host === 'native') && input['runtime']['ui'] === 'none') {
+        // A compute-only plugin is legitimate; nothing to check.
+      }
+      runtime = {
+        host: host as PluginHostRuntime,
+        ...(ui === undefined ? {} : { ui: ui as PluginUiSurface }),
+        ...(typeof wasm === 'string' ? { wasm } : {}),
+        ...(native === undefined ? {} : { native }),
+      };
+    }
+  }
+
+  let checksums: Record<string, string> | undefined;
+  if (input['checksums'] !== undefined) {
+    if (!isRecord(input['checksums'])) {
+      issues.push('checksums must be an object of path → sha256');
+    } else {
+      checksums = {};
+      for (const [file, digest] of Object.entries(input['checksums'])) {
+        if (!isSafePackagePath(file)) {
+          issues.push(`checksums.${file}: unsafe package path`);
+          continue;
+        }
+        if (typeof digest !== 'string' || !SHA256_RE.test(digest)) {
+          issues.push(`checksums.${file}: must be a lowercase sha256 hex digest`);
+          continue;
+        }
+        checksums[file] = digest;
+      }
+    }
+  }
+  // A host that is asked to execute bytes must be told which bytes: every wasm and
+  // native entry needs a digest, otherwise integrity is a claim without evidence.
+  if (runtime) {
+    const required = [
+      ...(runtime.wasm ? [runtime.wasm] : []),
+      ...(runtime.native ?? []).map((target) => target.entry),
+    ];
+    for (const file of required) {
+      if (!checksums || checksums[file] === undefined) {
+        issues.push(`checksums.${file}: missing digest for an executable entry`);
+      }
+    }
+  }
+
   if (issues.length > 0) {
     return err(
       new AppError({
@@ -288,6 +439,8 @@ export function validateManifest(input: unknown): Result<PluginManifest> {
   }
 
   const manifest: PluginManifest = {
+    ...(runtime === undefined ? {} : { runtime }),
+    ...(checksums === undefined ? {} : { checksums }),
     id: id as string,
     name: name as string,
     version: version as string,

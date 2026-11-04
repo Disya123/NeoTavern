@@ -467,3 +467,89 @@ describe('PluginRuntime', () => {
     expect(runtime.state).toBe('idle');
   });
 });
+
+describe('runtime declaration (ADR-0066)', () => {
+  const base = { id: 'author.plugin', name: 'Plugin', version: '1.0.0', apiVersion: 3 };
+  const digest = 'a'.repeat(64);
+
+  it('defaults to a sandboxed extension when runtime is absent', () => {
+    const result = validateManifest(base);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.runtime).toBeUndefined();
+  });
+
+  it('accepts a native plugin that names its binaries and their digests', () => {
+    const result = validateManifest({
+      ...base,
+      runtime: {
+        host: 'native',
+        ui: 'shell',
+        native: [
+          { platform: 'windows-x64', entry: 'native/win/agent.exe' },
+          { platform: 'linux-x64', entry: 'native/linux/agent' },
+        ],
+      },
+      checksums: {
+        'native/win/agent.exe': digest,
+        'native/linux/agent': digest,
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.runtime?.host).toBe('native');
+      expect(result.value.runtime?.native).toHaveLength(2);
+      expect(result.value.runtime?.ui).toBe('shell');
+    }
+  });
+
+  it('rejects a native plugin without an executable digest', () => {
+    const result = validateManifest({
+      ...base,
+      runtime: { host: 'native', native: [{ platform: 'windows-x64', entry: 'native/agent.exe' }] },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(String(result.error.message)).toMatch(/missing digest/u);
+  });
+
+  it('rejects a native plugin with no platform targets and an unknown platform', () => {
+    const empty = validateManifest({ ...base, runtime: { host: 'native' } });
+    expect(empty.ok).toBe(false);
+    const unknown = validateManifest({
+      ...base,
+      runtime: {
+        host: 'native',
+        native: [{ platform: 'plan9', entry: 'native/agent' }],
+      },
+      checksums: { 'native/agent': digest },
+    });
+    expect(unknown.ok).toBe(false);
+  });
+
+  it('requires a wasm entry and a digest for it', () => {
+    const missingEntry = validateManifest({ ...base, runtime: { host: 'wasm' } });
+    expect(missingEntry.ok).toBe(false);
+    const missingDigest = validateManifest({
+      ...base,
+      runtime: { host: 'wasm', wasm: 'wasm/plugin.wasm' },
+    });
+    expect(missingDigest.ok).toBe(false);
+    const ok = validateManifest({
+      ...base,
+      runtime: { host: 'wasm', wasm: 'wasm/plugin.wasm' },
+      checksums: { 'wasm/plugin.wasm': digest },
+    });
+    expect(ok.ok).toBe(true);
+  });
+
+  it('rejects an unknown ui surface and a malformed checksum', () => {
+    const badUi = validateManifest({ ...base, runtime: { host: 'sandbox', ui: 'hologram' } });
+    expect(badUi.ok).toBe(false);
+    const badDigest = validateManifest({ ...base, checksums: { 'ui/app.js': 'not-a-digest' } });
+    expect(badDigest.ok).toBe(false);
+  });
+
+  it('rejects an unsafe checksum path', () => {
+    const result = validateManifest({ ...base, checksums: { '../escape.js': 'a'.repeat(64) } });
+    expect(result.ok).toBe(false);
+  });
+});
