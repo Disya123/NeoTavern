@@ -16,6 +16,7 @@ import {
 } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import type { NavigationRailItemId, NavigationRailPanelItemId } from '@neotavern/theme-sdk';
 import { usePlugins, useThemes } from '../api/hooks.js';
 import { useUiStore, type SidebarPanelId } from '../state/ui.js';
@@ -25,7 +26,6 @@ import { SystemSurfaceLink } from './SystemSurfaceLink.js';
 import { SidebarPanelHeader } from './SidebarPanelHeader.js';
 import { matchSystemSurface } from './systemSurfaces.js';
 import { PluginSidebarPanels } from './PluginPanels.js';
-import { SettingsPanel } from './SettingsPanel.js';
 import { AiSettingsPanel as ApiBackedAiSettingsPanel } from './ai-settings/AiSettingsPanel.js';
 import { CharacterManagementPanel } from './CharacterManagementPanel.js';
 import { ChatManagementPanel } from './ChatManagementPanel.js';
@@ -69,6 +69,7 @@ const RAIL_ITEMS_BY_THEME_ID: ReadonlyMap<NavigationRailPanelItemId, RailItem> =
 
 export function Sidebar() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const sidebarOpen = useUiStore((state) => state.sidebarOpen);
   const setSidebarOpen = useUiStore((state) => state.setSidebarOpen);
   const navigationRailExpanded = useUiStore((state) => state.navigationRailExpanded);
@@ -257,7 +258,7 @@ export function Sidebar() {
           className={selected ? styles.railButtonActive : styles.railButton}
           data-part="item-control"
           data-state={selected ? 'active' : 'inactive'}
-          onClick={() => openPanel(id)}
+          onClick={() => (id === 'settings' ? navigate('/settings') : openPanel(id))}
           aria-label={t(labelKey)}
           title={t(labelKey)}
           aria-expanded={selected}
@@ -335,8 +336,6 @@ export function Sidebar() {
               <BackgroundsPanel onClose={() => setSidebarOpen(false)} />
             ) : activePanel === 'providers' ? (
               <ApiBackedAiSettingsPanel onClose={() => setSidebarOpen(false)} />
-            ) : activePanel === 'settings' ? (
-              <SettingsPanel onClose={() => setSidebarOpen(false)} />
             ) : (
               <>
                 <SidebarPanelHeader

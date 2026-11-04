@@ -70,7 +70,7 @@ export interface SettingsPanelProps {
 }
 
 /** Settings menu: tabbed General / Themes / Data panel (role="tablist"). */
-type SettingsSectionId =
+export type SettingsSectionId =
   | 'general'
   | 'ai'
   | 'plugins'
@@ -82,16 +82,22 @@ type SettingsSectionId =
   | 'tools'
   | 'remote';
 
-interface SectionEntry {
+/** One settings destination: a rail entry and the panel it shows. */
+export interface SectionEntry {
   value: SettingsSectionId;
   label: string;
   icon: typeof Sliders;
   content: ReactNode;
 }
 
-export function SettingsPanel({ onClose }: SettingsPanelProps) {
+/**
+ * The single list of settings destinations, shared by the panel and the window.
+ *
+ * Keeping it in one place is what stops the two hosts from drifting into different
+ * settings trees: add a section here and both see it.
+ */
+export function useSettingsSections(onClose: () => void): readonly SectionEntry[] {
   const { t } = useTranslation();
-  const [section, setSection] = useState<SettingsSectionId>('general');
   // Desktop-shell-only tab: the kernel remote server exists only in the
   // packaged app, so browsers never see (or invoke) it.
   const remoteTab: readonly SectionEntry[] = isTauriRuntime()
@@ -205,6 +211,13 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     },
     ...remoteTab,
   ];
+  return sections;
+}
+
+export function SettingsPanel({ onClose }: SettingsPanelProps) {
+  const { t } = useTranslation();
+  const [section, setSection] = useState<SettingsSectionId>('general');
+  const sections = useSettingsSections(onClose);
 
   return (
     <FloatingTabPanel

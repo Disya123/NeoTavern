@@ -2,7 +2,7 @@ import type { Location } from 'react-router-dom';
 
 /** System-owned management surfaces that must open over the chat workspace. */
 export type SystemSurfaceId =
-  'characters' | 'chats' | 'providers' | 'themes' | 'plugins' | 'plugin';
+  'characters' | 'chats' | 'providers' | 'themes' | 'plugins' | 'settings' | 'plugin';
 
 export interface SystemSurfaceDefinition {
   id: Exclude<SystemSurfaceId, 'plugin'>;
@@ -27,6 +27,12 @@ export const SYSTEM_SURFACES = [
     path: '/chats',
     labelKey: 'navigation:chats',
     descriptionKey: 'chat:librarySubtitle',
+  },
+  {
+    id: 'settings',
+    path: '/settings',
+    labelKey: 'navigation:settings',
+    descriptionKey: 'settings:subtitle',
   },
   {
     id: 'providers',

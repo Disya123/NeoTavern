@@ -6,6 +6,7 @@ import { PluginsPage } from '../pages/PluginsPage.js';
 import { ProvidersPage } from '../pages/ProvidersPage.js';
 import { ThemesPage } from '../pages/ThemesPage.js';
 import { SurfaceDialog } from './SurfaceDialog.js';
+import { SettingsWindow } from './SettingsWindow.js';
 import type { SystemSurfaceMatch } from './systemSurfaces.js';
 
 export interface SystemSurfaceProps {
@@ -16,6 +17,9 @@ export interface SystemSurfaceProps {
 /** Route-aware modal layer. Chat remains mounted behind every system tool. */
 export function SystemSurface({ match, onClose }: SystemSurfaceProps) {
   const { t } = useTranslation();
+  // Settings draws its own surface: it owns a section rail and its own close control, and
+  // wrapping it in a second dialog would put two dialogs on the same layer.
+  if (match.id === 'settings') return <SettingsWindow onClose={onClose} />;
   return (
     <SurfaceDialog
       open

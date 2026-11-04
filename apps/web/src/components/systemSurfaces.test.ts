@@ -21,6 +21,7 @@ describe('system surfaces', () => {
     ['/providers', 'providers'],
     ['/themes', 'themes'],
     ['/plugins', 'plugins'],
+    ['/settings', 'settings'],
     ['/plugins/example/tool', 'plugin'],
   ] as const)('matches %s as the %s modal surface', (path, id) => {
     expect(matchSystemSurface(path)?.id).toBe(id);
@@ -31,8 +32,10 @@ describe('system surfaces', () => {
     expect(matchSystemSurface('/chats/chat-7')).toBeUndefined();
   });
 
-  it('no longer exposes the removed /settings page as a surface', () => {
-    expect(matchSystemSurface('/settings')).toBeUndefined();
+  // Settings briefly left this list when it lived only as a sidebar drawer. It is a
+  // surface again, on purpose: a drawer shares space with the chat, a window does not.
+  it('opens settings as a system surface, not a drawer', () => {
+    expect(matchSystemSurface('/settings')?.id).toBe('settings');
   });
 
   it('carries the mounted workspace through nested modal navigation', () => {

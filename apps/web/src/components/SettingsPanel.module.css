@@ -408,6 +408,14 @@
 /* The settings window: a section rail on the left, the section's own content on the
    right. The rail is the map — every setting in the product is reachable from here, so
    it has to stay visible while the content scrolls. */
+.settingsWindow {
+  /* A settings window, not a drawer: wide enough for the rail plus a readable column,
+     and tall enough that sections do not start scrolled. */
+  width: min(94vw, 1120px);
+  height: min(84vh, 760px);
+  min-height: 32rem;
+}
+
 .window {
   display: grid;
   grid-template-columns: 11.5rem minmax(0, 1fr);
