@@ -1432,6 +1432,8 @@ export const ru: Resources = {
     processStateRunning: 'Работает',
     processStateBackoff: 'Перезапуск',
     processStateFailed: 'Отказ',
+    shellExit: 'Выйти из интерфейса плагина',
+    shellTitle: 'Интерфейс плагина',
     eyebrow: 'Локальные расширения',
     subtitle:
       'Устанавливайте версионированные пакеты, проверяйте каждую запрошенную возможность и управляйте lifecycle без терминала.',

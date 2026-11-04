@@ -1404,6 +1404,8 @@ export const en = {
     processStateRunning: 'Running',
     processStateBackoff: 'Restarting',
     processStateFailed: 'Failed',
+    shellExit: 'Exit plugin UI',
+    shellTitle: 'Plugin interface',
     eyebrow: 'Local extensions',
     subtitle:
       'Install versioned plugin packages, review every requested capability, and control their lifecycle without a terminal.',

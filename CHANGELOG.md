@@ -24,6 +24,18 @@
 
 ### Added
 
+- **Host container for plugin-owned UI (round 97/99, ADR-0066 D4).**
+  `PluginSurfaceHost` decides whether the stock application or a plugin's frame is on
+  screen: with no active plugin it renders the app untouched; when a plugin takes over
+  it renders an opaque-origin iframe (`sandbox="allow-scripts"`, no same-origin) and a
+  host-drawn "exit" control that is the only way back. The plugin never mounts into the
+  React tree, so a hung frame cannot trap the user or touch app state. Verified: 3/3
+  component tests (stock UI, frame attributes + plugin id in the URL, host exit
+  control restores the app), tsc, ESLint and i18n 10/10 clean. Mounting it in `App.tsx`
+  is the last step of P4.
+
+### Added
+
 - **A replaced shell always has a way back (round 96/99, ADR-0066 D4).**
   `shellMode` holds which plugin owns the window and `restore()` returns to the stock
   UI at any time — including when the plugin is hung, crashed or never loaded. The
