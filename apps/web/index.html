@@ -33,30 +33,9 @@
             (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
           if (mode === 'system') root.removeAttribute('data-theme-mode');
           else root.setAttribute('data-theme-mode', mode);
-          if (new URLSearchParams(window.location.search).has('safe')) return;
-          var skipBoot =
-            location.protocol === 'file:' ||
-            location.hostname === 'appassets.androidplatform.net' ||
-            typeof window.__neotavernMobile !== 'undefined';
-          if (skipBoot) return;
-          fetch('/api/v2/themes/boot', { credentials: 'same-origin' })
-            .then(function (response) {
-              return response.ok ? response.json() : null;
-            })
-            .then(function (boot) {
-              if (!boot || !boot.themeId) return;
-              var vars = dark ? boot.dark : boot.light;
-              for (var name in vars) root.style.setProperty(name, vars[name]);
-              root.setAttribute('data-theme-id', boot.themeId);
-              (boot.cssUrls || []).forEach(function (href) {
-                var link = document.createElement('link');
-                link.rel = 'stylesheet';
-                link.href = href;
-                link.setAttribute('data-neotavern-theme-style', boot.themeId);
-                document.head.appendChild(link);
-              });
-            })
-            .catch(function () {});
+          // Theme tokens are applied by the app once the kernel answers;
+          // the old pre-paint fetch hit /api/v2/themes/boot, a route that no
+          // longer exists now that the kernel is the only backend.
         } catch (error) {}
       })();
     </script>
