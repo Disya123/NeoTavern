@@ -8,6 +8,8 @@ import {
   EventBus,
   validateManifest,
   resolveUiSurface,
+  describeConsent,
+  requiresExplicitConsent,
   definePlugin,
   activateServerPlugin,
   PluginRuntime,
@@ -656,5 +658,52 @@ describe('native execution consent (ADR-0066 D1)', () => {
     });
     expect(wasm.ok).toBe(true);
     expect(validateManifest({ ...base, runtime: { host: 'sandbox' } }).ok).toBe(true);
+  });
+});
+
+describe('install consent summary (ADR-0066 D1)', () => {
+  const base = { id: 'author.consent', name: 'Consent', version: '1.0.0', apiVersion: 3 };
+
+  it('puts the most dangerous grants first and names them in plain terms', () => {
+    const manifest = {
+      ...base,
+      requiredCapabilities: ['network.domains', 'native.process', 'ui.shell.replace'],
+    };
+    const items = describeConsent(manifest);
+    expect(items.map((item) => item.capability)).toEqual([
+      'native.process',
+      'ui.shell.replace',
+      'network.domains',
+    ]);
+    expect(items[0]?.risk).toBe('critical');
+    expect(items[0]?.labelKey).toBe('consent.nativeProcess');
+  });
+
+  it('accepts the scoped-object form and deduplicates against the flat list', () => {
+    const manifest = {
+      ...base,
+      requiredCapabilities: [{ name: 'native.gpu' }],
+      permissions: ['native.gpu', 'clipboard.read'],
+    };
+    const items = describeConsent(manifest);
+    expect(items.filter((item) => item.capability === 'native.gpu')).toHaveLength(1);
+    expect(items.map((item) => item.capability)).toContain('clipboard.read');
+  });
+
+  it('does not invent consent items for capabilities it cannot explain', () => {
+    const manifest = { ...base, requiredCapabilities: ['storage.user', 'jobs.background'] };
+    expect(describeConsent(manifest)).toEqual([]);
+  });
+
+  it('flags packages that need an explicit, unmissable consent step', () => {
+    expect(requiresExplicitConsent({ ...base, requiredCapabilities: ['clipboard.read'] })).toBe(
+      false,
+    );
+    expect(requiresExplicitConsent({ ...base, requiredCapabilities: ['camera.request'] })).toBe(
+      true,
+    );
+    expect(requiresExplicitConsent({ ...base, requiredCapabilities: ['native.process'] })).toBe(
+      true,
+    );
   });
 });

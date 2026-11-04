@@ -24,6 +24,19 @@
 
 ### Added
 
+- **The install dialog gets its content from one function (round 102/99, ADR-0066 P5b).**
+  `describeConsent(manifest)` turns a manifest into the list the consent step shows:
+  every risky grant with an i18n label, a risk grade and a one-line rationale, sorted
+  most dangerous first. It reads both declaration forms (string and `{name, scope}`) and
+  deduplicates, so `native.gpu` declared twice is one line. Capabilities it cannot
+  explain are left out on purpose — a wall of jargon trains people to click through —
+  while the full list stays visible in the install details.
+  `requiresExplicitConsent` marks packages that need an unmissable step. Verified:
+  plugin-sdk 105/105 (4 new cases), tsc clean. The dialog component and the
+  `plugins.bundle.*` wire family remain.
+
+### Added
+
 - **All four destructive acceptance cases pass (round 101/99, ADR-0066 D9).**
   The fourth case closes the set: a plugin installed without `storage.blobs` asks for a
   blob upload and the kernel refuses it with `PLUGIN_PERMISSION_DENIED`, naming

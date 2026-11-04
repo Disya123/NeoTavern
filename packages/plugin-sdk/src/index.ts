@@ -9,6 +9,7 @@ export * from './cleanup.js';
 export * from './events.js';
 export * from './manifest.js';
 export * from './uiSurfaces.js';
+export * from './consent.js';
 export * from './frontend.js';
 export * from './backend.js';
 export * from './visual-surface.js';
