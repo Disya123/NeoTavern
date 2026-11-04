@@ -24,6 +24,18 @@
 
 ### Added
 
+- **The supervisor can actually run and kill a plugin process (round 87/99,
+  ADR-0066 P3b).** `run_guarded` spawns one child, waits with a deadline, kills and
+  reaps it on timeout, and classifies the outcome: zero exit is clean, a non-zero
+  exit is a crash carrying its code, a silent child is a hang. The child is always
+  waited for, so a killed plugin never leaves a zombie. Verified: 3 process tests
+  (clean exit, `exit 7` names the code, a 30-second sleeper is killed in under a
+  second) plus the 7 policy tests — 10/10 in the module, clippy clean. Budgets
+  (memory/GPU) and the desktop wiring are next; this proves the mechanism, not a
+  full plugin host.
+
+### Added
+
 - **Supervisor policy for plugin processes (round 86/99, ADR-0066 D7/P3a).**
   `crates/runtime-kernel/src/plugin_supervisor.rs` is the decision half of the
   supervisor and nothing more: it never spawns or kills a process, so the rules are

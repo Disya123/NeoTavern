@@ -125,7 +125,8 @@ impl Supervisor {
 
     /// Whether a heartbeat is overdue at `since_last_heartbeat`.
     pub fn is_hung(&self, since_last_heartbeat: Duration) -> bool {
-        self.state == SupervisorState::Running && since_last_heartbeat > self.policy.heartbeat_timeout
+        self.state == SupervisorState::Running
+            && since_last_heartbeat > self.policy.heartbeat_timeout
     }
 
     /// Applies an exit and decides what happens next.
@@ -229,7 +230,10 @@ mod tests {
             Some(Duration::from_millis(400))
         );
         assert_eq!(supervisor.state(), SupervisorState::Backoff);
-        assert_eq!(supervisor.last_error(), Some("plugin process exited unexpectedly"));
+        assert_eq!(
+            supervisor.last_error(),
+            Some("plugin process exited unexpectedly")
+        );
     }
 
     #[test]
@@ -249,7 +253,9 @@ mod tests {
     fn a_hang_is_named_and_reaped_like_a_crash() {
         let mut supervisor = Supervisor::new(policy());
         supervisor.start();
-        let delay = supervisor.on_exit(ExitKind::Hang, None).expect("one restart");
+        let delay = supervisor
+            .on_exit(ExitKind::Hang, None)
+            .expect("one restart");
         assert!(delay > Duration::ZERO);
         assert_eq!(
             supervisor.last_error(),
@@ -291,5 +297,118 @@ mod tests {
         assert_eq!(supervisor.state(), SupervisorState::Stopped);
         assert_eq!(supervisor.restarts(), 0);
         assert!(supervisor.last_error().is_none());
+    }
+}
+
+/// The host half: run one plugin process under the policy above.
+///
+/// Isolation is the OS process boundary — the kernel never loads plugin code. This
+/// function only *supervises*: it spawns, waits, kills on timeout and classifies the
+/// outcome. Resource budgets (memory, GPU) belong to the platform layer and are not
+/// pretended here.
+pub struct ProcessOutcome {
+    pub kind: ExitKind,
+    pub detail: Option<String>,
+    /// Wall time the process lived, for the UI and for backoff decisions.
+    pub elapsed: Duration,
+}
+
+/// Spawns `command`, waits up to `timeout`, then kills it and reports a hang.
+///
+/// A non-zero exit is a crash with its code in `detail`; a zero exit is clean. The
+/// child is always waited for, so a killed process never becomes a zombie.
+pub fn run_guarded(
+    command: &mut std::process::Command,
+    timeout: Duration,
+) -> std::io::Result<ProcessOutcome> {
+    let started = std::time::Instant::now();
+    let mut child = command.spawn()?;
+    loop {
+        match child.try_wait()? {
+            Some(status) => {
+                let elapsed = started.elapsed();
+                return Ok(if status.success() {
+                    ProcessOutcome {
+                        kind: ExitKind::Clean,
+                        detail: None,
+                        elapsed,
+                    }
+                } else {
+                    ProcessOutcome {
+                        kind: ExitKind::Crash,
+                        detail: Some(match status.code() {
+                            Some(code) => format!("plugin process exited with code {code}"),
+                            None => "plugin process was terminated".to_string(),
+                        }),
+                        elapsed,
+                    }
+                });
+            }
+            None => {
+                if started.elapsed() >= timeout {
+                    let _ = child.kill();
+                    // Reap it: leaving a zombie behind is not a hang, it is a leak.
+                    let _ = child.wait();
+                    return Ok(ProcessOutcome {
+                        kind: ExitKind::Hang,
+                        detail: None,
+                        elapsed: started.elapsed(),
+                    });
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod process_tests {
+    use super::*;
+
+    fn shell(script: &str) -> std::process::Command {
+        #[cfg(windows)]
+        {
+            let mut command = std::process::Command::new("cmd");
+            command.args(["/C", script]);
+            command
+        }
+        #[cfg(not(windows))]
+        {
+            let mut command = std::process::Command::new("sh");
+            command.args(["-c", script]);
+            command
+        }
+    }
+
+    #[test]
+    fn a_zero_exit_is_clean() {
+        let outcome = run_guarded(&mut shell("exit 0"), Duration::from_secs(10)).expect("spawn");
+        assert_eq!(outcome.kind, ExitKind::Clean);
+        assert!(outcome.detail.is_none());
+    }
+
+    #[test]
+    fn a_non_zero_exit_names_the_code() {
+        let outcome = run_guarded(&mut shell("exit 7"), Duration::from_secs(10)).expect("spawn");
+        assert_eq!(outcome.kind, ExitKind::Crash);
+        assert!(
+            outcome.detail.as_deref().unwrap_or_default().contains('7'),
+            "the exit code must reach the user: {:?}",
+            outcome.detail
+        );
+    }
+
+    #[test]
+    fn a_silent_process_is_killed_and_reported_as_a_hang() {
+        #[cfg(windows)]
+        let mut command = shell("ping -n 30 127.0.0.1 >NUL");
+        #[cfg(not(windows))]
+        let mut command = shell("sleep 30");
+        let outcome = run_guarded(&mut command, Duration::from_millis(300)).expect("spawn");
+        assert_eq!(outcome.kind, ExitKind::Hang);
+        assert!(
+            outcome.elapsed < Duration::from_secs(10),
+            "the kill must be prompt"
+        );
     }
 }
