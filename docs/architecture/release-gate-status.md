@@ -32,12 +32,15 @@ capability matrix (`docs/capability-matrix.json`, generated), [cutover registry]
 
 ## Consequence
 
-The switch is blocked by G6–G10, not by the migration of features: the Rust
-kernel, the wire plane and the React contour are ready enough that every UI
-consumer flipped in rounds 1–5 has a Product Wire path, but "ready enough" is
-not the gate. Until G6–G10 pass on packaged artifacts, the sidecar stays the
-public default and the Kernel stays an explicit Preview
-(`NEOTA_KERNEL=1`, conflict policy in `apps/desktop/src-tauri/src/lib.rs`).
+**Ordering amendment (round 78).** This page used to say the sidecar stays the
+public default until G6–G10 pass. That rule was written while both planes
+existed; rounds 59–60 then deleted the sidecar, the Fastify app, Drizzle and
+`/api/v2` _before_ the gate closed. The order was not followed, and pretending
+otherwise would hide it: the Kernel is now the only transport, the preview switch
+`NEOTA_KERNEL` no longer exists, and there is no sidecar to fall back to. The
+remainder of this page is therefore a list of **release blockers on the single
+plane**, not a switch plan. Rollback, if the Kernel proves unusable, is a git
+revert to `d763df4a^` (the commit before the deletion), not a runtime flag.
 
 ## Next step order
 
@@ -64,10 +67,11 @@ import lifecycle `legacy_import::{plan,stage,validate_staged,activate_staged}`
    ADR-0061 transport exists (`assets.upload.*`), the kernel importer is a
    multi-round port of the legacy analyzer (11 categories, conflicts, aborts).
 
-Until then nothing in this list is "done", and the sidecar stays the default.
-Deleting `fastify`/`drizzle`/`api/v2` is the last step of the same gate: it
-can only happen when the legacy plane is provably unnecessary, which is exactly
-what G6–G8 measure.
+Until then nothing in this list is "done". The deletion of
+`fastify`/`drizzle`/`api/v2` was the last step of the original gate and it
+happened early (round 60b, commit `d763df4a`); G6–G8 still measure the same
+user-facing behaviour, only now there is no second plane whose presence could
+mask a gap.
 
 ## Pre-deletion full run (round 58b)
 

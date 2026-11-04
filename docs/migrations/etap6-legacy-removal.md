@@ -80,24 +80,26 @@ kernel-owned database`, exit 0). The MSI branch still fails with `os error 32`
 (a file held by the previous build), which is why the portable zip is the
 official artifact — unchanged from earlier rounds.
 
-## Open product gap found while closing g9
+## Plugin install: what works and what does not
 
-Installing a plugin **from a package file** is not possible on the kernel plane:
+Round 75 replaced the dead ZIP upload with a manifest descriptor: the user picks
+`manifest.json`, the UI validates the fields the wire requires, and `plugins.install`
+records the plugin with `trustState: locally-trusted`. Round 76 deleted
+`crates/adapters/package-verify`, which verified signed ZIPs that no plane ever
+read.
 
-- `apps/web/src/api/hostSurfaces.ts` routes `installPlugin(file)` to
-  `plugins.install.host-verify`, which is `unsupported` everywhere, and the route
-  it names (`/api/v2/plugins/install`) was deleted with the Fastify contour;
-- the wire `plugins.install` takes manifest _metadata_ (`id`, `name`, `version`,
-  `permissions`, `trustState`), not package bytes, so it cannot stand in;
-- `crates/adapters/package-verify` can verify a signed ZIP (path safety, limits,
-  publisher/local keys, Ed25519) but has **no call site anywhere in the tree**.
+What that means for a user:
 
-So the honest state is: plugins that are already installed keep working, and the
-kernel can register a plugin by descriptor, but a user cannot double-click a
-`.zip` and install it. Closing this needs a contract decision (stage the package as
-an asset and verify in the kernel, or verify in the host and install by
-descriptor) plus signature keys, which the build does not have — the same gap that
-keeps `security.plugin-package-trust` at `Implemented` rather than `Packaged`.
+- a plugin **whose code is already in the web bundle** installs by descriptor and
+  runs;
+- a plugin **shipped as a separate package** cannot be installed, because the
+  runtime loads plugin code from the bundle and nothing stages or serves external
+  package bytes. Git install refuses with `UnsupportedError` for the same reason.
+
+This is a product gap, not a hidden one: `security.plugin-package-trust` stays
+`Implemented` in the capability matrix, and closing it needs a real decision about
+where third-party code lives (asset-staged + verified in the kernel, or a host
+side loader), plus signing keys the build does not have.
 
 ## Migration notes for users of the removed contour
 

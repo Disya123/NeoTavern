@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /** Headless lifecycle smoke for the assembled portable Tauri shell. */
 import { spawn } from 'node:child_process';
-import { stat, readdir, rm } from 'node:fs/promises';
+import { rmSync } from 'node:fs';
+import { cp, mkdtemp, readdir, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,10 +26,23 @@ const candidates = entries.filter(
 if (candidates.length !== 1) {
   throw new Error(`Expected one portable directory, found ${candidates.length}`);
 }
-const portableRoot = resolve(portableBase, candidates[0].name);
+const artifactRoot = resolve(portableBase, candidates[0].name);
+
+// Never run inside the artifact: the shell writes `data/` next to its executable,
+// and this smoke starts from an empty data root. Touching the artifact would
+// delete a real library if someone pointed the smoke at a used portable copy, so
+// the walk happens in a throwaway copy of the bundle.
+const stagingBase = await mkdtemp(resolve(tmpdir(), 'neotavern-shell-smoke-'));
+const portableRoot = resolve(stagingBase, candidates[0].name);
+await cp(artifactRoot, portableRoot, { recursive: true });
 const dataDir = resolve(portableRoot, 'data');
-if (dirname(dataDir) !== portableRoot) throw new Error('Unsafe portable smoke data directory');
+if (dirname(dirname(dataDir)) !== stagingBase) {
+  throw new Error('Unsafe portable smoke data directory');
+}
 await rm(dataDir, { recursive: true, force: true });
+// The copy is disposable either way: a failed walk must not leave gigabytes of
+// bundle behind in the temp directory.
+process.on('exit', () => rmSync(stagingBase, { recursive: true, force: true }));
 
 /** Resolve with the exit code; rejects on spawn failure or timeout. */
 function waitForExit(child, timeoutMs, label, output, errors) {

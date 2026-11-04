@@ -27,7 +27,8 @@ server lifecycle** (ТЗ §11.1). The UI talks to the kernel through
 - `apps/web/src/api/tauriTransport.ts` — `LocalTransport` over Tauri IPC;
 - `scripts/build-desktop-release.mjs` — ephemeral signed updater configuration;
 - `.github/workflows/desktop-release.yml` — native Windows/macOS/Linux gates;
-- `scripts/prepare-desktop.mjs` — builds web and sidecar for the target triple.
+- `scripts/package-portable-windows.mjs` — packs the portable Windows archive;
+  the sidecar packager was deleted with the Fastify contour.
 
 ## Dependencies
 
