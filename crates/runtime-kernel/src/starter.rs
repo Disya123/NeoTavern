@@ -25,15 +25,15 @@ const LOREBOOK_ID_KEY: &str = "starter.hazel.v1.lorebookId";
 
 const CARD_JSON: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../apps/server/assets/starter/default_Hazel.json"
+    "/assets/starter/default_Hazel.json"
 ));
 const AVATAR_PNG: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../apps/server/assets/starter/default_Hazel_avatar.png"
+    "/assets/starter/default_Hazel_avatar.png"
 ));
 const LOREBOOK_JSON: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../apps/server/assets/starter/Vesper-lore-book.json"
+    "/assets/starter/Vesper-lore-book.json"
 ));
 
 /// Best-effort first-run seed. Failures log and leave the kernel open.

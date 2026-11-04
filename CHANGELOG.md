@@ -24,6 +24,23 @@
 
 ### Removed
 
+- **The legacy contour is gone from the tree (round 60b/99, ADR-0038).**
+  `apps/server` (Fastify, ~27k lines) and `packages/db` (Drizzle) are deleted,
+  with `playwright.legacy.config.ts`, `e2e/legacy/**`, the `test:e2e:legacy`
+  script, the ESLint overrides and the vitest SQLite probe that existed only for
+  them. The starter assets the kernel embedded from `apps/server/assets/starter`
+  moved to `crates/runtime-kernel/assets/starter` (the kernel no longer reads
+  from a deleted tree), and the plugin worker/loader already live under
+  `apps/plugin-runtime/worker`. Suite shrinks accordingly: root vitest
+  **1158/1158** (was 1925 — the legacy server's ~767 tests went with it), web
+  **872/872**, `cargo test --test kernel_starter` 1/1. The packaged artifact still
+  builds and runs: `NeoTavern_0.1.0_x64-portable.zip` SHA-256 `8225f898…a488`,
+  `scripts/smoke-desktop-shell.mjs` exit 0. `tsc`, ESLint and `docs:check` green.
+  User data under the untracked `apps/server/data/` (a dev `app.db`) is left in
+  place for the owner to delete; nothing in the product reads it.
+
+### Removed
+
 - **The desktop shell no longer ships or starts the Node sidecar (round 60a/99,
   ADR-0038).** `DesktopMode`, `desktop_mode()`, the `NEOTA_LEGACY_SERVER` /
   `NEOTA_KERNEL` switches, the sidecar spawn/stop lifecycle, `tauri-plugin-shell`

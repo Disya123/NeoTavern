@@ -193,31 +193,19 @@ User-facing error text is localized on the frontend.
 
 ## 6. Backend and API
 
-This section describes the legacy/migration contour (`apps/server`, `/api/v2`),
-which is feature-frozen (ADR-0038): no new product features are added to it,
-only security fixes, defect fixes and migration bridges. **New product logic
-is implemented in the Rust Kernel and exposed through the Product Wire
-Contracts** (`packages/contracts/src/wire`); hosts and the UI consume the
-typed Product Wire client, never the legacy API directly.
+**There is one backend: the Rust Kernel.** The legacy Fastify contour
+(`apps/server`, `/api/v2`) was deleted in round 60b (ADR-0038); it is not
+feature-frozen any more, it does not exist. Product logic lives in
+`crates/runtime-kernel` and is exposed through the Product Wire Contracts
+(`packages/contracts/src/wire`); hosts and the UI consume the typed Product Wire
+client only.
 
-For the legacy contour:
+Rules that still apply to any transport a host exposes around the kernel:
 
-- Structure every backend module as an isolated Fastify plugin.
-- Place the main API under `/api/v2/...`.
-- Place plugin routes under `/api/plugins/{pluginId}/...`.
-- All API inputs and outputs must have JSON Schema.
-- Use TypeBox and the Fastify Type Provider.
-- Streaming generation is done via SSE.
-- Use WebSocket only when a two-way realtime channel is genuinely needed.
-- All long-running operations must accept an `AbortSignal`.
-- Add timeouts and correct request termination when the client disconnects.
-- Do not hand ready-made, non-localized error messages to the frontend.
-- The backend listens on `127.0.0.1` only by default.
-
-Product Wire operations carry the same requirements as metadata (name/version,
-request/response/event schema, scope, idempotency, retry, timeouts, size
-limits, error codes, streaming semantics, compatibility classification) —
-enforced by `compileWireContract` in `packages/contracts/src/wire/registry.ts`.
+- all inputs and outputs must have a JSON Schema in the wire contract;
+- long-running operations must accept cancellation (`CancellationFlag`);
+- error text is localized on the frontend;
+- a host binds `127.0.0.1` only.
 
 ## 7. Provider SDK
 

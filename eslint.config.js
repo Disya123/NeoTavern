@@ -91,7 +91,6 @@ export default tseslint.config(
   },
   {
     files: [
-      'packages/db/**',
       'packages/provider-sdk/**',
       'packages/plugin-sdk/**',
       'packages/theme-sdk/**',
@@ -113,12 +112,6 @@ export default tseslint.config(
           ],
         },
       ],
-    },
-  },
-  {
-    files: ['apps/server/**'],
-    rules: {
-      'no-restricted-imports': ['error', { patterns: ['@neotavern/web', '**/apps/web/**'] }],
     },
   },
   {

@@ -2,13 +2,14 @@
  * Build the web application and package the Fastify server as a self-contained
  * Node.js 24 sidecar named according to Tauri's target-triple convention.
  */
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
-import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { gunzip, inflateRaw } from 'node:zlib';
 import { promisify } from 'node:util';
+
+const NODE_DIST_BASE = 'https://nodejs.org/dist';
 
 const gunzipAsync = promisify(gunzip);
 const inflateRawAsync = promisify(inflateRaw);
@@ -17,8 +18,6 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const desktop = resolve(root, 'apps/desktop/src-tauri');
 const resources = resolve(desktop, 'resources/web');
 const pluginRuntime = resolve(desktop, 'resources/runtime');
-const serverRequire = createRequire(resolve(root, 'apps/server/package.json'));
-const dbRequire = createRequire(resolve(root, 'packages/db/package.json'));
 
 function command(name, args, options = {}) {
   execFileSync(name, args, {

@@ -181,3 +181,12 @@ smoked (exit 0) and contains no `neotavern-server.exe`.
 What remains of the legacy contour is code that no longer ships: `apps/server`,
 `packages/db` and the `/api/v2` routes. Deleting them is the next round, together
 with the ADRs and the migration guide that describe the removed paths.
+
+## Round 60b: the legacy contour is deleted
+
+`apps/server` (Fastify) and `packages/db` (Drizzle) are gone, with their E2E
+config, specs, script, lint overrides and the vitest SQLite probe. The starter
+assets the kernel embedded from that tree moved into
+`crates/runtime-kernel/assets/starter`. The Product Wire is the only product API;
+a host exposes nothing else. Superseded sections above describe history, not the
+current tree.
