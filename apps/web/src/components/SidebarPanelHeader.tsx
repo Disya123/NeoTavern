@@ -1,6 +1,7 @@
-import { X } from '@phosphor-icons/react';
+import { List, X } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUiStore } from '../state/ui.js';
 import styles from './SidebarPanelHeader.module.css';
 
 export interface SidebarPanelHeaderProps {
@@ -30,8 +31,25 @@ export function SidebarPanelHeader({
   onClose,
 }: SidebarPanelHeaderProps) {
   const { t } = useTranslation();
+  const setSidebarOpen = useUiStore((state) => state.setSidebarOpen);
+  const setNavigationRailExpanded = useUiStore((state) => state.setNavigationRailExpanded);
   return (
     <header className={styles.header} data-component="sidebar-panel-header" data-part={part}>
+      {/* A full-screen panel hides the composer, so this is the way back to the menu
+          without closing the panel first. Phones only. */}
+      <button
+        type="button"
+        className={styles.menu}
+        data-part="menu"
+        aria-label={t('navigation:menu')}
+        title={t('navigation:menu')}
+        onClick={() => {
+          setSidebarOpen(false);
+          setNavigationRailExpanded(true);
+        }}
+      >
+        <List size={20} aria-hidden="true" />
+      </button>
       <div className={styles.identity} data-part="identity">
         {avatar ? (
           <span className={styles.avatar} data-part="avatar">

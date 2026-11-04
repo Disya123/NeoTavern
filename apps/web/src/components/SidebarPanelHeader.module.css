@@ -110,3 +110,23 @@
     }
   }
 }
+
+/* Phone-only: opens the destination menu from inside a full-screen panel. */
+.menu {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .menu {
+    display: inline-flex;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: var(--st-radius-control);
+    background: transparent;
+    color: var(--st-color-text-secondary);
+  }
+}
