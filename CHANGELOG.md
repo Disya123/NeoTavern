@@ -24,6 +24,17 @@
 
 ### Added
 
+- **Destructive acceptance for the supervisor (round 100/99, ADR-0066 D9).**
+  `plugin_supervisor_isolation` breaks plugins on purpose and then asks the real kernel
+  for work: a plugin that never exits is killed (reported as a hang) while
+  `meta.get` answers in the same test; a crash loop burns its budget and ends `Failed`,
+  with the reason kept for the UI and a start refused until an operator resets it; and
+  a fresh kernel on the same data root still serves after both failures. That covers
+  three of the four ADR-0066 D9 cases — the fourth (an ungranted capability denied at
+  the broker) is next, together with the consent UI. Verified: 3/3, 5.7 s.
+
+### Added
+
 - **Native execution is a consent, not a manifest flag (round 99/99, ADR-0066 P5a).**
   The catalog gains `native.process` and `native.gpu`, and a manifest with
   `runtime.host: 'native'` is rejected unless it asks for `native.process`: running
