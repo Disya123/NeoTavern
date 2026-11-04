@@ -1745,6 +1745,49 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
             imported.root
         ));
     }
+    // The pointer moving is not evidence that data moved: open the staged
+    // database and assert the ADR-0062 converter actually carried the fixture's
+    // rows (characters / chats / messages / lorebooks / presets), so a green
+    // walk cannot hide an empty import.
+    {
+        let staged_db = neotavern_storage::paths::db_path(&staged.staged_root);
+        let conn = rusqlite::Connection::open(&staged_db).map_err(|error| {
+            format!(
+                "migration walk: cannot open staged database {}: {error}",
+                staged_db.display()
+            )
+        })?;
+        let count = |table: &str| -> Result<i64, String> {
+            conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .map_err(|error| format!("migration walk: count {table} failed: {error}"))
+        };
+        for (table, expected) in [
+            ("characters", 1_i64),
+            ("chats", 1),
+            ("messages", 1),
+            ("lorebooks", 1),
+            ("presets", 1),
+        ] {
+            let actual = count(table)?;
+            if actual != expected {
+                return Err(format!(
+                    "migration walk: staged {table} has {actual} rows, expected {expected}"
+                ));
+            }
+        }
+        let imported_name: String = conn
+            .query_row("SELECT name FROM characters LIMIT 1", [], |row| row.get(0))
+            .map_err(|error| format!("migration walk: character name failed: {error}"))?;
+        if imported_name != "Alice" {
+            return Err(format!(
+                "migration walk: imported character is {imported_name:?}, expected Alice"
+            ));
+        }
+        eprintln!("[smoke] golden: staged import carries 5 families (Alice + counts)");
+    }
+
     activation::rollback_to(data_dir, &previous)
         .map_err(|error| format!("migration walk: rollback failed: {error}"))?;
     let rolled_back = activation::read_pointer(data_dir)

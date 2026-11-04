@@ -24,6 +24,19 @@
 
 ### Changed
 
+- **The packaged migration walk proves data, not just pointer movement (round
+  59b/99, ADR-0062).** Step 10 of `run_golden_smoke` now opens the staged
+  database after activation and asserts the converter carried the legacy
+  fixture's five families — characters (the `Alice` row), chats, messages,
+  lorebooks and presets — before rolling the pointer back. Previously the walk
+  proved plan → stage → validate → activate → rollback and pointer identity, so a
+  converter that produced an empty database would still have passed. Verified on
+  `NeoTavern_0.1.0_x64-portable.zip` SHA-256 `eb258efa…733b`,
+  `scripts/smoke-desktop-shell.mjs` exit 0. No silent fallback is involved: a
+  failed import keeps the previous root active and the kernel keeps serving.
+
+### Changed
+
 - **The public desktop build runs the Kernel by default (round 59a/99,
   ADR-0038).** The mode resolver stopped consulting the build channel: release,
   stable and custom channels all resolve to the Kernel; `NEOTA_LEGACY_SERVER=1`
