@@ -28,32 +28,10 @@ const checksum = `${archive}.sha256`;
 
 if (dirname(portableRoot) !== portableBase) throw new Error('Unsafe portable output directory');
 
-let sidecars;
-try {
-  sidecars = (await readdir(resolve(tauriRoot, 'binaries'))).filter(
-    (name) => name.startsWith('neotavern-server-') && name.endsWith('.exe'),
-  );
-} catch {
-  throw new Error(
-    'No sidecar binaries found — run "pnpm desktop:prepare" before packaging the portable build.',
-  );
-}
-if (sidecars.length !== 1) {
-  throw new Error(`Expected one prepared Windows sidecar, found ${sidecars.length}`);
-}
-
 const mainExecutable = resolve(release, 'neotavern.exe');
 const requiredArtifacts = [
   [mainExecutable, 'run "pnpm desktop:build" (Tauri release build) first'],
   [resolve(tauriRoot, 'resources/web/index.html'), 'run "pnpm desktop:prepare" first'],
-  [
-    resolve(tauriRoot, 'resources/native/node_modules/better-sqlite3/lib/index.js'),
-    'run "pnpm desktop:prepare" first',
-  ],
-  [
-    resolve(tauriRoot, 'resources/native/node_modules/sharp/lib/index.js'),
-    'run "pnpm desktop:prepare" first',
-  ],
   [resolve(tauriRoot, 'resources/runtime/node.exe'), 'run "pnpm desktop:prepare" first'],
   [resolve(tauriRoot, 'resources/runtime/plugin-worker.mjs'), 'run "pnpm desktop:prepare" first'],
   [resolve(tauriRoot, 'resources/runtime/plugin-loader.mjs'), 'run "pnpm desktop:prepare" first'],
@@ -72,7 +50,6 @@ await rm(checksum, { force: true });
 await mkdir(portableRoot, { recursive: true });
 await Promise.all([
   cp(mainExecutable, resolve(portableRoot, 'NeoTavern.exe')),
-  cp(resolve(tauriRoot, 'binaries', sidecars[0]), resolve(portableRoot, 'neotavern-server.exe')),
   cp(resolve(tauriRoot, 'resources'), resolve(portableRoot, 'resources'), {
     recursive: true,
     dereference: true,
@@ -83,9 +60,9 @@ await Promise.all([
     [
       'NeoTavern — portable Windows build',
       '',
-      'Run "NeoTavern.exe". Keep the executable, neotavern-server.exe,',
-      'resources folder and portable.flag together. User data is created in',
-      'the local data folder beside the application.',
+      'Run "NeoTavern.exe". Keep the executable, resources folder and',
+      'portable.flag together. User data is created in the local data folder',
+      'beside the application.',
       '',
     ].join('\r\n'),
   ),

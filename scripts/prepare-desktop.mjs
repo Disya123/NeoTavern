@@ -16,9 +16,7 @@ const inflateRawAsync = promisify(inflateRaw);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const desktop = resolve(root, 'apps/desktop/src-tauri');
 const resources = resolve(desktop, 'resources/web');
-const nativeModules = resolve(desktop, 'resources/native/node_modules');
 const pluginRuntime = resolve(desktop, 'resources/runtime');
-const binaries = resolve(desktop, 'binaries');
 const serverRequire = createRequire(resolve(root, 'apps/server/package.json'));
 const dbRequire = createRequire(resolve(root, 'packages/db/package.json'));
 
@@ -55,124 +53,6 @@ function targetInfo(triple) {
   if (triple.includes('linux')) return { platform: 'linux', arch };
   throw new Error(`Unsupported desktop target triple: ${triple}`);
 }
-
-function pkgTarget(target) {
-  const suffix = { win32: 'win', darwin: 'macos', linux: 'linux' }[target.platform];
-  if (!suffix) throw new Error(`Unsupported desktop target platform: ${target.platform}`);
-  return `node24-${suffix}-${target.arch}`;
-}
-
-async function findPackageRoot(entry) {
-  let current = dirname(entry);
-  for (;;) {
-    try {
-      const packageJson = JSON.parse(await readFile(resolve(current, 'package.json'), 'utf8'));
-      if (typeof packageJson.name === 'string') return current;
-    } catch {
-      // Continue walking to the package root.
-    }
-    const parent = dirname(current);
-    if (parent === current) throw new Error(`Could not find package root for ${entry}`);
-    current = parent;
-  }
-}
-
-async function copyNativeSharpRuntime(target) {
-  const sharpRoot = await findPackageRoot(serverRequire.resolve('sharp'));
-  const sharpRequire = createRequire(resolve(sharpRoot, 'package.json'));
-  const platformPackage = `@img/sharp-${target.platform}-${target.arch}`;
-  let platformRoot;
-  try {
-    platformRoot = await findPackageRoot(sharpRequire.resolve(`${platformPackage}/sharp.node`));
-  } catch {
-    throw new Error(
-      `Sharp native module for ${target.platform}/${target.arch} (${platformPackage}) is not ` +
-        'installed in this workspace. Cross-target desktop builds need the target platform ' +
-        'packages available — install them or build on the target OS.',
-    );
-  }
-  const packageNames = ['sharp', '@img/colour', platformPackage];
-  const packageRoots = [
-    sharpRoot,
-    await findPackageRoot(sharpRequire.resolve('@img/colour')),
-    platformRoot,
-  ];
-
-  // sharp >= 0.34 bundles the libvips runtime inside the platform package on
-  // Windows, but macOS/Linux keep it in a separate @img/sharp-libvips-* package
-  // that must ship alongside it — the packaged sidecar cannot resolve into the
-  // build workspace's node_modules at runtime.
-  const libvipsPackage = `@img/sharp-libvips-${target.platform}-${target.arch}`;
-  try {
-    // NB: @img/sharp-libvips-* exports only "./lib", "./package" and
-    // "./versions" — "./package.json" is NOT exported (ERR_PACKAGE_PATH_NOT_EXPORTED).
-    const libvipsRoot = await findPackageRoot(sharpRequire.resolve(`${libvipsPackage}/lib`));
-    packageNames.push(libvipsPackage);
-    packageRoots.push(libvipsRoot);
-  } catch {
-    // Platform without a separate libvips package (Windows bundles it) — nothing to copy.
-  }
-
-  for (let index = 0; index < packageNames.length; index += 1) {
-    const name = packageNames[index];
-    const source = packageRoots[index];
-    if (!name || !source) throw new Error('Invalid Sharp runtime package mapping');
-    const destination = resolve(nativeModules, ...name.split('/'));
-    await mkdir(dirname(destination), { recursive: true });
-    await cp(source, destination, { recursive: true, dereference: true });
-  }
-  const libvipsCopied = packageNames.some((name) => name.startsWith('@img/sharp-libvips-'));
-  console.log(
-    `[desktop] sharp runtime: ${packageNames.join(', ')}` +
-      (libvipsCopied ? '' : ' (libvips bundled in the platform package)'),
-  );
-}
-
-async function installNativeSqliteRuntime(target) {
-  // Resolve the version through require.resolve + package-root walk like the
-  // rest of this script — the old hard-coded
-  // "./packages/db/node_modules/better-sqlite3/package.json" path broke
-  // silently on any pnpm layout change.
-  const sqliteRoot = await findPackageRoot(dbRequire.resolve('better-sqlite3'));
-  const manifest = JSON.parse(await readFile(resolve(sqliteRoot, 'package.json'), 'utf8'));
-  const version = manifest.version;
-  if (typeof version !== 'string' || version.length === 0) {
-    throw new Error('Could not resolve better-sqlite3 version');
-  }
-  // prebuild-install honors npm_config_platform/arch, so cross-target builds
-  // fetch the target prebuilt binary instead of the host's.
-  command(
-    'npm',
-    [
-      'install',
-      '--prefix',
-      resolve(desktop, 'resources/native'),
-      '--no-save',
-      '--no-package-lock',
-      '--omit=dev',
-      `better-sqlite3@${version}`,
-    ],
-    {
-      env: {
-        ...process.env,
-        npm_config_platform: target.platform,
-        npm_config_arch: target.arch,
-        npm_config_target_arch: target.arch,
-      },
-    },
-  );
-}
-
-/**
- * Node.js distribution helpers. Cross-target builds must never ship the build
- * host's binary as the plugin runtime: an x64 node.exe silently copied into a
- * win-arm64 bundle breaks every backend plugin on the user's machine (and the
- * file name is wrong when building Windows from Linux). For a cross target we
- * download the official distribution matching the TARGET platform/arch for
- * the exact Node version this script runs on and extract just the binary —
- * with no external tools (tar/zip readers below use node:zlib only).
- */
-const NODE_DIST_BASE = 'https://nodejs.org/dist';
 
 function nodeDistName(version, target) {
   const os = { win32: 'win', darwin: 'darwin', linux: 'linux' }[target.platform];
@@ -288,51 +168,24 @@ async function installPluginRuntimeNode(target) {
 
 const triple = targetTriple();
 const target = targetInfo(triple);
-const extension = triple.includes('windows') ? '.exe' : '';
-const output = resolve(binaries, `neotavern-server-${triple}${extension}`);
 
 command('pnpm', ['build']);
 await rm(resources, { recursive: true, force: true });
 await mkdir(resources, { recursive: true });
 await cp(resolve(root, 'apps/web/dist'), resources, { recursive: true });
-await rm(nativeModules, { recursive: true, force: true });
-await mkdir(nativeModules, { recursive: true });
-await installNativeSqliteRuntime(target);
-// npm --prefix drops a manifest next to the prebuilt module; the bundle only
-// needs the binary tree, not a stray package.json claiming the resources dir.
-await rm(resolve(desktop, 'resources/native/package.json'), { force: true });
-await copyNativeSharpRuntime(target);
+// The plugin sandbox still runs on a Node runtime shipped next to the app: the
+// worker/loader pair is the host half of the plugin boundary (ADR-0058), not the
+// deleted Fastify sidecar.
 await rm(pluginRuntime, { recursive: true, force: true });
 await mkdir(pluginRuntime, { recursive: true });
 await installPluginRuntimeNode(target);
 await cp(
-  resolve(root, 'apps/server/worker/plugin-worker.mjs'),
+  resolve(root, 'apps/plugin-runtime/worker/plugin-worker.mjs'),
   resolve(pluginRuntime, 'plugin-worker.mjs'),
 );
 await cp(
-  resolve(root, 'apps/server/worker/plugin-loader.mjs'),
+  resolve(root, 'apps/plugin-runtime/worker/plugin-loader.mjs'),
   resolve(pluginRuntime, 'plugin-loader.mjs'),
 );
-await mkdir(binaries, { recursive: true });
 
-// `--no-bytecode --public` instead of pkg's default V8-bytecode snapshot.
-// The bytecode pass spawns the fetched Node binary per module and can stall
-// indefinitely on Windows (observed twice: a 0-byte then truncated output,
-// near-zero CPU, hours of wall time) which turns every packaged build into a
-// stuck pipeline. pkg refuses `--no-bytecode` without source, so `--public`
-// rides along; the resulting snapshot finishes in ~2.5 minutes instead of
-// hanging. The sidecar is the legacy migration contour (ADR-0038) and its
-// source is already public in this repo, so bytecode obfuscation buys nothing.
-command('pnpm', [
-  'exec',
-  'pkg',
-  'apps/server/package.json',
-  '--targets',
-  pkgTarget(target),
-  '--no-bytecode',
-  '--public',
-  '--output',
-  output,
-]);
-
-console.log(`[desktop] prepared ${output}`);
+console.log('[desktop] prepared resources (web bundle + plugin runtime; no Node sidecar)');

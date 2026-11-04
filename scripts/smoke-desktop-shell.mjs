@@ -80,9 +80,10 @@ if (exitCode !== 0) {
     `Portable Tauri shell exited with ${exitCode}\n${output.join('')}\n${errors.join('')}`,
   );
 }
-// Kernel mode (Phase 3+) creates `database.sqlite` via the Runtime Kernel;
-// the legacy server sidecar created `app.db`. Accept either.
-const databaseCandidates = ['database.sqlite', 'app.db'].map((name) => resolve(dataDir, name));
+// The kernel creates `database.sqlite`. The legacy `app.db` fallback is gone with
+// the sidecar (round 60a): if the kernel did not create its database, that is a
+// failure, not an alternative layout.
+const databaseCandidates = ['database.sqlite'].map((name) => resolve(dataDir, name));
 const databasePath = await Promise.any(
   databaseCandidates.map(async (candidate) => {
     const info = await stat(candidate).catch(() => null);
@@ -92,23 +93,5 @@ const databasePath = await Promise.any(
 ).catch(() => null);
 if (!databasePath) throw new Error('Portable shell did not create its local database');
 await new Promise((resolvePromise) => setTimeout(resolvePromise, 300));
-const sidecarProbe = spawn('tasklist', ['/FI', 'IMAGENAME eq neotavern-server.exe', '/FO', 'CSV'], {
-  windowsHide: true,
-  stdio: ['ignore', 'pipe', 'ignore'],
-});
-let taskList = '';
-sidecarProbe.stdout.setEncoding('utf8');
-sidecarProbe.stdout.on('data', (chunk) => {
-  taskList += chunk;
-});
-const probeCode = await new Promise((resolvePromise, reject) => {
-  sidecarProbe.once('exit', resolvePromise);
-  sidecarProbe.once('error', (error) =>
-    reject(new Error(`tasklist probe could not be started: ${error.message}`, { cause: error })),
-  );
-});
-if (probeCode !== 0 || taskList.toLowerCase().includes('"neotavern-server.exe"')) {
-  throw new Error('Portable Tauri shell left a backend sidecar process running');
-}
 await rm(dataDir, { recursive: true, force: true });
-console.log('[desktop:shell-smoke] OK — portable data path, readiness and sidecar cleanup');
+console.log('[desktop:shell-smoke] OK — portable data path, readiness and kernel-owned database');

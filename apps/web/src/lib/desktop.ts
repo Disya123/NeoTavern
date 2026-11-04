@@ -34,9 +34,10 @@ export function isDesktopShell(): boolean {
 
 /**
  * Resolved backend mode of the desktop shell: "kernel" | "sidecar" | null.
- * The Rust shell answers from the same `desktop_mode()` decision table used
+ * The Rust shell answers from its single backend (the kernel); the old
  * to pick the backend (ADR-0038 conflict policy: `NEOTA_KERNEL=1` wins over
- * `NEOTA_LEGACY_SERVER=1`). Null outside the shell or when the probe is
+ * `desktop_mode()` table and the sidecar are gone (round 60a). Null outside the
+ * shell or when the probe is
  * unavailable (e.g. the mobile WebView, where the command is not registered).
  */
 export async function getDesktopBackendMode(): Promise<'kernel' | 'sidecar' | null> {

@@ -169,3 +169,15 @@ portable smoke run _without_ `NEOTA_KERNEL` — `scripts/smoke-desktop-shell.mjs
 exit 0 on `NeoTavern_0.1.0_x64-portable.zip` SHA-256 `8c4efc1e…da27`. The next
 stage deletes the sidecar, `apps/server`, `packages/db` and `api/v2`; until then
 the legacy contour ships only for callers who explicitly ask for it.
+
+## Round 60a: the sidecar is out of the desktop shell
+
+The shell now has one backend. `DesktopMode`, the resolver, both environment
+overrides, the spawn/stop lifecycle, `tauri-plugin-shell` and the `externalBin`
+entry were deleted, and the packaging pipeline stopped producing the `pkg`
+snapshot and the native module trees it needed. The portable artifact is built,
+smoked (exit 0) and contains no `neotavern-server.exe`.
+
+What remains of the legacy contour is code that no longer ships: `apps/server`,
+`packages/db` and the `/api/v2` routes. Deleting them is the next round, together
+with the ADRs and the migration guide that describe the removed paths.

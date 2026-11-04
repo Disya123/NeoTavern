@@ -22,6 +22,24 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Removed
+
+- **The desktop shell no longer ships or starts the Node sidecar (round 60a/99,
+  ADR-0038).** `DesktopMode`, `desktop_mode()`, the `NEOTA_LEGACY_SERVER` /
+  `NEOTA_KERNEL` switches, the sidecar spawn/stop lifecycle, `tauri-plugin-shell`
+  and the `externalBin` entry are gone; the shell always embeds the kernel.
+  `desktop_backend_mode` answers `"kernel"` for the DiagnosticsPanel.
+  Packaging follows: `prepare-desktop` no longer builds the `pkg` snapshot or
+  stages `sharp`/`better-sqlite3` trees, `package-portable-windows` no longer
+  requires or copies `neotavern-server.exe`, the Linux AppImage script drops the
+  sidecar staging/checksum-restore step, and the smoke no longer accepts an
+  `app.db` fallback — a missing `database.sqlite` is a failure. The plugin
+  worker/loader moved out of the doomed `apps/server/worker` tree to
+  `apps/plugin-runtime/worker`. Verified: portable build
+  `NeoTavern_0.1.0_x64-portable.zip` SHA-256 `fa65e6d9…795e`, smoke exit 0 on the
+  kernel plane with no sidecar process or binary present; `cargo check`, `tsc` and
+  `docs:check` green.
+
 ### Changed
 
 - **The packaged migration walk proves data, not just pointer movement (round

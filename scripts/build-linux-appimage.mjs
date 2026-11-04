@@ -41,19 +41,8 @@ const outAppImage = resolve(target, 'bundle/appimage', `${product}_${version}_am
 
 const bin = resolve(target, 'neotavern');
 
-// tauri externalBin convention: binaries/<name>-<target-triple>
-const triple = process.env.TARGET_TRIPLE ?? 'x86_64-unknown-linux-gnu';
-const sidecarSrc = resolve(tauriRoot, `binaries/neotavern-server-${triple}`);
-
-if (
-  !(await stat(sidecarSrc).then(
-    () => true,
-    () => false,
-  ))
-) {
-  throw new Error(`sidecar not found: ${sidecarSrc} (run pnpm desktop:prepare first)`);
-}
-
+// Round 60a: the AppImage ships the kernel binary only — there is no Node
+// sidecar to stage, checksum or restore.
 const sha256 = async (p) =>
   createHash('sha256')
     .update(await readFile(p))
@@ -398,8 +387,6 @@ await mkdir(join(appDir, 'usr/lib', product, 'resources'), {
 
 await copyFile(bin, join(appDir, 'usr/bin/neotavern'));
 
-await copyFile(sidecarSrc, join(appDir, 'usr/bin/neotavern-server'));
-
 const resources =
   JSON.parse(await readFile(resolve(tauriRoot, 'tauri.conf.json'), 'utf8')).bundle.resources ?? [];
 
@@ -435,31 +422,11 @@ await writeFile(
 
 await copyFile(join(toolsDir, `AppRun-${arch}`), join(appDir, 'AppRun'));
 
-run('chmod', [
-  '+x',
-  join(appDir, 'AppRun'),
-  join(appDir, 'usr/bin/neotavern'),
-  join(appDir, 'usr/bin/neotavern-server'),
-]);
+run('chmod', ['+x', join(appDir, 'AppRun'), join(appDir, 'usr/bin/neotavern')]);
 
 // 2. linuxdeploy deploy-only: base deps (stage 1) + GTK plugin direct (stage 2),
 //    both without the AppImage runtime and with guarded re-entry
 await runExtractedLinuxdeploy();
-
-// 3. Restore pristine sidecar + verify (CI invariant)
-const sidecarInApp = join(appDir, 'usr/bin/neotavern-server');
-
-const before = await sha256(sidecarSrc);
-
-await copyFile(sidecarSrc, sidecarInApp);
-
-const after = await sha256(sidecarInApp);
-
-if (before !== after) {
-  throw new Error('sidecar sha256 mismatch after restore');
-}
-
-console.log(`sidecar restored: ${before} (${before === after ? 'ok' : 'MISMATCH'})`);
 
 // 4. appimagetool
 await download(
