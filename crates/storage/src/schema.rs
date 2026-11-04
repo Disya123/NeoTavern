@@ -1351,6 +1351,42 @@ pub const MIGRATION_32_SQL: &str = migration_32_sql!();
 pub const MIGRATION_32_CHECKSUM: &str =
     "efaae0d87af321c2dc80520eb4f007b36f4712b17790bb342a8d64a3b4a719d8";
 
+/// Literal body of the plugin job queue (v33) migration: one STRICT table for
+/// kernel-scheduled plugin work plus the two access paths the scheduler needs
+/// (due jobs by state+time, a plugin's jobs by creation time). `payload_json`
+/// is opaque plugin data; the queue never stores secret material (ADR-0064).
+macro_rules! migration_33_sql {
+    () => {
+        r#"CREATE TABLE plugin_jobs (
+  id TEXT PRIMARY KEY,
+  plugin_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  state TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  run_at_ms INTEGER NOT NULL,
+  lease_until_ms INTEGER,
+  last_error TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+) STRICT;
+CREATE INDEX idx_plugin_jobs_due ON plugin_jobs(state, run_at_ms);
+CREATE INDEX idx_plugin_jobs_plugin ON plugin_jobs(plugin_id, created_at_ms);"#
+    };
+}
+
+/// Name of the plugin job queue (v33) schema migration.
+pub const MIGRATION_33_NAME: &str = "033_plugin_jobs";
+
+/// Exact SQL of the plugin job queue schema migration (v33).
+pub const MIGRATION_33_SQL: &str = migration_33_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_33_SQL` string bytes.
+pub const MIGRATION_33_CHECKSUM: &str =
+    "5d9a17769a76bcb92bb1bb568595bc1afae41478ab54155d9ac72fb30d34fd95";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -1421,7 +1457,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_31_sql!(),
     "\n",
-    migration_32_sql!()
+    migration_32_sql!(),
+    "\n",
+    migration_33_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

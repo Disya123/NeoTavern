@@ -24,6 +24,28 @@
 
 ### Added
 
+- **Plugin job queue in the kernel (round 55/99, ADR-0064).** The owner chose a
+  kernel-resident executor, so the first half lands as durable state rather than
+  a host queue: schema v33 `plugin_jobs` (STRICT, `ON DELETE CASCADE` from
+  plugins, indexes for due jobs and a plugin's history) and four wire ops —
+  `plugins.jobs.enqueue|list|get|cancel` (158 ops, hash advanced). Claiming,
+  leasing and completing are deliberately NOT wire ops: a client cannot pose as a
+  worker or steal a job. `crates/plugin-executor` is the scheduling state machine
+  (deterministic ordering by `(run_at, created_at, id)`, attempts counted per
+  lease, exponential jitter-free backoff, terminal states that refuse further
+  transitions) with no I/O and no clock, so every rule is unit-testable.
+  Guards: payload must be JSON and ≤ 64 KiB (the KV quota — the queue is not a
+  secret channel), the plugin must exist (`PLUGIN_NOT_FOUND`), and one plugin may
+  hold at most 256 outstanding jobs (`JOB_QUEUE_LIMIT`). The worker loop that
+  would inject plugin secrets is **not enabled**: ADR-0064 lists the six-item
+  security-review checklist that must be answered first, and until then jobs stay
+  `queued` and `hostSurfaces.ts` keeps `plugins.jobs.host-queue`. Capability
+  `plugins.jobs`: Implemented on every host, not Packaged. Verified:
+  `cargo test -p plugin-executor` 7/7, `cargo test -p runtime-kernel --test
+  plugin_jobs` 7/7, contracts + neobackend 233/233, migration applies cleanly.
+
+### Added
+
 - **`providers.images` — the media family is complete (round 54/99,
   ADR-0063).** Prompt in, `generated-image` asset id out: `{ assetId,
   contentType, sizeBytes, model, width?, height? }`, one image per call (the

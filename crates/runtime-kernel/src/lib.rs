@@ -46,6 +46,7 @@ pub mod imports_full_backup;
 pub mod imports_full_backup_execute;
 pub mod local;
 pub mod plugin_blobs;
+pub mod plugin_jobs;
 pub mod plugin_secrets;
 pub mod plugin_state;
 pub mod plugins;
@@ -702,6 +703,12 @@ fn handle_unary(
         "providers.images" => with_db_opt(db, |db| {
             provider_media::images(db, &state.registry, state.secret_resolver.as_deref(), req)
         }),
+        // ADR-0064: the kernel-resident plugin executor's durable queue. Claiming
+        // and completing stay internal; the wire only enqueues, reads and cancels.
+        "plugins.jobs.enqueue" => with_db_opt(db, |db| plugin_jobs::enqueue(db, req)),
+        "plugins.jobs.list" => with_db_opt(db, |db| plugin_jobs::list(db, req)),
+        "plugins.jobs.get" => with_db_opt(db, |db| plugin_jobs::get(db, req)),
+        "plugins.jobs.cancel" => with_db_opt(db, |db| plugin_jobs::cancel(db, req)),
         // Этап 4 slice 5 remainder: canonical content-addressed AssetStore.
         "assets.put" => with_db_opt(db, |db| assets::assets_put(db, req)),
         // ADR-0061: chunked upload for files larger than the assets.put cap.

@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-11-03T23:38:42.551Z",
+  "generatedAt": "2026-11-03T23:55:52.582Z",
   "rows": [
     {
       "hosts": {
@@ -336,6 +336,24 @@
         "personas.get",
         "personas.list",
         "personas.update"
+      ]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "plugins.jobs",
+      "milestone": "M7",
+      "notes": "",
+      "title": "Plugin job queue (kernel-scheduled, execution gated)",
+      "wireOps": [
+        "plugins.jobs.cancel",
+        "plugins.jobs.enqueue",
+        "plugins.jobs.get",
+        "plugins.jobs.list"
       ]
     },
     {

@@ -535,6 +535,23 @@
       "milestone": "M4"
     },
     {
+      "id": "plugins.jobs",
+      "title": "Plugin job queue (kernel-scheduled, execution gated)",
+      "wireOps": [
+        "plugins.jobs.enqueue",
+        "plugins.jobs.list",
+        "plugins.jobs.get",
+        "plugins.jobs.cancel"
+      ],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Implemented"
+      },
+      "milestone": "M7"
+    },
+    {
       "id": "ui.portable-data",
       "title": "Portable data / activation / restore",
       "wireOps": ["data.activation.status"],

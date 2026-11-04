@@ -86,7 +86,7 @@ describe('product wire registry', () => {
     // contract (ADR-0061) adds the chunked upload family (142), and the asset
     // catalog adds `assets.list` (143). The plugin blob slice (M7 cluster 21a)
     // adds the chunked `plugins.blobs` family (150).
-    expect(registry.operations).toHaveLength(154);
+    expect(registry.operations).toHaveLength(158);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -161,6 +161,10 @@ describe('product wire registry', () => {
       'providers.images',
       'providers.speech',
       'providers.transcribe',
+      'plugins.jobs.enqueue',
+      'plugins.jobs.list',
+      'plugins.jobs.get',
+      'plugins.jobs.cancel',
       'backups.create',
       'backups.list',
       'backups.restore',

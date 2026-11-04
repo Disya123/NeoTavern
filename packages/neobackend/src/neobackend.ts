@@ -203,6 +203,11 @@ import type {
   ProvidersImagesRequestDto,
   ProvidersImagesResultDto,
   ProviderTranscribeResultDto,
+  PluginJobResultDto,
+  PluginsJobsEnqueueRequestDto,
+  PluginsJobsListRequestDto,
+  PluginsJobsListResultDto,
+  PluginJobIdRequestDto,
 } from '@neotavern/contracts';
 
 /** Options accepted by facade calls (ТЗ §15). */
@@ -632,6 +637,24 @@ export interface PluginsApi {
     req: DeletePluginBlobRequestDto,
     opts?: BackendCallOptions,
   ): Promise<DeletePluginBlobResultDto>;
+  /**
+   * Enqueue one plugin job (wire `plugins.jobs.enqueue`, ADR-0064). The payload
+   * is opaque JSON bounded to 64 KiB and is NOT a secret channel: the executor
+   * resolves secrets at run time through the kernel broker.
+   */
+  jobsEnqueue(
+    req: PluginsJobsEnqueueRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<PluginJobResultDto>;
+  /** List jobs newest first, optionally by plugin/state (plugins.jobs.list). */
+  jobsList(
+    req: PluginsJobsListRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<PluginsJobsListResultDto>;
+  /** Read one job (plugins.jobs.get). */
+  jobsGet(req: PluginJobIdRequestDto, opts?: BackendCallOptions): Promise<PluginJobResultDto>;
+  /** Cancel a queued or leased job (plugins.jobs.cancel); terminal jobs refuse. */
+  jobsCancel(req: PluginJobIdRequestDto, opts?: BackendCallOptions): Promise<PluginJobResultDto>;
   /**
    * List the plugin's own secret keys in one scope (wire
    * plugins.secrets.list, M7 cluster 21 part 2). Value-free by construction:

@@ -231,6 +231,16 @@ where the chunked ingestion contract hands the kernel an asset id; what remains
 for the row is `imports.fullbackup.execute` (destructive, conflict policy),
 the discard/direct-import variants and the `DataMigrationPanel` flip.
 
+Per-surface note (round 55): the kernel now owns a durable plugin job queue —
+`plugins.jobs.enqueue|list|get|cancel` over schema v33, with
+[crates/plugin-executor](https://github.com/Disya123/NeoTavern/blob/main/crates/plugin-executor) as the scheduling state
+machine ([ADR-0064](../adr/0064-kernel-plugin-executor.md)). Claiming and
+completing stay internal, so the host's `pluginJobs` face keeps serving live
+execution (`hostSurfaces.ts`) until the executor's worker loop is enabled; that
+loop is gated on ADR-0064's security-review checklist, because it is the first
+component that would move a secret toward plugin code. Row 21(b) therefore moves
+from "no consumer exists" to "consumer designed, execution under review".
+
 Per-surface note (round 44): row 21a is flipped. The plugin blob store is a
 first-class wire family — `plugins.blobs.begin|append|finish|list|read|delete`
 (registry **150 ops**, schema **v32** `plugin_blob_uploads` + `plugin_blobs`) —

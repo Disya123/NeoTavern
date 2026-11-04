@@ -93,6 +93,10 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "providers.images" => Some(8192),
         "providers.speech" => Some(8192),
         "providers.transcribe" => Some(2048),
+        "plugins.jobs.enqueue" => Some(70000),
+        "plugins.jobs.list" => Some(1024),
+        "plugins.jobs.get" => Some(1024),
+        "plugins.jobs.cancel" => Some(1024),
         "backups.create" => Some(1024),
         "backups.list" => Some(1024),
         "backups.restore" => Some(1024),
@@ -255,6 +259,10 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "providers.images" => Some(8192),
         "providers.speech" => Some(8192),
         "providers.transcribe" => Some(262144),
+        "plugins.jobs.enqueue" => Some(70000),
+        "plugins.jobs.list" => Some(262144),
+        "plugins.jobs.get" => Some(70000),
+        "plugins.jobs.cancel" => Some(70000),
         "backups.create" => Some(262144),
         "backups.list" => Some(262144),
         "backups.restore" => Some(1024),
@@ -9243,6 +9251,574 @@ pub fn validate_providers_speech_format(value: &Value) -> Result<(), Vec<Issue>>
 
 pub fn decode_providers_speech_format(bytes: &[u8]) -> Result<ProvidersSpeechFormat, WireError> {
     crate::decode::<ProvidersSpeechFormat>(validate_providers_speech_format, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PluginJobState {
+    #[serde(rename = "queued")] Queued,
+    #[serde(rename = "leased")] Leased,
+    #[serde(rename = "succeeded")] Succeeded,
+    #[serde(rename = "failed")] Failed,
+    #[serde(rename = "cancelled")] Cancelled,
+}
+
+pub(crate) fn check_plugin_job_state(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "queued" | "leased" | "succeeded" | "failed" | "cancelled") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_plugin_job_state(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_plugin_job_state(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_plugin_job_state(bytes: &[u8]) -> Result<PluginJobState, WireError> {
+    crate::decode::<PluginJobState>(validate_plugin_job_state, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PluginJob {
+    pub id: String,
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    pub kind: String,
+    pub state: PluginJobState,
+    #[serde(rename = "payloadJson")]
+    pub payload_json: String,
+    pub attempts: i64,
+    #[serde(rename = "maxAttempts")]
+    pub max_attempts: i64,
+    #[serde(rename = "runAt")]
+    pub run_at: String,
+    #[serde(rename = "leaseUntil", default, skip_serializing_if = "Option::is_none")]
+    pub lease_until: Option<String>,
+    #[serde(rename = "lastError", default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+pub(crate) fn check_plugin_job(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_3: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_4: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("kind").is_none() {
+            issues.push(Issue::new(join_path(path, "kind"), "RequiredProperty"));
+        }
+        if value.get("state").is_none() {
+            issues.push(Issue::new(join_path(path, "state"), "RequiredProperty"));
+        }
+        if value.get("payloadJson").is_none() {
+            issues.push(Issue::new(join_path(path, "payloadJson"), "RequiredProperty"));
+        }
+        if value.get("attempts").is_none() {
+            issues.push(Issue::new(join_path(path, "attempts"), "RequiredProperty"));
+        }
+        if value.get("maxAttempts").is_none() {
+            issues.push(Issue::new(join_path(path, "maxAttempts"), "RequiredProperty"));
+        }
+        if value.get("runAt").is_none() {
+            issues.push(Issue::new(join_path(path, "runAt"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("kind") {
+            let child_path = join_path(path, "kind");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 32 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("state") {
+            let child_path = join_path(path, "state");
+            check_plugin_job_state(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("payloadJson") {
+            let child_path = join_path(path, "payloadJson");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 65536 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("attempts") {
+            let child_path = join_path(path, "attempts");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("maxAttempts") {
+            let child_path = join_path(path, "maxAttempts");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 10 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("runAt") {
+            let child_path = join_path(path, "runAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("leaseUntil") {
+            let child_path = join_path(path, "leaseUntil");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("lastError") {
+            let child_path = join_path(path, "lastError");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 512 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_3.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_4.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "pluginId" | "kind" | "state" | "payloadJson" | "attempts" | "maxAttempts" | "runAt" | "leaseUntil" | "lastError" | "createdAt" | "updatedAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_plugin_job(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_plugin_job(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_plugin_job(bytes: &[u8]) -> Result<PluginJob, WireError> {
+    crate::decode::<PluginJob>(validate_plugin_job, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsJobsEnqueue {
+    #[serde(rename = "pluginId")]
+    pub plugin_id: String,
+    pub kind: String,
+    #[serde(rename = "payloadJson", default, skip_serializing_if = "Option::is_none")]
+    pub payload_json: Option<String>,
+    #[serde(rename = "runAt", default, skip_serializing_if = "Option::is_none")]
+    pub run_at: Option<String>,
+    #[serde(rename = "maxAttempts", default, skip_serializing_if = "Option::is_none")]
+    pub max_attempts: Option<i64>,
+}
+
+pub(crate) fn check_request_plugins_jobs_enqueue(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("pluginId").is_none() {
+            issues.push(Issue::new(join_path(path, "pluginId"), "RequiredProperty"));
+        }
+        if value.get("kind").is_none() {
+            issues.push(Issue::new(join_path(path, "kind"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("kind") {
+            let child_path = join_path(path, "kind");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 32 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("payloadJson") {
+            let child_path = join_path(path, "payloadJson");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 65536 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("runAt") {
+            let child_path = join_path(path, "runAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("maxAttempts") {
+            let child_path = join_path(path, "maxAttempts");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 10 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "kind" | "payloadJson" | "runAt" | "maxAttempts") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_jobs_enqueue(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_jobs_enqueue(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_jobs_enqueue(bytes: &[u8]) -> Result<RequestPluginsJobsEnqueue, WireError> {
+    crate::decode::<RequestPluginsJobsEnqueue>(validate_request_plugins_jobs_enqueue, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginJob {
+    pub job: PluginJob,
+}
+
+pub(crate) fn check_result_plugin_job(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("job").is_none() {
+            issues.push(Issue::new(join_path(path, "job"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("job") {
+            let child_path = join_path(path, "job");
+            check_plugin_job(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "job") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugin_job(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugin_job(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugin_job(bytes: &[u8]) -> Result<ResultPluginJob, WireError> {
+    crate::decode::<ResultPluginJob>(validate_result_plugin_job, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsJobsList {
+    #[serde(rename = "pluginId", default, skip_serializing_if = "Option::is_none")]
+    pub plugin_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<PluginJobState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+}
+
+pub(crate) fn check_request_plugins_jobs_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if let Some(child) = value.get("pluginId") {
+            let child_path = join_path(path, "pluginId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("state") {
+            let child_path = join_path(path, "state");
+            check_plugin_job_state(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("limit") {
+            let child_path = join_path(path, "limit");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "pluginId" | "state" | "limit") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_jobs_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_jobs_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_jobs_list(bytes: &[u8]) -> Result<RequestPluginsJobsList, WireError> {
+    crate::decode::<RequestPluginsJobsList>(validate_request_plugins_jobs_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsJobsList {
+    pub jobs: Vec<PluginJob>,
+}
+
+pub(crate) fn check_result_plugins_jobs_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("jobs").is_none() {
+            issues.push(Issue::new(join_path(path, "jobs"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("jobs") {
+            let child_path = join_path(path, "jobs");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 200 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_plugin_job(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "jobs") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_jobs_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_jobs_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_jobs_list(bytes: &[u8]) -> Result<ResultPluginsJobsList, WireError> {
+    crate::decode::<ResultPluginsJobsList>(validate_result_plugins_jobs_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsJobsGet {
+    #[serde(rename = "jobId")]
+    pub job_id: String,
+}
+
+pub(crate) fn check_request_plugins_jobs_get(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("jobId").is_none() {
+            issues.push(Issue::new(join_path(path, "jobId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("jobId") {
+            let child_path = join_path(path, "jobId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "jobId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_jobs_get(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_jobs_get(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_jobs_get(bytes: &[u8]) -> Result<RequestPluginsJobsGet, WireError> {
+    crate::decode::<RequestPluginsJobsGet>(validate_request_plugins_jobs_get, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

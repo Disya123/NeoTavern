@@ -11,6 +11,7 @@ neotavern-storage = { path = "../storage" }
 # Phase 7 provider integration: the portable adapter contract plus the
 # built-in adapters registered by `providers::ProviderRegistry`.
 provider-sdk = { path = "../provider-sdk" }
+plugin-executor = { path = "../plugin-executor" }
 built-in-providers = { path = "../built-in-providers" }
 # Provider-config secrets (ТЗ §9.4, §SEC-01): the kernel holds the SecretStore
 # port handle and stores only opaque references in provider_configs.

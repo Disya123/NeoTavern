@@ -33,6 +33,8 @@ import {
   type ListPluginBlobsResultDto,
   type ReadPluginBlobResultDto,
   type DeletePluginBlobResultDto,
+  type PluginsJobsListResultDto,
+  type PluginJobResultDto,
   type ListPluginSecretsResultDto,
   type PluginSecretDto,
   type RevealPluginSecretResultDto,
@@ -516,6 +518,12 @@ export class LocalBackend implements NeoBackend {
         this.invoke<ReadPluginBlobResultDto>('plugins.blobs.read', req, opts),
       blobDelete: (req, opts) =>
         this.invoke<DeletePluginBlobResultDto>('plugins.blobs.delete', req, opts),
+      jobsEnqueue: (req, opts) =>
+        this.invoke<PluginJobResultDto>('plugins.jobs.enqueue', req, opts),
+      jobsList: (req, opts) =>
+        this.invoke<PluginsJobsListResultDto>('plugins.jobs.list', req, opts),
+      jobsGet: (req, opts) => this.invoke<PluginJobResultDto>('plugins.jobs.get', req, opts),
+      jobsCancel: (req, opts) => this.invoke<PluginJobResultDto>('plugins.jobs.cancel', req, opts),
       secretsList: (req, opts) =>
         this.invoke<ListPluginSecretsResultDto>('plugins.secrets.list', req, opts),
       secretSet: (req, opts) => this.invoke<PluginSecretDto>('plugins.secrets.set', req, opts),

@@ -298,9 +298,14 @@
       "sha256": "6013be96515f2323d10266f45e3354f4b6e45f22d859ade0fb0e184e1708c28a"
     },
     {
+      "source": "adr/0064-kernel-plugin-executor.md",
+      "target": "adr/0064-kernel-plugin-executor.md",
+      "sha256": "6e6e77b39d46d5cbfc8bef3df27514f58873b57fbb1c2227baf2f349a8b14211"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "3f57ee9ef97cc3175b923c3838efddd1c51b0feac365b56adcafbbdb8852735c"
+      "sha256": "ec812c08f2c794d8037f148d6a0e57a0605062f7fe2a0a627dd79f57d7950354"
     },
     {
       "source": "android/README.md",
@@ -325,7 +330,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "05fe2fb407a919c30dc1dd8a67f316dd02e67e0d814ce90328349ab8a331b99c"
+      "sha256": "3165c1e7de003dc8934e72ae3968b5b66690f5b79ae7b417424eec2d30855076"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -440,7 +445,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "bfeb2cb630771c72aa1081af65ffbe3f08f3ff1f4527954cbf51f42aff0f0abb"
+      "sha256": "909c65c8bf2c53f9aab44023111f507684b7c5f3a501ff90f5f1cbd3a9ea75a8"
     },
     {
       "source": "data/README.md",

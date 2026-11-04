@@ -450,6 +450,99 @@ export const ProvidersSpeechResultDtoSchema = Type.Object(
 export type ProvidersSpeechResultDto = Static<typeof ProvidersSpeechResultDtoSchema>;
 
 /**
+ * Plugin job lifecycle (`wire.plugin-job.state`, ADR-0064). `leased` means a
+ * worker holds a lease and may still report; `attempts` counts leases, not
+ * failures, so a crashed worker cannot retry forever.
+ */
+export const WirePluginJobState = Type.Union(
+  [
+    Type.Literal('queued'),
+    Type.Literal('leased'),
+    Type.Literal('succeeded'),
+    Type.Literal('failed'),
+    Type.Literal('cancelled'),
+  ],
+  { $id: 'wire.plugin-job.state', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WirePluginJobState = Static<typeof WirePluginJobState>;
+
+/** One scheduled plugin job (`wire.plugin-job`), payload included but opaque. */
+export const PluginJobDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    pluginId: Type.String({ minLength: 1, maxLength: 64 }),
+    kind: Type.String({ minLength: 1, maxLength: 32 }),
+    state: WirePluginJobState,
+    payloadJson: Type.String({ maxLength: 65536 }),
+    attempts: Type.Integer({ minimum: 0 }),
+    maxAttempts: Type.Integer({ minimum: 1, maximum: 10 }),
+    runAt: Type.String({ format: 'rfc3339' }),
+    leaseUntil: Type.Optional(Type.String({ format: 'rfc3339' })),
+    lastError: Type.Optional(Type.String({ maxLength: 512 })),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.plugin-job', additionalProperties: false },
+);
+export type PluginJobDto = Static<typeof PluginJobDtoSchema>;
+
+/**
+ * Job enqueue request (`wire.request.plugins-jobs-enqueue`, ADR-0064): the
+ * payload is opaque JSON owned by the plugin and bounded to 64 KiB. Secrets are
+ * never part of a payload — the executor resolves them at run time through the
+ * kernel broker, never from queue state.
+ */
+export const PluginsJobsEnqueueRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.String({ minLength: 1, maxLength: 64 }),
+    kind: Type.String({ minLength: 1, maxLength: 32 }),
+    payloadJson: Type.Optional(Type.String({ maxLength: 65536 })),
+    runAt: Type.Optional(Type.String({ format: 'rfc3339' })),
+    maxAttempts: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
+  },
+  { $id: 'wire.request.plugins-jobs-enqueue', additionalProperties: false },
+);
+export type PluginsJobsEnqueueRequestDto = Static<typeof PluginsJobsEnqueueRequestDtoSchema>;
+
+/** Single-job result shared by enqueue/get/cancel (`wire.result.plugin-job`). */
+export const PluginJobResultDtoSchema = Type.Object(
+  {
+    job: PluginJobDtoSchema,
+  },
+  { $id: 'wire.result.plugin-job', additionalProperties: false },
+);
+export type PluginJobResultDto = Static<typeof PluginJobResultDtoSchema>;
+
+/** Job list request (`wire.request.plugins-jobs-list`): bounded page. */
+export const PluginsJobsListRequestDtoSchema = Type.Object(
+  {
+    pluginId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+    state: Type.Optional(WirePluginJobState),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+  },
+  { $id: 'wire.request.plugins-jobs-list', additionalProperties: false },
+);
+export type PluginsJobsListRequestDto = Static<typeof PluginsJobsListRequestDtoSchema>;
+
+/** Job list result (`wire.result.plugins-jobs-list`), newest first. */
+export const PluginsJobsListResultDtoSchema = Type.Object(
+  {
+    jobs: Type.Array(PluginJobDtoSchema, { maxItems: 200 }),
+  },
+  { $id: 'wire.result.plugins-jobs-list', additionalProperties: false },
+);
+export type PluginsJobsListResultDto = Static<typeof PluginsJobsListResultDtoSchema>;
+
+/** Job id request (`wire.request.plugins-jobs-get` / `-cancel`). */
+export const PluginJobIdRequestDtoSchema = Type.Object(
+  {
+    jobId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.plugins-jobs-get', additionalProperties: false },
+);
+export type PluginJobIdRequestDto = Static<typeof PluginJobIdRequestDtoSchema>;
+
+/**
  * Transcription request (`wire.request.provider-transcribe`, ADR-0063): the
  * audio is a STAGED asset (ADR-0061), so the bytes never ride a JSON request and
  * the kernel owns the read; `providerId` addresses one stored config and
@@ -4395,6 +4488,13 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.imports.fullbackup.warning': FullBackupWarningDtoSchema,
   'wire.card.export.format': WireCardExportFormat,
   'wire.providers-speech.format': WireSpeechFormat,
+  'wire.plugin-job.state': WirePluginJobState,
+  'wire.plugin-job': PluginJobDtoSchema,
+  'wire.request.plugins-jobs-enqueue': PluginsJobsEnqueueRequestDtoSchema,
+  'wire.result.plugin-job': PluginJobResultDtoSchema,
+  'wire.request.plugins-jobs-list': PluginsJobsListRequestDtoSchema,
+  'wire.result.plugins-jobs-list': PluginsJobsListResultDtoSchema,
+  'wire.request.plugins-jobs-get': PluginJobIdRequestDtoSchema,
   'wire.providers-images.size': WireImageSize,
   'wire.request.providers-images': ProvidersImagesRequestDtoSchema,
   'wire.result.providers-images': ProvidersImagesResultDtoSchema,

@@ -17,6 +17,18 @@ are staged assets, outputs are assets, caps are explicit (8 KiB text/prompt,
 `fake` provider keeps tests deterministic. Full decision:
 [ADR-0063](0063-media-operations-exchange-assets.md).
 
+## ADR-0064: Kernel-resident plugin executor
+
+**Accepted (owner decision, 2026-11-04); queue implemented, execution gated.**
+The kernel owns the durable plugin job queue (schema v33, `plugins.jobs.*`), and
+`crates/plugin-executor` is the scheduling state machine — leases, retries,
+terminal states — with no I/O and no clock. Claiming and completing never cross
+the wire, so a client cannot pose as a worker. The worker loop that would inject
+plugin secrets stays off until the ADR's security-review checklist is answered in
+writing; until then jobs accumulate as `queued` and the host keeps its live
+execution surface. Full decision:
+[ADR-0064](0064-kernel-plugin-executor.md).
+
 ## ADR-0061: Large files enter through chunked upload on Product Wire
 
 **Proposed (kernel plane implemented, 2026-11-02).** Wire requests are JSON and

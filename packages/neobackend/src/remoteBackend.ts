@@ -30,6 +30,8 @@ import type {
   ReadPluginBlobResultDto,
   DeletePluginBlobRequestDto,
   DeletePluginBlobResultDto,
+  PluginJobResultDto,
+  PluginsJobsListResultDto,
   ListPluginSecretsResultDto,
   PluginSecretDto,
   RevealPluginSecretResultDto,
@@ -473,6 +475,14 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<RevealPluginSecretResultDto>('plugins.secrets.reveal', req, {
         signal: opts?.signal,
       }),
+    jobsEnqueue: (req, opts) =>
+      this.sdk.call<PluginJobResultDto>('plugins.jobs.enqueue', req, { signal: opts?.signal }),
+    jobsList: (req, opts) =>
+      this.sdk.call<PluginsJobsListResultDto>('plugins.jobs.list', req, { signal: opts?.signal }),
+    jobsGet: (req, opts) =>
+      this.sdk.call<PluginJobResultDto>('plugins.jobs.get', req, { signal: opts?.signal }),
+    jobsCancel: (req, opts) =>
+      this.sdk.call<PluginJobResultDto>('plugins.jobs.cancel', req, { signal: opts?.signal }),
   };
 
   readonly themes: ThemesApi = {
