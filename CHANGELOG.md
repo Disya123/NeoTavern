@@ -24,6 +24,23 @@
 
 ### Added
 
+- **Plugin bundles are verified and staged in the kernel (round 84/99, ADR-0066 P2b).**
+  `crates/runtime-kernel/src/plugin_bundles.rs` publishes a package under
+  `<data root>/plugin-bundles/<pluginId>/<version>/` after hashing every declared
+  file and refusing the whole install on a mismatch, so a host never sees bytes it
+  did not verify. Paths are validated segment by segment (traversal, absolute paths,
+  drive prefixes, backslashes, case-insensitive duplicates), publication is atomic
+  (staging directory + rename), and reads are bounded to 4 MiB ranges with a real
+  eof, which is what a frame or a native supervisor needs to stream a model. Limits:
+  512 files, 256 MiB per file, 2 GiB per bundle. Nothing executes here — staging is
+  storage; running bytes is the supervisor (P3). Verified: 6/6 integration tests
+  (install + range read, digest mismatch publishes nothing, traversal refused before
+  copy, missing file named, reinstall replaces bytes, bounded read + bad ids), clippy
+  clean. Still open: the `plugins.bundle.*` wire family and the UI wiring that asks
+  for a bundle URL.
+
+### Added
+
 - **Plugin frames load a real sandbox document (round 83/99, ADR-0066 P2a).**
   `runtime.ts` pointed every plugin iframe at `/api/v2/plugins/:id/sandbox`, a route
   deleted with the Fastify contour — so any plugin with `hasFrontend` rendered a 404.
