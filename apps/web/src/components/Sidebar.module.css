@@ -1138,8 +1138,8 @@
   }
 }
 
-/* Phones: the rail is an overlay menu, opened from the chat header. */
-
+/* Phones: the rail is an overlay menu, opened from the corner button below. */
+@media (max-width: 600px) {
   .rail {
     position: fixed;
     inset: 0;
