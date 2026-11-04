@@ -21,6 +21,7 @@ import {
 } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import type { NavigationRailItemId, NavigationRailPanelItemId } from '@neotavern/theme-sdk';
 import { usePlugins, useThemes } from '../api/hooks.js';
@@ -318,37 +319,41 @@ export function Sidebar() {
       </nav>
 
       {/* Phones: the rail is replaced by a tile menu, so navigation is a place you go
-          rather than a strip you squeeze past. It is hidden on wider screens. */}
-      <div className={styles.mobileMenu} data-open={navigationRailExpanded ? 'true' : 'false'}>
-        <header className={styles.mobileMenuHeader}>
-          <strong>{t('navigation:menu')}</strong>
-          <button
-            type="button"
-            className={styles.mobileMenuClose}
-            onClick={() => setNavigationRailExpanded(false)}
-            aria-label={t('accessibility:closeMenu')}
-            title={t('accessibility:closeMenu')}
-          >
-            <X size={20} aria-hidden="true" />
-          </button>
-        </header>
-        <div className={styles.mobileMenuGrid}>
-          {RAIL_ITEMS.map(({ id, labelKey, icon: ItemIcon }) => (
+          rather than a strip you squeeze past. It is portalled out of the sidebar so the
+          panel's own animation and inert state cannot swallow it. */}
+      {createPortal(
+        <div className={styles.mobileMenu} data-open={navigationRailExpanded ? 'true' : 'false'}>
+          <header className={styles.mobileMenuHeader}>
+            <strong>{t('navigation:menu')}</strong>
             <button
-              key={id}
               type="button"
-              className={styles.mobileMenuTile}
-              onClick={() => {
-                setNavigationRailExpanded(false);
-                openPanel(id);
-              }}
+              className={styles.mobileMenuClose}
+              onClick={() => setNavigationRailExpanded(false)}
+              aria-label={t('accessibility:closeMenu')}
+              title={t('accessibility:closeMenu')}
             >
-              <ItemIcon size={22} aria-hidden="true" weight="duotone" />
-              <span>{t(labelKey)}</span>
+              <X size={20} aria-hidden="true" />
             </button>
-          ))}
-        </div>
-      </div>
+          </header>
+          <div className={styles.mobileMenuGrid}>
+            {RAIL_ITEMS.map(({ id, labelKey, icon: ItemIcon }) => (
+              <button
+                key={id}
+                type="button"
+                className={styles.mobileMenuTile}
+                onClick={() => {
+                  setNavigationRailExpanded(false);
+                  openPanel(id);
+                }}
+              >
+                <ItemIcon size={22} aria-hidden="true" weight="duotone" />
+                <span>{t(labelKey)}</span>
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
       {sidebarPresent ? (
         <>
           <button
