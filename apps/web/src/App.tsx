@@ -21,6 +21,7 @@ import { getBackgroundLocation, matchSystemSurface } from './components/systemSu
 import { PluginAuthResult } from './components/PluginAuthResult.js';
 import { ThemeSync } from './components/ThemeSync.js';
 import { HostConnect } from './components/HostConnect.js';
+import { PluginSurfaceHost } from './plugins/PluginSurfaceHost.js';
 import { ChatPage } from './pages/ChatPage.js';
 import { HomePage } from './pages/HomePage.js';
 import { useUiStore } from './state/ui.js';
@@ -43,7 +44,11 @@ export function App() {
             <PluginSync />
             <PluginProviderSync />
             <AutoConnectSync />
-            <AppRoutes />
+            {/* A plugin may own the whole window; the host keeps the way back
+                (ADR-0066 D4). Outside that mode this renders the app untouched. */}
+            <PluginSurfaceHost>
+              <AppRoutes />
+            </PluginSurfaceHost>
           </AuthGate>
         </HostConnect>
       </AppRouter>

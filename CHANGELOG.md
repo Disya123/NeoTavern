@@ -24,6 +24,15 @@
 
 ### Added
 
+- **The app shell is ready to be replaced (round 98/99, ADR-0066 P4 complete).**
+  `PluginSurfaceHost` now wraps `AppRoutes`, so a plugin granted `ui.shell.replace` can
+  own the window and the host keeps the only way back. Outside that mode the wrapper
+  renders the application untouched — no extra node in the tree, no layout change.
+  Verified: tsc clean, surface-host 3/3. P4 is closed; P5 (native/GPU/mic/camera
+  consent plus the four destructive tests) is what remains.
+
+### Added
+
 - **Host container for plugin-owned UI (round 97/99, ADR-0066 D4).**
   `PluginSurfaceHost` decides whether the stock application or a plugin's frame is on
   screen: with no active plugin it renders the app untouched; when a plugin takes over
