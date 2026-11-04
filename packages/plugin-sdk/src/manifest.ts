@@ -395,6 +395,22 @@ export function validateManifest(input: unknown): Result<PluginManifest> {
     }
   }
 
+  // A native host is running third-party code as the user: that is the consent
+  // moment (ADR-0066 D1), so the manifest has to ask for it explicitly.
+  if (runtime?.host === 'native') {
+    const declared = Array.isArray(input['requiredCapabilities'])
+      ? input['requiredCapabilities']
+      : [];
+    const asksForNative = declared.some((entry) =>
+      typeof entry === 'string'
+        ? entry === 'native.process'
+        : isRecord(entry) && entry['name'] === 'native.process',
+    );
+    if (!asksForNative) {
+      issues.push("runtime.host 'native' requires the native.process capability");
+    }
+  }
+
   // A plugin that wants the whole window must ask for the capability that grants it:
   // the UI declaration alone is a wish, the grant is the consent moment (ADR-0066 D4).
   if (runtime?.ui === 'shell') {

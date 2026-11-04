@@ -73,6 +73,10 @@ export const CAPABILITY_NAMES = [
   'ui.shell.replace',
   // Compute
   'compute.worker',
+  // ADR-0066 D1: running a native process is a consent, not a default; a GPU is a
+  // second, separate one because it is a different risk (driver, memory, contention).
+  'native.process',
+  'native.gpu',
   'compute.backend',
   'jobs.background',
   // Network and integrations

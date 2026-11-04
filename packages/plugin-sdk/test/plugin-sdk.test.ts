@@ -482,7 +482,7 @@ describe('runtime declaration (ADR-0066)', () => {
   it('accepts a native plugin that names its binaries and their digests', () => {
     const result = validateManifest({
       ...base,
-      requiredCapabilities: ['ui.shell.replace'],
+      requiredCapabilities: ['ui.shell.replace', 'native.process'],
       runtime: {
         host: 'native',
         ui: 'shell',
@@ -621,5 +621,40 @@ describe('ui surface resolution (ADR-0066 D4)', () => {
     expect(resolveUiSurface({ host: 'native', ui: 'shell' }, ['ui.shell.replace'])).toEqual({
       surface: 'shell',
     });
+  });
+});
+
+describe('native execution consent (ADR-0066 D1)', () => {
+  const base = { id: 'author.native', name: 'Native', version: '1.0.0', apiVersion: 3 };
+  const digest = 'b'.repeat(64);
+
+  it('refuses a native host that did not ask for native.process', () => {
+    const result = validateManifest({
+      ...base,
+      runtime: { host: 'native', native: [{ platform: 'windows-x64', entry: 'native/agent.exe' }] },
+      checksums: { 'native/agent.exe': digest },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(String(result.error.message)).toMatch(/native\.process/u);
+  });
+
+  it('accepts a native host that asked for it', () => {
+    const result = validateManifest({
+      ...base,
+      requiredCapabilities: ['native.process'],
+      runtime: { host: 'native', native: [{ platform: 'windows-x64', entry: 'native/agent.exe' }] },
+      checksums: { 'native/agent.exe': digest },
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('keeps wasm and sandbox plugins free of the native grant', () => {
+    const wasm = validateManifest({
+      ...base,
+      runtime: { host: 'wasm', wasm: 'wasm/plugin.wasm' },
+      checksums: { 'wasm/plugin.wasm': digest },
+    });
+    expect(wasm.ok).toBe(true);
+    expect(validateManifest({ ...base, runtime: { host: 'sandbox' } }).ok).toBe(true);
   });
 });

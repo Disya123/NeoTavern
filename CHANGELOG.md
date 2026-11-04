@@ -24,6 +24,16 @@
 
 ### Added
 
+- **Native execution is a consent, not a manifest flag (round 99/99, ADR-0066 P5a).**
+  The catalog gains `native.process` and `native.gpu`, and a manifest with
+  `runtime.host: 'native'` is rejected unless it asks for `native.process`: running
+  third-party code as the user is the consent moment, and a GPU is a separate grant
+  because it carries a different risk (driver, memory, contention). Wasm and sandbox
+  plugins are unaffected. Verified: plugin-sdk 101/101 (3 new cases), tsc clean. The
+  consent UI and the four destructive tests are the remaining P5 work.
+
+### Added
+
 - **The app shell is ready to be replaced (round 98/99, ADR-0066 P4 complete).**
   `PluginSurfaceHost` now wraps `AppRoutes`, so a plugin granted `ui.shell.replace` can
   own the window and the host keeps the only way back. Outside that mode the wrapper
