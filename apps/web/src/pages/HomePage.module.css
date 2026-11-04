@@ -396,6 +396,16 @@
     font-size: var(--st-font-size-sm);
   }
   @media (max-width: 600px) {
+    /* The chat header is absolutely positioned above this page; the page also reserved
+       max(2xl, inset-top) on top of a header that already carries its own control-height
+       row. That band had nothing in it, right where the title should follow the identity. */
+    .page {
+      padding-block-start: calc(
+        var(--st-control-height-large) + var(--nt-inset-top) + var(--st-space-md)
+      );
+      padding-inline: var(--st-space-lg);
+    }
+
     .recentLink {
       grid-template-columns: auto minmax(0, 1fr);
       gap: var(--st-space-sm);
