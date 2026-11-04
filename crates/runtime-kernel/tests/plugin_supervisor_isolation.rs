@@ -158,3 +158,44 @@ fn the_kernel_still_serves_after_a_plugin_was_killed() {
         "a fresh kernel must still answer: {result}"
     );
 }
+
+#[test]
+fn an_ungranted_capability_is_denied_at_the_kernel_boundary() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let kernel = open(dir.path());
+    // Installed with no permissions: the plugin exists, but the grant set is empty.
+    dispatch(
+        &kernel,
+        "plugins.install",
+        serde_json::json!({
+            "id": "author-denied",
+            "name": "Denied",
+            "version": "1.0.0",
+            "trustState": "locally-trusted",
+            "permissions": [],
+        }),
+    );
+
+    let flag = CancellationFlag::new();
+    let request = serde_json::to_vec(&serde_json::json!({
+        "pluginId": "author-denied",
+        "name": "probe.bin",
+        "contentType": "application/octet-stream",
+        "totalBytes": 16,
+    }))
+    .expect("request serialization");
+    let error = kernel
+        .dispatch("plugins.blobs.begin", &request, &flag)
+        .expect_err("an ungranted capability must be refused by the kernel, not by the UI");
+    let product = error.product.expect("a product error carries a wire code");
+    assert_eq!(product.code, "PLUGIN_PERMISSION_DENIED");
+    assert_eq!(
+        product
+            .params
+            .get("capability")
+            .and_then(|value| value.as_str()),
+        Some("storage.blobs"),
+        "the refusal must name the capability the plugin did not get: {:?}",
+        product.params
+    );
+}

@@ -24,6 +24,18 @@
 
 ### Added
 
+- **All four destructive acceptance cases pass (round 101/99, ADR-0066 D9).**
+  The fourth case closes the set: a plugin installed without `storage.blobs` asks for a
+  blob upload and the kernel refuses it with `PLUGIN_PERMISSION_DENIED`, naming
+  `storage.blobs` in the params — the refusal happens at the kernel boundary, not in
+  the UI, so a client cannot talk its way past it. Verified: 4/4 in
+  `plugin_supervisor_isolation` (hang killed while `meta.get` answers, crash loop ends
+  `Failed` and needs a reset, fresh kernel serves afterwards, ungranted capability
+  denied), 5.3 s. ADR-0066's behavioural acceptance criterion is met; the consent UI and
+  the `plugins.bundle.*` wire family remain.
+
+### Added
+
 - **Destructive acceptance for the supervisor (round 100/99, ADR-0066 D9).**
   `plugin_supervisor_isolation` breaks plugins on purpose and then asks the real kernel
   for work: a plugin that never exits is killed (reported as a hang) while
