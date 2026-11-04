@@ -436,9 +436,20 @@
   color: var(--st-text-muted);
 }
 
+.windowHint {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--st-text-muted);
+  font-size: 0.8125rem;
+}
+
 .windowSearch {
-  margin-inline-start: auto;
-  width: min(18rem, 40%);
+  flex: 0 0 auto;
+  width: min(16rem, 32%);
   min-width: 8rem;
   padding: 0.35rem 0.6rem;
   border-radius: var(--st-radius-sm);

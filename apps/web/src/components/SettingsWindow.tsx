@@ -51,6 +51,7 @@ export function SettingsWindow({ onClose }: SettingsWindowProps) {
             {CurrentIcon ? <CurrentIcon size={18} /> : null}
           </span>
           <h2>{current?.label}</h2>
+          <p className={styles.windowHint}>{current?.hint}</p>
           <input
             type="search"
             className={styles.windowSearch}

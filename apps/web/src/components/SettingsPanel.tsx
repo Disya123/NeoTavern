@@ -73,6 +73,8 @@ export type SettingsSectionId =
 export interface SectionEntry {
   value: SettingsSectionId;
   label: string;
+  /** One line saying what the section is for; the window header shows it. */
+  hint: string;
   icon: typeof Sliders;
   content: ReactNode;
 }
@@ -92,6 +94,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
         {
           value: 'remote',
           label: t('settings:remoteAccess'),
+          hint: t('settings:sectionHintRemote'),
           icon: ShieldCheck,
           content: (
             <FloatingTabContent>
@@ -105,6 +108,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
     {
       value: 'general',
       label: t('settings:general'),
+      hint: t('settings:sectionHintGeneral'),
       icon: Sliders,
       content: (
         <FloatingTabContent>
@@ -115,6 +119,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
     {
       value: 'themes',
       label: t('navigation:themes'),
+      hint: t('settings:sectionHintThemes'),
       icon: PencilSimple,
       content: (
         <FloatingTabContent>
@@ -125,6 +130,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
     {
       value: 'ai',
       label: t('settings:aiSettings'),
+      hint: t('settings:sectionHintAi'),
       icon: Globe,
       content: (
         <FloatingTabContent>
@@ -135,6 +141,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
     {
       value: 'plugins',
       label: t('navigation:plugins'),
+      hint: t('settings:sectionHintPlugins'),
       icon: Cube,
       content: (
         <FloatingTabContent>
@@ -145,6 +152,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
     {
       value: 'data',
       label: t('settings:data'),
+      hint: t('settings:sectionHintData'),
       icon: Database,
       content: (
         <FloatingTabContent>
@@ -155,6 +163,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
     {
       value: 'profiles',
       label: t('navigation:profiles'),
+      hint: t('settings:sectionHintProfiles'),
       icon: Sliders,
       content: (
         <FloatingTabContent>
@@ -165,6 +174,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
     {
       value: 'secrets',
       label: t('navigation:secrets'),
+      hint: t('settings:sectionHintSecrets'),
       icon: ShieldCheck,
       content: (
         <FloatingTabContent>
@@ -175,6 +185,7 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
     {
       value: 'tools',
       label: t('settings:tools'),
+      hint: t('settings:sectionHintTools'),
       icon: Plug,
       content: (
         <FloatingTabContent>
