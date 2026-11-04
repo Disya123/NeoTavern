@@ -295,6 +295,18 @@ export function Sidebar() {
       data-component="navigation-rail"
       data-state={navigationRailExpanded ? 'expanded' : 'collapsed'}
     >
+      {/* Phones have no rail: this opens it as a full-screen menu. It sits low, next to
+          the composer, so it never covers the conversation header. */}
+      <button
+        type="button"
+        className={styles.mobileMenuButton}
+        data-action="mobile-menu-open"
+        aria-label={t('accessibility:openMenu')}
+        title={t('accessibility:openMenu')}
+        onClick={() => setNavigationRailExpanded(true)}
+      >
+        <SidebarSimple size={20} aria-hidden="true" />
+      </button>
       <nav
         id="primary-navigation"
         className={styles.rail}

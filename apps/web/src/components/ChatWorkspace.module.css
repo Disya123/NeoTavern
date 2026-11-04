@@ -543,29 +543,3 @@
     }
   }
 }
-
-/* Menu entry for phones, in the header row: the rail is an overlay there, so this is the
-   only permanent navigation affordance and it must not hover over the conversation. */
-.headerMenuButton {
-  display: none;
-}
-
-@media (max-width: 600px) {
-  .headerMenuButton {
-    display: inline-flex;
-    flex: none;
-    width: 36px;
-    height: 36px;
-    align-items: center;
-    justify-content: center;
-    border: 0;
-    border-radius: var(--st-radius-control);
-    background: transparent;
-    color: var(--st-color-text-secondary);
-  }
-
-  .headerMenuButton:focus-visible {
-    outline: 2px solid var(--st-focus-ring);
-    outline-offset: 1px;
-  }
-}
