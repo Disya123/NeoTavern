@@ -87,3 +87,60 @@ export async function createBundleUrl(
   const bytes = await readBundleFile(pluginId, version, path);
   return URL.createObjectURL(new Blob([bytes], { type: 'text/javascript' }));
 }
+
+/** What a manifest says the frame should import, if it says anything. */
+export interface BundleEntry {
+  path: string;
+  kind: 'frontend' | 'wasm';
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) if (typeof value === 'string' && value.length > 0) return value;
+  return null;
+}
+
+/**
+ * Reads the importable entry out of a manifest that the kernel already stores.
+ *
+ * The web client receives the manifest as an opaque record, so this is where the shape
+ * of three declaration styles is understood in one place: a flat `frontend`, a
+ * `runtime.frontend`, and a wasm module. No manifest means no entry, and no entry means
+ * nothing is posted to the frame — a missing field must not turn into a guess.
+ */
+export function entryPathFor(manifest: unknown): BundleEntry | null {
+  const root = asRecord(manifest);
+  const runtime = asRecord(root['runtime']);
+  const ui = asRecord(root['ui']);
+
+  const frontend = firstString(
+    runtime['frontend'],
+    root['frontend'],
+    ui['entry'],
+    asRecord(ui['panel'])['entry'],
+  );
+  if (frontend !== null) return { path: frontend, kind: 'frontend' };
+
+  const wasm = firstString(runtime['wasm'], root['wasm']);
+  if (wasm !== null) return { path: wasm, kind: 'wasm' };
+
+  return null;
+}
+
+/**
+ * Produces the URL to hand a frame, or `null` when the package has nothing to import or
+ * the host cannot serve bytes. Callers post only a non-null URL, so a frame never
+ * receives a placeholder that would load an empty document and look 'mounted'.
+ */
+export async function resolveEntryUrl(
+  pluginId: string,
+  version: string,
+  manifest: unknown,
+): Promise<string | null> {
+  const entry = entryPathFor(manifest);
+  if (entry === null || !hasBundleHost()) return null;
+  return createBundleUrl(pluginId, version, entry.path);
+}

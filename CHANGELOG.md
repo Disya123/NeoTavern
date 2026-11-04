@@ -24,6 +24,17 @@
 
 ### Added
 
+- **The manifest already carries what the frame must import (round 105/99).**
+  `entryPathFor(manifest)` resolves the entry from the three declaration styles the
+  product actually has — flat `frontend`, `runtime.frontend`, `ui.panel.entry` — plus a
+  wasm module, and returns `null` rather than guessing when the manifest is silent.
+  `resolveEntryUrl` turns that into a blob URL, and returns `null` when the host cannot
+  serve bytes, so a frame is never handed a placeholder that would render an empty
+  document and look mounted. No wire change was needed: the kernel already ships the
+  manifest as an opaque record. Verified: bundleClient 8/8 (3 new cases), tsc clean.
+
+### Added
+
 - **Bundle bytes reach the frame without a new wire op (round 104/99, ADR-0066 P2c).**
   A host command `plugin_bundle_read` returns `size|eof|<base64>` for one bounded range,
   and `bundleClient.ts` assembles a file from those ranges, refusing a read that runs

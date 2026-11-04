@@ -8,6 +8,8 @@ import {
   parseBundleChunk,
   readBundleFile,
   createBundleUrl,
+  entryPathFor,
+  resolveEntryUrl,
 } from './bundleClient.js';
 import { UnsupportedError } from '@neotavern/neobackend';
 
@@ -68,6 +70,43 @@ describe('bundle client', () => {
       'blob:neotavern/1',
     );
     expect(createObjectURL).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('bundle entry resolution', () => {
+  it('understands the flat, runtime and ui declaration styles', () => {
+    expect(entryPathFor({ frontend: 'ui/app.js' })).toEqual({
+      path: 'ui/app.js',
+      kind: 'frontend',
+    });
+    expect(entryPathFor({ runtime: { frontend: 'ui/main.js' } })).toEqual({
+      path: 'ui/main.js',
+      kind: 'frontend',
+    });
+    expect(entryPathFor({ ui: { panel: { entry: 'ui/panel.js' } } })).toEqual({
+      path: 'ui/panel.js',
+      kind: 'frontend',
+    });
+    expect(entryPathFor({ runtime: { wasm: 'wasm/plugin.wasm' } })).toEqual({
+      path: 'wasm/plugin.wasm',
+      kind: 'wasm',
+    });
+  });
+
+  it('returns nothing rather than guessing when the manifest is silent', () => {
+    expect(entryPathFor({})).toBeNull();
+    expect(entryPathFor(null)).toBeNull();
+    expect(entryPathFor({ runtime: { host: 'sandbox' } })).toBeNull();
+  });
+
+  it('does not hand a frame a URL it cannot load', async () => {
+    await expect(resolveEntryUrl('author.plugin', '1.0.0', {})).resolves.toBeNull();
+    invoke.mockResolvedValueOnce(chunk(3, true, 'abc'));
+    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:neotavern/2' });
+    await expect(
+      resolveEntryUrl('author.plugin', '1.0.0', { frontend: 'ui/app.js' }),
+    ).resolves.toBe('blob:neotavern/2');
     vi.unstubAllGlobals();
   });
 });
