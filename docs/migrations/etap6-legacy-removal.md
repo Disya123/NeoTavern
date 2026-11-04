@@ -69,6 +69,17 @@ wire `message.role` union is `system|user|assistant|tool`, so the legacy
 `plugin` role has no wire spelling — the bridge will have to map it explicitly
 (e.g. to `assistant` with plugin metadata) when 60c-3 lands.
 
+### Packaged proof (round 66)
+
+`apps/desktop/src-tauri/target/release/neotavern.exe` was rebuilt with the legacy
+transport gone, packed by `scripts/package-portable-windows.mjs`
+(`NeoTavern_0.1.0_x64-portable.zip`, SHA-256
+`9d8e6095ade462c56aa268f581494002a8c13624ec7b15b09953c240c38c6909`) and smoked by
+`scripts/smoke-desktop-shell.mjs` (`OK — portable data path, readiness and
+kernel-owned database`, exit 0). The MSI branch still fails with `os error 32`
+(a file held by the previous build), which is why the portable zip is the
+official artifact — unchanged from earlier rounds.
+
 ## Migration notes for users of the removed contour
 
 1. **Nothing to migrate by hand for product data.** The kernel opens
