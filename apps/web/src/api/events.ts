@@ -14,22 +14,10 @@
  * 18 closes the boundary cluster 15 documented).
  */
 import type { QueryClient } from '@tanstack/react-query';
-import type { BrowserAppEvent } from '@neotavern/contracts';
 import { startAppEventPolling } from './appEventPoller.js';
 import { isKernelMode } from './backend.js';
 import { needsHostConnect } from './hostSession.js';
 import { pollAppEvents } from './wireBridge.js';
-
-/**
- * Server frame on the legacy wire. The event names come from the shared
- * contract (BROWSER_APP_EVENTS); unknown future events fall through the
- * switch's default branch.
- */
-interface AppEventEnvelope {
-  type: string;
-  event?: BrowserAppEvent | string;
-  payload?: { chatId?: string; characterId?: string };
-}
 
 /** Payload ids the invalidations need (ids only — never message text). */
 interface AppEventIds {
@@ -135,18 +123,6 @@ export function connectAppEvents(queryClient: QueryClient): () => void {
     });
   }
 
-  const source = new EventSource('/api/v2/events');
-
-  source.onmessage = (message: MessageEvent<string>) => {
-    let envelope: AppEventEnvelope;
-    try {
-      envelope = JSON.parse(message.data) as AppEventEnvelope;
-    } catch {
-      return; // Keep-alives and malformed frames carry no cache signal.
-    }
-    if (envelope.type !== 'event' || typeof envelope.event !== 'string') return;
-    invalidateForAppEvent(queryClient, envelope.event, envelope.payload);
-  };
-
-  return () => source.close();
+  // No kernel plane means no host at all: a closed backend has no event feed.
+  return () => undefined;
 }

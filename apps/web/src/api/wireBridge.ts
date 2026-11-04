@@ -184,10 +184,9 @@ export async function exportCharacterCard(
     triggerDownload(blobUrlFromBase64(result.contentBase64, result.contentType));
     return;
   }
-  // Legacy-only capability: the URL is served by the legacy contour, and
-  // wireBridge is the migration routing table (legacy branch lives here).
-  // eslint-disable-next-line @neotavern/no-legacy-api-surface
-  triggerDownload(`/api/v2/characters/${encodeURIComponent(characterId)}/export?format=${format}`);
+  // There is no legacy contour to serve this URL any more (round 64): refuse
+  // honestly instead of downloading a 404 page as a card.
+  throw new UnsupportedError('characters.exportCard');
 }
 
 /** Decodes a base64 payload into a temporary object URL for download. */
@@ -216,9 +215,8 @@ export async function exportChat(chatId: string): Promise<void> {
     triggerDownload(blobUrlFromBase64(exported.contentBase64, exported.contentType));
     return;
   }
-  // Legacy-only capability (see exportCharacterCard).
-  // eslint-disable-next-line @neotavern/no-legacy-api-surface
-  triggerDownload(`/api/v2/chats/${encodeURIComponent(chatId)}/export`);
+  // There is no legacy contour to serve this URL any more (round 64).
+  throw new UnsupportedError('chats.export');
 }
 
 /**
