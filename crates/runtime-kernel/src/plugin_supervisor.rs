@@ -412,3 +412,161 @@ mod process_tests {
         );
     }
 }
+
+/// One supervisor per plugin, owned by the host (ADR-0066 P3c).
+///
+/// The registry is the piece the desktop host talks to: it answers "may this plugin
+/// start now?", records what happened, and keeps a per-plugin failure history. It
+/// deliberately does not spawn anything — [`run_guarded`] does that — so the host can
+/// decide *when* to run while this stays testable without processes.
+#[derive(Default)]
+pub struct SupervisorRegistry {
+    entries: std::collections::BTreeMap<String, Supervisor>,
+}
+
+impl SupervisorRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a plugin with a policy, or replaces the policy of a known one
+    /// without losing its history.
+    pub fn register(&mut self, plugin_id: &str, policy: SupervisorPolicy) -> &Supervisor {
+        let entry = self
+            .entries
+            .entry(plugin_id.to_string())
+            .or_insert_with(|| Supervisor::new(policy.clone()));
+        if entry.policy != policy {
+            entry.policy = policy;
+        }
+        entry
+    }
+
+    pub fn get(&self, plugin_id: &str) -> Option<&Supervisor> {
+        self.entries.get(plugin_id)
+    }
+
+    /// Whether the host may start the plugin now.
+    ///
+    /// `Failed` is sticky: only an explicit [`Self::reset`] clears it, so a plugin
+    /// that crashed its budget does not quietly retry when the UI re-renders.
+    pub fn can_start(&self, plugin_id: &str) -> bool {
+        match self.entries.get(plugin_id).map(Supervisor::state) {
+            Some(SupervisorState::Stopped) | Some(SupervisorState::Backoff) => true,
+            Some(SupervisorState::Running) | Some(SupervisorState::Failed) | None => false,
+        }
+    }
+
+    /// Marks the plugin as starting; returns false when the policy forbids it.
+    pub fn start(&mut self, plugin_id: &str) -> bool {
+        let Some(entry) = self.entries.get_mut(plugin_id) else {
+            return false;
+        };
+        if entry.state() == SupervisorState::Running || entry.state() == SupervisorState::Failed {
+            return false;
+        }
+        entry.start();
+        true
+    }
+
+    /// Records a run's outcome and returns the delay before the next attempt.
+    pub fn finish(
+        &mut self,
+        plugin_id: &str,
+        kind: ExitKind,
+        detail: Option<String>,
+    ) -> Option<Duration> {
+        self.entries
+            .get_mut(plugin_id)
+            .and_then(|entry| entry.on_exit(kind, detail))
+    }
+
+    /// Operator stop: keeps history, forgets backoff.
+    pub fn stop(&mut self, plugin_id: &str) {
+        if let Some(entry) = self.entries.get_mut(plugin_id) {
+            entry.stop();
+        }
+    }
+
+    /// Operator reset: failure history cleared, restarts allowed again.
+    pub fn reset(&mut self, plugin_id: &str) {
+        if let Some(entry) = self.entries.get_mut(plugin_id) {
+            entry.reset();
+        }
+    }
+
+    /// Ids with a failure reason, for the UI's plugin health list.
+    pub fn failing(&self) -> Vec<(&str, &str)> {
+        self.entries
+            .iter()
+            .filter_map(|(id, entry)| entry.last_error().map(|error| (id.as_str(), error)))
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+
+    fn policy() -> SupervisorPolicy {
+        SupervisorPolicy {
+            max_restarts: 1,
+            base_delay: Duration::from_millis(50),
+            max_delay: Duration::from_millis(100),
+            heartbeat_timeout: Duration::from_secs(5),
+        }
+    }
+
+    #[test]
+    fn an_unknown_plugin_cannot_start() {
+        let registry = SupervisorRegistry::new();
+        assert!(!registry.can_start("ghost"));
+    }
+
+    #[test]
+    fn a_registered_plugin_starts_once_and_reports_its_failure() {
+        let mut registry = SupervisorRegistry::new();
+        registry.register("author.plugin", policy());
+        assert!(registry.can_start("author.plugin"));
+        assert!(registry.start("author.plugin"));
+        assert!(!registry.start("author.plugin"), "already running");
+
+        let delay = registry.finish("author.plugin", ExitKind::Crash, Some("boom".into()));
+        assert!(delay.is_some());
+        assert_eq!(
+            registry.failing(),
+            vec![("author.plugin", "boom")],
+            "the UI needs the reason, not just a boolean"
+        );
+    }
+
+    #[test]
+    fn the_registry_marks_failed_and_only_reset_brings_it_back() {
+        let mut registry = SupervisorRegistry::new();
+        registry.register("author.plugin", policy());
+        for _ in 0..2 {
+            registry.start("author.plugin");
+            registry.finish("author.plugin", ExitKind::Crash, None);
+        }
+        assert!(!registry.can_start("author.plugin"));
+        assert!(!registry.start("author.plugin"));
+        registry.reset("author.plugin");
+        assert!(registry.can_start("author.plugin"));
+        assert!(registry.failing().is_empty());
+    }
+
+    #[test]
+    fn a_clean_run_leaves_no_failure_history() {
+        let mut registry = SupervisorRegistry::new();
+        registry.register("author.plugin", policy());
+        registry.start("author.plugin");
+        assert!(registry
+            .finish("author.plugin", ExitKind::Clean, None)
+            .is_none());
+        assert!(
+            registry.can_start("author.plugin"),
+            "a cleanly stopped plugin stays startable"
+        );
+        assert!(registry.failing().is_empty());
+    }
+}

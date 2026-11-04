@@ -24,6 +24,17 @@
 
 ### Added
 
+- **Per-plugin supervisor registry (round 88/99, ADR-0066 P3c-1).** The host now
+  keeps one `Supervisor` per installed plugin: `register` (idempotent, keeps
+  history), `can_start` (a `Failed` plugin stays down until an explicit reset, so a
+  re-render cannot silently retry a crash loop), `start`, `finish` (returns the
+  backoff delay), `stop`, `reset`, and `failing()` — the id→reason list the UI needs
+  instead of a bare boolean. Verified: 14/14 in the module (7 policy + 3 process +
+  4 registry), clippy clean. This is the decision layer the desktop host will call;
+  no Tauri command or web bridge yet.
+
+### Added
+
 - **The supervisor can actually run and kill a plugin process (round 87/99,
   ADR-0066 P3b).** `run_guarded` spawns one child, waits with a deadline, kills and
   reaps it on timeout, and classifies the outcome: zero exit is clean, a non-zero
