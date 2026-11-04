@@ -410,7 +410,12 @@
    it has to stay visible while the content scrolls. */
 .settingsWindow {
   /* A settings window, not a drawer: wide enough for the rail plus a readable column,
-     and tall enough that sections do not start scrolled. */
+     and tall enough that sections do not start scrolled. It is a flex column so the
+     body below is the only thing that scrolls — a fixed height with an unconstrained
+     child is what made the content unreachable at the bottom. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   width: min(94vw, 1120px);
   height: min(84vh, 760px);
   min-height: 32rem;
@@ -419,8 +424,9 @@
 .window {
   display: grid;
   grid-template-columns: 11.5rem minmax(0, 1fr);
+  flex: 1 1 auto;
   min-height: 0;
-  flex: 1;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -468,9 +474,18 @@
 
 .windowBody {
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
+}
+
+/* Embedded management pages bring their own outer scroll container; inside the window
+   the body is the scroller, so the child must not claim its own height. */
+.windowBody > * {
+  min-height: 0;
+  flex: 0 0 auto;
 }
 
 @media (max-width: 40rem) {

@@ -1,8 +1,11 @@
 import {
+  BookOpenText,
   ChatsCircle,
   Cube,
+  ImageSquare,
   SidebarSimple,
   SlidersHorizontal,
+  Smiley,
   UsersThree,
 } from '@phosphor-icons/react';
 import {
@@ -54,6 +57,19 @@ const RAIL_ITEMS: readonly RailItem[] = [
     id: 'characters',
     labelKey: 'navigation:characters',
     icon: UsersThree,
+  },
+  { themeId: 'personas', id: 'personas', labelKey: 'navigation:personas', icon: Smiley },
+  {
+    themeId: 'lorebooks',
+    id: 'lorebooks',
+    labelKey: 'navigation:lorebooks',
+    icon: BookOpenText,
+  },
+  {
+    themeId: 'backgrounds',
+    id: 'backgrounds',
+    labelKey: 'navigation:backgrounds',
+    icon: ImageSquare,
   },
   {
     themeId: 'settings',

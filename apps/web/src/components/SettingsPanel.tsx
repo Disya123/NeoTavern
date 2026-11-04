@@ -5,7 +5,6 @@ import {
   Cube,
   Globe,
   PencilSimple,
-  UsersThree,
   Plug,
   ShieldCheck,
   SlidersHorizontal,
@@ -45,9 +44,6 @@ import { useErrorText } from '../lib/useErrorText.js';
 import { isTauriRuntime } from '../api/tauriTransport.js';
 import { canChangeHost, openHostConnect, readHostSession } from '../api/hostSession.js';
 import { DataMigrationPanel } from './DataMigrationPanel.js';
-import { LorebookPanel } from './LorebookPanel.js';
-import { PersonasPanel } from './PersonasPanel.js';
-import { BackgroundsPanel } from './BackgroundsPanel.js';
 import { PluginsPage } from '../pages/PluginsPage.js';
 import { AiSettingsPanel } from './ai-settings/AiSettingsPanel.js';
 import { ActivationStatusPanel } from './ActivationStatusPanel.js';
@@ -71,16 +67,7 @@ export interface SettingsPanelProps {
 
 /** Settings menu: tabbed General / Themes / Data panel (role="tablist"). */
 export type SettingsSectionId =
-  | 'general'
-  | 'ai'
-  | 'plugins'
-  | 'library'
-  | 'themes'
-  | 'data'
-  | 'profiles'
-  | 'secrets'
-  | 'tools'
-  | 'remote';
+  'general' | 'ai' | 'plugins' | 'themes' | 'data' | 'profiles' | 'secrets' | 'tools' | 'remote';
 
 /** One settings destination: a rail entry and the panel it shows. */
 export interface SectionEntry {
@@ -152,20 +139,6 @@ export function useSettingsSections(onClose: () => void): readonly SectionEntry[
       content: (
         <FloatingTabContent>
           <PluginsPage />
-        </FloatingTabContent>
-      ),
-    },
-    {
-      value: 'library',
-      label: t('settings:library'),
-      icon: UsersThree,
-      content: (
-        <FloatingTabContent>
-          <div className={styles.stack}>
-            <PersonasPanel onClose={() => undefined} />
-            <LorebookPanel onClose={() => undefined} />
-            <BackgroundsPanel onClose={() => undefined} />
-          </div>
         </FloatingTabContent>
       ),
     },
