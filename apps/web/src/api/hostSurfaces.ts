@@ -240,12 +240,14 @@ export async function installPlugin(file: File): Promise<PluginInstallResult> {
   return { plugin: translatePlugin(installed.plugin), replaced: false };
 }
 
-/** Install a plugin from a public Git archive (host-side fetch + verification). */
+/**
+ * Git install has no kernel path: fetching a repository and trusting its contents
+ * is host work that no plane implements, so it refuses instead of pretending.
+ */
 export async function installPluginFromGit(
-  input: PluginGitInstallRequest,
+  _input: PluginGitInstallRequest,
 ): Promise<PluginInstallResult> {
-  assertLegacyPlane('plugins.install.git.host-verify');
-  return api.post<PluginInstallResult>(hostSurface('plugins.install.git.host-verify').route, input);
+  throw new UnsupportedError('plugins.install.git');
 }
 
 /** Enter plugin runtime safe mode (host-owned switch). */
