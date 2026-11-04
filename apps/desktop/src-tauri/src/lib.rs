@@ -2282,6 +2282,63 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         serde_json::json!({ "id": "smoke-plugin" }),
     )?;
 
+    // 15b. Plugin job queue (ADR-0064, round 57b): the durable queue is walked on
+    //      the packaged artifact — enqueue with an opaque payload, list it back by
+    //      plugin, cancel it, and a second cancel is refused as JOB_TERMINAL.
+    //      Execution stays OFF: no handler is registered in the packaged default,
+    //      so the enabled runner would still claim nothing and jobs stay queued.
+    let job = dispatch_ok(
+        &host,
+        "plugins.jobs.enqueue",
+        serde_json::json!({
+            "pluginId": "smoke-plugin",
+            "kind": "timer",
+            "payloadJson": "{\"tick\":1}",
+        }),
+    )?;
+    let job_id = job["job"]["id"]
+        .as_str()
+        .ok_or_else(|| "enqueued job carried no id".to_string())?
+        .to_string();
+    let listed = dispatch_ok(
+        &host,
+        "plugins.jobs.list",
+        serde_json::json!({ "pluginId": "smoke-plugin" }),
+    )?;
+    let listed_count = listed["jobs"]
+        .as_array()
+        .map(|jobs| jobs.len())
+        .unwrap_or(0);
+    if listed_count != 1 {
+        return Err(format!(
+            "plugins.jobs.list returned {listed_count} jobs, expected the one just enqueued"
+        ));
+    }
+    let cancelled = dispatch_ok(
+        &host,
+        "plugins.jobs.cancel",
+        serde_json::json!({ "jobId": job_id }),
+    )?;
+    if cancelled["job"]["state"].as_str() != Some("cancelled") {
+        return Err("plugins.jobs.cancel did not report a cancelled job".to_string());
+    }
+    let terminal = dispatch_error(
+        &host,
+        "plugins.jobs.cancel",
+        serde_json::json!({ "jobId": job_id }),
+    )?;
+    // `dispatch_error` returns the product error DTO as JSON text, not a bare code.
+    let terminal_code = serde_json::from_str::<serde_json::Value>(&terminal)
+        .ok()
+        .and_then(|value| value["code"].as_str().map(str::to_string))
+        .unwrap_or_else(|| terminal.clone());
+    if terminal_code != "JOB_TERMINAL" {
+        return Err(format!(
+            "second cancel reported {terminal_code}, expected JOB_TERMINAL"
+        ));
+    }
+    eprintln!("[smoke] golden: plugin jobs enqueue/list/cancel + terminal refusal ok");
+
     let messages = dispatch_ok(
         &host,
         "chats.messages.list",

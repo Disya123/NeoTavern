@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-11-03T23:55:52.582Z",
+  "generatedAt": "2026-11-04T02:56:15.988Z",
   "rows": [
     {
       "hosts": {
@@ -341,13 +341,13 @@
     {
       "hosts": {
         "android": "Implemented",
-        "desktop": "Implemented",
+        "desktop": "Packaged",
         "headless": "Implemented",
         "webClient": "Implemented"
       },
       "id": "plugins.jobs",
       "milestone": "M7",
-      "notes": "",
+      "notes": "ADR-0064. Desktop Packaged evidence: run_golden_smoke step 15b (apps/desktop/src-tauri/src/lib.rs:2285-2341) enqueues one job for `smoke-plugin` with an opaque payload, lists it back by plugin (asserts exactly one), cancels it (asserts `cancelled`), and asserts the second cancel answers the product code JOB_TERMINAL; the walk runs inside the packaged portable artifact via scripts/smoke-desktop-shell.mjs (NeoTavern_0.1.0_x64-portable.zip, SHA-256 841ac496…4eca, exit 0). The runner itself is not started in the packaged default: no handler is registered, RunnerOptions::enabled is false, so jobs stay queued until the host adapter opts in — that is the documented kill switch, not a gap.",
       "title": "Plugin job queue (kernel-scheduled, execution gated)",
       "wireOps": [
         "plugins.jobs.cancel",

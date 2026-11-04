@@ -300,7 +300,7 @@
     {
       "source": "adr/0064-kernel-plugin-executor.md",
       "target": "adr/0064-kernel-plugin-executor.md",
-      "sha256": "6e6e77b39d46d5cbfc8bef3df27514f58873b57fbb1c2227baf2f349a8b14211"
+      "sha256": "0b01673843263ba8070e49d06829b10c9966762ab83674a456f65ea1a6e85c48"
     },
     {
       "source": "adr/README.md",
@@ -330,7 +330,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "3165c1e7de003dc8934e72ae3968b5b66690f5b79ae7b417424eec2d30855076"
+      "sha256": "b3bf2d49a02ab2f38bb764c955c5305ff59a227c0e7b8687974e9e25d96e69f9"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -445,7 +445,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "909c65c8bf2c53f9aab44023111f507684b7c5f3a501ff90f5f1cbd3a9ea75a8"
+      "sha256": "c914be053ed9bb0eefa636aaac04ac6654af1a81a1a95a7063444d6d5b06af2a"
     },
     {
       "source": "data/README.md",

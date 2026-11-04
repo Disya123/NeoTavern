@@ -235,7 +235,7 @@ completing stay internal, so the host's `pluginJobs` face keeps serving live
 execution (`hostSurfaces.ts`) until the executor's worker loop is enabled; that
 loop is gated on ADR-0064's security-review checklist, because it is the first
 component that would move a secret toward plugin code. Row 21(b) therefore moves
-from "no consumer exists" to "consumer implemented; execution disabled by default". Round 56 closes the security checklist in the ADR: the runner claims, evaluates the `secrets.reveal` grant per call, injects only through a per-job session, and the leak tests pin that job rows never hold a value. The host still owns the live sandbox and its `pluginJobs` face; wiring the adapter to call the runner is the remaining step.
+from "no consumer exists" to "consumer implemented; execution disabled by default". Round 56 closes the security checklist in the ADR: the runner claims, evaluates the `secrets.reveal` grant per call, injects only through a per-job session, and the leak tests pin that job rows never hold a value. The host still owns the live sandbox and its `pluginJobs` face; round 57b walks the queue on the packaged artifact (step 15b: enqueue → list → cancel → JOB_TERMINAL on the second cancel), so the capability is Packaged while execution itself stays behind the kill switch. Wiring the Tauri adapter's timer and handler is the remaining step.
 
 Per-surface note (round 44): row 21a is flipped. The plugin blob store is a
 first-class wire family — `plugins.blobs.begin|append|finish|list|read|delete`

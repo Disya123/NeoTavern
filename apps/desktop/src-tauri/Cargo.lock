@@ -2655,6 +2655,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "plugin-executor"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "png"
 version = "0.17.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3045,6 +3053,7 @@ dependencies = [
  "contracts-generated",
  "image",
  "neotavern-storage",
+ "plugin-executor",
  "provider-openai-compat",
  "provider-sdk",
  "rusqlite",

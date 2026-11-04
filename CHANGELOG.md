@@ -22,6 +22,18 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Changed
+
+- **`plugins.jobs` is Packaged on desktop (round 57b/99, ADR-0064).** The
+  packaged golden walk now exercises the queue end to end: step 15b
+  (`apps/desktop/src-tauri/src/lib.rs:2285-2341`) enqueues a job for the smoke
+  plugin, lists it back by plugin, cancels it and asserts a second cancel answers
+  `JOB_TERMINAL`. Verified inside the portable artifact
+  (`NeoTavern_0.1.0_x64-portable.zip`, SHA-256 `841ac496…4eca`,
+  `scripts/smoke-desktop-shell.mjs` exit 0). Execution remains off in the packaged
+  default — the kill switch is `RunnerOptions::enabled = false` — so the
+  capability claims the queue, not a running worker.
+
 ### Added
 
 - **Executor entry on the Kernel API (round 57a/99, ADR-0064).**
