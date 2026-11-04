@@ -22,6 +22,18 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Added
+
+- **Host dispatch seam for the plugin job queue (round 70/99, ADR-0065).**
+  `plugin_jobs::claim_for_host` hands a host adapter a `ClaimedJob` (id, plugin,
+  kind, payload, attempt, max attempts) without the lease, and
+  `report_from_host` applies the outcome: an older attempt is refused as
+  `JOB_LEASE_STALE` (a slow reporter cannot complete a retry) and a terminal job
+  as `JOB_TERMINAL`, while a missing report simply lets the lease expire and the
+  scheduler retry. Four integration tests pin those promises. This is the kernel
+  half of the desktop seam; the Tauri timer, the `plugin.job.due` event and the
+  host-only `plugin_job_report` command remain (g1).
+
 ### Changed
 
 - **Plugin jobs run on the kernel queue, not a host HTTP surface (round 68/99).**

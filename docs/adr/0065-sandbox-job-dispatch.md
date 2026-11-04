@@ -49,6 +49,16 @@ crash-safety the sync handler had, expressed as a timeout instead of a panic.
 - **No wire surface grows.** The event is a host-local Tauri event, the report is
   a host-local command, and the queue remains the only durable record.
 
+## Implementation note (round 70)
+
+The kernel half of the seam landed: `plugin_jobs::claim_for_host` returns a
+`ClaimedJob` (id, plugin, kind, payload, attempt, max attempts — no lease), and
+`plugin_jobs::report_from_host` applies an outcome to a leased job, refusing a
+report that names an older attempt as `JOB_LEASE_STALE` and a terminal job as
+`JOB_TERMINAL`. Four integration tests (`plugin_host_dispatch`) pin the promises:
+a claim leases and cannot be stolen, a success clears the lease, a stale report is
+refused and leaves the row leased, and a terminal job refuses a second report.
+
 ## Open item (tracked as g1)
 
 The Tauri timer, the `plugin.job.due` emission, the `plugin_job_report` command

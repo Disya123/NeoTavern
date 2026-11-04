@@ -20,7 +20,7 @@
 
 use contracts_generated::generated::{self, PluginJob, ResultPluginJob, ResultPluginsJobsList};
 use neotavern_storage::open::Database;
-use plugin_executor::{self as scheduler, Enqueue, JobState};
+use plugin_executor::{self as scheduler, Enqueue, JobState, Outcome};
 use rusqlite::OptionalExtension;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -439,6 +439,98 @@ pub(crate) fn claim_next(
         created_at_ms: row.created_at_ms,
         updated_at_ms: now,
     }))
+}
+
+/// A job claimed for a host adapter, shaped for the dispatch seam of ADR-0065.
+///
+/// Deliberately not the wire DTO and deliberately without the lease: the host
+/// gets what the sandbox needs to run the job, and nothing that would let it
+/// forge a claim.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaimedJob {
+    /// Kernel-assigned job id.
+    pub id: String,
+    /// Owning plugin; authoritative for grants, never read from the payload.
+    pub plugin_id: String,
+    /// Job kind the plugin registered.
+    pub kind: String,
+    /// Opaque plugin JSON, bounded at enqueue.
+    pub payload_json: String,
+    /// Attempt number this claim is (1 for the first).
+    pub attempts: u32,
+    /// Attempts the plugin is willing to pay for.
+    pub max_attempts: u32,
+}
+
+/// Claims the next due job for a host adapter (ADR-0065).
+///
+/// Same queue and same ordering as [`claim_next`]; the difference is the shape
+/// and the audience. A host that claims must report or let the lease expire.
+pub fn claim_for_host(db: &Database, lease_ms: i64) -> Result<Option<ClaimedJob>, KernelError> {
+    Ok(claim_next(db, lease_ms)?.map(|job| ClaimedJob {
+        id: job.id,
+        plugin_id: job.plugin_id,
+        kind: job.kind,
+        payload_json: job.payload,
+        attempts: job.attempts,
+        max_attempts: job.max_attempts,
+    }))
+}
+
+/// Applies a host-reported outcome to a leased job (ADR-0065).
+///
+/// `attempts` is the claim number the host received: a report that names an
+/// older attempt is refused as `JOB_LEASE_STALE`, so a retried job cannot be
+/// completed by a slow reporter from its previous life. A terminal job refuses
+/// with `JOB_TERMINAL`, matching the cancel path.
+pub fn report_from_host(
+    db: &Database,
+    job_id: &str,
+    attempts: u32,
+    outcome: Outcome,
+) -> Result<(), KernelError> {
+    let row = db
+        .conn()
+        .query_row(
+            &format!("SELECT {SELECT_COLUMNS} FROM plugin_jobs WHERE id = ?1"),
+            rusqlite::params![job_id],
+            read_row,
+        )
+        .optional()
+        .map_err(|err| sqlite_error(err, "plugins.jobs: report lookup failed"))?;
+    let Some(row) = row else {
+        return Err(job_not_found(job_id));
+    };
+    if row.state != "leased" {
+        return Err(KernelError::product(
+            "JOB_TERMINAL".to_string(),
+            vec![("jobId".to_string(), job_id.to_string())],
+        ));
+    }
+    if row.attempts as u32 != attempts {
+        return Err(KernelError::product(
+            "JOB_LEASE_STALE".to_string(),
+            vec![
+                ("jobId".to_string(), job_id.to_string()),
+                ("attempts".to_string(), attempts.to_string()),
+            ],
+        ));
+    }
+    let mut job = scheduler::Job {
+        id: row.id,
+        plugin_id: row.plugin_id,
+        kind: row.kind,
+        payload: row.payload_json,
+        state: JobState::Leased,
+        attempts: row.attempts as u32,
+        max_attempts: row.max_attempts as u32,
+        run_at_ms: row.run_at_ms,
+        lease_until_ms: row.lease_until_ms,
+        last_error: row.last_error,
+        created_at_ms: row.created_at_ms,
+        updated_at_ms: row.updated_at_ms,
+    };
+    complete(db, &mut job, outcome)
 }
 
 /// Reports a claimed job's outcome (internal — no wire op).
