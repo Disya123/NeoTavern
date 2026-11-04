@@ -931,6 +931,8 @@ export const ru: Resources = {
     contextStrategy_summarize: 'Суммаризировать старый контекст',
     'contextStrategy_vector-recall': 'Выбирать релевантную память',
     contextStrategy_manual: 'Ручные исключения',
+    searchSettings: 'Поиск по настройкам…',
+    noMatches: 'Ничего не нашлось.',
     library: 'Библиотека',
     data: 'Данные и резервные копии',
     migrateFullBackup: 'Импортировать полный бэкап данных',

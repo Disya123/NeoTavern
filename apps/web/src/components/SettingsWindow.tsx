@@ -9,7 +9,7 @@
  * The section list comes from `useSettingsSections`, so the window and the old panel can
  * never disagree about which settings exist.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SurfaceDialog } from './SurfaceDialog.js';
 import { useSettingsSections, type SettingsSectionId } from './SettingsPanel.js';
@@ -23,6 +23,14 @@ export function SettingsWindow({ onClose }: SettingsWindowProps) {
   const { t } = useTranslation();
   const sections = useSettingsSections(onClose);
   const [section, setSection] = useState<SettingsSectionId>('general');
+  const [query, setQuery] = useState('');
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (needle.length === 0) return sections;
+    return sections.filter((entry) => entry.label.toLowerCase().includes(needle));
+  }, [query, sections]);
+  const current = sections.find((entry) => entry.value === section);
+  const CurrentIcon = current?.icon;
 
   return (
     <SurfaceDialog
@@ -39,10 +47,34 @@ export function SettingsWindow({ onClose }: SettingsWindowProps) {
             instead of moving the control: settings content starts below it and can never
             collide with the X. */}
         <header className={styles.windowHeader}>
-          <h2>{sections.find((entry) => entry.value === section)?.label}</h2>
+          <span className={styles.windowIcon} aria-hidden="true">
+            {CurrentIcon ? <CurrentIcon size={18} /> : null}
+          </span>
+          <h2>{current?.label}</h2>
+          <input
+            type="search"
+            className={styles.windowSearch}
+            placeholder={t('settings:searchSettings')}
+            aria-label={t('settings:searchSettings')}
+            value={query}
+            onChange={(event) => {
+              const next = event.target.value;
+              setQuery(next);
+              const needle = next.trim().toLowerCase();
+              if (needle.length === 0) return;
+              const matches = sections.filter((entry) =>
+                entry.label.toLowerCase().includes(needle),
+              );
+              // Typing jumps to the first section that matches, so the search is a way in
+              // rather than a filter you have to interpret.
+              if (matches.length > 0 && !matches.some((entry) => entry.value === section)) {
+                setSection(matches[0]!.value);
+              }
+            }}
+          />
         </header>
         <nav className={styles.sectionNav} aria-label={t('settings:title')}>
-          {sections.map((entry) => {
+          {visible.map((entry) => {
             const EntryIcon = entry.icon;
             const active = entry.value === section;
             return (
@@ -61,7 +93,11 @@ export function SettingsWindow({ onClose }: SettingsWindowProps) {
           })}
         </nav>
         <div className={styles.windowBody}>
-          {sections.find((entry) => entry.value === section)?.content}
+          {visible.length === 0 ? (
+            <p className={styles.emptySearch}>{t('settings:noMatches')}</p>
+          ) : (
+            current?.content
+          )}
         </div>
       </div>
     </SurfaceDialog>
