@@ -98,6 +98,35 @@ try {
   failures += 1;
 }
 
+// Packaged-claim evidence (ARC-10): a `desktop: Packaged` cell is only allowed
+// when its note names the packaged mechanism that walks it — a `lib.rs:` range,
+// `run_kernel_smoke`, or a script under `scripts/`. Without this guard a row can
+// be promoted with a round number and nothing else, which is exactly the
+// overclaim the matrix audit had to undo.
+try {
+  const manifest = JSON.parse(readFileSync(join(root, 'docs/release-manifest.json'), 'utf8'));
+  const missing = (manifest.capabilities ?? []).filter((capability) => {
+    if (capability.hosts?.desktop !== 'Packaged') return false;
+    const notes = capability.notes ?? '';
+    return (
+      !notes.includes('lib.rs:') &&
+      !notes.includes('run_kernel_smoke') &&
+      !notes.includes('scripts/')
+    );
+  });
+  if (missing.length > 0) {
+    for (const capability of missing) {
+      console.error(
+        `[docs:check] Packaged desktop cell without packaged evidence: ${capability.id}`,
+      );
+    }
+    failures += 1;
+  }
+} catch (error) {
+  console.error(`[docs:check] packaged-evidence check failed: ${error.message}`);
+  failures += 1;
+}
+
 // Architectural exception expiry (ARC-09).
 try {
   const exceptions = JSON.parse(
