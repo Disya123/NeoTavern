@@ -25,6 +25,15 @@ writing; until then jobs accumulate as `queued` and the host keeps its live
 execution surface. Full decision:
 [ADR-0064](0064-kernel-plugin-executor.md).
 
+## ADR-0065: Sandbox job dispatch for kernel-scheduled plugin jobs
+
+Who executes a job the kernel claimed: the kernel owns time and state, the host
+owns transport (a Tauri event plus a host-only report command), and the sandbox
+owns the effect. A missing report is a lease expiry, never a silent success — the
+same crash-safety as the synchronous handler, expressed as a timeout.
+
+[ADR-0065](0065-sandbox-job-dispatch.md).
+
 ## ADR-0061: Large files enter through chunked upload on Product Wire
 
 **Proposed (kernel plane implemented, 2026-11-02).** Wire requests are JSON and
