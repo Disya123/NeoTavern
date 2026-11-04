@@ -24,6 +24,16 @@
 
 ### Added
 
+- **The desktop host exposes bundle install/read (round 85/99, ADR-0066 P2b).**
+  `KernelHost::install_plugin_bundle` and `read_plugin_bundle` wrap the bundle store
+  against the host's data root; both refuse a stateless host instead of pretending.
+  Host-only by design: checksum verification belongs where the bytes are, and a
+  client that could supply its own digests would verify nothing. Verified:
+  `cargo check -p neotavern-tauri-local` clean. Next: the `plugins.bundle.*` wire
+  family and the frame's request for a bundle URL.
+
+### Added
+
 - **Plugin bundles are verified and staged in the kernel (round 84/99, ADR-0066 P2b).**
   `crates/runtime-kernel/src/plugin_bundles.rs` publishes a package under
   `<data root>/plugin-bundles/<pluginId>/<version>/` after hashing every declared

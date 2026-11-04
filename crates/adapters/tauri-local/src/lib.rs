@@ -209,6 +209,42 @@ impl KernelHost {
         Arc::clone(&self.kernel)
     }
 
+    /// Installs a plugin bundle from a verified source directory (ADR-0066 P2b).
+    ///
+    /// Host-only on purpose: the checksum verification has to happen where the bytes
+    /// are, and a client that could name its own digests would verify nothing.
+    pub fn install_plugin_bundle(
+        &self,
+        request: &runtime_kernel::plugin_bundles::BundleRequest,
+        source_dir: &std::path::Path,
+    ) -> Result<runtime_kernel::plugin_bundles::InstalledBundle, String> {
+        let data_root = self
+            .data_root
+            .as_deref()
+            .ok_or_else(|| "the host is stateless: no data root for plugin bundles".to_string())?;
+        runtime_kernel::plugin_bundles::install_bundle(data_root, source_dir, request)
+            .map_err(|error| format!("{}: {error:?}", error.code()))
+    }
+
+    /// Reads one bounded range of a published bundle file (ADR-0066 P2b).
+    pub fn read_plugin_bundle(
+        &self,
+        plugin_id: &str,
+        version: &str,
+        relative: &str,
+        offset: u64,
+        length: u64,
+    ) -> Result<(Vec<u8>, u64, bool), String> {
+        let data_root = self
+            .data_root
+            .as_deref()
+            .ok_or_else(|| "the host is stateless: no data root for plugin bundles".to_string())?;
+        runtime_kernel::plugin_bundles::read_bundle_file(
+            data_root, plugin_id, version, relative, offset, length,
+        )
+        .map_err(|error| format!("{}: {error:?}", error.code()))
+    }
+
     /// Claims one due plugin job for the desktop timer (ADR-0065).
     ///
     /// The kernel owns the queue; the host only asks what is due and reports the
