@@ -24,6 +24,16 @@
 
 ### Added
 
+- **Kernel handle can claim and report plugin jobs (round 71/99, ADR-0065).**
+  Two internal (never wire) commands, `ClaimPluginJob` and `ReportPluginJob`,
+  plus `Kernel::claim_plugin_job` / `Kernel::report_plugin_job`. The desktop timer
+  needs them because the database lives on the writer thread: a host cannot hold
+  the connection, and a claim/report that crossed the wire would let a client pose
+  as a worker. The round-trip test drives enqueue over the wire, claim and report
+  through the handle, and reads the terminal state back over the wire.
+
+### Added
+
 - **Host dispatch seam for the plugin job queue (round 70/99, ADR-0065).**
   `plugin_jobs::claim_for_host` hands a host adapter a `ClaimedJob` (id, plugin,
   kind, payload, attempt, max attempts) without the lease, and

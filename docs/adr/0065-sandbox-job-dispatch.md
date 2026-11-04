@@ -51,7 +51,10 @@ crash-safety the sync handler had, expressed as a timeout instead of a panic.
 
 ## Implementation note (round 70)
 
-The kernel half of the seam landed: `plugin_jobs::claim_for_host` returns a
+Round 71 added the handle path the timer will use: internal `ClaimPluginJob` /
+`ReportPluginJob` commands and `Kernel::claim_plugin_job` / `report_plugin_job`,
+so a host never borrows the writer's database. Round 70 landed the seam itself:
+`plugin_jobs::claim_for_host` returns a
 `ClaimedJob` (id, plugin, kind, payload, attempt, max attempts — no lease), and
 `plugin_jobs::report_from_host` applies an outcome to a leased job, refusing a
 report that names an older attempt as `JOB_LEASE_STALE` and a terminal job as

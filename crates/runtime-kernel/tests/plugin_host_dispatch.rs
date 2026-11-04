@@ -10,6 +10,8 @@
 //! 4. a report on a terminal job is refused as `JOB_TERMINAL`.
 
 use plugin_executor::Outcome;
+use runtime_kernel::{CancellationFlag, Kernel, KernelConfig};
+use serde_json::{json, Value};
 
 const PLUGIN_ID: &str = "dispatch-jobs";
 const JOB_ID: &str = "00000000-0000-4000-8000-0000000000bb";
@@ -164,4 +166,66 @@ fn report_on_a_terminal_job_is_refused() {
         error.product.as_ref().map(|product| product.code.as_str()),
         Some("JOB_TERMINAL")
     );
+}
+
+fn open_kernel(root: &std::path::Path) -> Kernel {
+    Kernel::open(KernelConfig {
+        expected_schema_hash: contracts_generated::contract_schema_hash().to_string(),
+        ffi_abi_version: 1,
+        data_root: Some(root.to_path_buf()),
+    })
+    .expect("kernel must open")
+}
+
+fn dispatch(kernel: &Kernel, op: &str, request: Value) -> Value {
+    let flag = CancellationFlag::new();
+    let bytes = serde_json::to_vec(&request).expect("request serialization cannot fail");
+    let response = kernel
+        .dispatch(op, &bytes, &flag)
+        .expect("dispatch must succeed");
+    serde_json::from_slice(&response).expect("response must be JSON")
+}
+
+/// The whole seam through the public handle: enqueue over the wire, claim through
+/// the host command, report through the host command, and the wire observes the
+/// terminal state. This is the path the desktop timer will drive.
+#[test]
+fn host_claim_and_report_round_trip_through_the_kernel_handle() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let kernel = open_kernel(dir.path());
+    dispatch(
+        &kernel,
+        "plugins.install",
+        json!({
+            "id": PLUGIN_ID,
+            "name": "Dispatch Test",
+            "version": "1.0.0",
+            "trustState": "locally-trusted",
+            "permissions": ["jobs.enqueue"],
+        }),
+    );
+    let enqueued = dispatch(
+        &kernel,
+        "plugins.jobs.enqueue",
+        json!({
+            "pluginId": PLUGIN_ID,
+            "kind": "timer",
+            "payloadJson": "{\"tick\":1}",
+        }),
+    );
+    let job_id = enqueued["job"]["id"].as_str().expect("job id").to_string();
+
+    let claimed = kernel
+        .claim_plugin_job(30_000)
+        .expect("claim")
+        .expect("a due job");
+    assert_eq!(claimed.id, job_id);
+    assert_eq!(claimed.attempts, 1);
+
+    kernel
+        .report_plugin_job(&claimed.id, claimed.attempts, true, None)
+        .expect("report");
+
+    let observed = dispatch(&kernel, "plugins.jobs.get", json!({ "jobId": job_id }));
+    assert_eq!(observed["job"]["state"], "succeeded");
 }

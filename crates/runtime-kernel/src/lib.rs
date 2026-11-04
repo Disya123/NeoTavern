@@ -390,6 +390,23 @@ enum Command {
         handler: Arc<dyn plugin_runner::PluginJobHandler>,
         reply: mpsc::SyncSender<Result<plugin_runner::RunReport, KernelError>>,
     },
+    /// Claims one due job for a host adapter (ADR-0065). The host gets the
+    /// invocation, not the lease: the queue decides what is due, and a claimed
+    /// job that is never reported simply expires back into the queue.
+    ClaimPluginJob {
+        lease_ms: i64,
+        reply: mpsc::SyncSender<Result<Option<plugin_jobs::ClaimedJob>, KernelError>>,
+    },
+    /// Applies a host-reported outcome to a leased job (ADR-0065). Completion
+    /// is executor state, never a client claim, which is why this is a host
+    /// command and not a wire operation.
+    ReportPluginJob {
+        job_id: String,
+        attempts: u32,
+        ok: bool,
+        error: Option<String>,
+        reply: mpsc::SyncSender<Result<(), KernelError>>,
+    },
     /// Registers a runtime provider adapter (e.g. an OpenAI-compatible
     /// instance built from a stored provider config, ТЗ §9.3). Applied
     /// immediately and acknowledged.
@@ -972,6 +989,25 @@ fn drain_pending(
                 );
                 let _ = reply.send(result);
             }
+            Command::ClaimPluginJob { lease_ms, reply } => {
+                let result = plugin_jobs::claim_for_host(db, lease_ms);
+                let _ = reply.send(result);
+            }
+            Command::ReportPluginJob {
+                job_id,
+                attempts,
+                ok,
+                error,
+                reply,
+            } => {
+                let outcome = if ok {
+                    plugin_executor::Outcome::Success
+                } else {
+                    plugin_executor::Outcome::Failure(error.unwrap_or_default())
+                };
+                let result = plugin_jobs::report_from_host(db, &job_id, attempts, outcome);
+                let _ = reply.send(result);
+            }
             Command::RegisterProvider { adapter, reply } => {
                 state.registry.register(adapter);
                 let _ = reply.send(());
@@ -1148,6 +1184,34 @@ fn writer_main(
                         handler.as_ref(),
                         &options,
                     ),
+                    None => Err(KernelError::new(
+                        KernelErrorCode::StorageFailure,
+                        "plugin jobs require durable storage",
+                    )),
+                };
+                let _ = reply.send(result);
+            }
+            Command::ClaimPluginJob { lease_ms, reply } => {
+                let result = match db.as_ref() {
+                    Some(db) => plugin_jobs::claim_for_host(db, lease_ms),
+                    None => Ok(None),
+                };
+                let _ = reply.send(result);
+            }
+            Command::ReportPluginJob {
+                job_id,
+                attempts,
+                ok,
+                error,
+                reply,
+            } => {
+                let outcome = if ok {
+                    plugin_executor::Outcome::Success
+                } else {
+                    plugin_executor::Outcome::Failure(error.unwrap_or_default())
+                };
+                let result = match db.as_ref() {
+                    Some(db) => plugin_jobs::report_from_host(db, &job_id, attempts, outcome),
                     None => Err(KernelError::new(
                         KernelErrorCode::StorageFailure,
                         "plugin jobs require durable storage",
@@ -1502,6 +1566,64 @@ impl Kernel {
                 KernelError::new(
                     KernelErrorCode::Internal,
                     "plugin executor did not answer in time",
+                )
+            })?
+    }
+
+    /// Claims one due plugin job for a host adapter (ADR-0065).
+    ///
+    /// Returns `None` when nothing is due. The host owns the job until it reports
+    /// back or the lease expires; there is no wire op for this, by design.
+    pub fn claim_plugin_job(
+        &self,
+        lease_ms: i64,
+    ) -> Result<Option<plugin_jobs::ClaimedJob>, KernelError> {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        self.cmd_tx
+            .send(Command::ClaimPluginJob {
+                lease_ms,
+                reply: reply_tx,
+            })
+            .map_err(|_| {
+                KernelError::new(KernelErrorCode::Internal, "kernel writer thread is gone")
+            })?;
+        reply_rx
+            .recv_timeout(Duration::from_secs(30))
+            .map_err(|_| {
+                KernelError::new(
+                    KernelErrorCode::Internal,
+                    "plugin claim did not answer in time",
+                )
+            })?
+    }
+
+    /// Reports a claimed job's outcome (ADR-0065): `ok = false` stores `error` as
+    /// the attempt's bounded message, and the scheduler decides retry vs terminal.
+    pub fn report_plugin_job(
+        &self,
+        job_id: &str,
+        attempts: u32,
+        ok: bool,
+        error: Option<String>,
+    ) -> Result<(), KernelError> {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        self.cmd_tx
+            .send(Command::ReportPluginJob {
+                job_id: job_id.to_string(),
+                attempts,
+                ok,
+                error,
+                reply: reply_tx,
+            })
+            .map_err(|_| {
+                KernelError::new(KernelErrorCode::Internal, "kernel writer thread is gone")
+            })?;
+        reply_rx
+            .recv_timeout(Duration::from_secs(30))
+            .map_err(|_| {
+                KernelError::new(
+                    KernelErrorCode::Internal,
+                    "plugin report did not answer in time",
                 )
             })?
     }
