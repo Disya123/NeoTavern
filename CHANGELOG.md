@@ -24,6 +24,16 @@
 
 ### Added
 
+- **A replaced shell always has a way back (round 96/99, ADR-0066 D4).**
+  `shellMode` holds which plugin owns the window and `restore()` returns to the stock
+  UI at any time — including when the plugin is hung, crashed or never loaded. The
+  store holds an id, not a component, so a stuck plugin cannot block the transition,
+  and the control that calls it is drawn by the host. Replacing with the same plugin
+  is not a state change, and an empty id cannot blank the shell. Verified: 4/4 tests,
+  tsc and ESLint clean.
+
+### Added
+
 - **One place decides which UI surface a plugin gets (round 95/99, ADR-0066 D4).**
   `resolveUiSurface(runtime, granted)` answers for every host: silence is `none`, a
   panel needs `ui.panel`, an overlay needs `ui.overlay`, and replacing the shell needs
