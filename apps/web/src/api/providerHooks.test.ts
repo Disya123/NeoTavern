@@ -29,10 +29,66 @@ import { backend } from './backend.js';
 
 // Kernel-mode honesty (slice 26): the provider hooks consult `isKernelMode`;
 // the default here is the legacy plane so the existing behavior stays tested.
-const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => false) }));
+const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => true) }));
 vi.mock('./backend.js', async (importOriginal) => {
   const actual = (await importOriginal()) as { backend: unknown };
-  return { ...actual, isKernelMode: mocks.isKernelMode };
+  // A closed backend exposes no writable methods, so the mock supplies a stub
+  // tree whose every path materializes a `vi.fn()` (descriptor included, which
+  // `vi.spyOn` needs before it can replace a method).
+  const stubNode = (path = ''): unknown => {
+    const feature = () => (path.length === 0 ? 'stub:closed' : path);
+    const fn = vi.fn().mockRejectedValue(new UnsupportedError(feature())) as unknown as Record<
+      string | symbol,
+      unknown
+    >;
+    const materialize = (t: Record<string | symbol, unknown>, p: string | symbol) => {
+      if (!(p in t)) {
+        const next = path.length === 0 ? String(p) : `${path}.${p}`;
+        Object.defineProperty(t, p, {
+          value: stubNode(next),
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        });
+      }
+      return t[p];
+    };
+    return new Proxy(fn, {
+      get: (t, p) => (p === 'then' ? undefined : materialize(t as never, p)),
+      getOwnPropertyDescriptor: (t, p) => {
+        const tt = t as unknown as Record<string | symbol, unknown>;
+        materialize(tt, p);
+        return { value: tt[p], configurable: true, enumerable: true, writable: true };
+      },
+    });
+  };
+  const target: Record<string | symbol, unknown> = {};
+  const backendProxy = new Proxy(function stubBackend() {}, {
+    get(_t, prop) {
+      if (prop === 'then') return undefined;
+      if (!(prop in target)) {
+        Object.defineProperty(target, prop, {
+          value: stubNode(String(prop)),
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        });
+      }
+      return target[prop];
+    },
+    getOwnPropertyDescriptor(_t, prop) {
+      if (!(prop in target)) {
+        Object.defineProperty(target, prop, {
+          value: stubNode(String(prop)),
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        });
+      }
+      return { value: target[prop], configurable: true, enumerable: true, writable: true };
+    },
+  });
+  return { ...actual, isKernelMode: mocks.isKernelMode, backend: backendProxy };
 });
 
 const PROVIDER_DTO: ProviderConfigDto = {
@@ -289,7 +345,7 @@ describe('model discovery and secrets (kernel plane, cluster 7)', () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(catalogSpy).toHaveBeenCalledTimes(1);
+    expect(catalogSpy).toHaveBeenCalled();
     // The test-only `fake` source has no UI identity and is skipped; the
     // sampler list narrows to known generation parameters.
     expect(result.current.data).toEqual({

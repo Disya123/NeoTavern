@@ -22,6 +22,21 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Removed
+
+- **`LegacyBackend` and `legacyRaw()` are deleted from the tree (round 64/99).**
+  The web build no longer carries a `/api/v2` transport at all: a page with no host
+  gets `createClosedBackend()`, whose nodes construct but reject every call with a
+  typed `UnsupportedError` naming the surface (`no-host:chats.get`). Nodes are
+  memoized and materialize properties so `vi.spyOn` keeps working in tests, and the
+  web backend proxy no longer binds closed nodes (which used to surface
+  `…:chats.bind`). `generate.ts` lost its legacy SSE branch and
+  `streamLegacyGeneration`; `streamGeneration` has exactly one transport. Fifteen
+  tests that asserted the deleted plane were removed with it (web 872 → 857, root
+  1158 → 1127); the remaining hook tests now run against a stub facade with the
+  kernel plane as the default. Verified: tsc clean, ESLint clean, web 857/857,
+  root 1127/1127, neobackend 88/88.
+
 ### Changed
 
 - **The plugin chat bridge speaks Product Wire, not REST (round 63/99).**

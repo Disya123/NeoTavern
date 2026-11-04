@@ -8,23 +8,20 @@
  *   canonical wire events (`generation.delta` / `generation.completed` /
  *   `generation.failed` / `generation.cancelled`). The transport never
  *   touches `/api/v2`.
- * - **Legacy mode** (browser/sidecar, `LegacyBackend`): the existing SSE
- *   rendezvous (`POST /api/v2/chats/:id/generate`) persists the user message
- *   server-side and supports `plugin_intercept` prompt interceptors.
+ * There is no second transport: the legacy SSE rendezvous belonged to the Fastify
+ * contour and was deleted with it (round 60b).
  *
  * The transport branch lives here in the API layer — React components never
  * branch on the backend kind. Legacy-only options (regeneration, prompt
  * interceptors) are not silently downgraded on the kernel: they surface an
  * honest `UnsupportedError` instead.
  */
-import type { GenerationEvent, GenerationStepDto, PromptTriggerId } from '@neotavern/contracts';
+import type { GenerationStepDto, PromptTriggerId } from '@neotavern/contracts';
 import type { NeoBackend } from '@neotavern/neobackend';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { ErrorCodes } from '@neotavern/shared';
+import { backend } from './backend.js';
 import { ApiError } from './client.js';
-import { backend, isKernelMode, legacyRaw } from './backend.js';
-import { getCsrfToken, setCsrfToken } from './client.js';
-import { frontendPluginRuntime } from '../plugins/runtime.js';
 
 export interface GenerateHandlers {
   onStart?: (requestId: string) => void;
@@ -52,11 +49,11 @@ export async function streamGeneration(
   handlers: GenerateHandlers,
   signal: AbortSignal,
 ): Promise<void> {
-  if (isKernelMode()) {
-    await streamWireGeneration(backend, chatId, body, handlers, signal);
-    return;
-  }
-  await streamLegacyGeneration(chatId, body, handlers, signal);
+  // The kernel plane is the only transport: the legacy SSE rendezvous was deleted
+  // with the Fastify contour (round 60b). Legacy-only options (regenerate, prompt
+  // interceptors) surface an honest UnsupportedError inside the wire path rather
+  // than silently downgrading.
+  await streamWireGeneration(backend, chatId, body, handlers, signal);
 }
 
 /**
@@ -176,124 +173,4 @@ function formatProductError(error: { code: string; params?: Record<string, unkno
     .map(([key, value]) => `${key}=${String(value)}`)
     .join(' ');
   return params.length > 0 ? `${error.code} ${params}` : error.code;
-}
-
-/**
- * Legacy SSE generation (`POST /api/v2/chats/:id/generate`). Parses the
- * event stream and forwards deltas to the caller, which batches UI updates
- * via requestAnimationFrame (AGENTS.md §13: no per-token React render).
- */
-async function streamLegacyGeneration(
-  chatId: string,
-  body: GenerateBody,
-  handlers: GenerateHandlers,
-  signal: AbortSignal,
-): Promise<void> {
-  const csrfToken = getCsrfToken();
-  const response = await fetch(legacyRaw().sseUrl(`/chats/${chatId}/generate`), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
-    },
-    body: JSON.stringify(body),
-    signal,
-    credentials: 'same-origin',
-  });
-
-  if (!response.ok || !response.body) {
-    // The endpoint answers plain JSON (error envelope) when the request fails
-    // before streaming starts — e.g. REGENERATE_TARGET_MOVED (409).
-    let code = 'GENERATION_FAILED';
-    let message = `HTTP ${response.status}`;
-    try {
-      const envelope = (await response.json()) as { code?: unknown; message?: unknown };
-      if (typeof envelope.code === 'string') code = envelope.code;
-      if (typeof envelope.message === 'string' && envelope.message.length > 0) {
-        message = envelope.message;
-      }
-    } catch {
-      // Not JSON — keep the HTTP fallback.
-    }
-    if (response.status === 401) {
-      setCsrfToken(null);
-      window.dispatchEvent(new Event('neotavern-auth-required'));
-    }
-    handlers.onError(code, message);
-    return;
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let sawTerminalEvent = false;
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    let separator: number;
-    while ((separator = buffer.indexOf('\n\n')) >= 0) {
-      const chunk = buffer.slice(0, separator);
-      buffer = buffer.slice(separator + 2);
-      const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'));
-      if (!dataLine) continue;
-      const payload = dataLine.slice(5).trim();
-      if (payload.length === 0) continue;
-
-      let event: GenerationEvent;
-      try {
-        event = JSON.parse(payload) as GenerationEvent;
-      } catch {
-        continue;
-      }
-      if (event.type === 'plugin_intercept') {
-        const context = await frontendPluginRuntime.runPromptInterceptors({
-          chatId: event.chatId,
-          messages: event.messages,
-          meta: event.meta,
-        });
-        const interceptorResponse = await fetch(
-          legacyRaw().sseUrl(`/plugin-intercepts/${encodeURIComponent(event.requestId)}`),
-          {
-            method: 'POST',
-            headers: {
-              ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
-            },
-            body: JSON.stringify({
-              responseToken: event.responseToken,
-              messages: context.messages,
-              meta: context.meta,
-            }),
-            signal,
-            credentials: 'same-origin',
-          },
-        );
-        if (!interceptorResponse.ok) {
-          // The server broker expires a rendezvous (404) once it has moved on
-          // without the intercepted prompt — the generation already continues
-          // server-side. Throwing here would abort a stream the server
-          // successfully finished (PLUG-53); one plugin's lateness must not
-          // surface as a failed generation.
-          continue;
-        }
-      } else if (event.type === 'start') handlers.onStart?.(event.requestId);
-      else if (event.type === 'delta') handlers.onDelta(event.text);
-      else if (event.type === 'done') {
-        sawTerminalEvent = true;
-        handlers.onDone(event.text);
-      } else if (event.type === 'error') {
-        sawTerminalEvent = true;
-        handlers.onError(event.code, event.message);
-      }
-    }
-  }
-
-  // A connection that ends without a terminal event (dropped mid-stream,
-  // server process killed) must not leave the caller stuck in the generating
-  // state forever (ST1-race): surface it as a failure.
-  if (!sawTerminalEvent) {
-    handlers.onError(ErrorCodes.GENERATION_FAILED, 'Stream ended unexpectedly');
-  }
 }

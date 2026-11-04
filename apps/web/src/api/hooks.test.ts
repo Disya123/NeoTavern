@@ -3,8 +3,8 @@ import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { createQueryClient, jsonResponse } from '../../test/helpers.js';
-import { getCsrfToken, setCsrfToken } from './client.js';
+import { createQueryClient } from '../../test/helpers.js';
+import { setCsrfToken } from './client.js';
 import {
   useAnalyzeFullBackup,
   useAuthSession,
@@ -18,11 +18,9 @@ import {
   useCreateBackup,
   useDeleteBackground,
   useDeleteBackup,
-  useDeleteCharacter,
   useDeleteCharacterImage,
   useDiagnostics,
   useDiscardFullBackupAnalysis,
-  useExecuteFullBackupImport,
   useImportCharacter,
   useInstructFormats,
   useLogin,
@@ -44,18 +42,19 @@ import { backend } from './backend.js';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { ProductError } from '@neotavern/client-sdk';
 
-// Kernel-mode honesty (slice 17): the diagnostics hooks consult
-// `isKernelMode`; the default here is the legacy plane so the existing tests
-// stay as they were.
-const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => false) }));
+// The product plane is the kernel, so that is the default here; tests that need
+// the other side set the mock explicitly.
+const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => true) }));
 const assetsMock = vi.hoisted(() => ({
   list: vi.fn(),
+  put: vi.fn(),
   del: vi.fn(),
   uploadBegin: vi.fn(),
   uploadAppend: vi.fn(),
   uploadFinish: vi.fn(),
 }));
 const importsMock = vi.hoisted(() => ({
+  characterCard: vi.fn(),
   fullBackupAnalyze: vi.fn(),
   fullBackupExecute: vi.fn(),
 }));
@@ -70,6 +69,19 @@ vi.mock('./backend.js', async (importOriginal) => {
       if (prop in assetsMock) return assetsMock[prop as keyof typeof assetsMock];
       return Reflect.get(target, prop, receiver);
     },
+    // `vi.spyOn` reads the descriptor first; the mocked methods must answer there
+    // too or a replacement is refused with "property is not defined".
+    getOwnPropertyDescriptor(target, prop) {
+      if (prop in assetsMock) {
+        return {
+          value: assetsMock[prop as keyof typeof assetsMock],
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        };
+      }
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    },
   });
   const realImports = (realBackend as { imports: Record<string, unknown> }).imports;
   const importsProxy = new Proxy(realImports, {
@@ -77,12 +89,81 @@ vi.mock('./backend.js', async (importOriginal) => {
       if (prop in importsMock) return importsMock[prop as keyof typeof importsMock];
       return Reflect.get(target, prop, receiver);
     },
+    getOwnPropertyDescriptor(target, prop) {
+      if (prop in importsMock) {
+        return {
+          value: importsMock[prop as keyof typeof importsMock],
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        };
+      }
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    },
   });
-  const backendProxy = new Proxy(realBackend, {
-    get(target, prop, receiver) {
+  // A closed backend has no writable methods to spy on, so the test facade is a
+  // stub tree: every path materializes a `vi.fn()` that resolves `undefined`,
+  // which `vi.spyOn` can replace. `assets` and `imports` keep their dedicated
+  // mocks.
+  const stubNode = (): unknown => {
+    const fn = vi.fn().mockRejectedValue(new UnsupportedError('stub:closed')) as unknown as Record<
+      string | symbol,
+      unknown
+    >;
+    const materialize = (target: Record<string | symbol, unknown>, prop: string | symbol) => {
+      if (!(prop in target)) {
+        Object.defineProperty(target, prop, {
+          value: stubNode(),
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        });
+      }
+      return target[prop];
+    };
+    return new Proxy(fn, {
+      get(target, prop) {
+        if (prop === 'then') return undefined;
+        return materialize(target as Record<string | symbol, unknown>, prop);
+      },
+      // `vi.spyOn` asks for the descriptor before replacing the method; without
+      // this trap it would report "property is not defined on the function".
+      getOwnPropertyDescriptor(target, prop) {
+        const t = target as unknown as Record<string | symbol, unknown>;
+        materialize(t, prop);
+        return { value: t[prop], configurable: true, enumerable: true, writable: true };
+      },
+    });
+  };
+  const backendProxy = new Proxy(function stubBackend() {}, {
+    get(target, prop) {
       if (prop === 'assets') return assetsProxy;
       if (prop === 'imports') return importsProxy;
-      return Reflect.get(target, prop, receiver);
+      if (prop === 'then') return undefined;
+      const materialize = (t: Record<string | symbol, unknown>, p: string | symbol) => {
+        if (!(p in t)) {
+          Object.defineProperty(t, p, {
+            value: stubNode(),
+            configurable: true,
+            enumerable: true,
+            writable: true,
+          });
+        }
+        return t[p];
+      };
+      return materialize(target as unknown as Record<string | symbol, unknown>, prop);
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      const t = target as unknown as Record<string | symbol, unknown>;
+      if (!(prop in t)) {
+        Object.defineProperty(t, prop, {
+          value: stubNode(),
+          configurable: true,
+          enumerable: true,
+          writable: true,
+        });
+      }
+      return { value: t[prop], configurable: true, enumerable: true, writable: true };
     },
   });
   return { ...actual, isKernelMode: mocks.isKernelMode, backend: backendProxy };
@@ -134,50 +215,6 @@ afterEach(() => {
   setCsrfToken(null);
 });
 
-describe('useAuthSession', () => {
-  it('loads the session and keeps the CSRF token in memory only', async () => {
-    const session = { required: true, authenticated: true, csrfToken: 'c'.repeat(43) };
-    fetchMock.mockResolvedValueOnce(jsonResponse(session));
-    const storageSpy = vi.spyOn(Storage.prototype, 'setItem');
-    const { result } = renderHook(() => useAuthSession(), { wrapper: wrapperFor(queryClient) });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/v2/auth/session');
-    expect(result.current.data).toEqual(session);
-    expect(getCsrfToken()).toBe('c'.repeat(43));
-    expect(storageSpy).not.toHaveBeenCalled();
-  });
-});
-
-describe('useLogin', () => {
-  it('posts the token, caches the session and stores the CSRF token in memory', async () => {
-    const session = { required: true, authenticated: true, csrfToken: 'd'.repeat(43) };
-    fetchMock.mockResolvedValueOnce(jsonResponse(session));
-    const { result } = renderHook(() => useLogin(), { wrapper: wrapperFor(queryClient) });
-    act(() => result.current.mutate({ token: 'remote-secret' }));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/api/v2/auth/session');
-    expect(init.method).toBe('POST');
-    expect(JSON.parse(String(init.body))).toEqual({ token: 'remote-secret' });
-    expect(getCsrfToken()).toBe('d'.repeat(43));
-    expect(queryClient.getQueryData(['auth-session'])).toEqual(session);
-  });
-});
-
-describe('useDeleteCharacter', () => {
-  it('deletes via DELETE and invalidates the character list', async () => {
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
-    const { result } = renderHook(() => useDeleteCharacter(), { wrapper: wrapperFor(queryClient) });
-    act(() => result.current.mutate('char-1'));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/api/v2/characters/char-1');
-    expect(init.method).toBe('DELETE');
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['characters'] });
-  });
-});
-
 describe('character trash + version history hooks (M7 Etap-4 cluster 26)', () => {
   const characterDto = {
     id: '018f0000-0000-7000-8000-000000000401',
@@ -203,19 +240,6 @@ describe('character trash + version history hooks (M7 Etap-4 cluster 26)', () =>
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['characters'] });
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
-  });
-
-  it('useRestoreCharacter posts the legacy restore route on the legacy plane', async () => {
-    mocks.isKernelMode.mockReturnValue(false);
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
-    const { result } = renderHook(() => useRestoreCharacter(), {
-      wrapper: wrapperFor(queryClient),
-    });
-    act(() => result.current.mutate('char-1'));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/api/v2/characters/char-1/restore');
-    expect(init.method).toBe('POST');
   });
 
   it('useCharacters asks the wire for trashed rows with includeDeleted', async () => {
@@ -294,15 +318,6 @@ describe('character trash + version history hooks (M7 Etap-4 cluster 26)', () =>
 });
 
 describe('diagnostics hooks (kernel-plane honesty, slice 17)', () => {
-  it('useDiagnostics fetches the legacy snapshot on the legacy plane', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ generatedAt: '2026-08-13T00:00:00Z' }));
-    const { result } = renderHook(() => useDiagnostics(), { wrapper: wrapperFor(queryClient) });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe('/api/v2/diagnostics');
-  });
-
   it('useDiagnostics resolves null on the kernel plane without a network call', async () => {
     mocks.isKernelMode.mockReturnValue(true);
     const { result } = renderHook(() => useDiagnostics(), { wrapper: wrapperFor(queryClient) });
@@ -325,17 +340,6 @@ describe('diagnostics hooks (kernel-plane honesty, slice 17)', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['diagnostics'] });
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
-  });
-
-  it('useRebuildSearch posts the legacy rebuild route on the legacy plane', async () => {
-    mocks.isKernelMode.mockReturnValue(false);
-    fetchMock.mockResolvedValueOnce(jsonResponse({ query: '', results: [] }));
-    const { result } = renderHook(() => useRebuildSearch(), { wrapper: wrapperFor(queryClient) });
-    act(() => result.current.mutate());
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/api/v2/search/rebuild');
-    expect(init.method).toBe('POST');
   });
 
   it('useClearDiagnosticCache clears through the wire op on the kernel plane', async () => {
@@ -370,17 +374,6 @@ describe('backups hooks (kernel-plane honesty, slice 19)', () => {
     checksumSha256: 'a'.repeat(64),
     status: 'completed',
   } as const;
-
-  it('useBackups fetches the legacy list on the legacy plane', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ items: [{ id: 'b1', kind: 'manual', createdAt: 1, sizeBytes: 2 }] }),
-    );
-    const { result } = renderHook(() => useBackups(), { wrapper: wrapperFor(queryClient) });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe('/api/v2/backups');
-  });
 
   it('useBackups maps the wire list on the kernel plane without a network call', async () => {
     mocks.isKernelMode.mockReturnValue(true);
@@ -451,29 +444,9 @@ describe('backups hooks (kernel-plane honesty, slice 19)', () => {
     deleteSpy.mockRestore();
     mocks.isKernelMode.mockReturnValue(false);
   });
-
-  it('useDeleteBackup uses the legacy DELETE endpoint on the legacy plane', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ deleted: true }));
-    const { result } = renderHook(() => useDeleteBackup(), { wrapper: wrapperFor(queryClient) });
-    act(() => result.current.mutate('b1'));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ deleted: true });
-    const [url, init] = fetchMock.mock.calls[0] as [string, { method?: string }];
-    expect(url).toBe('/api/v2/backups/b1');
-    expect(init.method).toBe('DELETE');
-  });
 });
 
 describe('backgrounds hooks (kernel plane: asset catalogue + chunked upload)', () => {
-  it('useBackgrounds fetches the legacy list on the legacy plane', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ items: [{ id: 'bg1' }] }));
-    const { result } = renderHook(() => useBackgrounds(), { wrapper: wrapperFor(queryClient) });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe('/api/v2/backgrounds');
-  });
-
   it('useBackgrounds reads the background kind from the asset catalogue on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
     assetsMock.list.mockResolvedValue({
@@ -587,19 +560,6 @@ describe('backgrounds hooks (kernel plane: asset catalogue + chunked upload)', (
 });
 
 describe('character gallery hooks (kernel-plane honesty, slice 21)', () => {
-  it('useCharacterGallery fetches the legacy list on the legacy plane', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ items: [{ id: 'img1', name: 'a.png', thumbnailUrl: '/x.png' }] }),
-    );
-    const { result } = renderHook(() => useCharacterGallery('char-1', 'newest'), {
-      wrapper: wrapperFor(queryClient),
-    });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe('/api/v2/characters/char-1/gallery?sort=newest');
-  });
-
   it('useCharacterGallery maps wire items with asset data URLs on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
     const listSpy = vi.spyOn(backend.characters, 'galleryList').mockResolvedValue({
@@ -836,26 +796,6 @@ describe('remaining legacy hooks (kernel-plane honesty, slice 22)', () => {
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useDataActivationStatus reports an honest error on the legacy plane without a network call', async () => {
-    activationStatusMock.getDataActivationStatus.mockRejectedValue(
-      new UnsupportedError('data.activation.status'),
-    );
-    const { result } = renderHook(() => useDataActivationStatus(), {
-      wrapper: wrapperFor(queryClient),
-    });
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('useInstructFormats fetches the legacy list on the legacy plane', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ items: [{ id: 'f1' }] }));
-    const { result } = renderHook(() => useInstructFormats(), { wrapper: wrapperFor(queryClient) });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe('/api/v2/settings/instruct-formats');
-  });
-
   it('useInstructFormats reads the wire catalog on the kernel plane without a network call', async () => {
     mocks.isKernelMode.mockReturnValue(true);
     const spy = vi.spyOn(backend.settings, 'instructFormats').mockResolvedValue({
@@ -930,61 +870,6 @@ describe('remaining legacy hooks (kernel-plane honesty, slice 22)', () => {
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useExecuteFullBackupImport calls the wire op with the chosen policy (legacyExtensions dropped)', async () => {
-    mocks.isKernelMode.mockReturnValue(true);
-    importsMock.fullBackupExecute.mockResolvedValue({
-      runId: 'run-1',
-      sourceHash: 'b'.repeat(64),
-      conflictPolicy: 'skip',
-      archiveAlreadyImported: false,
-      categories: [
-        {
-          id: 'characters',
-          discovered: 1,
-          imported: 1,
-          reused: 0,
-          skipped: 0,
-          conflicted: 0,
-          invalid: 0,
-          dependentImported: 0,
-        },
-      ],
-      totals: {
-        discovered: 1,
-        imported: 1,
-        reused: 0,
-        skipped: 0,
-        conflicted: 0,
-        invalid: 0,
-        dependentImported: 0,
-      },
-      warningCount: 0,
-      warnings: [],
-    });
-    const { result } = renderHook(() => useExecuteFullBackupImport(), {
-      wrapper: wrapperFor(queryClient),
-    });
-    act(() =>
-      result.current.mutate({
-        analysisId: 'a1',
-        input: { categories: ['characters', 'legacyExtensions'], conflictPolicy: 'skip' },
-        signal: new AbortController().signal,
-      }),
-    );
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(importsMock.fullBackupExecute).toHaveBeenCalledWith(
-      { assetId: 'a1', categories: ['characters'], conflictPolicy: 'skip' },
-      expect.anything(),
-    );
-    expect(result.current.data).toMatchObject({
-      jobId: 'run-1',
-      safetyBackupId: '',
-      counts: { characters: { imported: 1, reused: 0, skipped: 0 } },
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    mocks.isKernelMode.mockReturnValue(false);
-  });
-
   it('useDiscardFullBackupAnalysis drops the staged asset on the kernel plane', async () => {
     mocks.isKernelMode.mockReturnValue(true);
     assetsMock.del.mockResolvedValue({});
@@ -1029,22 +914,6 @@ describe('auth hooks (kernel-plane honesty, slice 23)', () => {
 });
 
 describe('prompt context preview hook (kernel-plane honesty, slice 24)', () => {
-  it('usePromptContextPreview fetches the legacy preview on the legacy plane', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ preview: { providerConfigId: 'p1' } }));
-    const { result } = renderHook(
-      () =>
-        usePromptContextPreview({
-          characterId: 'char-1',
-          userMessage: 'hi',
-        }),
-      { wrapper: wrapperFor(queryClient) },
-    );
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe('/api/v2/context-preview');
-  });
-
   it('usePromptContextPreview rejects with UnsupportedError on the kernel plane without a network call', async () => {
     mocks.isKernelMode.mockReturnValue(true);
     const { result } = renderHook(

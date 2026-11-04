@@ -85,7 +85,7 @@ export function readConnectQuery(): string | null {
  * - Android / packaged WebView: skip only after the user picked local or remote.
  * - Browser with `?connect=`: show (and auto-fill) so Playwright can drive
  *   the Headless remote flow.
- * - Plain browser / Vite+sidecar: same-origin LegacyBackend — skip.
+ * - Plain browser: no host at all, so the backend is closed — skip.
  */
 export function needsHostConnect(): boolean {
   if (typeof window === 'undefined') return false;

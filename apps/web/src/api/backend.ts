@@ -10,49 +10,25 @@
  *   the singleton to `RemoteBackend` over Headless / Desktop Remote Access.
  * - A saved remote `hostSession` (browser Web Client or Android after a
  *   pairing link) uses `RemoteBackend` over Product Wire.
- * - Anywhere else (Vite + sidecar, same-origin Web Client) `LegacyBackend`
- *   stays the transport until M7 removes it.
+ * - Anywhere else (a bare Vite page with no host) the backend is *closed*: it
+ *   constructs, every call throws `UnsupportedError`, and the UI explains the state.
  *
  * The exported `backend` object is a proxy over the active instance so
  * HostConnect can swap Local/Remote without re-importing every module.
  */
 import {
-  LegacyBackend,
+  CLOSED_NODE,
+  createClosedBackend,
   LocalBackend,
   RemoteBackend,
-  UnsupportedError,
-  type LegacyRawApi,
   type NeoBackend,
 } from '@neotavern/neobackend';
-import { request, sseUrl, upload } from './client.js';
 import { readHostSession, readRemoteToken } from './hostSession.js';
 import { isMobileShell } from '../lib/mobile.js';
 import { MobileBridgeTransport } from './mobileTransport.js';
 import { resolveBackend, type Profile } from './profiles.js';
 import { createRemoteBackend } from './remoteWire.js';
 import { isTauriRuntime, TauriTransport } from './tauriTransport.js';
-
-function createLegacyBackend(): LegacyBackend {
-  return new LegacyBackend({
-    baseUrl: window.location.origin,
-    transport: {
-      // `LegacyBackend` passes full `/api/v2/...` paths (its contract —
-      // parity tests fetch `${baseUrl}${path}`); the same-origin transport
-      // (`client.ts`) prepends its own `/api/v2` BASE, so the prefix must be
-      // stripped here or every typed legacy call double-prefixes and 404s
-      // (`/api/v2/api/v2/...`). `legacyRaw` paths are already BASE-relative.
-      request: (method, path, body, signal) =>
-        request(
-          method,
-          path.startsWith('/api/v2') ? path.slice('/api/v2'.length) : path,
-          body,
-          signal,
-        ),
-      upload: (path, file, signal) => upload(path, file, signal),
-      sseUrl,
-    },
-  });
-}
 
 function createBackend(): NeoBackend {
   if (isTauriRuntime()) {
@@ -65,7 +41,9 @@ function createBackend(): NeoBackend {
   if (isMobileShell()) {
     return new LocalBackend({ transport: new MobileBridgeTransport() });
   }
-  return createLegacyBackend();
+  // No shell, no bridge, no saved remote host: the page renders, and every call
+  // rejects with a typed UnsupportedError naming the surface it wanted.
+  return createClosedBackend();
 }
 
 let currentBackend: NeoBackend = createBackend();
@@ -78,6 +56,9 @@ export const backend: NeoBackend = new Proxy({} as NeoBackend, {
   get(_target, prop) {
     const value = Reflect.get(currentBackend as object, prop, currentBackend) as unknown;
     if (typeof value === 'function') {
+      // A closed backend's nodes are callable so the call site rejects with the
+      // surface it asked for; binding them would surface `…:chats.bind` instead.
+      if ((value as { [CLOSED_NODE]?: boolean })[CLOSED_NODE]) return value;
       return (value as (...args: never[]) => unknown).bind(currentBackend);
     }
     return value;
@@ -117,22 +98,5 @@ export function createBackendForProfile(profile: Profile): NeoBackend {
  * the legacy `/api/v2` surface is not reachable — every call fails with a
  * typed `UnsupportedError`.
  */
-export function legacyRaw(): LegacyRawApi {
-  if (isKernelMode()) {
-    return {
-      request: () => {
-        throw new UnsupportedError('legacy.raw');
-      },
-      upload: () => {
-        throw new UnsupportedError('legacy.raw.upload');
-      },
-      sseUrl: () => {
-        throw new UnsupportedError('legacy.raw.sseUrl');
-      },
-    };
-  }
-  return (currentBackend as LegacyBackend).raw;
-}
-
 export { isTauriRuntime };
 export type { NeoBackend };

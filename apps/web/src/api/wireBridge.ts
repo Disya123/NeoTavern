@@ -11,7 +11,7 @@
  *   revisions, checkpoints, soft-delete, manual chat order). Unsupported
  *   inputs surface as a typed `UnsupportedError` (CAPABILITY_UNAVAILABLE) —
  *   never a silent downgrade.
- * - **Browser/sidecar mode** (`LegacyBackend`): delegates to the existing
+ * - **Browser with no host** (`createClosedBackend`): delegates to the existing
  *   legacy HTTP client unchanged (full-fidelity legacy entities).
  *
  * Every mapping decision is documented next to its translator; the migration

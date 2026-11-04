@@ -10,4 +10,4 @@ export * from './errors.js';
 export * from './neobackend.js';
 export * from './localBackend.js';
 export * from './remoteBackend.js';
-export * from './legacyBackend.js';
+export * from './closedBackend.js';

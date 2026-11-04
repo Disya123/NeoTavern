@@ -29,8 +29,8 @@ vi.mock('../api/backend.js', () => ({
   isKernelMode: () => true,
   // The kernel plane never reaches the legacy raw surface: a call here means
   // the preview fell through to the sidecar path.
-  legacyRaw: () => {
-    throw new Error('legacyRaw must not be reached on the kernel plane');
+  closedBackendGuard: () => {
+    throw new Error('no legacy transport may be reached on the kernel plane');
   },
 }));
 
