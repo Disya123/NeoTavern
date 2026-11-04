@@ -5,9 +5,10 @@
  * `onQueryChange` so the page can highlight matches in its message bubbles.
  */
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, MagnifyingGlass, X } from '@phosphor-icons/react';
+import { ArrowLeft, List, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useUiStore } from '../state/ui.js';
 import { SlotHost } from '../plugins/slots.js';
 import { ChatSnapshotsMenu } from './ChatSnapshotsMenu.js';
 import styles from './ChatWorkspace.module.css';
@@ -45,6 +46,7 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const setNavigationRailExpanded = useUiStore((state) => state.setNavigationRailExpanded);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -67,6 +69,18 @@ export function ChatHeader({
 
   return (
     <div className={styles.chatHeader} data-slot="chat.header">
+      {/* Phones have no rail: this is the one way into navigation, and it sits in the
+          header rather than floating over the conversation. */}
+      <button
+        type="button"
+        className={styles.headerMenuButton}
+        aria-label={t('accessibility:openMenu')}
+        title={t('accessibility:openMenu')}
+        onClick={() => setNavigationRailExpanded(true)}
+        data-action="mobile-menu-open"
+      >
+        <List size={20} aria-hidden="true" />
+      </button>
       {open ? (
         <div className={styles.chatSearch}>
           <MagnifyingGlass size={17} aria-hidden="true" />
