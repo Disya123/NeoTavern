@@ -16,7 +16,7 @@ export type ConsentRisk = 'critical' | 'high' | 'medium' | 'low';
 export interface ConsentItem {
   /** Capability as declared, so the dialog can group duplicates. */
   capability: string;
-  /** i18n key for the human label. */
+  /** i18n key (inside the `plugins` namespace) for the human label. */
   labelKey: string;
   risk: ConsentRisk;
   /** Why it matters, in one sentence the user can act on. */
@@ -31,54 +31,54 @@ export interface ConsentItem {
  */
 const EXPLAINED: Record<string, { labelKey: string; risk: ConsentRisk; rationaleKey: string }> = {
   'native.process': {
-    labelKey: 'consent.nativeProcess',
+    labelKey: 'consentNativeProcess',
     risk: 'critical',
-    rationaleKey: 'consent.nativeProcessWhy',
+    rationaleKey: 'consentNativeProcessWhy',
   },
   'native.gpu': {
-    labelKey: 'consent.nativeGpu',
+    labelKey: 'consentNativeGpu',
     risk: 'high',
-    rationaleKey: 'consent.nativeGpuWhy',
+    rationaleKey: 'consentNativeGpuWhy',
   },
   'ui.shell.replace': {
-    labelKey: 'consent.shellReplace',
+    labelKey: 'consentShellReplace',
     risk: 'high',
-    rationaleKey: 'consent.shellReplaceWhy',
+    rationaleKey: 'consentShellReplaceWhy',
   },
   'camera.request': {
-    labelKey: 'consent.camera',
+    labelKey: 'consentCamera',
     risk: 'high',
-    rationaleKey: 'consent.cameraWhy',
+    rationaleKey: 'consentCameraWhy',
   },
   'microphone.request': {
-    labelKey: 'consent.microphone',
+    labelKey: 'consentMicrophone',
     risk: 'high',
-    rationaleKey: 'consent.microphoneWhy',
+    rationaleKey: 'consentMicrophoneWhy',
   },
   'files.pick': {
-    labelKey: 'consent.filesPick',
+    labelKey: 'consentFilesPick',
     risk: 'medium',
-    rationaleKey: 'consent.filesPickWhy',
+    rationaleKey: 'consentFilesPickWhy',
   },
   'files.save': {
-    labelKey: 'consent.filesSave',
+    labelKey: 'consentFilesSave',
     risk: 'medium',
-    rationaleKey: 'consent.filesSaveWhy',
+    rationaleKey: 'consentFilesSaveWhy',
   },
   'network.domains': {
-    labelKey: 'consent.network',
+    labelKey: 'consentNetwork',
     risk: 'medium',
-    rationaleKey: 'consent.networkWhy',
+    rationaleKey: 'consentNetworkWhy',
   },
   'secrets.use': {
-    labelKey: 'consent.secrets',
+    labelKey: 'consentSecrets',
     risk: 'medium',
-    rationaleKey: 'consent.secretsWhy',
+    rationaleKey: 'consentSecretsWhy',
   },
   'clipboard.read': {
-    labelKey: 'consent.clipboardRead',
+    labelKey: 'consentClipboardRead',
     risk: 'low',
-    rationaleKey: 'consent.clipboardReadWhy',
+    rationaleKey: 'consentClipboardReadWhy',
   },
 };
 

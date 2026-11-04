@@ -24,6 +24,15 @@
 
 ### Added
 
+- **The consent step exists (round 103/99, ADR-0066 P5b).** `PluginConsentDialog`
+  renders `describeConsent` sorted by risk, names the package and version, and returns a
+  decision instead of installing anything itself — so a new install path cannot skip the
+  step by accident. Even a package with no dangerous grants is still shown, because the
+  user is entitled to see that the answer is "nothing". Strings live in `en` and `ru`.
+  Verified: dialog 4/4, plugin-sdk 105/105, tsc and ESLint clean.
+
+### Added
+
 - **The install dialog gets its content from one function (round 102/99, ADR-0066 P5b).**
   `describeConsent(manifest)` turns a manifest into the list the consent step shows:
   every risky grant with an i18n label, a risk grade and a one-line rationale, sorted

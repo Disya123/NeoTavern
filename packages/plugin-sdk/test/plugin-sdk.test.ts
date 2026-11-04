@@ -676,7 +676,7 @@ describe('install consent summary (ADR-0066 D1)', () => {
       'network.domains',
     ]);
     expect(items[0]?.risk).toBe('critical');
-    expect(items[0]?.labelKey).toBe('consent.nativeProcess');
+    expect(items[0]?.labelKey).toBe('consentNativeProcess');
   });
 
   it('accepts the scoped-object form and deduplicates against the flat list', () => {
