@@ -10,6 +10,8 @@ import {
   createBundleUrl,
   entryPathFor,
   resolveEntryUrl,
+  installBundle,
+  installPackage,
 } from './bundleClient.js';
 import { UnsupportedError } from '@neotavern/neobackend';
 
@@ -108,5 +110,56 @@ describe('bundle entry resolution', () => {
       resolveEntryUrl('author.plugin', '1.0.0', { frontend: 'ui/app.js' }),
     ).resolves.toBe('blob:neotavern/2');
     vi.unstubAllGlobals();
+  });
+});
+
+describe('bundle install', () => {
+  it('refuses a package with no digests before calling the host', async () => {
+    await expect(installBundle('author.plugin', '1.0.0', 'C:/pkg', {})).rejects.toThrow(
+      /at least one checksum/u,
+    );
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('passes the manifest digests through and reads the host report', async () => {
+    invoke.mockResolvedValueOnce('3|4096');
+    await expect(
+      installBundle('author.plugin', '1.0.0', 'C:/pkg', { 'ui/app.js': 'a'.repeat(64) }),
+    ).resolves.toEqual({ files: 3, totalBytes: 4096 });
+    expect(invoke.mock.calls[0]?.[0]).toBe('plugin_bundle_install');
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      pluginId: 'author.plugin',
+      version: '1.0.0',
+      sourceDir: 'C:/pkg',
+      checksums: [['ui/app.js', 'a'.repeat(64)]],
+    });
+  });
+});
+
+describe('package install', () => {
+  it('records the manifest the host actually verified', async () => {
+    invoke.mockResolvedValueOnce(
+      JSON.stringify({
+        manifest: JSON.stringify({ id: 'author.plugin', version: '1.0.0' }),
+        files: 2,
+        totalBytes: 512,
+      }),
+    );
+    await expect(installPackage('C:/pkg')).resolves.toEqual({
+      manifest: { id: 'author.plugin', version: '1.0.0' },
+      files: 2,
+      totalBytes: 512,
+    });
+    expect(invoke.mock.calls[0]?.[0]).toBe('plugin_package_install');
+  });
+
+  it('refuses to invent a manifest when the host reports none', async () => {
+    invoke.mockResolvedValueOnce(JSON.stringify({ files: 1 }));
+    await expect(installPackage('C:/pkg')).rejects.toThrow(/no manifest/u);
+  });
+
+  it('refuses a manifest that is not an object', async () => {
+    invoke.mockResolvedValueOnce(JSON.stringify({ manifest: '[1,2]' }));
+    await expect(installPackage('C:/pkg')).rejects.toThrow(/not an object/u);
   });
 });

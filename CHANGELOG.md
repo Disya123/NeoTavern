@@ -24,6 +24,20 @@
 
 ### Added
 
+- **A package can finally be installed (round 107/99, ADR-0066 P2b gap closed).**
+  The missing link was not the store but the door: `install_plugin_bundle` existed only
+  in the adapter, with no host command and no caller, so a bundle could never appear and
+  everything downstream read nothing. Now `plugin_package_install` takes the directory
+  the user picked, reads `manifest.json` there, installs exactly the files it declares
+  and returns the manifest text that was verified — so the descriptor recorded next is
+  the one the digests belong to, not a re-typed copy. A package without checksums is
+  refused, and a single mismatched digest still refuses the whole install.
+  Verified: bundleClient 13/13 (3 new package cases, 2 install cases), tsc clean,
+  `cargo check` for the desktop crate clean. The Plugins page still installs by manifest
+  only; wiring the picker to this command is the next slice.
+
+### Added
+
 - **The sandbox is handed its code (round 106/99, ADR-0066 P2c closed).** After the
   sandbox document loads, `deliverBundle` resolves the package entry and posts
   `neotavern.plugin.sandbox.bundle` with that URL — the message the sandbox document

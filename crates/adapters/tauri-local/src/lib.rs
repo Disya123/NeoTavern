@@ -334,6 +334,66 @@ impl KernelHost {
             .map_err(|error| format!("{}: {error:?}", error.code()))
     }
 
+    /// Installs a plugin package: its `manifest.json` plus the files it declares.
+    ///
+    /// One host call on purpose — the manifest the user picked and the bytes next to it
+    /// are verified together, so a manifest cannot be paired with a different payload
+    /// on the way in. Returns the manifest text so the caller records exactly the
+    /// descriptor that was verified, not a re-typed copy of it.
+    pub fn install_plugin_package(
+        &self,
+        source_dir: &std::path::Path,
+    ) -> Result<(String, usize, u64), String> {
+        let manifest_path = source_dir.join("manifest.json");
+        let text = std::fs::read_to_string(&manifest_path)
+            .map_err(|error| format!("PLUGIN_MANIFEST_UNREADABLE: {error}"))?;
+        let value: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|error| format!("PLUGIN_MANIFEST_INVALID: {error}"))?;
+        let plugin_id = value
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "PLUGIN_MANIFEST_INVALID: id".to_string())?;
+        let version = value
+            .get("version")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "PLUGIN_MANIFEST_INVALID: version".to_string())?;
+        let checksums: Vec<(String, String)> = value
+            .get("checksums")
+            .and_then(serde_json::Value::as_object)
+            .map(|map| {
+                map.iter()
+                    .filter_map(|(path, digest)| {
+                        digest.as_str().map(|value| (path.clone(), value.to_string()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if checksums.is_empty() {
+            return Err("PLUGIN_MANIFEST_INVALID: checksums".to_string());
+        }
+        let (files, total_bytes) =
+            self.install_plugin_bundle_from_checksums(plugin_id, version, &checksums, source_dir)?;
+        Ok((text, files, total_bytes))
+    }
+
+    /// Installs a bundle from a manifest's checksum map (ADR-0066 P2b).
+    ///
+    /// The desktop layer never builds kernel types itself, so the request is assembled
+    /// here — the digests still come from the manifest and are still verified where the
+    /// bytes are.
+    pub fn install_plugin_bundle_from_checksums(
+        &self,
+        plugin_id: &str,
+        version: &str,
+        checksums: &[(String, String)],
+        source_dir: &std::path::Path,
+    ) -> Result<(usize, u64), String> {
+        let request =
+            runtime_kernel::plugin_bundles::BundleRequest::from_checksums(plugin_id, version, checksums);
+        let installed = self.install_plugin_bundle(&request, source_dir)?;
+        Ok((installed.files.len(), installed.total_bytes))
+    }
+
     /// Reads one bounded range of a published bundle file (ADR-0066 P2b).
     pub fn read_plugin_bundle(
         &self,

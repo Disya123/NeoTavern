@@ -182,6 +182,48 @@ fn plugin_process_start(
     ))
 }
 
+/// Installs a whole plugin package from a directory: manifest plus declared files.
+///
+/// Returns a JSON envelope so the caller records the manifest text that was actually
+/// verified, not a copy it re-serialized.
+#[cfg(desktop)]
+#[tauri::command]
+fn plugin_package_install(app: AppHandle, source_dir: String) -> Result<String, String> {
+    let host = app.state::<KernelHost>();
+    let (manifest, files, total_bytes) =
+        host.install_plugin_package(std::path::Path::new(&source_dir))?;
+    Ok(serde_json::json!({
+        "manifest": manifest,
+        "files": files,
+        "totalBytes": total_bytes,
+    })
+    .to_string())
+}
+
+/// Installs a plugin bundle from a directory the user picked (ADR-0066 P2b).
+///
+/// The digests come from the manifest the user chose, and every file is verified before
+/// anything is published: a mismatch refuses the whole install. Host-only, because a
+/// client that named its own digests would verify nothing.
+#[cfg(desktop)]
+#[tauri::command]
+fn plugin_bundle_install(
+    app: AppHandle,
+    plugin_id: String,
+    version: String,
+    source_dir: String,
+    checksums: Vec<(String, String)>,
+) -> Result<String, String> {
+    let host = app.state::<KernelHost>();
+    let (files, total_bytes) = host.install_plugin_bundle_from_checksums(
+        &plugin_id,
+        &version,
+        &checksums,
+        std::path::Path::new(&source_dir),
+    )?;
+    Ok(format!("{files}|{total_bytes}"))
+}
+
 /// Reads one bounded range of a staged plugin bundle (ADR-0066 P2c).
 ///
 /// Returns `size|eof|<base64>` so the caller can loop without a second round trip for
@@ -2754,6 +2796,8 @@ pub fn run() {
                 plugin_job_report,
                 plugin_process_start,
                 plugin_bundle_read,
+                plugin_bundle_install,
+                plugin_package_install,
                 plugin_process_status,
                 plugin_process_stop,
                 plugin_process_reset,

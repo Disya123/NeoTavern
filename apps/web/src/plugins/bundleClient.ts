@@ -144,3 +144,75 @@ export async function resolveEntryUrl(
   if (entry === null || !hasBundleHost()) return null;
   return createBundleUrl(pluginId, version, entry.path);
 }
+
+/** What the host reports after publishing a bundle. */
+export interface InstalledBundle {
+  files: number;
+  totalBytes: number;
+}
+
+/**
+ * Installs a package's files from a directory the user picked.
+ *
+ * `checksums` is the manifest's own map: the host verifies every file against it and
+ * refuses the whole install on a single mismatch, so a package cannot arrive half
+ * verified. Passing an empty map is refused here rather than at the host, because a
+ * bundle without digests is exactly the thing that would install unchecked bytes.
+ */
+export async function installBundle(
+  pluginId: string,
+  version: string,
+  sourceDir: string,
+  checksums: Record<string, string>,
+): Promise<InstalledBundle> {
+  const entries = Object.entries(checksums);
+  if (entries.length === 0) throw new Error('a bundle needs at least one checksum');
+  const raw = await invokeHost<string>('plugin_bundle_install', {
+    pluginId,
+    version,
+    sourceDir,
+    checksums: entries,
+  });
+  const [files = '0', totalBytes = '0'] = raw.split('|');
+  return {
+    files: Number.parseInt(files, 10) || 0,
+    totalBytes: Number.parseInt(totalBytes, 10) || 0,
+  };
+}
+
+/** A package that passed host verification: the exact manifest, plus what landed. */
+export interface InstalledPackage {
+  manifest: Record<string, unknown>;
+  files: number;
+  totalBytes: number;
+}
+
+/**
+ * Installs a package from a directory the user picked.
+ *
+ * One host call installs the manifest's declared files and hands back the manifest text
+ * that was verified, so the descriptor recorded afterwards is the same one the digests
+ * belong to. A package whose digests do not match is refused as a whole — there is no
+ * partially installed state to clean up.
+ */
+export async function installPackage(sourceDir: string): Promise<InstalledPackage> {
+  const raw = await invokeHost<string>('plugin_package_install', { sourceDir });
+  const parsed: unknown = JSON.parse(raw);
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('the host returned an unreadable install report');
+  }
+  const report = parsed as Record<string, unknown>;
+  const manifest: unknown = report['manifest'];
+  if (typeof manifest === 'string') {
+    const decoded: unknown = JSON.parse(manifest);
+    if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) {
+      throw new Error('the installed manifest is not an object');
+    }
+    return {
+      manifest: decoded as Record<string, unknown>,
+      files: Number(report['files']) || 0,
+      totalBytes: Number(report['totalBytes']) || 0,
+    };
+  }
+  throw new Error('the host reported no manifest');
+}
