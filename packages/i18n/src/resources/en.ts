@@ -1392,6 +1392,18 @@ export const en = {
   },
   plugins: {
     title: 'Plugins',
+    processTitle: 'Plugin process',
+    processState: 'State',
+    processRestarts: 'Restarts',
+    processLastError: 'Last failure',
+    processStop: 'Stop process',
+    processReset: 'Reset failures',
+    processNoHost: 'The desktop app manages plugin processes; this session has none.',
+    processUnavailable: 'Process state is unavailable.',
+    processStateStopped: 'Stopped',
+    processStateRunning: 'Running',
+    processStateBackoff: 'Restarting',
+    processStateFailed: 'Failed',
     eyebrow: 'Local extensions',
     subtitle:
       'Install versioned plugin packages, review every requested capability, and control their lifecycle without a terminal.',

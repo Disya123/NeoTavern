@@ -24,6 +24,16 @@
 
 ### Added
 
+- **Plugin process health panel (round 93/99, ADR-0066 P3c-6).**
+  `PluginProcessHealthPanel` renders what the supervisor knows: state, restart count,
+  the last failure reason, and stop/reset actions. A browser session says plainly that
+  the desktop app owns plugin processes instead of showing an empty box, and a failed
+  read surfaces an alert rather than a blank frame. Strings live in the `plugins`
+  namespace in `en` and `ru`. Verified: panel 4/4, i18n 10/10, tsc and ESLint clean.
+  Not yet mounted in Settings → Plugins — that wiring and the P4 UI surfaces are next.
+
+### Added
+
 - **Plugin process health hooks (round 92/99, ADR-0066 P3c-5).**
   `usePluginProcessHealth` polls the supervisor (5 s) because a crashed process cannot
   push an event, and it stays idle without a host instead of spinning forever.

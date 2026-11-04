@@ -1420,6 +1420,18 @@ export const ru: Resources = {
   },
   plugins: {
     title: 'Плагины',
+    processTitle: 'Процесс плагина',
+    processState: 'Состояние',
+    processRestarts: 'Перезапуски',
+    processLastError: 'Последняя ошибка',
+    processStop: 'Остановить процесс',
+    processReset: 'Сбросить отказы',
+    processNoHost: 'Процессами плагинов управляет десктопное приложение; в этой сессии их нет.',
+    processUnavailable: 'Состояние процесса недоступно.',
+    processStateStopped: 'Остановлен',
+    processStateRunning: 'Работает',
+    processStateBackoff: 'Перезапуск',
+    processStateFailed: 'Отказ',
     eyebrow: 'Локальные расширения',
     subtitle:
       'Устанавливайте версионированные пакеты, проверяйте каждую запрошенную возможность и управляйте lifecycle без терминала.',
