@@ -24,6 +24,16 @@
 
 ### Added
 
+- **Plugin process health hooks (round 92/99, ADR-0066 P3c-5).**
+  `usePluginProcessHealth` polls the supervisor (5 s) because a crashed process cannot
+  push an event, and it stays idle without a host instead of spinning forever.
+  `useStopPluginProcess` and `useResetPluginProcess` invalidate the plugin's key so the
+  panel never shows a stale failure after an operator action. Verified: 3/3 hook tests
+  (read, idle-without-host, stop+reset invalidate), tsc and ESLint clean. The Settings
+  panel that consumes them is next.
+
+### Added
+
 - **The web client can drive plugin processes (round 91/99, ADR-0066 P3c-4).**
   `apps/web/src/plugins/processHost.ts` wraps the four host commands: start (plugin,
   version, package-relative entry, timeout), status, stop, reset. The host answers in
