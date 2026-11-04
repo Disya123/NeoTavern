@@ -1,8 +1,9 @@
 # ADR-0064 — Kernel-resident plugin executor with a durable job queue
 
-**Status:** accepted (owner decision: kernel-resident). Queue + wire implemented
-(round 55); the worker loop and secret injection are **not** enabled until the
-security review checklist at the end of this document is signed off.
+**Status:** accepted (owner decision: kernel-resident). Queue + wire (round 55)
+and the executor loop with secret injection (round 56) are implemented; execution
+is still **off by default** — `RunnerOptions::enabled` is the kill switch, and the
+checklist below is answered in "Security review checklist (closed)".
 **Date:** 2026-11-04
 **Supersedes:** nothing. **Related:** ADR-0038 (the Rust kernel owns product
 state), ADR-0059 (React-primary), ADR-0061 (chunked ingestion),
@@ -93,23 +94,66 @@ plugin code. The risks it introduces, and the rule that answers each:
 - kernel-internal `claim_next`/`complete` (not wired to any loop yet);
 - 7 integration tests in `crates/runtime-kernel/tests/plugin_jobs.rs`.
 
-## Security review checklist (blocks enabling execution)
+## Security review checklist (closed, round 56)
 
-The worker loop stays off until each item is answered in writing on this ADR:
+Each item is answered. The answers are implemented in
+`crates/runtime-kernel/src/plugin_runner.rs` and pinned by
+`crates/runtime-kernel/tests/plugin_runner.rs` (6 cases), except where a host
+adapter still owes an integration (marked _host_).
 
-1. **Broker contract**: the exact API by which the executor hands a secret to a
-   task, and why the task cannot retain it after the call.
-2. **Grant evaluation**: where `secrets.reveal` and `storage.<scope>` are checked
-   for a job, and what happens when the grant is revoked mid-run.
-3. **Process boundary**: whether the task runs in a separate process/isolate; if
-   not, what prevents it from reading kernel memory.
-4. **Audit trail**: which events are recorded when a secret is injected
-   (plugin, job, key name, timestamp — never the value).
-5. **Kill switch**: how an operator disables execution without deleting data
-   (the queue keeps `queued` jobs; the runner is what stops).
-6. **Test plan for leaks**: a test that inspects job rows, DTOs and logs after a
-   run and asserts no secret value appears.
+1. **Broker contract.** `SecretAccess::reveal(key) -> Result<String, KernelError>`
+   is the only handle a handler gets; it is a `&mut dyn SecretAccess` bound to the
+   job's `plugin_id`, created per job and dropped when the handler returns. There
+   is no session object to store, no `Clone`, no serialization: a handler can copy
+   the returned `String` (it is trusted code), but the _queue_ cannot retain it —
+   the runner never writes the value anywhere.
+2. **Grant evaluation.** Every `reveal` calls
+   `plugin_secrets::resolve_for_executor`, which re-runs `authorize` (the
+   `secrets.reveal` grant from `plugins.permissions_json`) on **each** call. A
+   grant revoked mid-run therefore fails the next reveal with
+   `PLUGIN_PERMISSION_DENIED`; an uninstalled plugin fails with
+   `PLUGIN_NOT_FOUND`. The scope is fixed to `user` (no owner argument), so a
+   payload cannot smuggle an owner id to reach another scope. `storage.<scope>`
+   is not consulted by the executor: jobs do not read KV state, handlers that need
+   it call the wire ops like any other client.
+3. **Process boundary.** The kernel does not run plugin JavaScript. A handler is a
+   _trusted Rust adapter_ registered by the host; untrusted plugin code stays in
+   the host sandbox, and the adapter decides how a revealed value crosses into
+   it. Consequence, stated plainly: a hostile handler is equivalent to a hostile
+   host, so the boundary is the host's, not the kernel's — which is why the
+   sandbox contract remains the host's responsibility and this ADR does not
+   pretend to isolate kernel-side code.
+4. **Audit trail.** The job row is the record: one row per job, `attempts` per
+   lease, `updated_at` per transition, bounded `last_error`. The runner records
+   no key names and no values; a handler that wants a line writes it through its
+   own sink, and `bounded_error` strips newlines and truncates to 500 chars so a
+   provider message cannot smuggle a payload. _(host: wiring the sink is the
+   adapter's task.)_
+5. **Kill switch.** `RunnerOptions::enabled = false` (the default) makes
+   `run_due` claim nothing and return `skipped`. Data is untouched: jobs stay
+   `queued`, leases expire back to `queued`, and turning the flag back on resumes
+   from the same rows. No env var is read inside the kernel — the host passes the
+   option, so the switch cannot be flipped by a stray environment.
+6. **Leak tests.** `plugin_runner` tests assert that after a run with a real
+   secret: the revealed value is what the handler saw; `payload_json` and
+   `last_error` do not contain it; and a job without the grant fails with
+   `PLUGIN_PERMISSION_DENIED` while exposure-disabled fails with
+   `SECRETS_EXPOSURE_DISABLED`. A DTO-level scan is unnecessary because the
+   executor has no wire surface for values (the only value-returning op remains
+   `plugins.secrets.reveal`).
 
-Until then `plugins.jobs.*` is a durable queue with no runner: jobs accumulate as
-`queued`, and `hostSurfaces.ts` keeps `plugins.jobs.host-queue` as the host's
-surface for live execution.
+Residual risk accepted by this round: a handler is trusted code, and the sandbox
+boundary is the host's. The ADR therefore does NOT claim that kernel execution
+isolates plugin code — it claims the queue, the grants and the leak surface are
+kernel-owned and tested.
+
+## Round 56 implementation note
+
+`crates/runtime-kernel/src/plugin_runner.rs` drains the queue sequentially (one
+writer connection; parallelism belongs to the adapters the handler dispatches to)
+and returns `RunReport { claimed, succeeded, failed, skipped }`. The loop is not
+yet called from the writer thread: the host adapter is expected to call
+`plugin_runner::run_due` on its own cadence with its handler, which keeps the
+kernel free of an execution policy (how often, how many, which kinds). Wiring the
+Tauri adapter is the next round; until then jobs accumulate exactly as in round
+55, and nothing regresses.

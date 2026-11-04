@@ -47,6 +47,7 @@ pub mod imports_full_backup_execute;
 pub mod local;
 pub mod plugin_blobs;
 pub mod plugin_jobs;
+pub mod plugin_runner;
 pub mod plugin_secrets;
 pub mod plugin_state;
 pub mod plugins;

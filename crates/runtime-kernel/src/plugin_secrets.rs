@@ -362,6 +362,51 @@ pub(crate) fn reveal(
     product::encode(&dto)
 }
 
+/// Executor-side resolution (ADR-0064): read one `user`-scope secret VALUE for a
+/// running job.
+///
+/// This is the seam the kernel-resident executor uses when it injects a secret
+/// into a task. It is deliberately narrower than `plugins.secrets.reveal`:
+///
+/// - it never crosses the wire, so there is no DTO and no base64;
+/// - it requires the same `secrets.reveal` grant recorded at install, checked on
+///   EVERY call (a grant revoked mid-run makes the next reveal fail);
+/// - it only addresses the `user` scope, which has no owner argument, so a job
+///   cannot reach another scope by smuggling an owner id through its payload.
+pub(crate) fn resolve_for_executor(
+    db: &Database,
+    store: Option<&Arc<dyn SecretStore>>,
+    plugin_id: &str,
+    key: &str,
+) -> Result<String, KernelError> {
+    let scope = PluginStateScope::User;
+    let owner_key = {
+        let conn = db.conn();
+        authorize(conn, plugin_id, &scope, None, CAPABILITY_REVEAL)?
+    };
+    {
+        let conn = db.conn();
+        if load_row(conn, plugin_id, &scope, &owner_key, key)?.is_none() {
+            return Err(secret_not_found(plugin_id, &scope, key));
+        }
+    }
+    let store = store.ok_or_else(no_secret_store)?;
+    let namespace = secret_namespace(plugin_id);
+    let id = entry_id(&scope, &owner_key, key);
+    store
+        .get(&namespace, &id)
+        .map_err(|e| secret_error(&e))?
+        .ok_or_else(|| {
+            KernelError::product(
+                "SECRET_UNAVAILABLE_ON_THIS_DEVICE".to_string(),
+                vec![
+                    ("pluginId".to_string(), plugin_id.to_string()),
+                    ("key".to_string(), key.to_string()),
+                ],
+            )
+        })
+}
+
 /// Revoke every stored value of a plugin BEFORE its rows cascade away (called
 /// by the plugin delete/uninstall path). Best-effort per entry: an unreadable
 /// store must not block the uninstall from dropping the references.

@@ -24,6 +24,26 @@
 
 ### Added
 
+- **Plugin executor loop with gated secret injection (round 56/99, ADR-0064).**
+  `plugin_runner::run_due` drains the queue: claim → run → complete, sequentially
+  on the kernel's writer connection. Secrets reach a job only through
+  `SecretAccess::reveal`, a per-job session bound to the row's `plugin_id`, which
+  re-checks the `secrets.reveal` grant on EVERY call (revoking it mid-run fails
+  the next reveal with `PLUGIN_PERMISSION_DENIED`) and is additionally gated by
+  `RunnerOptions::allow_exposure` (`SECRETS_EXPOSURE_DISABLED`). Execution is off
+  by default: `RunnerOptions::enabled = false` claims nothing and returns
+  `skipped`, so the kill switch deletes no data and jobs resume from the same
+  rows. The ADR's security checklist is answered item by item, including the
+  honest limit: a handler is trusted Rust, untrusted plugin JavaScript stays in
+  the host sandbox, so the kernel does not claim to isolate plugin code — it owns
+  the queue, grants and leak surface. Leak tests assert the revealed value never
+  appears in `payload_json` or `last_error`. Verified: `cargo test -p
+  runtime-kernel --test plugin_runner` 6/6, plugin-executor 7/7, clippy
+  `-D warnings`. The Tauri adapter still needs to call `run_due` on its cadence
+  (next round); the host keeps `plugins.jobs.host-queue` until then.
+
+### Added
+
 - **Plugin job queue in the kernel (round 55/99, ADR-0064).** The owner chose a
   kernel-resident executor, so the first half lands as durable state rather than
   a host queue: schema v33 `plugin_jobs` (STRICT, `ON DELETE CASCADE` from
