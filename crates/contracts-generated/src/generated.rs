@@ -18157,6 +18157,8 @@ pub struct RequestCreateMessage {
     pub generation_run_id: Option<String>,
     #[serde(rename = "idempotencyKey", default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<FreeObject>,
 }
 
 pub(crate) fn check_request_create_message(value: &Value, path: &str, issues: &mut Vec<Issue>) {
@@ -18227,9 +18229,13 @@ pub(crate) fn check_request_create_message(value: &Value, path: &str, issues: &m
                 None => issues.push(Issue::new(child_path.as_str(), "String")),
             }
         }
+        if let Some(child) = value.get("meta") {
+            let child_path = join_path(path, "meta");
+            check_free_object(child, &child_path, issues);
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "chatId" | "role" | "content" | "generationRunId" | "idempotencyKey") {
+                if !matches!(key.as_str(), "chatId" | "role" | "content" | "generationRunId" | "idempotencyKey" | "meta") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }

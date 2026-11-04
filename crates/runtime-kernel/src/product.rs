@@ -495,6 +495,9 @@ fn row_to_lorebook(row: &rusqlite::Row) -> Result<LorebookDto, KernelError> {
 
 /// Column list shared by every lorebook SELECT: the six `lorebooks` columns
 /// plus the optional `character_lorebooks.character_id` subquery (column 6).
+/// Upper bound for `messages.meta_json` written through `chats.messages.create`.
+const MAX_MESSAGE_META_BYTES: usize = 64 * 1024;
+
 const LOREBOOK_SELECT: &str = "SELECT l.id, l.name, l.description, \
      json_array_length(l.entries_json), l.created_at, l.updated_at, \
      (SELECT cl.character_id FROM character_lorebooks cl \
@@ -1924,6 +1927,29 @@ pub fn messages_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     let id = new_id();
     let now = now();
     let role = role_sql(&req.role);
+    // Extension metadata is stored as JSON and comes back on every read. Bounded so
+    // a plugin cannot park an unbounded blob in a message row.
+    let meta_json = match req.meta.as_ref() {
+        Some(meta) => {
+            let raw = serde_json::to_string(meta).map_err(|err| {
+                KernelError::new(
+                    KernelErrorCode::ContractViolation,
+                    format!("messages_create: meta is not serializable: {err}"),
+                )
+            })?;
+            if raw.len() > MAX_MESSAGE_META_BYTES {
+                return Err(KernelError::new(
+                    KernelErrorCode::ContractViolation,
+                    format!(
+                        "messages_create: meta is {} bytes, limit is {MAX_MESSAGE_META_BYTES}",
+                        raw.len()
+                    ),
+                ));
+            }
+            raw
+        }
+        None => "{}".to_owned(),
+    };
     let sequence = db.transaction(|tx| {
         let sequence = next_message_sequence(tx, &chat_id)?;
         tx.execute(
@@ -1936,7 +1962,7 @@ pub fn messages_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
                 &req.content,
                 sequence,
                 &req.generation_run_id,
-                "{}",
+                &meta_json,
                 &req.idempotency_key,
                 &now
             ],

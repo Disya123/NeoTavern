@@ -1619,6 +1619,13 @@ export const CreateMessageRequestDtoSchema = Type.Object(
      * absent means "always append", which is what UI sends.
      */
     idempotencyKey: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    /**
+     * Extension metadata stored with the message and returned on every read
+     * (`MessageDto.meta`). Plugin authors use `{ "authorKind": "plugin" }` because
+     * the role union has no `plugin` member and the messages CHECK constraint
+     * cannot be altered without rebuilding the table.
+     */
+    meta: Type.Optional(WireFreeObjectSchema),
   },
   { $id: 'wire.request.create-message', additionalProperties: false },
 );

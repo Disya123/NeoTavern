@@ -24,6 +24,17 @@
 
 ### Added
 
+- **Message metadata passthrough on create (round 62/99).** `chats.messages.create`
+  accepts an optional `meta` free object, stored in `messages.meta_json` and
+  returned as `MessageDto.meta`; payloads over 64 KiB are refused rather than
+  truncated. This is how plugin authorship travels: the wire role union is
+  `system|user|assistant|tool` and the `messages.role` CHECK cannot be altered
+  without a table rebuild, so a plugin message is `assistant` plus
+  `meta.authorKind = "plugin"`. Verified: `kernel_crud` 25/25 (meta round-trips,
+  oversized meta fails), codegen `--check`, contracts + neobackend 233/233.
+
+### Added
+
 - **Idempotent message append on the wire (round 61/99, schema v34).**
   `chats.messages.create` accepts an optional `idempotencyKey` (1–128 chars): a
   second create with the same key in the same chat returns the ORIGINAL message,

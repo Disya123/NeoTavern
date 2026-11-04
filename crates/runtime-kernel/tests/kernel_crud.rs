@@ -740,11 +740,40 @@ fn chats_and_messages_crud_round_trip() {
     );
     assert_eq!(retried.content, "tick", "the original content wins");
 
+    // Plugin authorship rides in meta, not the role union: the messages table CHECK
+    // is system|user|assistant|tool and cannot be altered without a rebuild.
+    let plugin_meta = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({
+            "chatId": chat_id,
+            "role": "assistant",
+            "content": "plugin says hi",
+            "meta": { "authorKind": "plugin", "pluginId": "smoke-plugin" },
+        }),
+    )
+    .expect("plugin-authored message");
+    assert_eq!(plugin_meta.meta.payload["authorKind"], "plugin");
+    assert_eq!(plugin_meta.meta.payload["pluginId"], "smoke-plugin");
+
+    // Oversized meta is refused, not silently truncated.
+    let huge = "x".repeat(70 * 1024);
+    let err = dispatch_json(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "assistant", "content": "big", "meta": { "pad": huge } }),
+    )
+    .expect_err("meta over the bound must fail");
+    assert!(
+        format!("{err:?}").contains("meta"),
+        "unexpected error: {err:?}"
+    );
+
     // chat messageCount now reflects the three appended messages
     let chat_after =
         dispatch_decoded::<ChatDto>(&kernel, "chats.get", json!({ "chatId": chat_id }))
             .expect("chats.get after append");
-    assert_eq!(chat_after.message_count, 4);
+    assert_eq!(chat_after.message_count, 5);
 
     // missing chat → CHAT_NOT_FOUND
     let err = dispatch_json(
@@ -833,7 +862,7 @@ fn chats_and_messages_crud_round_trip() {
     )
     .expect("messages.list after delete");
     // Four appends (m0, m1, m2 and the idempotent keyed one) minus the deleted m2.
-    assert_eq!(remaining.items.len(), 3);
+    assert_eq!(remaining.items.len(), 4);
     assert!(remaining.items.iter().all(|m| m.id != m2.id));
 
     // delete again → MESSAGE_NOT_FOUND
