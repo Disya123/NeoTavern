@@ -60,7 +60,7 @@ const child = spawn(resolve(portableRoot, 'NeoTavern.exe'), [], {
   // Deterministic kernel-mode smoke: release-channel shells default to the
   // legacy sidecar (honest staged default, ADR-0038), but this smoke must
   // keep exercising the Kernel handshake + meta path.
-  env: { ...process.env, NEOTA_DESKTOP_SMOKE: '1', NEOTA_KERNEL: '1' },
+  env: { ...process.env, NEOTA_DESKTOP_SMOKE: '1' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 child.stdout.setEncoding('utf8');

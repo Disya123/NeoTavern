@@ -156,3 +156,16 @@ before any migration work can be declared.
   this is an honest interim state, not a permanent architecture.
 - A separate decision record (ADR-0041) fixes the exact versioned data-root
   layout and Windows activation protocol before the converter is built.
+
+## Round 59a: the public release runs the Kernel by default
+
+The mode resolver no longer consults the build channel: every channel — release
+included — resolves to the Kernel, and `NEOTA_LEGACY_SERVER=1` is the only way to
+the sidecar, kept for one transition window. `NEOTA_KERNEL=1` remains accepted
+(conflict policy unchanged: it wins).
+
+Evidence: `apps/desktop/src-tauri` unit matrix (`cargo test --lib`, 6/6) and the
+portable smoke run _without_ `NEOTA_KERNEL` — `scripts/smoke-desktop-shell.mjs`
+exit 0 on `NeoTavern_0.1.0_x64-portable.zip` SHA-256 `8c4efc1e…da27`. The next
+stage deletes the sidecar, `apps/server`, `packages/db` and `api/v2`; until then
+the legacy contour ships only for callers who explicitly ask for it.

@@ -24,6 +24,19 @@
 
 ### Changed
 
+- **The public desktop build runs the Kernel by default (round 59a/99,
+  ADR-0038).** The mode resolver stopped consulting the build channel: release,
+  stable and custom channels all resolve to the Kernel; `NEOTA_LEGACY_SERVER=1`
+  is the only remaining path to the sidecar and exists for one transition window
+  (`NEOTA_KERNEL=1` stays accepted, and still wins when both are set). The smoke
+  script no longer forces `NEOTA_KERNEL=1`, so the packaged evidence proves the
+  DEFAULT is the kernel plane: `NeoTavern_0.1.0_x64-portable.zip` SHA-256
+  `8c4efc1e…da27`, `scripts/smoke-desktop-shell.mjs` exit 0. Desktop unit matrix
+  6/6 (`cargo test --lib`). Next stage deletes the sidecar, `apps/server`,
+  `packages/db` and `api/v2`.
+
+### Changed
+
 - **`plugins.jobs` is Packaged on desktop (round 57b/99, ADR-0064).** The
   packaged golden walk now exercises the queue end to end: step 15b
   (`apps/desktop/src-tauri/src/lib.rs:2285-2341`) enqueues a job for the smoke

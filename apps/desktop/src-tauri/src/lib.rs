@@ -77,7 +77,9 @@ enum DesktopMode {
 /// 2. `kernel_override` (`NEOTA_KERNEL=1`) в†’ Kernel; when BOTH are set the
 ///    Kernel wins (conflict policy вЂ” the warning is printed by the caller);
 /// 3. `debug_build` в†’ Kernel (dev builds are internal);
-/// 4. build channel: `nightly` в†’ Kernel, any other/unset в†’ Sidecar (the
+/// 4. build channel: every channel (release included) в†’ Kernel. The public
+///    release flipped to the Kernel in round 59a; `NEOTA_LEGACY_SERVER=1` is the
+///    only way back to the sidecar, for one transition window.
 ///    public release default while the Kernel is a Preview).
 #[cfg(desktop)]
 fn resolve_desktop_mode(
@@ -91,14 +93,12 @@ fn resolve_desktop_mode(
         (true, false) => DesktopMode::Sidecar,
         (false, true) => DesktopMode::Kernel,
         (false, false) => {
-            if debug_build {
-                DesktopMode::Kernel
-            } else {
-                match channel {
-                    Some("nightly") => DesktopMode::Kernel,
-                    _ => DesktopMode::Sidecar,
-                }
-            }
+            // The public release runs the Kernel (round 59a). The channel no
+            // longer decides: a release build without overrides is Kernel, and
+            // the sidecar is reachable only through NEOTA_LEGACY_SERVER=1.
+            let _ = channel;
+            let _ = debug_build;
+            DesktopMode::Kernel
         }
     }
 }
@@ -132,27 +132,14 @@ mod tests {
     use super::{resolve_desktop_mode, DesktopMode};
 
     #[test]
-    fn public_release_channel_defaults_to_sidecar() {
-        assert_eq!(
-            resolve_desktop_mode(false, false, false, None),
-            DesktopMode::Sidecar
-        );
-        assert_eq!(
-            resolve_desktop_mode(false, false, false, Some("release")),
-            DesktopMode::Sidecar
-        );
-        assert_eq!(
-            resolve_desktop_mode(false, false, false, Some("stable")),
-            DesktopMode::Sidecar
-        );
-    }
-
-    #[test]
-    fn nightly_channel_defaults_to_kernel() {
-        assert_eq!(
-            resolve_desktop_mode(false, false, false, Some("nightly")),
-            DesktopMode::Kernel
-        );
+    fn every_channel_defaults_to_the_kernel() {
+        for channel in [None, Some("release"), Some("stable"), Some("nightly")] {
+            assert_eq!(
+                resolve_desktop_mode(false, false, false, channel),
+                DesktopMode::Kernel,
+                "channel {channel:?} must default to the kernel"
+            );
+        }
     }
 
     #[test]
@@ -221,17 +208,12 @@ mod tests {
                 for debug in [false, true] {
                     for channel in channels {
                         let mode = resolve_desktop_mode(legacy, kernel, debug, channel);
-                        let expected = if kernel {
-                            DesktopMode::Kernel
-                        } else if legacy {
-                            DesktopMode::Sidecar
-                        } else if debug {
+                        // Round 59a: only an explicit legacy override still
+                        // selects the sidecar; everything else is the Kernel.
+                        let expected = if kernel || !legacy {
                             DesktopMode::Kernel
                         } else {
-                            match channel {
-                                Some("nightly") => DesktopMode::Kernel,
-                                _ => DesktopMode::Sidecar,
-                            }
+                            DesktopMode::Sidecar
                         };
                         assert_eq!(
                             mode, expected,
