@@ -26,6 +26,7 @@ import {
   type PluginInstallResult,
   type PluginSafeModeResult,
 } from '@neotavern/contracts';
+import { installPackage } from '../plugins/bundleClient.js';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { api, legacyUrl } from './client.js';
 import { isKernelMode } from './backend.js';
@@ -216,6 +217,46 @@ export async function installPlugin(file: File): Promise<PluginInstallResult> {
     throw new Error('plugin manifest must be a JSON object');
   }
   const record = parsed as Record<string, unknown>;
+  const id = typeof record['id'] === 'string' ? record['id'] : '';
+  if (!/^[a-z][a-z0-9-]{1,63}$/u.test(id)) {
+    throw new Error('plugin manifest needs an id matching ^[a-z][a-z0-9-]{1,63}$');
+  }
+  const name =
+    typeof record['name'] === 'string' && record['name'].length > 0 ? record['name'] : id;
+  const version =
+    typeof record['version'] === 'string' && record['version'].length > 0
+      ? record['version']
+      : '0.0.0';
+  const permissions = Array.isArray(record['permissions'])
+    ? record['permissions'].filter((value): value is string => typeof value === 'string')
+    : [];
+  const installed = await backend.plugins.install({
+    id,
+    name: name.slice(0, 128),
+    version: version.slice(0, 64),
+    trustState: 'locally-trusted',
+    permissions: permissions.slice(0, 64),
+    manifest: record,
+  });
+  return { plugin: translatePlugin(installed.plugin), replaced: false };
+}
+
+/**
+ * Installs a plugin package the user picks as a folder (ADR-0066 P2b).
+ *
+ * The host reads `manifest.json`, verifies every declared file and publishes them; this
+ * function only records the descriptor afterwards, using the manifest text that was
+ * verified rather than one re-typed from the picked fields. Without a folder picker the
+ * caller keeps the manifest-only path, which is honest but cannot load any code.
+ */
+export async function installPluginDirectory(): Promise<PluginInstallResult> {
+  const dialog = await import('@tauri-apps/plugin-dialog');
+  const picked = await dialog.open({ directory: true, multiple: false });
+  if (typeof picked !== 'string' || picked.length === 0) {
+    throw new Error('no package was selected');
+  }
+  const pkg = await installPackage(picked);
+  const record = pkg.manifest;
   const id = typeof record['id'] === 'string' ? record['id'] : '';
   if (!/^[a-z][a-z0-9-]{1,63}$/u.test(id)) {
     throw new Error('plugin manifest needs an id matching ^[a-z][a-z0-9-]{1,63}$');

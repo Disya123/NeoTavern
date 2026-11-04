@@ -24,6 +24,15 @@
 
 ### Added
 
+- **The Plugins page installs packages, not just manifests (round 108/99).**
+  On the desktop host the install button now opens a folder picker, installs the package
+  through `plugin_package_install` and records the descriptor from the manifest that was
+  verified. In a browser — where no host can read a folder — it keeps the manifest-only
+  path instead of failing at the last moment. Verified: hostSurfaces + hooks + PluginsPage
+  52/52, bundleClient 13/13, tsc clean.
+
+### Added
+
 - **A package can finally be installed (round 107/99, ADR-0066 P2b gap closed).**
   The missing link was not the store but the door: `install_plugin_bundle` existed only
   in the adapter, with no host command and no caller, so a bundle could never appear and

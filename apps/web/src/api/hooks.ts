@@ -106,6 +106,7 @@ import {
   disablePlugin,
   deletePlugin,
   installPlugin,
+  installPluginDirectory,
   installPluginFromGit,
   enterPluginSafeMode,
   exitPluginSafeMode,
@@ -1253,7 +1254,7 @@ export function usePlugins() {
 export function useInstallPlugin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => installPlugin(file),
+    mutationFn: (file: File) => (hasBundleHost() ? installPluginDirectory() : installPlugin(file)),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['plugins'] }),
   });
 }
