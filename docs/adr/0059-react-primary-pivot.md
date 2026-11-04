@@ -140,3 +140,15 @@ made the guide mandatory is amended to void):
   versioned ST Compatibility API if needed" item collapses to nothing —
   the legacy removal stage now covers only the Fastify/Drizzle sidecar and
   the `app.db` contour.
+
+## Delivery note (round 64)
+
+The pivot's last consequence is now real in the tree: the Fastify/Drizzle
+contour, the sidecar mode and the last `app.db`-era transport are gone
+(rounds 60a/60b), and so is the web build's `/api/v2` client. `LegacyBackend`
+and `legacyRaw()` were deleted; a page without a host gets
+`createClosedBackend()`, which constructs and rejects every call with a typed
+`UnsupportedError` naming the surface. `streamGeneration` has one transport.
+The product serves exactly one plane — the Runtime Kernel over Product Wire —
+and the packaged portable artifact boots without a sidecar
+(`scripts/smoke-desktop-shell.mjs`, `run_golden_smoke`).
