@@ -42,8 +42,6 @@ import { isKernelMode } from './backend.js';
 export interface HostSurface {
   /** Stable id — doubles as the `UnsupportedError` code. */
   readonly id:
-    | 'plugins.install.host-verify'
-    | 'plugins.install.git.host-verify'
     | 'plugins.safe-mode.enter'
     | 'plugins.safe-mode.exit'
     | 'plugins.auth.connections'
@@ -68,29 +66,6 @@ export interface HostSurface {
  * violation; the accompanying test keeps this table and the functions in sync.
  */
 export const HOST_SURFACES: readonly HostSurface[] = [
-  {
-    id: 'plugins.install.host-verify',
-    route: '/plugins/install',
-    method: 'POST',
-    kernelMode: 'unsupported',
-    why:
-      'Package acceptance is host-owned: the kernel `plugins.install` op requires the host to have already ' +
-      'verified signature/digest and ZIP traversal (SEC-05). The browser has no verifier.',
-    removal:
-      'Move the verifier into the kernel-side host adapter (desktop/CLI) and expose a "verified package" ' +
-      'handle to the UI, then delete this route.',
-  },
-  {
-    id: 'plugins.install.git.host-verify',
-    route: '/plugins/install-git',
-    method: 'POST',
-    kernelMode: 'unsupported',
-    why:
-      'A Git archive fetch is an outbound network operation of the trusted host, not the browser, and it ' +
-      'needs the same signature verification as a local package.',
-    removal:
-      'Serve it from the same kernel-side host adapter as `plugins.install` (one verifier, two sources).',
-  },
   {
     id: 'plugins.safe-mode.enter',
     route: '/plugins/runtime/safe-mode',
@@ -209,10 +184,60 @@ export async function hostSurfaceFetch(
   });
 }
 
-/** Install a plugin package the host has verified (see `plugins.install.host-verify`). */
+/** Reads a picked file as text (`File.text` is missing in some test DOMs). */
+function readFileText(file: File): Promise<string> {
+  if (typeof file.text === 'function') return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('plugin manifest could not be read'));
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.readAsText(file);
+  });
+}
+
+/**
+ * Install a plugin from its `manifest.json` (round 75).
+ *
+ * There is no package pipeline: the kernel stores a plugin as a descriptor row
+ * (`plugins.install`) and the runtime loads code from the web bundle, so a signed
+ * ZIP would verify a payload nobody reads. The user picks a manifest, we validate
+ * the few fields the wire requires, and the descriptor is recorded with
+ * `locally-trusted` — the honest state of a plugin the user chose by hand.
+ */
 export async function installPlugin(file: File): Promise<PluginInstallResult> {
-  assertLegacyPlane('plugins.install.host-verify');
-  return api.upload<PluginInstallResult>(hostSurface('plugins.install.host-verify').route, file);
+  const text = await readFileText(file);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('plugin manifest is not valid JSON');
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('plugin manifest must be a JSON object');
+  }
+  const record = parsed as Record<string, unknown>;
+  const id = typeof record['id'] === 'string' ? record['id'] : '';
+  if (!/^[a-z][a-z0-9-]{1,63}$/u.test(id)) {
+    throw new Error('plugin manifest needs an id matching ^[a-z][a-z0-9-]{1,63}$');
+  }
+  const name =
+    typeof record['name'] === 'string' && record['name'].length > 0 ? record['name'] : id;
+  const version =
+    typeof record['version'] === 'string' && record['version'].length > 0
+      ? record['version']
+      : '0.0.0';
+  const permissions = Array.isArray(record['permissions'])
+    ? record['permissions'].filter((value): value is string => typeof value === 'string')
+    : [];
+  const installed = await backend.plugins.install({
+    id,
+    name: name.slice(0, 128),
+    version: version.slice(0, 64),
+    trustState: 'locally-trusted',
+    permissions: permissions.slice(0, 64),
+    manifest: record,
+  });
+  return { plugin: translatePlugin(installed.plugin), replaced: false };
 }
 
 /** Install a plugin from a public Git archive (host-side fetch + verification). */

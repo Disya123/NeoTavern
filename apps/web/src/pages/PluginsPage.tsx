@@ -173,7 +173,7 @@ export function PluginsPage() {
               <input
                 className={styles.fileInput}
                 type="file"
-                accept=".zip,.stplugin,application/zip"
+                accept=".json,application/json"
                 disabled={busy}
                 onChange={(event) => void choosePackage(event)}
               />

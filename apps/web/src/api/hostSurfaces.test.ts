@@ -24,8 +24,6 @@ import {
   exitPluginSafeMode,
   hostSurface,
   hostSurfaceFetch,
-  installPlugin,
-  installPluginFromGit,
   readPluginAuthConnections,
   revokePluginAuth,
 } from './hostSurfaces.js';
@@ -68,8 +66,6 @@ describe('host surface registry', () => {
     // The union of ids used by the functions below; a new export must add an id.
     expect(new Set(HOST_SURFACES.map((surface) => surface.id))).toEqual(
       new Set([
-        'plugins.install.host-verify',
-        'plugins.install.git.host-verify',
         'plugins.safe-mode.enter',
         'plugins.safe-mode.exit',
         'plugins.auth.connections',
@@ -89,11 +85,6 @@ describe('host surfaces fail closed on the kernel plane', () => {
   });
 
   const cases: Array<[string, () => Promise<unknown>]> = [
-    ['plugins.install.host-verify', () => installPlugin(new File(['x'], 'p.zip'))],
-    [
-      'plugins.install.git.host-verify',
-      () => installPluginFromGit({ url: 'https://example.test/p' }),
-    ],
     ['plugins.safe-mode.enter', () => enterPluginSafeMode()],
     ['plugins.safe-mode.exit', () => exitPluginSafeMode()],
     ['plugins.auth.connections', () => readPluginAuthConnections('author.p')],
@@ -125,18 +116,6 @@ describe('host surfaces fail closed on the kernel plane', () => {
 });
 
 describe('host surfaces keep the legacy routes on the legacy plane', () => {
-  it('install posts the package', async () => {
-    await installPlugin(new File(['x'], 'p.zip'));
-    const [url, init] = fetchMock.mock.calls[0] as [string, { method?: string }];
-    expect(url).toBe('/api/v2/plugins/install');
-    expect(init.method).toBe('POST');
-  });
-
-  it('git install posts the repository reference', async () => {
-    await installPluginFromGit({ url: 'https://example.test/p' });
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/v2/plugins/install-git');
-  });
-
   it('safe mode uses POST to enter and DELETE to leave', async () => {
     await enterPluginSafeMode();
     await exitPluginSafeMode();

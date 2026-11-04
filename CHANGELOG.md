@@ -22,6 +22,20 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Changed
+
+- **Plugins install from a manifest, not a signed package (round 75/99).**
+  `installPlugin(file)` used to upload a ZIP to `plugins.install.host-verify`, a
+  surface no plane served, so a packaged build could not install a plugin at all.
+  The kernel stores a plugin as a descriptor row and the runtime loads code from
+  the web bundle, which means a package signature would verify bytes nobody reads.
+  The flow is now: the user picks `manifest.json`, the UI validates the fields the
+  wire requires (`id` pattern, name, version, permissions) and calls
+  `plugins.install` with `trustState: locally-trusted`. Both host-verify surfaces
+  are deleted, and git install refuses with `UnsupportedError` instead of pretending
+  (fetching and trusting a repository is host work no plane implements). The file
+  picker accepts `.json`; `package-verify` stays an unused crate, recorded as such.
+
 ### Added
 
 - **The desktop host dispatches plugin jobs (round 72/99, ADR-0065).**

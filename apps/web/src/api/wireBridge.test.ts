@@ -1561,7 +1561,9 @@ describe('plugins (Этап 4 context 6 part 4, wire plugins.*)', () => {
   });
 
   it('rejects host-side and executor-only flows on the kernel plane honestly', async () => {
-    await expect(installPlugin(new File(['z'], 'p.zip'))).rejects.toBeInstanceOf(UnsupportedError);
+    // Package installs became a manifest descriptor (round 75); a malformed
+    // manifest is refused before anything reaches the kernel.
+    await expect(installPlugin(new File(['{'], 'p.json'))).rejects.toThrow(/not valid JSON/u);
     await expect(installPluginFromGit({ url: 'https://example.com/repo' })).rejects.toBeInstanceOf(
       UnsupportedError,
     );
