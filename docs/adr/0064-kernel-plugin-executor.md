@@ -151,9 +151,13 @@ kernel-owned and tested.
 
 `crates/runtime-kernel/src/plugin_runner.rs` drains the queue sequentially (one
 writer connection; parallelism belongs to the adapters the handler dispatches to)
-and returns `RunReport { claimed, succeeded, failed, skipped }`. The loop is not
-yet called from the writer thread: the host adapter is expected to call
-`plugin_runner::run_due` on its own cadence with its handler, which keeps the
-kernel free of an execution policy (how often, how many, which kinds). Wiring the
-Tauri adapter is the next round; until then jobs accumulate exactly as in round
-55, and nothing regresses.
+and returns `RunReport { claimed, succeeded, failed, skipped }`.
+
+Round 57a adds the public entry the host adapter uses:
+`Kernel::run_plugin_jobs(options, Arc<dyn PluginJobHandler>)` sends the pass to
+the writer thread (one connection, no second opener) and returns the report; the
+cadence stays the host's, so the kernel keeps no execution policy. Tests
+`plugin_executor_kernel` drive the whole path through the wire — install →
+enqueue → run → `plugins.jobs.get` — including the kill switch. What remains is
+the Tauri adapter's timer and its handler; until that lands, jobs accumulate
+exactly as in round 55 and nothing regresses.

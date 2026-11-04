@@ -382,6 +382,14 @@ enum Command {
         allow: bool,
         reply: mpsc::SyncSender<()>,
     },
+    /// Runs one executor drain pass on the writer thread (ADR-0064). The handler
+    /// is trusted host code; `plugin_runner` owns the claim/complete protocol and
+    /// the secret gates, so the kernel only supplies the connection.
+    RunPluginJobs {
+        options: plugin_runner::RunnerOptions,
+        handler: Arc<dyn plugin_runner::PluginJobHandler>,
+        reply: mpsc::SyncSender<Result<plugin_runner::RunReport, KernelError>>,
+    },
     /// Registers a runtime provider adapter (e.g. an OpenAI-compatible
     /// instance built from a stored provider config, ТЗ §9.3). Applied
     /// immediately and acknowledged.
@@ -951,6 +959,19 @@ fn drain_pending(
                 state.secrets_exposure = allow;
                 let _ = reply.send(());
             }
+            Command::RunPluginJobs {
+                options,
+                handler,
+                reply,
+            } => {
+                let result = plugin_runner::run_due(
+                    db,
+                    state.secret_store.as_ref(),
+                    handler.as_ref(),
+                    &options,
+                );
+                let _ = reply.send(result);
+            }
             Command::RegisterProvider { adapter, reply } => {
                 state.registry.register(adapter);
                 let _ = reply.send(());
@@ -1114,6 +1135,25 @@ fn writer_main(
             Command::SetSecretsExposure { allow, reply } => {
                 state.secrets_exposure = allow;
                 let _ = reply.send(());
+            }
+            Command::RunPluginJobs {
+                options,
+                handler,
+                reply,
+            } => {
+                let result = match db.as_ref() {
+                    Some(db) => plugin_runner::run_due(
+                        db,
+                        state.secret_store.as_ref(),
+                        handler.as_ref(),
+                        &options,
+                    ),
+                    None => Err(KernelError::new(
+                        KernelErrorCode::StorageFailure,
+                        "plugin jobs require durable storage",
+                    )),
+                };
+                let _ = reply.send(result);
             }
             Command::RegisterProvider { adapter, reply } => {
                 state.registry.register(adapter);
@@ -1433,6 +1473,37 @@ impl Kernel {
             reply: reply_tx,
         });
         let _ = reply_rx.recv_timeout(Duration::from_secs(5));
+    }
+
+    /// Runs one plugin-executor drain pass (ADR-0064).
+    ///
+    /// The host owns the cadence and the handler; the kernel owns the queue, the
+    /// grant checks and the secret seam. Execution is closed unless the caller
+    /// passes `options.enabled = true` — there is no environment switch inside
+    /// the kernel, so a stray variable cannot start plugin work.
+    pub fn run_plugin_jobs(
+        &self,
+        options: plugin_runner::RunnerOptions,
+        handler: Arc<dyn plugin_runner::PluginJobHandler>,
+    ) -> Result<plugin_runner::RunReport, KernelError> {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        self.cmd_tx
+            .send(Command::RunPluginJobs {
+                options,
+                handler,
+                reply: reply_tx,
+            })
+            .map_err(|_| {
+                KernelError::new(KernelErrorCode::Internal, "kernel writer thread is gone")
+            })?;
+        reply_rx
+            .recv_timeout(Duration::from_secs(300))
+            .map_err(|_| {
+                KernelError::new(
+                    KernelErrorCode::Internal,
+                    "plugin executor did not answer in time",
+                )
+            })?
     }
 
     /// Registers a runtime provider adapter (ТЗ §9.3).

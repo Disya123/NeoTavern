@@ -24,6 +24,16 @@
 
 ### Added
 
+- **Executor entry on the Kernel API (round 57a/99, ADR-0064).**
+  `Kernel::run_plugin_jobs(options, handler)` routes one drain pass to the writer
+  thread, so a host adapter needs no second database connection and the cadence
+  stays outside the kernel. Closed by default: `RunnerOptions::default()` skips.
+  Tests `plugin_executor_kernel` walk install → enqueue → run →
+  `plugins.jobs.get` through the wire and assert the kill switch leaves jobs
+  `queued`. The Tauri timer and its handler remain.
+
+### Added
+
 - **Plugin executor loop with gated secret injection (round 56/99, ADR-0064).**
   `plugin_runner::run_due` drains the queue: claim → run → complete, sequentially
   on the kernel's writer connection. Secrets reach a job only through
