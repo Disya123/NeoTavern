@@ -132,5 +132,7 @@ request `{ runId }` → `wire.prompt.plan`. Missing plan → stable
   workflow that executes the plan.
 - [Wire contracts](wire-contracts.md) — `generation.prompt.plan` and the
   prompt DTOs.
-- [Legacy prompt pipeline](https://github.com/Disya123/NeoTavern/blob/main/apps/server/src/pipeline/promptPipeline.ts) —
-  the legacy reference implementation the rules mirror.
+- The legacy prompt pipeline (`apps/server/src/pipeline/promptPipeline.ts`) was
+  the reference implementation these rules mirror; it was deleted with the
+  Fastify contour in round 60b, and the rules above are now enforced by
+  `crates/runtime-kernel/src/prompt.rs`.

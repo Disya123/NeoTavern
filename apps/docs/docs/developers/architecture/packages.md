@@ -19,11 +19,11 @@ apps (server, web, desktop, plugin-runtime)
   → shared, contracts (the floor)
 ```
 
-`server` and `web` depend on packages; packages depend at most on `shared`
-and `contracts`. Cyclic dependencies are forbidden. When you add new code,
-put it in the narrowest package that can host it: shared helpers go to
-`@neotavern/shared`, API shapes go to `@neotavern/contracts`, and anything database
-related goes to `@neotavern/db`.
+`web` depends on packages; packages depend at most on `contracts` and
+`neobackend`. Cyclic dependencies are forbidden. When you add new code, put it in
+the narrowest package that can host it: wire shapes go to `@neotavern/contracts`,
+transport and facade code to `@neotavern/neobackend`, and anything database-related
+to the Rust kernel (`crates/storage`), never to a TypeScript package.
 
 ## Package Responsibilities
 
@@ -32,8 +32,8 @@ related goes to `@neotavern/db`.
   secret redaction, timeout and signal helpers, and prompt macros.
 - `@neotavern/contracts` — TypeBox schemas for every API input and output. The
   single source of truth shared by server and web; never duplicated by hand.
-- `@neotavern/db` — SQLite: the Drizzle schema, migrations, repositories, and FTS5
-  search. The only package that talks to the database.
+- `@neotavern/neobackend` — the `backend.*` facade over Product Wire (local kernel,
+  remote kernel, closed backend). The only package that talks to the kernel.
 - `@neotavern/ui` — headless base components built on Radix primitives, design
   tokens, and the `data-*` hooks that themes rely on.
 - `@neotavern/i18n` — i18next setup, namespaces, `en` and `ru` resources, and the
@@ -55,7 +55,7 @@ related goes to `@neotavern/db`.
 
 - **API shapes** always come from `@neotavern/contracts`. Backend and frontend
   never declare the same type twice.
-- **Database access** happens only through `@neotavern/db` repositories. Plugin
+- **Database access** happens only inside the Rust kernel (`crates/storage`). Plugin
   code never receives a SQLite connection.
 - **Provider behavior** lives in `@neotavern/provider-sdk` adapters. The server
   core is not coupled to any single provider's SDK, with one documented

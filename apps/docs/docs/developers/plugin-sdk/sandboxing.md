@@ -29,7 +29,7 @@ restrictions:
   bus, and can emit only under its own namespace.
 - If the process crashes, the host removes every registration it owned.
 
-The plugin process never receives the Fastify root, the SQLite connection,
+The plugin process never receives the kernel handle, the SQLite connection,
 absolute paths, the full environment, or other providers' API keys. Network
 access is limited to granted hosts through the permission-checked `fetch`.
 

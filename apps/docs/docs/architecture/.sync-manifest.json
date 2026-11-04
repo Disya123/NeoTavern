@@ -170,7 +170,7 @@
     {
       "source": "adr/0038-canonical-rust-kernel-core.md",
       "target": "adr/0038-canonical-rust-kernel-core.md",
-      "sha256": "297755ff0475bf4075eb96e3060089e77c1662129f886cf0e18c8c2c9bf5dd92"
+      "sha256": "f201c92ed41fdd81c18c8fee8ab0e433c9ccb0f1efe4679ec15d2244d2d50c7c"
     },
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
@@ -275,7 +275,7 @@
     {
       "source": "adr/0059-react-primary-pivot.md",
       "target": "adr/0059-react-primary-pivot.md",
-      "sha256": "f8e14d29bd1a5646229662a796e2a185c8e5a6169c8c5d9f45b71a3d8033c223"
+      "sha256": "3d708a9f7011f987fa55c78a0db669239ef843b86144bbcba4570ff4eb95f02a"
     },
     {
       "source": "adr/0060-app-event-cursor-not-sse.md",
@@ -303,9 +303,14 @@
       "sha256": "0b01673843263ba8070e49d06829b10c9966762ab83674a456f65ea1a6e85c48"
     },
     {
+      "source": "adr/0065-sandbox-job-dispatch.md",
+      "target": "adr/0065-sandbox-job-dispatch.md",
+      "sha256": "1c884ebd27a290f9abb25519de66c72538bf01d64c747fe83454da14ba2f92c0"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "ec812c08f2c794d8037f148d6a0e57a0605062f7fe2a0a627dd79f57d7950354"
+      "sha256": "4d7b109e6b414b55257812e7d922e6a277bb9bcb538ecc029929acfad4ab037a"
     },
     {
       "source": "android/README.md",
@@ -330,7 +335,7 @@
     {
       "source": "architecture/etap4-ui-cutover-registry.md",
       "target": "architecture/etap4-ui-cutover-registry.md",
-      "sha256": "b3bf2d49a02ab2f38bb764c955c5305ff59a227c0e7b8687974e9e25d96e69f9"
+      "sha256": "49f1dd938bb75fedabee9f7698a0c665ac20f281494391a6f8c416c8afef0741"
     },
     {
       "source": "architecture/generation-durability.md",
@@ -380,7 +385,7 @@
     {
       "source": "architecture/prompt-pipeline.md",
       "target": "architecture/prompt-pipeline.md",
-      "sha256": "064cf61c76168c811c2ab5db88d924b904424937879bc21966417338c6aeb1f6"
+      "sha256": "47d74a012df3f09734cd875923f00b82b5f26592f3a361248a74581adc4ff11f"
     },
     {
       "source": "architecture/providers.md",
@@ -390,7 +395,7 @@
     {
       "source": "architecture/release-gate-status.md",
       "target": "architecture/release-gate-status.md",
-      "sha256": "0b23e7c048c02dec7d64c84134d84f67734f5a3cf1790f5be01361922932f597"
+      "sha256": "b9c77c6ab02824953766322c32735fd1c4340ca264adff3a6ae435e473556224"
     },
     {
       "source": "architecture/resource-containment.md",
@@ -415,7 +420,7 @@
     {
       "source": "audits/rust-app/INVENTORY.md",
       "target": "audits/rust-app/INVENTORY.md",
-      "sha256": "551b934fcd5d2c2c8ceae26ba5761c98bd07c9333da2f2d21a8583b140e7cd75"
+      "sha256": "86b2ef24918fe22012ea6b69d748d117d60c6a404129473397a0cca7972de52f"
     },
     {
       "source": "audits/rust-app/KERNEL.md",
@@ -445,7 +450,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "c914be053ed9bb0eefa636aaac04ac6654af1a81a1a95a7063444d6d5b06af2a"
+      "sha256": "8356c0e472a45414c3c5706632f1cc890fda1ba3245b6c05fa892b29e5ad92e4"
     },
     {
       "source": "data/README.md",
@@ -485,7 +490,7 @@
     {
       "source": "migrations/etap6-legacy-removal.md",
       "target": "migrations/etap6-legacy-removal.md",
-      "sha256": "1225b2b85b5cd3eec4ea2775c7a472a3fe26ceebc1b6d860222551ceae790ade"
+      "sha256": "798d641eefb6f1afb7d6ee33df3a9120267e475030ec29aa5beba0e720c734ba"
     },
     {
       "source": "plugin-sdk/README.md",

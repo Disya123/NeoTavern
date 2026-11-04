@@ -278,7 +278,7 @@ package's publisher signature before `plugins.install` records it as
 is why the matrix row `security.plugin-package-trust` was corrected to
 `Implemented` (it proves the trust-RANK fence, not signature verification).
 Stage 6 therefore cannot delete `apps/server` until the Tauri host adapter runs
-`package-verify` at install/first-load and the packaged smoke drives it; until
+`package-verify` at install/first-load and the packaged smoke drives it (the crate was deleted in round 76 — install is a manifest descriptor now); until
 then the honest reading of row 19's "install partial: host verifier" is that
 the verifier exists as a crate and as legacy code, not in the packaged kernel
 path.

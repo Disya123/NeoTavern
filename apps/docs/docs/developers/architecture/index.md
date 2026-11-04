@@ -14,8 +14,9 @@ together.
 
 - [Monorepo Overview](architecture/overview) — the layout of `apps/` and `packages/`, the
   data flow between server and web, and the local-first principle.
-- [Technology Stack](architecture/stack) — the approved stack: Node.js 24, Fastify 5,
-  React 19, Vite 8, SQLite, Drizzle, Tauri 2, and pnpm workspaces.
+- [Technology Stack](architecture/stack) — the approved stack: Rust kernel over
+  Product Wire, React 19, Vite 8, SQLite inside the kernel, Tauri 2, and pnpm
+  workspaces.
 - [Packages](architecture/packages) — the responsibility of every workspace package and
   the dependency direction between them.
 

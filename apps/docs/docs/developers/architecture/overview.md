@@ -6,7 +6,7 @@ description: >-
 sidebar_position: 2
 ---
 
-NeoTavern is a local-first application: a single Fastify process serves the
+NeoTavern is a local-first application: a Rust kernel serves the
 API and the optional built frontend, with no external databases, queues, or
 containers required.
 
@@ -17,7 +17,6 @@ The workspace is a pnpm monorepo with two top-level groups, `apps/` and
 
 ```text
 apps/
-  server/          # Fastify backend: API, prompt pipeline, SSE
   web/             # React SPA
   plugin-runtime/  # Restricted Node.js process for backend plugins
   desktop/         # Tauri 2 shell; runs the server as a sidecar process
@@ -36,9 +35,9 @@ packages/
 
 ## Apps
 
-- `apps/server` — the Fastify backend. It exposes the `/api/v2/*` API, runs
+- `crates/runtime-kernel` — the backend. It dispatches every Product Wire
   the prompt pipeline, and streams generation over SSE. Each module is an
-  isolated Fastify plugin.
+  operation, runs the prompt pipeline, and owns the database.
 - `apps/web` — the React SPA. It talks to the server over HTTP and renders
   the chat workspace, plus the surfaces for characters, settings, providers,
   themes, and plugins.
@@ -60,9 +59,9 @@ package has one responsibility, and dependencies only point downward:
 A typical request flows through these layers:
 
 1. The frontend calls an `/api/v2/*` endpoint through TanStack Query.
-2. Fastify validates the input against a TypeBox schema and returns errors
+2. The kernel validates the envelope against a generated contract and returns errors
    in the `{ code, params, traceId }` envelope.
-3. Repositories in `@neotavern/db` read and write SQLite, with cursor pagination
+3. Kernel modules read and write SQLite through `crates/storage`, with cursor pagination
    and FTS5 search.
 4. Generation runs `POST /api/v2/chats/:id/generate`: the prompt pipeline
    assembles the context, the provider adapter serializes the request, the

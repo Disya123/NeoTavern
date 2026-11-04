@@ -56,4 +56,4 @@ applies to packaged builds; `pnpm desktop:dev` wires the shell to your
 running dev processes instead.
 
 For how the sidecar is bundled and managed, see
-[Node Sidecar](node-sidecar.md).
+the [removed Node sidecar](node-sidecar.md); the kernel now runs in-process.

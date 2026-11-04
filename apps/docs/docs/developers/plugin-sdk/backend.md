@@ -27,7 +27,7 @@ export default definePlugin({
 ```
 
 The backend entry runs as a separate Node.js process. The plugin never
-receives the Fastify root instance, the SQLite connection, internal tables,
+receives the kernel handle, the SQLite connection, internal tables,
 absolute paths, the full environment, or other providers' API keys.
 
 ## Routes

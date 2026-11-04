@@ -4,23 +4,25 @@ description: How the desktop app is delivered — a Tauri 2 shell with an embedd
 sidebar_position: 1
 ---
 
-The desktop app is a native distribution of NeoTavern: a Tauri 2 shell that
-runs the Fastify backend as an embedded Node.js sidecar.
+The desktop app is a native distribution of NeoTavern: a Tauri 2 shell that hosts
+the Rust kernel in-process and renders the React client in the WebView. There is no
+backend process to start, and no local port to wait for.
 
 ## One App, No Setup
 
-The desktop distribution is self-contained. Node.js, SQLite, and the
-production web assets ship inside the package, so the first run needs no
-terminal, no Git, no npm, and no manual database setup. You install the app,
-launch it, and the webview opens once the local API is ready.
+The desktop distribution is self-contained. The kernel, SQLite (bundled) and the
+production web assets ship inside the package, so the first run needs no terminal,
+no Git, no npm, and no manual database setup. You install the app, launch it, and
+the WebView opens against the kernel already listening on the IPC channel.
 
 The runtime pieces are:
 
-- **Tauri 2 shell** — the native window and application lifecycle.
-- **Node.js sidecar** — a self-contained Node.js 24 binary that runs the
-  Fastify backend locally on `127.0.0.1`.
-- **SQLite** — the local database, created automatically in the data
-  directory on first run.
+- **Tauri 2 shell** — the native window, application lifecycle, and the host-only
+  commands (job report, remote access, activation).
+- **Runtime kernel** — Rust, in-process: dispatch, prompt pipeline, providers,
+  plugins, storage.
+- **SQLite** — the local database, created by the kernel in the data directory on
+  first run.
 
 ## Supported Formats
 
@@ -41,7 +43,7 @@ The shell and the sidecar are one unit. Closing the window shuts down the
 backend — the app never leaves an orphan Node.js process behind. An
 unexpected backend exit ends the shell with an error instead of a silently
 broken window. See [Tauri Shell](tauri-shell.md) and
-[Node Sidecar](node-sidecar.md) for the mechanics.
+the [kernel transport](tauri-shell.md) for the mechanics; the Node sidecar it used to describe is gone.
 
 ## Recovery Mode
 
@@ -68,12 +70,12 @@ The plugin runtime (sandboxed backend workers, the capability broker,
 frontend registrars) is a **server** feature: it
 exists only where a backend process runs.
 
-- **Kernel mode** — unavailable by design: the Runtime Kernel is embedded in
-  the shell and there is no plugin host (no server, no HTTP, no listening
-  port). The only third-party contributions are declarative theme packages.
-- **Legacy sidecar mode** (`NEOTA_LEGACY_SERVER=1`) — available: the Node.js
-  sidecar runs the full Fastify backend, including the plugin runtime and
-  the server-side safe-mode switch above.
+- **Kernel plane (the only plane)** — the Runtime Kernel is embedded in the shell
+  and there is no plugin host process (no HTTP, no listening port). Plugin code
+  runs in a sandbox against the wire surface; themes stay declarative.
+- **Legacy sidecar mode** — removed in round 60b together with the Fastify
+  backend. `NEOTA_LEGACY_SERVER` no longer exists, and the rollback path is a git
+  revert, not an environment variable.
 
 Which extension surfaces the web UI exposes is documented in the [Frontend Plugin API](../plugin-sdk/frontend.md)
 availability note.
@@ -89,5 +91,5 @@ application. Data handling itself is covered in the
 ## Next Steps
 
 - [Tauri Shell](tauri-shell.md) — the native window and its lifecycle.
-- [Node Sidecar](node-sidecar.md) — the embedded backend process.
+- [Node sidecar (removed)](node-sidecar.md) — historical, the process no longer exists.
 - [Packaging](packaging.md) — distribution formats and first run.

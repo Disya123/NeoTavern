@@ -31,9 +31,9 @@ streams and saves the response.
 
 ## Implementation
 
-The pipeline lives in `apps/server/src/pipeline/`. It runs entirely on the
-server, before any network call, so the request that reaches a provider is
-always the result of the same deterministic stages.
+The pipeline lives in `crates/runtime-kernel/src/prompt.rs`. It runs entirely
+inside the kernel, before any network call, so the request that reaches a provider
+is always the result of the same deterministic stages.
 
 ## Related Sections
 

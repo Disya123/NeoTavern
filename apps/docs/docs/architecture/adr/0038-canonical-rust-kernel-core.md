@@ -160,3 +160,37 @@ before any migration work can be declared.
   this is an honest interim state, not a permanent architecture.
 - A separate decision record (ADR-0041) fixes the exact versioned data-root
   layout and Windows activation protocol before the converter is built.
+
+## Round 59a: the public release runs the Kernel by default
+
+The mode resolver no longer consults the build channel: every channel — release
+included — resolves to the Kernel, and `NEOTA_LEGACY_SERVER=1` is the only way to
+the sidecar, kept for one transition window. `NEOTA_KERNEL=1` remains accepted
+(conflict policy unchanged: it wins).
+
+Evidence: `apps/desktop/src-tauri` unit matrix (`cargo test --lib`, 6/6) and the
+portable smoke run _without_ `NEOTA_KERNEL` — `scripts/smoke-desktop-shell.mjs`
+exit 0 on `NeoTavern_0.1.0_x64-portable.zip` SHA-256 `8c4efc1e…da27`. The next
+stage deletes the sidecar, `apps/server`, `packages/db` and `api/v2`; until then
+the legacy contour ships only for callers who explicitly ask for it.
+
+## Round 60a: the sidecar is out of the desktop shell
+
+The shell now has one backend. `DesktopMode`, the resolver, both environment
+overrides, the spawn/stop lifecycle, `tauri-plugin-shell` and the `externalBin`
+entry were deleted, and the packaging pipeline stopped producing the `pkg`
+snapshot and the native module trees it needed. The portable artifact is built,
+smoked (exit 0) and contains no `neotavern-server.exe`.
+
+What remains of the legacy contour is code that no longer ships: `apps/server`,
+`packages/db` and the `/api/v2` routes. Deleting them is the next round, together
+with the ADRs and the migration guide that describe the removed paths.
+
+## Round 60b: the legacy contour is deleted
+
+`apps/server` (Fastify) and `packages/db` (Drizzle) are gone, with their E2E
+config, specs, script, lint overrides and the vitest SQLite probe. The starter
+assets the kernel embedded from that tree moved into
+`crates/runtime-kernel/assets/starter`. The Product Wire is the only product API;
+a host exposes nothing else. Superseded sections above describe history, not the
+current tree.

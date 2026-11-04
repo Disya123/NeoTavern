@@ -11,7 +11,7 @@ covering both the browser-side UI and the server-side backend.
 
 Plugins are ZIP packages (`.stplugin`) that ship a manifest, optional frontend
 and backend entry points, and assets. They extend the application through the
-`@neotavern/plugin-sdk` package only — never by importing Fastify, React, Zustand,
+`@neotavern/plugin-sdk` package only — never by importing the kernel, React, Zustand,
 TanStack Query, the SQLite connection, or internal components directly. Those
 are implementation details of the host and change without notice.
 

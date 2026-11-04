@@ -17,7 +17,7 @@ The connection is opened with the following settings:
 - WAL journal mode — readers are never blocked by writers.
 - `busy_timeout` — concurrent writers wait instead of failing immediately.
 - `synchronous = NORMAL` — durability with WAL-safe performance.
-- Prepared statements — all queries go through Drizzle's prepared
+- Prepared statements — all queries go through the kernel's prepared
   statements; no raw SQL string interpolation.
 - STRICT tables wherever possible — SQLite enforces column types.
 - FTS5 — full-text search over characters, chats, and messages.
