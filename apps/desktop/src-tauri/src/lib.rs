@@ -45,8 +45,6 @@ fn desktop_backend_mode() -> &'static str {
     "kernel"
 }
 
-
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CoreUpdateStatus {
@@ -159,6 +157,13 @@ fn resolve_data_dir(app: &tauri::App) -> Result<(PathBuf, bool), Box<dyn std::er
     Ok((data_dir, portable))
 }
 
+/// Tauri event carrying one claimed plugin job to the webview (ADR-0065).
+///
+/// Tauri event names reject `.` (`IllegalEventName`), so the host channel is
+/// kebab-case while the app-event name the sandbox sees stays `plugin.job.due`.
+#[cfg(desktop)]
+const PLUGIN_JOB_DUE_EVENT: &str = "plugin-job-due";
+
 /// Lease handed to a plugin job claimed by the desktop timer (ADR-0065). Long
 /// enough for a sandbox round trip, short enough that a crashed webview returns
 /// the job to the queue on the next pass.
@@ -192,10 +197,17 @@ fn plugin_job_report(
 /// lease expires, exactly like a crashed synchronous handler.
 #[cfg(desktop)]
 fn spawn_plugin_job_timer(app: AppHandle) {
-    if !std::env::var("NEOTA_PLUGIN_JOBS")
+    let enabled = std::env::var("NEOTA_PLUGIN_JOBS")
         .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false)
-    {
+        .unwrap_or(false);
+    spawn_plugin_job_timer_inner(app, enabled);
+}
+
+/// Timer body. `enabled` is separate so the packaged smoke can start it without
+/// depending on the user's environment.
+#[cfg(desktop)]
+fn spawn_plugin_job_timer_inner(app: AppHandle, enabled: bool) {
+    if !enabled {
         return;
     }
     std::thread::spawn(move || loop {
@@ -210,7 +222,7 @@ fn spawn_plugin_job_timer(app: AppHandle) {
                     "payloadJson": job.payload_json,
                     "attempts": job.attempts,
                 });
-                if let Err(error) = app.emit("plugin.job.due", payload) {
+                if let Err(error) = app.emit(PLUGIN_JOB_DUE_EVENT, payload) {
                     eprintln!("plugin job timer: emit failed: {error}");
                 }
             }
@@ -220,6 +232,141 @@ fn spawn_plugin_job_timer(app: AppHandle) {
             Err(error) => eprintln!("plugin job timer: {error}"),
         }
     });
+}
+
+/// Packaged proof of the full dispatch loop (ADR-0065): enqueue over the wire →
+/// timer claims → `plugin.job.due` is emitted → the host reports → the queue
+/// reads `succeeded`.
+///
+/// The listener here is Rust, not the webview. What this proves is the packaged
+/// mechanism: the timer thread, the kernel claim, the emitted event and the
+/// host-only report all run inside the shipped binary. The webview half (sandbox
+/// `jobs.run`, then `invoke('plugin_job_report')`) is covered by
+/// `apps/web/src/plugins/kernel/jobs.test.ts`, and both halves meet on the same
+/// event name and command contract, which this walk pins down.
+#[cfg(desktop)]
+fn run_plugin_dispatch_smoke(app: &AppHandle) -> Result<(), String> {
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+    use tauri::Listener;
+
+    let host = app.state::<KernelHost>();
+    let plugin_id = "dispatch-smoke";
+
+    // Leftovers from a previous run must not change the outcome.
+    let _ = dispatch_error(
+        &host,
+        "plugins.jobs.list",
+        serde_json::json!({ "pluginId": plugin_id, "state": "queued" }),
+    );
+    let _ = dispatch_error(
+        &host,
+        "plugins.uninstall",
+        serde_json::json!({ "pluginId": plugin_id }),
+    );
+    dispatch_ok(
+        &host,
+        "plugins.install",
+        serde_json::json!({
+            "id": plugin_id,
+            "name": "Dispatch Smoke",
+            "version": "1.0.0",
+            "trustState": "locally-trusted",
+            "permissions": [],
+        }),
+    )?;
+
+    let enqueued = dispatch_ok(
+        &host,
+        "plugins.jobs.enqueue",
+        serde_json::json!({
+            "pluginId": plugin_id,
+            "kind": "smoke.noop",
+            "payloadJson": "{\"probe\":true}",
+            "maxAttempts": 1,
+        }),
+    )?;
+    let job_id = enqueued["job"]["id"]
+        .as_str()
+        .ok_or_else(|| "enqueue response carried no job id".to_string())?
+        .to_string();
+
+    let (tx, rx) = mpsc::channel::<serde_json::Value>();
+    let listener = app.listen(PLUGIN_JOB_DUE_EVENT, move |event| {
+        if let Ok(payload) = serde_json::from_str::<serde_json::Value>(event.payload()) {
+            let _ = tx.send(payload);
+        }
+    });
+
+    // The timer is normally opt-in; the smoke starts it explicitly.
+    spawn_plugin_job_timer_inner(app.clone(), true);
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let mut due: Option<serde_json::Value> = None;
+    while Instant::now() < deadline {
+        match rx.recv_timeout(Duration::from_millis(500)) {
+            Ok(payload) => {
+                if payload["jobId"].as_str() == Some(job_id.as_str()) {
+                    due = Some(payload);
+                    break;
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err("plugin.job.due listener disconnected".to_string())
+            }
+        }
+    }
+    app.unlisten(listener);
+    let due = due.ok_or_else(|| "timer never emitted plugin.job.due".to_string())?;
+
+    let attempts = due["attempts"]
+        .as_u64()
+        .ok_or_else(|| "due payload carried no attempts".to_string())? as u32;
+    if due["pluginId"].as_str() != Some(plugin_id) {
+        return Err(format!("due payload named plugin {:?}", due["pluginId"]));
+    }
+    if due["kind"].as_str() != Some("smoke.noop") {
+        return Err(format!("due payload named kind {:?}", due["kind"]));
+    }
+    if due["payloadJson"].as_str() != Some("{\"probe\":true}") {
+        return Err("due payload lost the queued payloadJson".to_string());
+    }
+
+    host.report_plugin_job(&job_id, attempts, true, None)
+        .map_err(|error| format!("report failed: {error:?}"))?;
+
+    let job = dispatch_ok(
+        &host,
+        "plugins.jobs.get",
+        serde_json::json!({ "jobId": job_id }),
+    )?;
+    let state = job["job"]["state"].as_str().unwrap_or_default();
+    if state != "succeeded" {
+        return Err(format!("job state after report was {state:?}"));
+    }
+
+    // A drained queue must not hand the same job out twice.
+    if host
+        .claim_plugin_job(30_000)
+        .map_err(|error| format!("second claim failed: {error:?}"))?
+        .is_some()
+    {
+        return Err("the timer left a terminal job claimable".to_string());
+    }
+
+    dispatch_ok(
+        &host,
+        "plugins.jobs.get",
+        serde_json::json!({ "jobId": job_id }),
+    )?;
+    let _ = dispatch_error(
+        &host,
+        "plugins.uninstall",
+        serde_json::json!({ "pluginId": plugin_id }),
+    );
+    println!("[smoke] plugin dispatch OK: enqueue -> claim -> due -> report -> succeeded");
+    Ok(())
 }
 
 #[cfg(desktop)]
@@ -289,8 +436,16 @@ fn setup_local_kernel_mode(
     }
 
     if std::env::var("NEOTA_DESKTOP_SMOKE").as_deref() == Ok("1") {
-        let smoke =
-            run_kernel_smoke(app.handle()).and_then(|_| run_golden_smoke(app.handle(), &data_dir));
+        let dispatch_probe = std::env::var("NEOTA_PLUGIN_DISPATCH_SMOKE").as_deref() == Ok("1");
+        let smoke = run_kernel_smoke(app.handle())
+            .and_then(|_| run_golden_smoke(app.handle(), &data_dir))
+            .and_then(|_| {
+                if dispatch_probe {
+                    run_plugin_dispatch_smoke(app.handle())
+                } else {
+                    Ok(())
+                }
+            });
         if let Err(error) = smoke {
             eprintln!("[smoke] FAILED: {error}");
             std::process::exit(1);
@@ -2262,10 +2417,17 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
     let chat_page = dispatch_ok(&host, "chats.list", serde_json::json!({ "limit": 50 }))?;
     let chat_ids: Vec<&str> = chat_page["items"]
         .as_array()
-        .map(|items| items.iter().filter_map(|item| item["id"].as_str()).collect())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item["id"].as_str())
+                .collect()
+        })
         .unwrap_or_default();
     if !chat_ids.contains(&chat_id.as_str()) {
-        return Err(format!("chats.list did not report the smoke chat: {chat_page}"));
+        return Err(format!(
+            "chats.list did not report the smoke chat: {chat_page}"
+        ));
     }
 
     let exposure = dispatch_ok(&host, "secrets.exposure", serde_json::json!({}))?;
@@ -2304,7 +2466,9 @@ fn run_golden_smoke(app: &AppHandle, data_dir: &std::path::Path) -> Result<(), S
         serde_json::json!({ "uploadId": upload_id }),
     )?;
     if uploaded["asset"]["sizeBytes"] != serde_json::json!(5) {
-        return Err(format!("chunked asset upload did not publish the bytes: {uploaded}"));
+        return Err(format!(
+            "chunked asset upload did not publish the bytes: {uploaded}"
+        ));
     }
     let abort_begin = dispatch_ok(
         &host,

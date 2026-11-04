@@ -74,7 +74,7 @@ wire `message.role` union is `system|user|assistant|tool`, so the legacy
 `apps/desktop/src-tauri/target/release/neotavern.exe` was rebuilt with the legacy
 transport gone and the plugin job timer in place, packed by
 `scripts/package-portable-windows.mjs` (`NeoTavern_0.1.0_x64-portable.zip`,
-SHA-256 `b5e2232baaebf940ef5f4d62cc93d9545faec9fd701699056a9fbbac1f9b3a13`) and smoked by
+SHA-256 `57fd627466e16062f2eca8f6089bbc982c6f6236f845b2a556a4833fb08a8901`) and smoked by
 `scripts/smoke-desktop-shell.mjs` (`OK — portable data path, readiness and
 kernel-owned database`, exit 0). The MSI branch still fails with `os error 32`
 (a file held by the previous build), which is why the portable zip is the

@@ -2058,7 +2058,9 @@ export class FrontendPluginRuntime {
 
   /**
    * Host-local event bridge (ADR-0065): the desktop job timer emits
-   * `plugin.job.due` through Tauri rather than the wire, because claiming and
+   * `plugin-job-due` through Tauri (the channel cannot contain dots) and the
+   * event is re-delivered under the app-event name `plugin.job.due`, because
+   * claiming and
    * completing a job are host operations. The event enters the same delivery
    * path as kernel app events, so a sandbox cannot tell the difference — and the
    * outcome goes back through the host-only `plugin_job_report` command.
@@ -2072,7 +2074,7 @@ export class FrontendPluginRuntime {
     void (async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        await listen<unknown>('plugin.job.due', (event) => {
+        await listen<unknown>('plugin-job-due', (event) => {
           this.deliverAppEvent('plugin.job.due', event.payload);
         });
       } catch {

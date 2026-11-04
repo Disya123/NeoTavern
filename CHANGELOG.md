@@ -22,6 +22,20 @@
   `docs/architecture/release-gate-status.md` carries the corrected numbers. No
   product code changed.
 
+### Added
+
+- **The packaged artifact proves the plugin dispatch loop (round 77/99, ADR-0065).**
+  `run_plugin_dispatch_smoke` (`apps/desktop/src-tauri/src/lib.rs:250`) runs inside
+  the portable binary when `NEOTA_PLUGIN_DISPATCH_SMOKE=1`: it installs a
+  descriptor, enqueues a job over the wire, starts the real timer, waits for the
+  emitted event, reports the outcome through the host-only
+  `KernelHost::report_plugin_job`, asserts `plugins.jobs.get` reads `succeeded`,
+  and asserts a drained queue hands out no second claim. Portable SHA-256
+  `57fd6274…8901`, exit 0, `scripts/smoke-desktop-shell.mjs` green with the same env.
+  The walk found a real defect: Tauri rejects dots in event names
+  (`IllegalEventName`), so the host channel is `plugin-job-due` while the sandbox
+  still receives the app event `plugin.job.due`.
+
 ### Removed
 
 - **`crates/adapters/package-verify` is gone (round 76/99).** It could verify a

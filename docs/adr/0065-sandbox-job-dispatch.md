@@ -56,9 +56,18 @@ Round 72 wired the three parties: `spawn_plugin_job_timer` claims through
 `plugin.job.due` to the webview, and the host-only `plugin_job_report` command
 applies the sandbox's answer. The web side registers the Tauri event in the
 plugin runtime (same delivery path as kernel app events) and `jobs.ts` reports
-success or the bounded error message. The packaged dispatch loop is not yet
-proven inside a webview — the smoke covers enqueue/list/cancel only — so that
-stays the open item.
+success or the bounded error message. Round 77 emits on `plugin-job-due`, not
+`plugin.job.due`: Tauri rejects dots in event names (`IllegalEventName`), a defect
+the packaged walk found immediately.
+
+Packaged proof (round 77): `run_plugin_dispatch_smoke`
+(`apps/desktop/src-tauri/src/lib.rs:250-372`) runs in the portable artifact when
+`NEOTA_PLUGIN_DISPATCH_SMOKE=1` — enqueue over the wire, timer claim, emitted
+event, host report, `plugins.jobs.get` reads `succeeded`, and a drained queue
+hands out no second claim. The listener there is Rust standing in for the webview;
+the webview half (sandbox `jobs.run`, then `invoke('plugin_job_report')`) is
+covered by `apps/web/src/plugins/kernel/jobs.test.ts`, and both halves meet on the
+same event payload and command contract.
 
 Round 71 added the handle path the timer will use: internal `ClaimPluginJob` /
 `ReportPluginJob` commands and `Kernel::claim_plugin_job` / `report_plugin_job`,

@@ -57,10 +57,14 @@ const errors = [];
 const child = spawn(resolve(portableRoot, 'NeoTavern.exe'), [], {
   cwd: portableRoot,
   windowsHide: true,
-  // Deterministic kernel-mode smoke: release-channel shells default to the
-  // legacy sidecar (honest staged default, ADR-0038), but this smoke must
-  // keep exercising the Kernel handshake + meta path.
-  env: { ...process.env, NEOTA_DESKTOP_SMOKE: '1' },
+  // Deterministic kernel-mode smoke: the shell's only transport is the kernel,
+  // and `--dispatch` additionally walks the plugin job loop (ADR-0065) inside the
+  // packaged binary.
+  env: {
+    ...process.env,
+    NEOTA_DESKTOP_SMOKE: '1',
+    ...(process.argv.includes('--dispatch') ? { NEOTA_PLUGIN_DISPATCH_SMOKE: '1' } : {}),
+  },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 child.stdout.setEncoding('utf8');
@@ -80,6 +84,13 @@ if (exitCode !== 0) {
     `Portable Tauri shell exited with ${exitCode}\n${output.join('')}\n${errors.join('')}`,
   );
 }
+const dispatchWalk = process.argv.includes('--dispatch');
+if (dispatchWalk && !output.join('').includes('plugin dispatch OK')) {
+  throw new Error(
+    `--dispatch was requested but the shell never reported the plugin dispatch walk\n${output.join('')}\n${errors.join('')}`,
+  );
+}
+
 // The kernel creates `database.sqlite`. The legacy `app.db` fallback is gone with
 // the sidecar (round 60a): if the kernel did not create its database, that is a
 // failure, not an alternative layout.
