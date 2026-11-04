@@ -2,6 +2,7 @@ import {
   BookOpenText,
   ChatsCircle,
   Cube,
+  Globe,
   ImageSquare,
   SidebarSimple,
   SlidersHorizontal,
@@ -71,6 +72,7 @@ const RAIL_ITEMS: readonly RailItem[] = [
     labelKey: 'navigation:backgrounds',
     icon: ImageSquare,
   },
+  { themeId: 'ai-settings', id: 'providers', labelKey: 'settings:aiSettings', icon: Globe },
   {
     themeId: 'settings',
     id: 'settings',
