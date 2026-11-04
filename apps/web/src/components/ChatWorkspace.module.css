@@ -543,3 +543,16 @@
     }
   }
 }
+
+/* Phone-only navigation entry, inline in the composer's utility row. */
+.composerMenu {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .composerMenu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

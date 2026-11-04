@@ -1166,31 +1166,3 @@
     width: 100%;
   }
 }
-
-/* Phones: no permanent rail. This is the way in — pinned low, above the composer, so it
-   is thumb-reachable and never sits on top of the chat header. */
-.mobileMenuButton {
-  display: none;
-}
-
-@media (max-width: 600px) {
-  .mobileMenuButton {
-    position: fixed;
-    z-index: var(--st-layer-panel);
-    inset-block-end: calc(env(safe-area-inset-bottom, 0px) + 92px);
-    inset-inline-start: 12px;
-    display: inline-flex;
-    width: 40px;
-    height: 40px;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--st-color-border);
-    border-radius: var(--st-radius-control);
-    background: var(--st-color-surface-secondary);
-    color: var(--st-color-text-primary);
-  }
-
-  .sidebar:has(.rail[data-state='expanded']) .mobileMenuButton {
-    display: none;
-  }
-}
