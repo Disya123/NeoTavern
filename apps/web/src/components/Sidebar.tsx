@@ -8,6 +8,7 @@ import {
   SlidersHorizontal,
   Smiley,
   UsersThree,
+  X,
 } from '@phosphor-icons/react';
 import {
   useEffect,
@@ -315,6 +316,39 @@ export function Sidebar() {
           </div>
         ) : null}
       </nav>
+
+      {/* Phones: the rail is replaced by a tile menu, so navigation is a place you go
+          rather than a strip you squeeze past. It is hidden on wider screens. */}
+      <div className={styles.mobileMenu} data-open={navigationRailExpanded ? 'true' : 'false'}>
+        <header className={styles.mobileMenuHeader}>
+          <strong>{t('navigation:menu')}</strong>
+          <button
+            type="button"
+            className={styles.mobileMenuClose}
+            onClick={() => setNavigationRailExpanded(false)}
+            aria-label={t('accessibility:closeMenu')}
+            title={t('accessibility:closeMenu')}
+          >
+            <X size={20} aria-hidden="true" />
+          </button>
+        </header>
+        <div className={styles.mobileMenuGrid}>
+          {RAIL_ITEMS.map(({ id, labelKey, icon: ItemIcon }) => (
+            <button
+              key={id}
+              type="button"
+              className={styles.mobileMenuTile}
+              onClick={() => {
+                setNavigationRailExpanded(false);
+                openPanel(id);
+              }}
+            >
+              <ItemIcon size={22} aria-hidden="true" weight="duotone" />
+              <span>{t(labelKey)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       {sidebarPresent ? (
         <>
           <button

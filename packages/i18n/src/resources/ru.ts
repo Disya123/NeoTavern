@@ -80,6 +80,7 @@ export const ru: Resources = {
     chats: 'Чаты',
     settings: 'Настройки',
     plugins: 'Плагины',
+    menu: 'Меню',
     resizeHint: 'Потяните, чтобы изменить ширину панели',
     themes: 'Темы',
     providers: 'Провайдеры',

@@ -1141,28 +1141,80 @@
 /* Phones: the rail is an overlay menu, opened from the corner button below. */
 @media (max-width: 600px) {
   .rail {
+    display: none;
+  }
+}
+
+/* Phone menu: a grid of destinations, the way the workspace is meant to be entered from a
+   phone — not a column of icons squeezed beside the chat. */
+.mobileMenu {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .mobileMenu {
     position: fixed;
     inset: 0;
-    width: 100vw;
-    height: 100dvh;
+    z-index: calc(var(--st-layer-modal) + 2);
+    display: none;
+    flex-direction: column;
+    gap: var(--st-space-lg);
     padding: max(var(--st-space-lg), var(--nt-inset-top)) var(--st-space-lg)
       max(var(--st-space-lg), var(--nt-inset-bottom));
-    transform: translateX(-100%);
-    transition: transform var(--st-motion-duration-normal) var(--st-motion-easing-standard);
-    z-index: calc(var(--st-layer-modal) + 2);
+    background: var(--st-color-surface-canvas);
+    overflow-y: auto;
   }
 
-  .rail[data-state='expanded'] {
-    transform: none;
+  .mobileMenu[data-open='true'] {
+    display: flex;
   }
 
-  .railMain,
-  .railBottom {
+  .mobileMenuHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .mobileMenuHeader strong {
+    font-size: var(--st-font-size-lg);
+  }
+
+  .mobileMenuClose {
+    display: inline-flex;
+    width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: var(--st-radius-control);
+    background: transparent;
+    color: var(--st-color-text-secondary);
+  }
+
+  .mobileMenuGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--st-space-md);
+  }
+
+  .mobileMenuTile {
+    display: flex;
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--st-space-sm);
+    min-height: 6.5rem;
+    padding: var(--st-space-md);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-secondary);
+    color: var(--st-color-text-primary);
+    font: inherit;
+    font-size: var(--st-font-size-sm);
+    text-align: start;
   }
 
-  .rail[data-state='expanded'] .railItem {
-    width: 100%;
+  .mobileMenuTile:active {
+    background: var(--st-color-surface-tertiary);
   }
 }

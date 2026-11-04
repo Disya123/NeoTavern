@@ -79,6 +79,7 @@ export const en = {
     chats: 'Chats',
     settings: 'Settings',
     plugins: 'Plugins',
+    menu: 'Menu',
     resizeHint: 'Drag to resize panel',
     themes: 'Themes',
     providers: 'Providers',
