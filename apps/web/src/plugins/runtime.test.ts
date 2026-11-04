@@ -97,6 +97,11 @@ describe('frontend plugin sandbox runtime', () => {
     );
     expect(iframe).not.toBeNull();
     expect(iframe).toHaveAttribute('sandbox', 'allow-scripts');
+    // The frame loads the plugin sandbox document, not the deleted
+    // `/api/v2/plugins/:id/sandbox` route (ADR-0066 D4).
+    expect(iframe?.getAttribute('src')).toMatch(
+      /^\/plugin-sandbox\.html\?plugin=test\.frontend-runtime&frame=frame-/u,
+    );
     // Every powerful browser feature is denied at the iframe boundary
     // (rev4 §0: plugins never observe devices, clipboard, location, …).
     const allow = iframe?.getAttribute('allow') ?? '';

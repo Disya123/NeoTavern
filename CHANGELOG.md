@@ -24,6 +24,17 @@
 
 ### Added
 
+- **Plugin frames load a real sandbox document (round 83/99, ADR-0066 P2a).**
+  `runtime.ts` pointed every plugin iframe at `/api/v2/plugins/:id/sandbox`, a route
+  deleted with the Fastify contour — so any plugin with `hasFrontend` rendered a 404.
+  The frame now loads `plugin-sandbox.html`, which runs in an opaque origin
+  (`sandbox="allow-scripts"`, no same-origin), announces readiness to its parent and
+  accepts a bundle URL only over postMessage, rejecting anything that is not a
+  same-origin absolute path. No bundle is staged yet: that is the remaining P2 half,
+  and until it lands the document is an empty shell — honest about being empty.
+
+### Added
+
 - **Plugin manifests can declare execution and UI (round 82/99, ADR-0066 P1).**
   `validateManifest` now accepts an optional `runtime` block (`host: sandbox|wasm|native`,
   `ui: none|panel|overlay|shell`, a `wasm` entry, per-platform `native` targets) and

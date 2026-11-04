@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NeoTavern plugin sandbox</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font:
+          13px/1.4 system-ui,
+          sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 8px;
+        background: transparent;
+      }
+      [data-part='status'] {
+        opacity: 0.6;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Isolated UI context for one plugin (ADR-0066 D4).
+
+      The frame is loaded with sandbox="allow-scripts" and no allow-same-origin, so
+      it gets an opaque origin: no access to the app's DOM, cookies, storage or the
+      Tauri bridge. Everything it needs arrives over postMessage, and the bytes it
+      renders are named by the parent (P2: a kernel-served bundle), never by this
+      document guessing a route.
+    -->
+    <div data-part="status">Waiting for the plugin host…</div>
+    <script type="module">
+      const params = new URLSearchParams(location.search);
+      const pluginId = params.get('plugin') ?? '';
+      const frameId = params.get('frame') ?? '';
+      const status = document.querySelector('[data-part="status"]');
+
+      /** Tiny protocol: the parent knows the plugin, the frame knows nothing. */
+      const post = (message) => window.parent.postMessage({ ...message, pluginId, frameId }, '*');
+
+      window.addEventListener('message', async (event) => {
+        // Messages only ever come from the embedding window; the payload is
+        // validated, never trusted for paths or code.
+        if (event.source !== window.parent) return;
+        const data = event.data;
+        if (!data || typeof data !== 'object' || typeof data.type !== 'string') return;
+        if (data.type === 'neotavern.plugin.sandbox.bundle') {
+          const url = typeof data.url === 'string' ? data.url : '';
+          if (!url.startsWith('/') || url.startsWith('//')) {
+            post({ type: 'neotavern.plugin.sandbox.rejected', reason: 'unsafe-bundle-url' });
+            return;
+          }
+          try {
+            await import(url);
+            post({ type: 'neotavern.plugin.sandbox.loaded' });
+          } catch (error) {
+            post({
+              type: 'neotavern.plugin.sandbox.failed',
+              reason: String(error instanceof Error ? error.message : error).slice(0, 300),
+            });
+          }
+        }
+      });
+
+      status.textContent = pluginId ? `Plugin ${pluginId}` : 'No plugin id';
+      post({ type: 'neotavern.plugin.sandbox.ready' });
+    </script>
+  </body>
+</html>

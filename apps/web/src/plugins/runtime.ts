@@ -1706,7 +1706,12 @@ export class FrontendPluginRuntime {
     defs.append(clipPath);
     clipSvg.append(defs);
     const iframe = document.createElement('iframe');
-    iframe.src = `/api/v2/plugins/${encodeURIComponent(plugin.id)}/sandbox`;
+    // The old `/api/v2/plugins/:id/sandbox` route died with the Fastify contour;
+    // the frame now loads the plugin sandbox document, which receives its bundle
+    // over postMessage (ADR-0066). A dead URL here used to mean every plugin
+    // iframe rendered a 404 page.
+    const frameId = `frame-${++this.frameSeq}`;
+    iframe.src = `/plugin-sandbox.html?plugin=${encodeURIComponent(plugin.id)}&frame=${encodeURIComponent(frameId)}`;
     iframe.setAttribute('sandbox', 'allow-scripts');
     iframe.setAttribute('allow', PLUGIN_IFRAME_DENIED_FEATURES);
     iframe.title = plugin.name;
@@ -1715,7 +1720,7 @@ export class FrontendPluginRuntime {
     iframe.style.clipPath = `url(#${clipId})`;
     iframe.style.setProperty('-webkit-clip-path', `url(#${clipId})`);
     const frame: RuntimeFrame = {
-      frameId: `frame-${++this.frameSeq}`,
+      frameId,
       plugin,
       host,
       iframe,
