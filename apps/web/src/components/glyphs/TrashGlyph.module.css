@@ -1,0 +1,58 @@
+.glyph {
+  display: block;
+  overflow: visible;
+}
+
+/* The lid is hinged at its right edge, so it swings rather than slides. */
+.lid {
+  transform-origin: 18px 6.4px;
+  transition: transform 320ms var(--st-motion-easing-overshoot);
+}
+
+.body {
+  transform-origin: 12px 9px;
+  transition: transform 320ms var(--st-motion-easing-overshoot);
+}
+
+.paper {
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+/* Hover: the lid lifts a little, as if the bin is being opened to be used. */
+.glyph:hover .lid {
+  transform: rotate(-14deg) translateY(-0.6px);
+}
+
+.glyph:hover .paper {
+  opacity: 0.75;
+}
+
+/* Armed: the lid shuts hard, the bin leans away from the finger, the papers drop inside. */
+.glyph[data-state='armed'] .lid {
+  transform: rotate(3deg) translateY(0.4px);
+}
+
+.glyph[data-state='armed'] .body {
+  transform: rotate(-3.5deg) scale(0.97);
+}
+
+.glyph[data-state='armed'] .paper {
+  opacity: 0;
+  transition-delay: 90ms;
+  transform: translateY(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lid,
+  .body,
+  .paper {
+    transition: none;
+  }
+
+  .glyph:hover .lid,
+  .glyph[data-state='armed'] .lid,
+  .glyph[data-state='armed'] .body {
+    transform: none;
+  }
+}

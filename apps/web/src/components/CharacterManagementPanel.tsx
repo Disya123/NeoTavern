@@ -23,6 +23,7 @@ import {
 import { useCallback, useDeferredValue, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { TrashGlyph } from './glyphs/TrashGlyph.js';
 import { SpringSlider } from './SpringSlider.js';
 import type {
   Character,
@@ -1080,7 +1081,9 @@ function EditTab({
           onClick={onDelete}
           aria-label={t('characters:deleteAction')}
         >
-          <Trash size={18} aria-hidden="true" />
+          {/* An illustrated bin, not a stock glyph: the lid lifts under the pointer and
+              shuts as the action arms. */}
+          <TrashGlyph size={18} />
         </IconButton>
         <SlotHost slot="character.editor.actions" context={{ characterId: characterId ?? null }} />
       </div>
