@@ -14,6 +14,7 @@ import '@fontsource/opendyslexic/latin.css';
 import '@neotavern/ui';
 import './styles/preferences.css';
 import './styles/motion.css';
+import { installPointerOrigin } from './motion/pointerOrigin.js';
 import { App } from './App.js';
 import { connectAppEvents } from './api/events.js';
 import { useUiStore } from './state/ui.js';
@@ -31,6 +32,10 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Capture the press point before any dialog can mount, so a window can grow out of the
+// control that opened it.
+installPointerOrigin();
 
 async function bootstrap(): Promise<void> {
   const {

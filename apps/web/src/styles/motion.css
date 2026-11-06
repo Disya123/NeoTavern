@@ -91,6 +91,12 @@ select:focus-visible,
   animation: st-surface-fade var(--st-motion-duration-quick) var(--st-motion-easing-out) both;
 }
 
+/* A dialog grows out of the control that opened it. `scale` is its own property, so the
+   centring transform is untouched, and transform-origin is set to the press point when the
+   content mounts. Where @starting-style is unsupported the dialog simply appears. */
+/* The dialog is morphed from the control's box by a Web Animations keyframe pair in
+   SurfaceDialog: a transition here would race the explicit start state. */
+
 @keyframes st-surface-fade {
   from {
     opacity: 0;
@@ -307,6 +313,7 @@ input[type='range']:focus-visible {
   [data-component='message'],
   [data-component='sidebar-panel'],
   [role='dialog'],
+  [data-component='dialog-content'],
   [class*='mobileMenuTile'],
   [data-component='popover'],
   [data-component='dropdown'],

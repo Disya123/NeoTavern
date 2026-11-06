@@ -169,6 +169,7 @@ async function shoot(name, width, height, steps, route = '/') {
   page.on('pageerror', (error) => errors.push(String(error)));
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
+    if (message.text().includes('[dialog-morph]')) console.log(`  ${message.text()}`);
   });
   await page.goto(`${webOrigin}${route}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(800);
@@ -218,6 +219,25 @@ if (only !== 'mobile') {
       await page.waitForTimeout(700);
       await page.screenshot({ path: join(shots, 'desktop-03-panel.png') });
     }
+
+    // Open the settings window from the rail and catch it mid-flight: this is the only way
+    // a still frame can prove the dialog grows out of the control that was pressed.
+    const railButtons = page.locator('nav[data-slot="navigation.primary"] button');
+    const count = await railButtons.count();
+    if (count > 0) {
+      // A raw mouse press: locator.click() waits for actionability and by then the morph has
+      // already finished, which is why every still looked like the dialog simply appeared.
+      const box = await railButtons.nth(count - 1).boundingBox();
+      if (box !== null) {
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      } else {
+        await railButtons.nth(count - 1).click();
+      }
+      await page.waitForTimeout(60);
+      await page.screenshot({ path: join(shots, 'desktop-04-dialog-mid.png') });
+      await page.waitForTimeout(900);
+      await page.screenshot({ path: join(shots, 'desktop-05-dialog.png') });
+    }
   });
 
   // The settings window is a system surface: it can be opened by route, which is the only
@@ -229,11 +249,11 @@ if (only !== 'mobile') {
     async (page, name) => {
       await page.waitForTimeout(600);
       await page.screenshot({ path: join(shots, `${name}-02-window.png`) });
-      const tab = page.getByRole('button', { name: 'Advanced' }).first();
-      if ((await tab.count()) > 0) {
-        await tab.click();
-        await page.waitForTimeout(500);
-        await page.screenshot({ path: join(shots, `${name}-03-advanced.png`) });
+      const aiSection = page.getByRole('button', { name: 'AI Settings' }).first();
+      if ((await aiSection.count()) > 0) {
+        await aiSection.click();
+        await page.waitForTimeout(700);
+        await page.screenshot({ path: join(shots, `${name}-03-ai.png`) });
       }
     },
     '/settings',
