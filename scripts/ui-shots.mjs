@@ -135,14 +135,21 @@ const playwrightEntry = existsSync(join(pnpmPlaywright, 'package.json'))
 const playwrightModule = await import(pathToFileURL(join(playwrightEntry, 'index.js')).href);
 const chromium = playwrightModule.chromium ?? playwrightModule.default?.chromium;
 if (!chromium) throw new Error('playwright did not expose chromium');
-const browser = await chromium.launch();
+// Playwright may look for a headless-shell build that is not installed; use the full
+// Chromium that is (PLAYWRIGHT_CHROMIUM points at it when it lives outside the cache).
+const executablePath = process.env['PLAYWRIGHT_CHROMIUM'] ?? undefined;
+const browser = await chromium.launch({ executablePath, headless: true });
 
 async function shoot(name, width, height, steps) {
+  const recordVideo = process.argv.includes('--video')
+    ? { dir: shots, size: { width, height } }
+    : undefined;
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 2,
     isMobile: width < 700,
     hasTouch: width < 700,
+    recordVideo,
   });
   await context.addInitScript(
     (entries) => {
@@ -175,20 +182,27 @@ async function shoot(name, width, height, steps) {
 
 if (only !== 'desktop') {
   await shoot('mobile', 390, 844, async (page) => {
-    // The menu entry lives in the composer's utility row on phones.
+    // The menu is seeded open (so its layout can be inspected); close it, shoot the
+    // workspace, then open it the way a person does — from the composer.
+    const close = page.locator('button[class*="mobileMenuClose"]');
+    if ((await close.count()) > 0 && (await close.first().isVisible())) {
+      await close.first().click();
+      await page.waitForTimeout(300);
+    }
+    await page.screenshot({ path: join(shots, 'mobile-02-workspace.png') });
     const menu = page.locator('button[class*="composerMenu"]');
     if ((await menu.count()) === 0) {
       console.log('  menu button not found in the composer');
       return;
     }
     await menu.first().click();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: join(shots, 'mobile-02-menu.png') });
+    await page.waitForTimeout(450);
+    await page.screenshot({ path: join(shots, 'mobile-03-menu.png') });
     const tile = page.locator('button[class*="mobileMenuTile"]').nth(1);
     if ((await tile.count()) > 0) {
       await tile.click();
-      await page.waitForTimeout(600);
-      await page.screenshot({ path: join(shots, 'mobile-03-panel.png') });
+      await page.waitForTimeout(650);
+      await page.screenshot({ path: join(shots, 'mobile-04-panel.png') });
     }
   });
 }

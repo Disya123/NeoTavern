@@ -13,6 +13,7 @@ import '@fontsource-variable/jetbrains-mono';
 import '@fontsource/opendyslexic/latin.css';
 import '@neotavern/ui';
 import './styles/preferences.css';
+import './styles/motion.css';
 import { App } from './App.js';
 import { connectAppEvents } from './api/events.js';
 import { useUiStore } from './state/ui.js';
