@@ -14,33 +14,29 @@
 
 /* ---- Controls ---------------------------------------------------------- */
 
+/* A button does not move when you point at it. It changes colour, border and shadow, which
+   is feedback; the lift is reserved for things that are cards or tiles, where displacement
+   actually says "this is a different kind of object". */
 button,
 [role='button'],
 a[href],
 summary,
 [data-interactive='true'] {
   transition:
-    transform var(--st-motion-duration-micro) var(--st-motion-easing-standard),
-    background-color var(--st-motion-duration-quick) var(--st-motion-easing-standard),
-    border-color var(--st-motion-duration-quick) var(--st-motion-easing-standard),
-    color var(--st-motion-duration-quick) var(--st-motion-easing-standard),
-    box-shadow var(--st-motion-duration-quick) var(--st-motion-easing-standard),
-    opacity var(--st-motion-duration-quick) var(--st-motion-easing-standard);
+    background-color var(--st-motion-duration-fast) ease,
+    border-color var(--st-motion-duration-fast) ease,
+    color var(--st-motion-duration-fast) ease,
+    box-shadow var(--st-motion-duration-fast) ease,
+    opacity var(--st-motion-duration-fast) ease;
 }
 
-@media (hover: hover) {
-  button:hover:not(:disabled),
-  [role='button']:hover:not([aria-disabled='true']),
-  summary:hover {
-    transform: translateY(var(--st-motion-lift));
-  }
-}
-
+/* Press feedback stays: it confirms the tap landed, and it is the one transform a control
+   owes the finger. */
 button:active:not(:disabled),
 [role='button']:active:not([aria-disabled='true']),
 summary:active {
   transform: scale(var(--st-motion-press));
-  transition-duration: var(--st-motion-duration-micro);
+  transition: transform var(--st-motion-duration-micro) var(--st-motion-easing-standard);
 }
 
 /* The focus ring appears at once: a control that fades in its focus state feels broken. */
@@ -55,6 +51,22 @@ select:focus-visible,
   transition-duration: 0ms;
   outline: 2px solid var(--st-color-accent-soft-text);
   outline-offset: 2px;
+}
+
+/* Tiles and cards are objects, not chrome: they may lift, and only on a pointer device. */
+@media (hover: hover) and (pointer: fine) {
+  [class*='mobileMenuTile'],
+  [data-lift='true'] {
+    transition:
+      transform var(--st-motion-duration-quick) var(--st-motion-easing-standard),
+      background-color var(--st-motion-duration-quick) ease,
+      border-color var(--st-motion-duration-quick) ease;
+  }
+
+  [class*='mobileMenuTile']:hover,
+  [data-lift='true']:hover {
+    transform: translateY(var(--st-motion-lift));
+  }
 }
 
 /* ---- Surfaces ---------------------------------------------------------- */
@@ -154,7 +166,6 @@ select:focus-visible,
 [data-component='message'] {
   animation: st-message-in var(--st-motion-duration-quick) var(--st-motion-easing-out) both;
 }
-
 
 /* ---- Sliders: the thumb has weight ------------------------------------- */
 
@@ -308,10 +319,11 @@ input[type='range']:focus-visible {
     transition-duration: 0ms !important;
   }
 
-  button:hover:not(:disabled),
   button:active:not(:disabled),
   [role='button']:active,
-  [class*='mobileMenuTile']:active {
+  [class*='mobileMenuTile']:hover,
+  [class*='mobileMenuTile']:active,
+  [data-lift='true']:hover {
     transform: none;
   }
 }

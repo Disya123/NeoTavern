@@ -140,7 +140,7 @@ if (!chromium) throw new Error('playwright did not expose chromium');
 const executablePath = process.env['PLAYWRIGHT_CHROMIUM'] ?? undefined;
 const browser = await chromium.launch({ executablePath, headless: true });
 
-async function shoot(name, width, height, steps) {
+async function shoot(name, width, height, steps, route = '/') {
   const recordVideo = process.argv.includes('--video')
     ? { dir: shots, size: { width, height } }
     : undefined;
@@ -170,7 +170,7 @@ async function shoot(name, width, height, steps) {
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
-  await page.goto(webOrigin, { waitUntil: 'networkidle' });
+  await page.goto(`${webOrigin}${route}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(800);
   await page.screenshot({ path: join(shots, `${name}-01-home.png`) });
 
@@ -219,6 +219,25 @@ if (only !== 'mobile') {
       await page.screenshot({ path: join(shots, 'desktop-03-panel.png') });
     }
   });
+
+  // The settings window is a system surface: it can be opened by route, which is the only
+  // way to look at it without a working host.
+  await shoot(
+    'settings',
+    1280,
+    800,
+    async (page, name) => {
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: join(shots, `${name}-02-window.png`) });
+      const tab = page.getByRole('button', { name: 'Advanced' }).first();
+      if ((await tab.count()) > 0) {
+        await tab.click();
+        await page.waitForTimeout(500);
+        await page.screenshot({ path: join(shots, `${name}-03-advanced.png`) });
+      }
+    },
+    '/settings',
+  );
 }
 
 await browser.close();
