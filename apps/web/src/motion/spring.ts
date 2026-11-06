@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+
 /**
  * Spring physics for UI motion.
  *
@@ -187,6 +189,33 @@ export function rubberBand(overshoot: number, dimension: number, coefficient = 0
   const sign = Math.sign(overshoot);
   const distance = Math.abs(overshoot);
   return (sign * (1 - 1 / ((distance * coefficient) / dimension + 1)) * dimension) / 1;
+}
+
+/**
+ * A number that chases `target` on a spring and can be interrupted mid-flight. Used where a
+ * CSS transition would restart from zero — an open/close a user can reverse with a second tap.
+ */
+export function useSpringValue(target: number, config: Partial<SpringConfig> = {}): number {
+  const [value, setValue] = useState(target);
+  const handle = useRef<SpringHandle | null>(null);
+  const latest = useRef(value);
+  latest.current = value;
+
+  useEffect(() => {
+    handle.current?.stop();
+    handle.current = createSpring({
+      from: latest.current,
+      to: target,
+      config,
+      reducedMotion: prefersReducedMotion(),
+      onFrame: (frame) => setValue(frame),
+    });
+    return () => handle.current?.stop();
+    // `config` is a literal at every call site; comparing it would restart the spring on
+    // every render, which is worse than an intentional omission here.
+  }, [target]);
+
+  return value;
 }
 
 export function prefersReducedMotion(): boolean {

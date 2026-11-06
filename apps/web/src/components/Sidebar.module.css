@@ -1156,17 +1156,15 @@
     position: fixed;
     inset: 0;
     z-index: calc(var(--st-layer-modal) + 2);
-    display: none;
+    /* Visibility and pointer-events come from the spring (inline), not from display, so the
+       sheet can be retargeted while it is still moving. */
+    display: flex;
     flex-direction: column;
     gap: var(--st-space-lg);
     padding: max(var(--st-space-lg), var(--nt-inset-top)) var(--st-space-lg)
       max(var(--st-space-lg), var(--nt-inset-bottom));
     background: var(--st-color-surface-canvas);
     overflow-y: auto;
-  }
-
-  .mobileMenu[data-open='true'] {
-    display: flex;
   }
 
   .mobileMenuHeader {

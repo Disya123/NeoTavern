@@ -161,7 +161,7 @@ async function shoot(name, width, height, steps) {
       'neotavern.hostSession',
       JSON.stringify({ kind: 'remote', url: hostUrl }),
       'neotavern.navigationRailExpanded',
-      'true',
+      process.env['UI_SHOTS_MENU'] === 'closed' ? 'false' : 'true',
     ],
   );
   const page = await context.newPage();

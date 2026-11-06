@@ -22,6 +22,7 @@ import {
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
+import { useSpringValue } from '../motion/spring.js';
 import { useNavigate } from 'react-router-dom';
 import type { NavigationRailItemId, NavigationRailPanelItemId } from '@neotavern/theme-sdk';
 import { usePlugins, useThemes } from '../api/hooks.js';
@@ -225,6 +226,13 @@ export function Sidebar() {
   };
 
   const activeItem = RAIL_ITEMS.find((item) => item.id === activePanel);
+  // The menu slides on a spring, so a second tap reverses it mid-flight instead of
+  // restarting from zero the way a CSS transition would.
+  const menuProgress = useSpringValue(navigationRailExpanded ? 1 : 0, {
+    stiffness: 260,
+    damping: 30,
+    mass: 1,
+  });
 
   const renderRailItem = (itemId: NavigationRailItemId, group: 'main' | 'bottom') => {
     if (itemId === 'menu-toggle') {
@@ -322,7 +330,16 @@ export function Sidebar() {
           rather than a strip you squeeze past. It is portalled out of the sidebar so the
           panel's own animation and inert state cannot swallow it. */}
       {createPortal(
-        <div className={styles.mobileMenu} data-open={navigationRailExpanded ? 'true' : 'false'}>
+        <div
+          className={styles.mobileMenu}
+          data-open={navigationRailExpanded ? 'true' : 'false'}
+          style={{
+            opacity: menuProgress,
+            transform: `translateY(${(1 - menuProgress) * -10}px)`,
+            visibility: menuProgress > 0.002 ? 'visible' : 'hidden',
+            pointerEvents: menuProgress > 0.5 ? 'auto' : 'none',
+          }}
+        >
           <header className={styles.mobileMenuHeader}>
             <strong>{t('navigation:menu')}</strong>
             <button
