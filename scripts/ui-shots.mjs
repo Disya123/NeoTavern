@@ -169,7 +169,9 @@ async function shoot(name, width, height, steps, route = '/') {
   page.on('pageerror', (error) => errors.push(String(error)));
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
-    if (message.text().includes('[dialog-morph]')) console.log(`  ${message.text()}`);
+    if (message.text().includes('[dialog-morph]') || message.text().includes('[morph]')) {
+      console.log(`  ${message.text()}`);
+    }
   });
   await page.goto(`${webOrigin}${route}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(800);

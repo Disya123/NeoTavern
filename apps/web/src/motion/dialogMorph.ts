@@ -11,8 +11,12 @@
  */
 import { readTriggerRect } from './pointerOrigin.js';
 
-const DURATION = 320;
-const EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
+const DURATION = 420;
+// Ease-in-out, not ease-out: an ease-out curve covers most of the distance in the first
+// third of the time, so the window is already near the centre before the eye registers the
+// button — it reads as "appeared in the middle". An even curve keeps it anchored to the
+// control it came from for the whole travel.
+const EASING = 'cubic-bezier(0.62, 0.02, 0.3, 1)';
 
 export function animateDialogFromTrigger(): void {
   const dialog = document.querySelector<HTMLElement>(
@@ -28,11 +32,23 @@ export function animateDialogFromTrigger(): void {
   const sx = trigger ? Math.max(trigger.width / rect.width, 0.04) : 0.96;
   const sy = trigger ? Math.max(trigger.height / rect.height, 0.04) : 0.96;
 
-  dialog.animate(
-    [
-      { translate: `${dx}px ${dy}px`, scale: `${sx} ${sy}`, opacity: 0 },
-      { translate: '0px 0px', scale: '1 1', opacity: 1 },
-    ],
-    { duration: DURATION, easing: EASING, fill: 'both' },
-  );
+  // The dialog is centred by its own transform (Radix writes translate(-50%, -50%)), so the
+  // morph composes with that matrix instead of replacing it: base * translate * scale.
+  // Animating individual `translate`/`scale` properties did not survive the real render —
+  // the window kept its centred position and only faded, which is what "appears from the
+  // middle" looked like.
+  const computed = getComputedStyle(dialog).transform;
+  const base = computed === 'none' ? new DOMMatrix() : new DOMMatrix(computed);
+  const startMatrix = base.translate(dx, dy).scale(sx, sy);
+
+  dialog.animate([{ opacity: 0 }, { opacity: 1 }], {
+    duration: 150,
+    easing: 'ease-out',
+    fill: 'both',
+  });
+  dialog.animate([{ transform: startMatrix.toString() }, { transform: base.toString() }], {
+    duration: DURATION,
+    easing: EASING,
+    fill: 'both',
+  });
 }
