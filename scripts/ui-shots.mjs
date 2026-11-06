@@ -210,6 +210,14 @@ if (only !== 'desktop') {
 if (only !== 'mobile') {
   await shoot('desktop', 1280, 800, async (page) => {
     await page.screenshot({ path: join(shots, 'desktop-02-home.png') });
+    // Open a panel from the rail: the panel entrance is the spring, so its settled state
+    // is what this frame proves.
+    const railItem = page.locator('nav[data-slot="navigation.primary"] button').nth(2);
+    if ((await railItem.count()) > 0) {
+      await railItem.click();
+      await page.waitForTimeout(700);
+      await page.screenshot({ path: join(shots, 'desktop-03-panel.png') });
+    }
   });
 }
 

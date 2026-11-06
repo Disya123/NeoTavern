@@ -231,6 +231,7 @@
   }
 
   .panelOpen[data-state='closing'] {
+    animation: none;
     pointer-events: none;
     animation-name: navigation-panel-exit;
   }

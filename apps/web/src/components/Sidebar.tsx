@@ -10,15 +10,7 @@ import {
   UsersThree,
   X,
 } from '@phosphor-icons/react';
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type AnimationEvent as ReactAnimationEvent,
-  type ComponentType,
-} from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
@@ -221,13 +213,14 @@ export function Sidebar() {
     openSidebarPanel(panel);
   };
 
-  const finishSidebarExit = (event: ReactAnimationEvent<HTMLElement>): void => {
-    if (event.target === event.currentTarget && !sidebarOpen) setSidebarPresent(false);
-  };
-
   const activeItem = RAIL_ITEMS.find((item) => item.id === activePanel);
   // The menu slides on a spring, so a second tap reverses it mid-flight instead of
   // restarting from zero the way a CSS transition would.
+  const panelProgress = useSpringValue(sidebarOpen ? 1 : 0, {
+    stiffness: 300,
+    damping: 32,
+    mass: 1,
+  });
   const menuProgress = useSpringValue(navigationRailExpanded ? 1 : 0, {
     stiffness: 260,
     damping: 30,
@@ -378,6 +371,7 @@ export function Sidebar() {
             className={styles.backdrop}
             data-part="panel-backdrop"
             data-state={sidebarOpen ? 'open' : 'closing'}
+            style={{ opacity: panelProgress }}
             onClick={() => setSidebarOpen(false)}
             aria-label={t('accessibility:closeMenu')}
             aria-hidden={!sidebarOpen}
@@ -390,13 +384,16 @@ export function Sidebar() {
             className={styles.panelOpen}
             data-component="navigation-panel"
             data-state={sidebarOpen ? 'open' : 'closing'}
+            style={{
+              opacity: panelProgress,
+              transform: `translateX(${(1 - panelProgress) * -16}px)`,
+            }}
             data-panel={activePanel}
             data-slot="panel.left"
             data-management-tabs-pinned={shellLayout.managementTabs.pinned ? 'true' : 'false'}
             aria-label={t(activeItem?.labelKey ?? 'navigation:home')}
             aria-hidden={!sidebarOpen}
             inert={!sidebarOpen}
-            onAnimationEnd={finishSidebarExit}
           >
             {activePanel === 'characters' ? (
               <CharacterManagementPanel onClose={() => setSidebarOpen(false)} />
