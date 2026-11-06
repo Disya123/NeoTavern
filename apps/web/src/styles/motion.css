@@ -148,6 +148,135 @@ select:focus-visible,
   animation: st-message-in var(--st-motion-duration-quick) var(--st-motion-easing-out) both;
 }
 
+
+/* ---- Sliders: the thumb has weight ------------------------------------- */
+
+input[type='range'] {
+  --st-slider-thumb: 18px;
+  appearance: none;
+  /* No fixed height: the control keeps whatever box the layout gave it, so styling the
+     track cannot shift a settings row. */
+  background: transparent;
+  vertical-align: middle;
+  cursor: grab;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--st-color-border) 70%, transparent);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: var(--st-slider-thumb);
+  height: var(--st-slider-thumb);
+  margin-top: calc((6px - var(--st-slider-thumb)) / 2);
+  border: 0;
+  border-radius: 50%;
+  background: var(--st-color-accent-soft-text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+  transition:
+    transform var(--st-motion-duration-quick) var(--st-motion-easing-spring),
+    box-shadow var(--st-motion-duration-quick) var(--st-motion-easing-standard);
+}
+
+input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--st-color-border) 70%, transparent);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: var(--st-slider-thumb);
+  height: var(--st-slider-thumb);
+  border: 0;
+  border-radius: 50%;
+  background: var(--st-color-accent-soft-text);
+  transition: transform var(--st-motion-duration-quick) var(--st-motion-easing-spring);
+}
+
+/* Dragging stretches the thumb a little; releasing springs it back, so a value reads as
+   "sitting on a step" rather than being dragged through treacle. */
+input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.18);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--st-color-accent-soft-text) 18%, transparent);
+}
+
+input[type='range']:active::-moz-range-thumb {
+  transform: scale(1.18);
+}
+
+input[type='range']:focus-visible {
+  outline: 2px solid var(--st-color-accent-soft-text);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+/* ---- Switches ---------------------------------------------------------- */
+
+[data-component='switch'] [data-part='thumb'] {
+  transition: transform var(--st-motion-duration-quick) var(--st-motion-easing-spring);
+}
+
+/* ---- Tabs: the indicator travels, it does not jump --------------------- */
+
+[data-component='tabs-indicator'] {
+  transition:
+    transform var(--st-motion-duration-normal) var(--st-motion-easing-spring),
+    width var(--st-motion-duration-normal) var(--st-motion-easing-out),
+    opacity var(--st-motion-duration-fast) linear;
+}
+
+/* ---- Scrolling: momentum, snap, and an edge that pushes back ----------- */
+
+[class*='Strip'],
+[class*='strip'],
+[data-scroll='x'],
+[data-component='tabs-list'] {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+  scroll-behavior: smooth;
+}
+
+[data-scroll='x'][data-snap='true'],
+[class*='Strip'][data-snap='true'] {
+  scroll-snap-type: inline mandatory;
+}
+
+[data-scroll='x'][data-snap='true'] > *,
+[class*='Strip'][data-snap='true'] > * {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* Lists get the same physics vertically: no rubber-banding the whole app away. */
+[class*='List'],
+[class*='list'],
+[data-scroll='y'] {
+  overscroll-behavior-block: contain;
+}
+
+/* ---- Popovers and dropdowns ------------------------------------------- */
+
+@keyframes st-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-component='popover'],
+[data-component='dropdown'],
+[role='menu'],
+[role='listbox'] {
+  animation: st-pop-in var(--st-motion-duration-fast) var(--st-motion-easing-spring) both;
+}
+
 /* ---- Reduced motion ---------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -161,7 +290,14 @@ select:focus-visible,
   [data-component='sidebar-panel'],
   [data-component='surface-dialog'] > *,
   [role='dialog'],
-  [class*='mobileMenuTile'] {
+  [class*='mobileMenuTile'],
+  [data-component='popover'],
+  [data-component='dropdown'],
+  [role='menu'],
+  [role='listbox'],
+  [data-component='tabs-indicator'],
+  input[type='range']::-webkit-slider-thumb,
+  input[type='range']::-moz-range-thumb {
     animation: none !important;
     transition-duration: 0ms !important;
   }
