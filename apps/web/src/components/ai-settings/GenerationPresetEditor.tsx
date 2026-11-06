@@ -9,6 +9,7 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SpringSlider } from '../SpringSlider.js';
 import {
   CONTEXT_TOKEN_DEFAULT,
   CONTEXT_TOKEN_DEFAULT_MAX,
@@ -582,15 +583,14 @@ function RangeField({
           }}
         />
       </span>
-      <input
-        type="range"
+      <SpringSlider
         value={value}
         min={min}
         max={max}
         step={step}
+        label={label}
         disabled={disabled}
-        aria-label={label}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onChange={onChange}
       />
       {unsupportedHint ? <small className={styles.unsupportedHint}>{unsupportedHint}</small> : null}
     </label>

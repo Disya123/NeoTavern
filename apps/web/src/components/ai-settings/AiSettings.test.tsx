@@ -420,8 +420,13 @@ describe('GenerationPresetEditor', () => {
   it('derives enabled sampler controls from the active provider capabilities', async () => {
     await renderEditor(<GenerationPresetEditor />);
     expect(await screen.findByRole('slider', { name: 'Temperature' })).toBeEnabled();
-    expect(screen.getByRole('slider', { name: 'Top P' })).toBeEnabled();
-    expect(screen.getByRole('slider', { name: 'Min P' })).toBeDisabled();
+    expect(screen.getByRole('slider', { name: 'Top P' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    // The slider is a custom widget now, so "disabled" is aria-disabled rather than the
+    // native attribute; the role and the name are what a user and a screen reader see.
+    expect(screen.getByRole('slider', { name: 'Min P' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.queryByRole('switch', { name: 'Request model reasoning' })).toBeNull();
   });
 
