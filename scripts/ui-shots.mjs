@@ -220,22 +220,27 @@ if (only !== 'mobile') {
       await page.screenshot({ path: join(shots, 'desktop-03-panel.png') });
     }
 
-    // Open the settings window from the rail and catch it mid-flight: this is the only way
-    // a still frame can prove the dialog grows out of the control that was pressed.
+    // Open the settings window from the rail and catch it mid-flight. Still frames cannot
+    // show motion, so CDP slows every animation tenfold before the press: a shot at 150ms
+    // then shows the dialog 15ms into the morph instead of after it.
     const railButtons = page.locator('nav[data-slot="navigation.primary"] button');
     const count = await railButtons.count();
     if (count > 0) {
-      // A raw mouse press: locator.click() waits for actionability and by then the morph has
-      // already finished, which is why every still looked like the dialog simply appeared.
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Animation.enable');
+      await cdp.send('Animation.setPlaybackRate', { playbackRate: 0.1 });
       const box = await railButtons.nth(count - 1).boundingBox();
       if (box !== null) {
         await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
       } else {
         await railButtons.nth(count - 1).click();
       }
-      await page.waitForTimeout(60);
+      await page.waitForTimeout(150);
       await page.screenshot({ path: join(shots, 'desktop-04-dialog-mid.png') });
-      await page.waitForTimeout(900);
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: join(shots, 'desktop-04b-dialog-later.png') });
+      await cdp.send('Animation.setPlaybackRate', { playbackRate: 1 });
+      await page.waitForTimeout(400);
       await page.screenshot({ path: join(shots, 'desktop-05-dialog.png') });
     }
   });
