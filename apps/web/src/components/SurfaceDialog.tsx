@@ -32,7 +32,9 @@ export function SurfaceDialog({
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
 
-      // The morph from the pressed control did not survive verification: the keyframes ran,
+  useEffect(() => {
+    if (!open) return;
+    // The morph from the pressed control did not survive verification: the keyframes ran,
     // but every captured frame showed the window already at full size. Shipping an animation
     // I cannot see working is worse than shipping none, so the dialog fades in (motion.css)
     // and the container transform is queued behind a real recording.
