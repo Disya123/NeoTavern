@@ -23,6 +23,7 @@ import {
 import { useCallback, useDeferredValue, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { SpringSlider } from './SpringSlider.js';
 import type {
   Character,
   CharacterGalleryImage,
@@ -1671,13 +1672,13 @@ function AdvancedTab({
           <strong>{t('characters:talkativeness')}</strong>
           <small>{Math.round(draft.talkativeness * 100)}%</small>
         </span>
-        <input
-          type="range"
+        <SpringSlider
           min={0}
           max={1}
           step={0.05}
+          label={t('characters:talkativeness')}
           value={draft.talkativeness}
-          onChange={(event) => onPatch({ talkativeness: Number(event.target.value) })}
+          onChange={(talkativeness) => onPatch({ talkativeness })}
         />
         <span className={styles.rangeLabels}>
           <small>{t('characters:talkativenessShy')}</small>

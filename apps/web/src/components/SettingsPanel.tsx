@@ -14,6 +14,7 @@ import {
 import { useState, type ChangeEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { SpringSlider } from './SpringSlider.js';
 import { ActionBar, ActionBarGroup, Button, Segmented } from '@neotavern/ui';
 import { SUPPORTED_LANGUAGES } from '@neotavern/i18n';
 import type { AuthSession } from '@neotavern/contracts';
@@ -393,15 +394,13 @@ function GeneralTab({ onClose }: { onClose: () => void }) {
             <span>{t('settings:uiOpacity')}</span>
             <span className={styles.rangeValue}>{uiOpacity}%</span>
           </div>
-          <input
-            className={styles.rangeInput}
-            type="range"
+          <SpringSlider
             min={0}
             max={100}
             step={5}
+            label={t('settings:uiOpacity')}
             value={uiOpacity}
-            aria-label={t('settings:uiOpacity')}
-            onChange={(e) => setUiOpacity(Number(e.target.value))}
+            onChange={setUiOpacity}
           />
         </div>
         <div className={styles.field}>
@@ -409,15 +408,13 @@ function GeneralTab({ onClose }: { onClose: () => void }) {
             <span>{t('settings:uiGlassBlur')}</span>
             <span className={styles.rangeValue}>{uiGlassBlur}px</span>
           </div>
-          <input
-            className={styles.rangeInput}
-            type="range"
+          <SpringSlider
             min={0}
             max={40}
             step={1}
+            label={t('settings:uiGlassBlur')}
             value={uiGlassBlur}
-            aria-label={t('settings:uiGlassBlur')}
-            onChange={(e) => setUiGlassBlur(Number(e.target.value))}
+            onChange={setUiGlassBlur}
           />
         </div>
         <Field label={t('settings:userMessagePosition')}>
