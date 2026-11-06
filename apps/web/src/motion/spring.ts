@@ -195,6 +195,39 @@ export function rubberBand(overshoot: number, dimension: number, coefficient = 0
  * A number that chases `target` on a spring and can be interrupted mid-flight. Used where a
  * CSS transition would restart from zero — an open/close a user can reverse with a second tap.
  */
+/**
+ * Drive a spring straight into the DOM, without a React state update per frame.
+ *
+ * `useSpringValue` re-renders the component 60 times a second; inside a big tree like the
+ * sidebar that is the difference between smooth and laggy. This version hands the value to
+ * a callback that writes styles, so the animation never touches the render cycle.
+ */
+export function useSpringDriver(
+  target: number,
+  apply: (value: number) => void,
+  config: Partial<SpringConfig> = {},
+): void {
+  const handle = useRef<SpringHandle | null>(null);
+  const latest = useRef(target);
+  const applyRef = useRef(apply);
+  applyRef.current = apply;
+
+  useEffect(() => {
+    handle.current?.stop();
+    handle.current = createSpring({
+      from: latest.current,
+      to: target,
+      config,
+      reducedMotion: prefersReducedMotion(),
+      onFrame: (frame) => {
+        latest.current = frame;
+        applyRef.current(frame);
+      },
+    });
+    return () => handle.current?.stop();
+  }, [target]);
+}
+
 export function useSpringValue(target: number, config: Partial<SpringConfig> = {}): number {
   const [value, setValue] = useState(target);
   const handle = useRef<SpringHandle | null>(null);

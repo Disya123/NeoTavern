@@ -26,13 +26,11 @@ summary,
     color var(--st-motion-duration-quick) var(--st-motion-easing-standard),
     box-shadow var(--st-motion-duration-quick) var(--st-motion-easing-standard),
     opacity var(--st-motion-duration-quick) var(--st-motion-easing-standard);
-  will-change: transform;
 }
 
 @media (hover: hover) {
   button:hover:not(:disabled),
   [role='button']:hover:not([aria-disabled='true']),
-  a[href]:hover,
   summary:hover {
     transform: translateY(var(--st-motion-lift));
   }
@@ -40,8 +38,7 @@ summary,
 
 button:active:not(:disabled),
 [role='button']:active:not([aria-disabled='true']),
-summary:active,
-a[href]:active {
+summary:active {
   transform: scale(var(--st-motion-press));
   transition-duration: var(--st-motion-duration-micro);
 }
@@ -74,11 +71,21 @@ select:focus-visible,
   }
 }
 
+/* Dialogs are centred with `transform: translate(-50%, -50%)`; animating transform here
+   replaces that and throws the window into a corner. Surfaces fade only. */
 [data-component='sidebar-panel'],
-[data-component='surface-dialog'] > *,
 [data-part='sheet'],
 [role='dialog'] {
-  animation: st-surface-in var(--st-motion-duration-quick) var(--st-motion-easing-out) both;
+  animation: st-surface-fade var(--st-motion-duration-quick) var(--st-motion-easing-out) both;
+}
+
+@keyframes st-surface-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ---- Lists and tiles --------------------------------------------------- */
@@ -288,7 +295,6 @@ input[type='range']:focus-visible {
   [class*='MessageBubble_bubble'],
   [data-component='message'],
   [data-component='sidebar-panel'],
-  [data-component='surface-dialog'] > *,
   [role='dialog'],
   [class*='mobileMenuTile'],
   [data-component='popover'],
@@ -305,8 +311,6 @@ input[type='range']:focus-visible {
   button:hover:not(:disabled),
   button:active:not(:disabled),
   [role='button']:active,
-  a[href]:hover,
-  a[href]:active,
   [class*='mobileMenuTile']:active {
     transform: none;
   }

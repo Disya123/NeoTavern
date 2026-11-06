@@ -14,7 +14,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentTy
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { useSpringValue } from '../motion/spring.js';
+import { useSpringDriver } from '../motion/spring.js';
 import { useNavigate } from 'react-router-dom';
 import type { NavigationRailItemId, NavigationRailPanelItemId } from '@neotavern/theme-sdk';
 import { usePlugins, useThemes } from '../api/hooks.js';
@@ -91,6 +91,8 @@ export function Sidebar() {
   const openSidebarPanel = useUiStore((state) => state.openSidebarPanel);
   const panelRef = useRef<HTMLElement>(null);
   const [sidebarPresent, setSidebarPresent] = useState(sidebarOpen);
+  const backdropRef = useRef<HTMLButtonElement | null>(null);
+  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const safeMode = isSafeMode();
   const themes = useThemes(!safeMode);
   const shellLayout = useMemo(
@@ -216,16 +218,33 @@ export function Sidebar() {
   const activeItem = RAIL_ITEMS.find((item) => item.id === activePanel);
   // The menu slides on a spring, so a second tap reverses it mid-flight instead of
   // restarting from zero the way a CSS transition would.
-  const panelProgress = useSpringValue(sidebarOpen ? 1 : 0, {
-    stiffness: 300,
-    damping: 32,
-    mass: 1,
-  });
-  const menuProgress = useSpringValue(navigationRailExpanded ? 1 : 0, {
-    stiffness: 260,
-    damping: 30,
-    mass: 1,
-  });
+  // Both sheets are driven straight into the DOM: a state update per frame re-rendered the
+  // whole sidebar sixty times a second, which is what made interaction feel heavy.
+  useSpringDriver(
+    sidebarOpen ? 1 : 0,
+    (progress) => {
+      if (panelRef.current !== null) {
+        panelRef.current.style.opacity = String(progress);
+        panelRef.current.style.transform = `translateX(${(1 - progress) * -16}px)`;
+      }
+      if (backdropRef.current !== null) backdropRef.current.style.opacity = String(progress);
+      if (!sidebarOpen && progress < 0.005) setSidebarPresent(false);
+    },
+    { stiffness: 300, damping: 32, mass: 1 },
+  );
+
+  useSpringDriver(
+    navigationRailExpanded ? 1 : 0,
+    (progress) => {
+      const menu = mobileMenuRef.current;
+      if (menu === null) return;
+      menu.style.opacity = String(progress);
+      menu.style.transform = `translateY(${(1 - progress) * -10}px)`;
+      menu.style.visibility = progress > 0.002 ? 'visible' : 'hidden';
+      menu.style.pointerEvents = progress > 0.5 ? 'auto' : 'none';
+    },
+    { stiffness: 260, damping: 30, mass: 1 },
+  );
 
   const renderRailItem = (itemId: NavigationRailItemId, group: 'main' | 'bottom') => {
     if (itemId === 'menu-toggle') {
@@ -324,14 +343,9 @@ export function Sidebar() {
           panel's own animation and inert state cannot swallow it. */}
       {createPortal(
         <div
+          ref={mobileMenuRef}
           className={styles.mobileMenu}
           data-open={navigationRailExpanded ? 'true' : 'false'}
-          style={{
-            opacity: menuProgress,
-            transform: `translateY(${(1 - menuProgress) * -10}px)`,
-            visibility: menuProgress > 0.002 ? 'visible' : 'hidden',
-            pointerEvents: menuProgress > 0.5 ? 'auto' : 'none',
-          }}
         >
           <header className={styles.mobileMenuHeader}>
             <strong>{t('navigation:menu')}</strong>
@@ -371,7 +385,7 @@ export function Sidebar() {
             className={styles.backdrop}
             data-part="panel-backdrop"
             data-state={sidebarOpen ? 'open' : 'closing'}
-            style={{ opacity: panelProgress }}
+            ref={backdropRef}
             onClick={() => setSidebarOpen(false)}
             aria-label={t('accessibility:closeMenu')}
             aria-hidden={!sidebarOpen}
@@ -384,10 +398,6 @@ export function Sidebar() {
             className={styles.panelOpen}
             data-component="navigation-panel"
             data-state={sidebarOpen ? 'open' : 'closing'}
-            style={{
-              opacity: panelProgress,
-              transform: `translateX(${(1 - panelProgress) * -16}px)`,
-            }}
             data-panel={activePanel}
             data-slot="panel.left"
             data-management-tabs-pinned={shellLayout.managementTabs.pinned ? 'true' : 'false'}
