@@ -6,6 +6,7 @@
 :root {
   --st-motion-duration-micro: 120ms;
   --st-motion-duration-quick: 220ms;
+  --st-motion-duration-geometry: 400ms;
   --st-motion-easing-spring: cubic-bezier(0.34, 1.42, 0.64, 1);
   --st-motion-easing-out: cubic-bezier(0.16, 1, 0.3, 1);
   --st-motion-lift: -1px;
@@ -121,7 +122,7 @@ select:focus-visible,
 
 /* The phone menu: each tile arrives a beat after the one above it. */
 [class*='mobileMenuTile'] {
-  animation: st-item-in var(--st-motion-duration-quick) var(--st-motion-easing-spring) both;
+  animation: st-item-in var(--st-motion-duration-geometry) var(--st-motion-easing-overshoot) both;
 }
 
 [class*='mobileMenuTile']:nth-child(1) {
@@ -247,9 +248,25 @@ input[type='range']:focus-visible {
 
 [data-component='tabs-indicator'] {
   transition:
-    transform var(--st-motion-duration-normal) var(--st-motion-easing-spring),
-    width var(--st-motion-duration-normal) var(--st-motion-easing-out),
+    transform var(--st-motion-duration-geometry) var(--st-motion-easing-overshoot),
+    width var(--st-motion-duration-geometry) var(--st-motion-easing-out),
     opacity var(--st-motion-duration-fast) linear;
+}
+
+/* ---- Icons -------------------------------------------------------------- */
+
+/* A rail icon grows a little under the pointer and settles with one overshoot: it is a
+   small object, so the geometry curve belongs here. Nothing is displaced around it. */
+@media (hover: hover) and (pointer: fine) {
+  nav[data-slot='navigation.primary'] button svg,
+  [data-component='sidebar-panel-header'] button svg {
+    transition: transform var(--st-motion-duration-geometry) var(--st-motion-easing-overshoot);
+  }
+
+  nav[data-slot='navigation.primary'] button:hover svg,
+  [data-component='sidebar-panel-header'] button:hover svg {
+    transform: scale(1.08);
+  }
 }
 
 /* ---- Scrolling: momentum, snap, and an edge that pushes back ----------- */
