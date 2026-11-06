@@ -258,9 +258,16 @@ if (only !== 'mobile') {
       await page.screenshot({ path: join(shots, `${name}-02-window.png`) });
       const aiSection = page.getByRole('button', { name: 'AI Settings' }).first();
       if ((await aiSection.count()) > 0) {
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send('Animation.enable');
+        await cdp.send('Animation.setPlaybackRate', { playbackRate: 0.08 });
         await aiSection.click();
+        await page.waitForTimeout(120);
+        await page.screenshot({ path: join(shots, `${name}-03-ai-mid.png`) });
         await page.waitForTimeout(700);
-        await page.screenshot({ path: join(shots, `${name}-03-ai.png`) });
+        await cdp.send('Animation.setPlaybackRate', { playbackRate: 1 });
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: join(shots, `${name}-04-ai.png`) });
       }
     },
     '/settings',

@@ -9,8 +9,9 @@
  * The section list comes from `useSettingsSections`, so the window and the old panel can
  * never disagree about which settings exist.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { prefersReducedMotion } from '../motion/spring.js';
 import { SurfaceDialog } from './SurfaceDialog.js';
 import { useSettingsSections, type SettingsSectionId } from './SettingsPanel.js';
 import styles from './SettingsPanel.module.css';
@@ -24,12 +25,32 @@ export function SettingsWindow({ onClose }: SettingsWindowProps) {
   const sections = useSettingsSections(onClose);
   const [section, setSection] = useState<SettingsSectionId>('general');
   const [query, setQuery] = useState('');
+  const sectionBodyRef = useRef<HTMLDivElement | null>(null);
+  const previousIndex = useRef(sections.findIndex((entry) => entry.value === section));
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (needle.length === 0) return sections;
     return sections.filter((entry) => entry.label.toLowerCase().includes(needle));
   }, [query, sections]);
   const current = sections.find((entry) => entry.value === section);
+
+  useEffect(() => {
+    const index = sections.findIndex((entry) => entry.value === section);
+    const direction = index >= previousIndex.current ? 1 : -1;
+    previousIndex.current = index;
+    const body = sectionBodyRef.current;
+    if (body === null || prefersReducedMotion()) return;
+    // Direction is the meaning: moving down the list pushes the old section up and brings
+    // the new one from below, so the eye keeps its place. One curve for every section would
+    // say nothing about where you went.
+    body.animate(
+      [
+        { opacity: 0, transform: `translateY(${direction * 14}px)` },
+        { opacity: 1, transform: 'translateY(0)' },
+      ],
+      { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+    );
+  }, [section, sections]);
   const CurrentIcon = current?.icon;
 
   return (
@@ -93,7 +114,7 @@ export function SettingsWindow({ onClose }: SettingsWindowProps) {
             );
           })}
         </nav>
-        <div className={styles.windowBody}>
+        <div className={styles.windowBody} ref={sectionBodyRef}>
           {visible.length === 0 ? (
             <p className={styles.emptySearch}>{t('settings:noMatches')}</p>
           ) : (
